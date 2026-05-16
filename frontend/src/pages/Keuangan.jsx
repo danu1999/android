@@ -11,8 +11,12 @@ export default function Keuangan() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({ id: null, type: 'EXPENSE', amount: '', description: '', date: '', status: 'PENDING' });
 
+  // REKAP & SALES = bebas, PAYABLE/RECEIVABLE/EXPENSE = premium
+  const PREMIUM_TABS = ['PAYABLE', 'RECEIVABLE', 'EXPENSE'];
+  const isLockedTab = PREMIUM_TABS.includes(activeTab) && !isPremium;
+
   useEffect(() => {
-    if (isPremium) {
+    if (!isLockedTab) {
       fetchData();
     }
   }, [activeTab, isPremium]);
@@ -361,39 +365,36 @@ export default function Keuangan() {
     }, 250);
   };
 
-  if (!isPremium) {
-    return (
-      <div className="page-container flex flex-col items-center justify-center text-center" style={{ minHeight: '80vh' }}>
-        <div className="glass-panel max-w-md p-8 w-full border-t-4 border-yellow-400">
-           <div className="w-20 h-20 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mx-auto mb-6">
-             <Lock size={40} />
-           </div>
-           <h2 className="text-2xl font-bold mb-3 text-gray-800">Akses Terkunci</h2>
-           <p className="text-gray-500 mb-8 leading-relaxed">
-             Fitur <b>Keuangan & Rekap Laporan Premium</b> hanya tersedia untuk versi berbayar. Lakukan pembayaran untuk membuka kunci semua fitur finansial canggih ini.
-           </p>
-           <button 
-             className="btn btn-primary w-full py-4 text-lg shadow-lg font-bold"
-             onClick={() => {
-               const key = prompt('Masukkan Kode Lisensi Premium Anda:');
-               // Validasi kunci lebih rumit: harus berformat POSBAH-XXXX-XXXX-PRO
-               const isValidKey = key && key.startsWith('POSBAH-') && key.endsWith('-PRO') && key.length === 20;
-               
-               if (isValidKey || key === 'POSBAH-X7V9-QW2R-PRO') {
-                 localStorage.setItem('posbah_premium', 'true');
-                 setIsPremium(true);
-                 alert('Aktivasi Berhasil! Fitur Premium telah terbuka.');
-               } else if (key) {
-                 alert('Kode Lisensi Tidak Valid!');
-               }
-             }}
-           >
-             Buka Kunci Akses
-           </button>
+  // Paywall hanya untuk tab premium (PAYABLE, RECEIVABLE, EXPENSE)
+  const renderPaywall = () => (
+    <div className="flex flex-col items-center justify-center text-center py-16">
+      <div className="glass-panel max-w-md p-8 w-full border-t-4 border-yellow-400">
+        <div className="w-20 h-20 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mx-auto mb-6">
+          <Lock size={40} />
         </div>
+        <h2 className="text-2xl font-bold mb-3 text-gray-800">Fitur Premium</h2>
+        <p className="text-gray-500 mb-8 leading-relaxed">
+          Fitur <b>Manajemen {activeTab === 'PAYABLE' ? 'Hutang' : activeTab === 'RECEIVABLE' ? 'Piutang' : 'Pengeluaran'}</b> hanya tersedia untuk versi berbayar.
+        </p>
+        <button
+          className="btn btn-primary w-full py-4 text-lg shadow-lg font-bold"
+          onClick={() => {
+            const key = prompt('Masukkan Kode Lisensi Premium Anda:');
+            const isValidKey = key && key.startsWith('POSBAH-') && key.endsWith('-PRO') && key.length === 20;
+            if (isValidKey || key === 'POSBAH-X7V9-QW2R-PRO') {
+              localStorage.setItem('posbah_premium', 'true');
+              setIsPremium(true);
+              alert('Aktivasi Berhasil! Semua fitur Premium telah terbuka.');
+            } else if (key) {
+              alert('Kode Lisensi Tidak Valid!');
+            }
+          }}
+        >
+          Buka Kunci Akses
+        </button>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
     <div className="page-container">
@@ -416,7 +417,10 @@ export default function Keuangan() {
 
       {renderTabs()}
 
-      {activeTab === 'REKAP' ? renderRekap() : renderTable()}
+      {isLockedTab
+        ? renderPaywall()
+        : activeTab === 'REKAP' ? renderRekap() : renderTable()
+      }
 
       {isModalOpen && (
         <div className="modal-overlay">
