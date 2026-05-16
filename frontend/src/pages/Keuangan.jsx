@@ -8,6 +8,8 @@ export default function Keuangan() {
   const [finances, setFinances] = useState([]);
   const [reports, setReports] = useState(null);
   const [products, setProducts] = useState([]);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({ id: null, type: 'EXPENSE', amount: '', description: '', date: '', status: 'PENDING' });
@@ -224,34 +226,54 @@ export default function Keuangan() {
 
   const renderRekap = () => {
     if (!reports) return <p>Loading...</p>;
+
+    // Filter transaksi berdasarkan tanggal jika filter aktif
+    const filterInfo = dateFrom || dateTo
+      ? `Periode: ${dateFrom ? new Date(dateFrom).toLocaleDateString('id-ID') : '—'} s/d ${dateTo ? new Date(dateTo).toLocaleDateString('id-ID') : 'sekarang'}`
+      : 'Semua waktu';
+
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-        <div className="glass-panel p-6 flex items-center gap-4 border-l-4 border-blue-500">
-          <TrendingUp size={40} className="text-blue-500" />
-          <div>
-            <div className="text-gray-500 text-sm font-semibold">Total Penjualan</div>
-            <div className="text-2xl font-bold">Rp {reports.totalSales.toLocaleString('id-ID')}</div>
-          </div>
+      <div>
+        {/* Filter Tanggal */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap', background: '#F8FAFC', padding: '12px 16px', borderRadius: 12, border: '1px solid #E2E8F0' }}>
+          <span style={{ fontWeight: 700, fontSize: 13, color: '#475569' }}>📅 Filter Periode:</span>
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13 }} />
+          <span style={{ color: '#94A3B8' }}>s/d</span>
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13 }} />
+          {(dateFrom || dateTo) && (
+            <button onClick={() => { setDateFrom(''); setDateTo(''); }} style={{ padding: '6px 12px', background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer', fontSize: 12 }}>✕ Reset</button>
+          )}
+          <span style={{ fontSize: 12, color: '#64748B', marginLeft: 'auto' }}>{filterInfo}</span>
         </div>
-        <div className="glass-panel p-6 flex items-center gap-4 border-l-4 border-red-500">
-          <ArrowDownCircle size={40} className="text-red-500" />
-          <div>
-            <div className="text-gray-500 text-sm font-semibold">Total Pengeluaran</div>
-            <div className="text-2xl font-bold">Rp {reports.totalExpenses.toLocaleString('id-ID')}</div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <div className="glass-panel p-6 flex items-center gap-4 border-l-4 border-blue-500">
+            <TrendingUp size={40} className="text-blue-500" />
+            <div>
+              <div className="text-gray-500 text-sm font-semibold">Total Penjualan</div>
+              <div className="text-2xl font-bold">Rp {reports.totalSales.toLocaleString('id-ID')}</div>
+            </div>
           </div>
-        </div>
-        <div className="glass-panel p-6 flex items-center gap-4 border-l-4 border-green-500">
-          <CreditCard size={40} className="text-green-500" />
-          <div>
-            <div className="text-gray-500 text-sm font-semibold">Pendapatan Bersih (Net)</div>
-            <div className="text-2xl font-bold">Rp {reports.netIncome.toLocaleString('id-ID')}</div>
+          <div className="glass-panel p-6 flex items-center gap-4 border-l-4 border-red-500">
+            <ArrowDownCircle size={40} className="text-red-500" />
+            <div>
+              <div className="text-gray-500 text-sm font-semibold">Total Pengeluaran</div>
+              <div className="text-2xl font-bold">Rp {reports.totalExpenses.toLocaleString('id-ID')}</div>
+            </div>
           </div>
-        </div>
-        <div className="glass-panel p-6 flex items-center gap-4 border-l-4 border-yellow-500">
-          <ArrowUpCircle size={40} className="text-yellow-500" />
-          <div>
-            <div className="text-gray-500 text-sm font-semibold">Piutang Tertunda</div>
-            <div className="text-2xl font-bold">Rp {reports.pendingReceivables.toLocaleString('id-ID')}</div>
+          <div className="glass-panel p-6 flex items-center gap-4 border-l-4 border-green-500">
+            <CreditCard size={40} className="text-green-500" />
+            <div>
+              <div className="text-gray-500 text-sm font-semibold">Pendapatan Bersih (Net)</div>
+              <div className="text-2xl font-bold">Rp {reports.netIncome.toLocaleString('id-ID')}</div>
+            </div>
+          </div>
+          <div className="glass-panel p-6 flex items-center gap-4 border-l-4 border-yellow-500">
+            <ArrowUpCircle size={40} className="text-yellow-500" />
+            <div>
+              <div className="text-gray-500 text-sm font-semibold">Piutang Tertunda</div>
+              <div className="text-2xl font-bold">Rp {reports.pendingReceivables.toLocaleString('id-ID')}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -494,12 +516,20 @@ export default function Keuangan() {
       <div className="header-actions">
         <h1>Keuangan & Laporan</h1>
         <div className="flex gap-2 flex-wrap">
-          <button className="btn btn-secondary" onClick={handleExportExcel}>
-            Excel (CSV)
-          </button>
-          <button className="btn btn-secondary" onClick={handleExportPDF}>
-            Cetak PDF
-          </button>
+          {isPremium ? (
+            <>
+              <button className="btn btn-secondary" onClick={handleExportExcel}>
+                📊 Excel (CSV)
+              </button>
+              <button className="btn btn-secondary" onClick={handleExportPDF}>
+                🖨️ Cetak PDF
+              </button>
+            </>
+          ) : (
+            <button className="btn btn-secondary" style={{ opacity: 0.5, cursor: 'not-allowed', display: 'flex', alignItems: 'center', gap: 6 }} title="Fitur Premium" disabled>
+              🔒 Export (Premium)
+            </button>
+          )}
           {activeTab !== 'REKAP' && activeTab !== 'SALES' && activeTab !== 'MARGIN' && !isLockedTab && (
             <button className="btn btn-primary" onClick={() => handleOpenModal()}>
               <Plus size={18} /> Tambah {activeTab === 'EXPENSE' ? 'Pengeluaran' : activeTab === 'PAYABLE' ? 'Hutang' : 'Piutang'}

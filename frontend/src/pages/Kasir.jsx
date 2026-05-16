@@ -208,13 +208,27 @@ export default function Kasir() {
           />
         </div>
 
+        {/* Low Stock Alert */}
+        {products.filter(p => p.stock > 0 && p.stock <= 5).length > 0 && (
+          <div style={{ background: '#FEF9C3', border: '1px solid #FDE047', borderRadius: 10, padding: '8px 14px', marginBottom: 10, fontSize: 13, color: '#854D0E', fontWeight: 600 }}>
+            ⚠️ Stok menipis: {products.filter(p => p.stock > 0 && p.stock <= 5).map(p => `${p.name} (${p.stock})`).join(' · ')}
+          </div>
+        )}
+
         <div className="product-grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {filteredProducts.map(product => (
             <div 
               key={product.id} 
               className="product-card glass-panel flex flex-col"
               onClick={() => addToCart(product)}
+              style={{ position: 'relative' }}
             >
+              {/* Low stock badge */}
+              {product.stock > 0 && product.stock <= 5 && (
+                <div style={{ position: 'absolute', top: 6, right: 6, background: '#F59E0B', color: '#fff', fontSize: 10, fontWeight: 800, padding: '2px 6px', borderRadius: 99, zIndex: 1 }}>
+                  Sisa {product.stock}
+                </div>
+              )}
               <div className="product-image h-24 md:h-32">
                 {product.image ? (
                   <img src={product.image} alt={product.name} className="w-full h-full object-contain p-2" />
