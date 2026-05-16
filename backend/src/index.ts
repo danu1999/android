@@ -79,7 +79,12 @@ app.post('/api/transactions', async (req, res) => {
     
     // items = [{ productId, quantity, price, discount }]
     // Find admin for demo (in reality, from auth token)
-    const employee = await prisma.employee.findFirst();
+    let employee = await prisma.employee.findFirst();
+    if (!employee) {
+      employee = await prisma.employee.create({
+        data: { name: 'Admin Default', role: 'ADMIN', pin: '1234' }
+      });
+    }
 
     const transaction = await prisma.transaction.create({
       data: {
