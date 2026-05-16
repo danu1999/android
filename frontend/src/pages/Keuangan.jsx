@@ -10,7 +10,7 @@ export default function Keuangan() {
   const [products, setProducts] = useState([]);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({ id: null, type: 'EXPENSE', amount: '', description: '', date: '', status: 'PENDING' });
 
@@ -54,13 +54,13 @@ export default function Keuangan() {
         date: new Date(finance.date).toISOString().slice(0, 16)
       });
     } else {
-      setFormData({ 
-        id: null, 
-        type: activeTab === 'REKAP' ? 'EXPENSE' : activeTab, 
-        amount: '', 
-        description: '', 
+      setFormData({
+        id: null,
+        type: activeTab === 'REKAP' ? 'EXPENSE' : activeTab,
+        amount: '',
+        description: '',
         date: new Date().toISOString().slice(0, 16),
-        status: 'PENDING' 
+        status: 'PENDING'
       });
     }
     setIsModalOpen(true);
@@ -105,37 +105,37 @@ export default function Keuangan() {
 
   const renderTabs = () => (
     <div className="flex gap-4 mb-6 border-b border-gray-200 pb-2" style={{ overflowX: 'auto', whiteSpace: 'nowrap', WebkitOverflowScrolling: 'touch' }}>
-      <button 
+      <button
         className={`font-semibold pb-2 ${activeTab === 'REKAP' ? 'text-primary border-b-2 border-primary' : 'text-gray-500'}`}
         onClick={() => setActiveTab('REKAP')}
       >
         Rekap Laporan
       </button>
-      <button 
+      <button
         className={`font-semibold pb-2 ${activeTab === 'SALES' ? 'text-primary border-b-2 border-primary' : 'text-gray-500'}`}
         onClick={() => setActiveTab('SALES')}
       >
         Riwayat Transaksi
       </button>
-      <button 
+      <button
         className={`font-semibold pb-2 ${activeTab === 'EXPENSE' ? 'text-primary border-b-2 border-primary' : 'text-gray-500'}`}
         onClick={() => setActiveTab('EXPENSE')}
       >
         Pengeluaran Usaha
       </button>
-      <button 
+      <button
         className={`font-semibold pb-2 ${activeTab === 'MARGIN' ? 'text-primary border-b-2 border-primary' : 'text-gray-500'}`}
         onClick={() => setActiveTab('MARGIN')}
       >
         Analisis Margin
       </button>
-      <button 
+      <button
         className={`font-semibold pb-2 ${activeTab === 'PAYABLE' ? 'text-primary border-b-2 border-primary' : 'text-gray-500'}`}
         onClick={() => setActiveTab('PAYABLE')}
       >
         Hutang
       </button>
-      <button 
+      <button
         className={`font-semibold pb-2 ${activeTab === 'RECEIVABLE' ? 'text-primary border-b-2 border-primary' : 'text-gray-500'}`}
         onClick={() => setActiveTab('RECEIVABLE')}
       >
@@ -299,8 +299,8 @@ export default function Keuangan() {
           {finances.length > 0 ? (
             finances.map((item) => (
               <tr key={item.id}>
-                <td>{new Date(item.date).toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year:'numeric'})}</td>
-                
+                <td>{new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+
                 {activeTab === 'SALES' ? (
                   <>
                     <td>
@@ -323,7 +323,7 @@ export default function Keuangan() {
                     <td className="font-semibold text-gray-700">Rp {Number(item.amount || 0).toLocaleString('id-ID')}</td>
                     {activeTab !== 'EXPENSE' && (
                       <td>
-                        <button 
+                        <button
                           className={`px-3 py-1 text-xs rounded-full font-bold ${item.status === 'PAID' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}
                           onClick={() => handleUpdateStatus(item.id, item.status)}
                         >
@@ -440,7 +440,7 @@ export default function Keuangan() {
           <tbody>
             ${finances.map(item => `
               <tr>
-                <td>${new Date(item.date).toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year:'numeric'})}</td>
+                <td>${new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
                 <td>${item.receiptNumber || '#' + item.id}</td>
                 <td>${item.type}</td>
                 <td>Rp ${Number(item.total || 0).toLocaleString('id-ID')}</td>
@@ -458,7 +458,7 @@ export default function Keuangan() {
           <tbody>
             ${finances.map(item => `
               <tr>
-                <td>${new Date(item.date).toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year:'numeric'})}</td>
+                <td>${new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
                 <td>${item.description || '-'}</td>
                 <td>Rp ${Number(item.amount || 0).toLocaleString('id-ID')}</td>
                 <td>${item.status || '-'}</td>
@@ -546,8 +546,8 @@ export default function Keuangan() {
       {isLockedTab
         ? renderPaywall()
         : activeTab === 'REKAP' ? renderRekap()
-        : activeTab === 'MARGIN' ? renderMargin()
-        : renderTable()
+          : activeTab === 'MARGIN' ? renderMargin()
+            : renderTable()
       }
 
       {isModalOpen && (
@@ -557,7 +557,7 @@ export default function Keuangan() {
             <form onSubmit={handleSave}>
               <div className="form-group">
                 <label>Tipe</label>
-                <select name="type" value={formData.type} onChange={(e) => setFormData({...formData, type: e.target.value})} required disabled={activeTab !== 'REKAP' && activeTab !== 'EXPENSE' && activeTab !== 'PAYABLE' && activeTab !== 'RECEIVABLE'}>
+                <select name="type" value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })} required disabled={activeTab !== 'REKAP' && activeTab !== 'EXPENSE' && activeTab !== 'PAYABLE' && activeTab !== 'RECEIVABLE'}>
                   <option value="EXPENSE">Pengeluaran Usaha</option>
                   <option value="PAYABLE">Hutang</option>
                   <option value="RECEIVABLE">Piutang</option>
@@ -565,20 +565,20 @@ export default function Keuangan() {
               </div>
               <div className="form-group">
                 <label>Tanggal</label>
-                <input type="datetime-local" name="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} required />
+                <input type="datetime-local" name="date" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} required />
               </div>
               <div className="form-group">
                 <label>Deskripsi</label>
-                <input type="text" name="description" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} required placeholder="Contoh: Beli Token Listrik" />
+                <input type="text" name="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} required placeholder="Contoh: Beli Token Listrik" />
               </div>
               <div className="form-group">
                 <label>Jumlah (Rp)</label>
-                <input type="number" name="amount" value={formData.amount} onChange={(e) => setFormData({...formData, amount: e.target.value})} required />
+                <input type="number" name="amount" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} required />
               </div>
               {formData.type !== 'EXPENSE' && (
                 <div className="form-group">
                   <label>Status</label>
-                  <select name="status" value={formData.status} onChange={(e) => setFormData({...formData, status: e.target.value})}>
+                  <select name="status" value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
                     <option value="PENDING">PENDING (Belum Lunas)</option>
                     <option value="PAID">PAID (Lunas)</option>
                   </select>
