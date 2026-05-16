@@ -407,7 +407,7 @@ export default function Keuangan() {
           <button className="btn btn-secondary" onClick={handleExportPDF}>
             Cetak PDF
           </button>
-          {activeTab !== 'REKAP' && (
+          {activeTab !== 'REKAP' && activeTab !== 'SALES' && !isLockedTab && (
             <button className="btn btn-primary" onClick={() => handleOpenModal()}>
               <Plus size={18} /> Tambah Data
             </button>
