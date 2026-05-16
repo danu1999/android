@@ -500,9 +500,9 @@ export default function Keuangan() {
           <button className="btn btn-secondary" onClick={handleExportPDF}>
             Cetak PDF
           </button>
-          {activeTab !== 'REKAP' && activeTab !== 'SALES' && !isLockedTab && (
+          {activeTab !== 'REKAP' && activeTab !== 'SALES' && activeTab !== 'MARGIN' && !isLockedTab && (
             <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-              <Plus size={18} /> Tambah Data
+              <Plus size={18} /> Tambah {activeTab === 'EXPENSE' ? 'Pengeluaran' : activeTab === 'PAYABLE' ? 'Hutang' : 'Piutang'}
             </button>
           )}
         </div>
@@ -520,11 +520,11 @@ export default function Keuangan() {
       {isModalOpen && (
         <div className="modal-overlay">
           <div className="modal-content glass-panel">
-            <h2>{formData.id ? 'Edit Data' : 'Tambah Data'} {activeTab}</h2>
+            <h2>{formData.id ? 'Edit' : 'Tambah'} {activeTab === 'EXPENSE' ? 'Pengeluaran Usaha' : activeTab === 'PAYABLE' ? 'Hutang' : 'Piutang'}</h2>
             <form onSubmit={handleSave}>
               <div className="form-group">
                 <label>Tipe</label>
-                <select name="type" value={formData.type} onChange={(e) => setFormData({...formData, type: e.target.value})} required disabled={activeTab !== 'REKAP'}>
+                <select name="type" value={formData.type} onChange={(e) => setFormData({...formData, type: e.target.value})} required disabled={activeTab !== 'REKAP' && activeTab !== 'EXPENSE' && activeTab !== 'PAYABLE' && activeTab !== 'RECEIVABLE'}>
                   <option value="EXPENSE">Pengeluaran Usaha</option>
                   <option value="PAYABLE">Hutang (Payable)</option>
                   <option value="RECEIVABLE">Piutang (Receivable)</option>
