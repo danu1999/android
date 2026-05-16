@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, ShoppingCart, Trash2, CreditCard, QrCode, Printer } from 'lucide-react';
+import { Search, ShoppingCart, Trash2, CreditCard, QrCode, Printer, X } from 'lucide-react';
 import api from '../api';
 
 export default function Kasir() {
@@ -309,8 +309,13 @@ export default function Kasir() {
                 <Trash2 size={16} />
               </button>
             )}
-            <button className="btn btn-secondary text-xs px-2 py-1 md:hidden" onClick={() => setIsMobileCartOpen(false)}>
-              Tutup
+            <button 
+              className="btn-icon bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-full p-2 md:hidden flex items-center justify-center" 
+              onClick={() => setIsMobileCartOpen(false)}
+              title="Tutup Keranjang"
+              style={{ width: '36px', height: '36px' }}
+            >
+              <X size={20} />
             </button>
           </div>
         </div>
