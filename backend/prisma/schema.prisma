@@ -58,6 +58,8 @@ model Transaction {
   
   customerId      Int?
   customer        Customer? @relation(fields: [customerId], references: [id])
+  customerName    String?
+  notes           String?
   
   items           TransactionItem[]
   createdAt       DateTime @default(now())

@@ -94,7 +94,7 @@ app.get('/api/transactions', async (req, res) => {
 
 app.post('/api/transactions', async (req, res) => {
   try {
-    const { items, total, discount, paymentMethod, type, customerId, date } = req.body;
+    const { items, total, discount, paymentMethod, type, customerId, date, status, notes, customerName } = req.body;
     
     // items = [{ productId, quantity, price, discount }]
     // Find admin for demo (in reality, from auth token)
@@ -110,7 +110,10 @@ app.post('/api/transactions', async (req, res) => {
         receiptNumber: `INV-${Date.now()}`,
         total: Number(total),
         discount: Number(discount || 0),
-        paymentMethod,
+        paymentMethod: paymentMethod || 'PENDING',
+        status: status || 'COMPLETED',
+        notes: notes || null,
+        customerName: customerName || null,
         type: type || 'SALES',
         date: date ? new Date(date) : new Date(),
         employeeId: employee!.id,
@@ -127,7 +130,8 @@ app.post('/api/transactions', async (req, res) => {
       include: { items: true }
     });
 
-    // Update stock
+    // Update stock ONLY if it's not pending/queue, or maybe we update stock even for queue to reserve it?
+    // Usually queue reserves stock. Let's keep it updating stock.
     for (const item of items) {
       await prisma.product.update({
         where: { id: item.productId },
@@ -139,6 +143,22 @@ app.post('/api/transactions', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(400).json({ error: 'Failed to process transaction' });
+  }
+});
+
+// Update transaction (e.g. paying a pending queue)
+app.put('/api/transactions/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { paymentMethod, status } = req.body;
+    const transaction = await prisma.transaction.update({
+      where: { id: Number(id) },
+      data: { paymentMethod, status }
+    });
+    res.json(transaction);
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({ error: 'Failed to update transaction' });
   }
 });
 

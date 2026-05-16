@@ -11,6 +11,10 @@ export default function Kasir() {
   const [receiptData, setReceiptData] = useState(null);
   const [isBackdate, setIsBackdate] = useState(false);
   const [transactionDate, setTransactionDate] = useState('');
+  const [customerName, setCustomerName] = useState('');
+  const [notes, setNotes] = useState('');
+  const [isQueueModalOpen, setIsQueueModalOpen] = useState(false);
+  const [queuedTransactions, setQueuedTransactions] = useState([]);
 
   useEffect(() => {
     fetchProducts();
@@ -93,7 +97,7 @@ export default function Kasir() {
     }));
   };
 
-  const handleCheckout = async () => {
+  const handleCheckout = async (isQueue = false) => {
     try {
       const transactionData = {
         items: cart.map(item => ({
@@ -104,20 +108,51 @@ export default function Kasir() {
         })),
         total: totalAmount,
         discount: globalDiscount,
-        paymentMethod: paymentMethod,
+        paymentMethod: isQueue ? 'PENDING' : paymentMethod,
+        status: isQueue ? 'PENDING' : 'COMPLETED',
+        notes: notes,
+        customerName: customerName,
         type: isBackdate ? 'BACKDATE' : 'SALES',
         date: isBackdate ? transactionDate : undefined
       };
       
       const res = await api.post('/transactions', transactionData);
-      setReceiptData(res.data);
+      
+      if (!isQueue) {
+        setReceiptData(res.data);
+      } else {
+        alert('Berhasil ditambahkan ke antrian!');
+      }
+      
       setCart([]);
       setGlobalDiscount(0);
+      setCustomerName('');
+      setNotes('');
       setIsPaymentModalOpen(false);
       fetchProducts(); // Refresh stock
     } catch (err) {
       console.error('Checkout failed', err);
       alert('Gagal memproses transaksi');
+    }
+  };
+
+  const fetchQueue = async () => {
+    try {
+      const res = await api.get('/transactions');
+      setQueuedTransactions(res.data.filter(t => t.status === 'PENDING'));
+      setIsQueueModalOpen(true);
+    } catch(err) {
+      console.error('Failed to fetch queue', err);
+    }
+  };
+
+  const payQueue = async (id, method) => {
+    try {
+      await api.put(`/transactions/${id}`, { status: 'COMPLETED', paymentMethod: method });
+      alert('Pembayaran antrian berhasil!');
+      setIsQueueModalOpen(false);
+    } catch(err) {
+      alert('Gagal memproses pembayaran antrian');
     }
   };
 
@@ -198,14 +233,19 @@ export default function Kasir() {
     <div className="kasir-layout flex-col md:flex-row h-auto md:h-full">
       {/* Left: Product Grid */}
       <div className="kasir-main">
-        <div className="glass-panel search-bar mb-4">
-          <Search size={20} className="text-gray-400" />
-          <input 
-            type="text" 
-            placeholder="Cari produk..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+        <div className="flex gap-2 mb-4">
+          <div className="glass-panel search-bar flex-1 mb-0">
+            <Search size={20} className="text-gray-400" />
+            <input 
+              type="text" 
+              placeholder="Cari produk..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <button className="btn btn-secondary whitespace-nowrap" onClick={fetchQueue}>
+            Daftar Antrian
+          </button>
         </div>
 
         {/* Low Stock Alert */}
@@ -294,6 +334,22 @@ export default function Kasir() {
         </div>
 
         <div className="cart-summary mt-auto">
+          <div className="flex flex-col gap-2 mb-4 border-t pt-4">
+            <input 
+              type="text" 
+              placeholder="Nama / No. Meja (opsional)" 
+              className="p-2 border rounded outline-none text-sm"
+              value={customerName}
+              onChange={e => setCustomerName(e.target.value)}
+            />
+            <textarea 
+              placeholder="Catatan Pesanan (opsional)" 
+              className="p-2 border rounded outline-none text-xs"
+              rows={2}
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+            />
+          </div>
           <div className="flex justify-between items-center mb-2 text-sm">
             <span>Diskon Transaksi (Rp):</span>
             <input 
@@ -307,13 +363,22 @@ export default function Kasir() {
             <span>Total</span>
             <span>Rp {totalAmount > 0 ? totalAmount.toLocaleString('id-ID') : 0}</span>
           </div>
-          <button 
-            className="btn btn-primary w-full mt-4 justify-center py-3 text-lg"
-            disabled={cart.length === 0}
-            onClick={() => setIsPaymentModalOpen(true)}
-          >
-            Bayar
-          </button>
+          <div className="flex flex-col gap-2 mt-4">
+            <button 
+              className="btn btn-secondary w-full justify-center py-2 text-sm"
+              disabled={cart.length === 0}
+              onClick={() => handleCheckout(true)}
+            >
+              Tambahkan Antrian (Bayar Nanti)
+            </button>
+            <button 
+              className="btn btn-primary w-full justify-center py-3 text-lg"
+              disabled={cart.length === 0}
+              onClick={() => setIsPaymentModalOpen(true)}
+            >
+              Bayar Sekarang
+            </button>
+          </div>
         </div>
       </div>
 
@@ -379,7 +444,7 @@ export default function Kasir() {
 
             <div className="modal-actions justify-center mt-6">
               <button className="btn btn-secondary" onClick={() => setIsPaymentModalOpen(false)}>Batal</button>
-              <button className="btn btn-primary px-8" onClick={handleCheckout}>Proses Pembayaran</button>
+              <button className="btn btn-primary px-8" onClick={() => handleCheckout(false)}>Proses Pembayaran</button>
             </div>
           </div>
         </div>
@@ -402,6 +467,37 @@ export default function Kasir() {
               <button className="btn btn-secondary justify-center mt-2" onClick={() => setReceiptData(null)}>
                 Tutup
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Queue Modal */}
+      {isQueueModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content glass-panel" style={{ maxWidth: 600 }}>
+            <div className="flex justify-between items-center mb-4">
+              <h2>Daftar Antrian</h2>
+              <button className="btn btn-secondary" onClick={() => setIsQueueModalOpen(false)}>Tutup</button>
+            </div>
+            <div className="max-h-96 overflow-y-auto pr-2">
+              {queuedTransactions.length === 0 ? (
+                <p className="text-center text-gray-500 py-4">Tidak ada antrian.</p>
+              ) : (
+                queuedTransactions.map(trx => (
+                  <div key={trx.id} className="border p-3 rounded mb-2 flex justify-between items-center bg-gray-50">
+                    <div>
+                      <div className="font-bold">{trx.customerName || trx.receiptNumber}</div>
+                      <div className="text-xs text-gray-600">Total: Rp {trx.total.toLocaleString('id-ID')} ({trx.items.length} item)</div>
+                      {trx.notes && <div className="text-xs text-blue-600 mt-1">Catatan: {trx.notes}</div>}
+                    </div>
+                    <div className="flex flex-col md:flex-row gap-2">
+                      <button className="btn btn-primary text-xs" onClick={() => payQueue(trx.id, 'CASH')}>Bayar CASH</button>
+                      <button className="btn btn-primary text-xs" onClick={() => payQueue(trx.id, 'QRIS')}>Bayar QRIS</button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
