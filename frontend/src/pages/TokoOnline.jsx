@@ -121,7 +121,7 @@ export default function TokoOnline() {
               <div key={product.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow overflow-hidden border border-gray-100 flex flex-col">
                 <div className="h-40 md:h-48 bg-gray-100 flex items-center justify-center relative">
                   {product.image ? (
-                    <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                    <img src={product.image} alt={product.name} className="w-full h-full object-contain p-2" />
                   ) : (
                     <ShoppingBag size={40} className="text-gray-300" />
                   )}

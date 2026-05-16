@@ -197,7 +197,7 @@ export default function Kasir() {
             >
               <div className="product-image h-24 md:h-32">
                 {product.image ? (
-                  <img src={product.image} alt={product.name} />
+                  <img src={product.image} alt={product.name} className="w-full h-full object-contain p-2" />
                 ) : (
                   <div className="image-placeholder">No Image</div>
                 )}
