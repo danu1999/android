@@ -1,0 +1,99 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Employee {
+  id        Int      @id @default(autoincrement())
+  name      String
+  role      String   @default("KASIR") // KASIR or ADMIN
+  pin       String   
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  transactions Transaction[]
+}
+
+model Customer {
+  id        Int      @id @default(autoincrement())
+  name      String
+  phone     String?
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  transactions Transaction[]
+  receivables Finance[] @relation("CustomerReceivables")
+}
+
+model Product {
+  id          Int      @id @default(autoincrement())
+  name        String
+  price       Float
+  stock       Int      @default(0)
+  image       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  transactionItems TransactionItem[]
+}
+
+model Transaction {
+  id              Int      @id @default(autoincrement())
+  receiptNumber   String   @unique
+  date            DateTime @default(now())
+  total           Float
+  discount        Float    @default(0)
+  paymentMethod   String   // QRIS, CASH
+  status          String   @default("COMPLETED") // COMPLETED, CANCELLED
+  type            String   @default("SALES") // SALES, BACKDATE
+  
+  employeeId      Int
+  employee        Employee @relation(fields: [employeeId], references: [id])
+  
+  customerId      Int?
+  customer        Customer? @relation(fields: [customerId], references: [id])
+  
+  items           TransactionItem[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model TransactionItem {
+  id            Int      @id @default(autoincrement())
+  transactionId Int
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+  
+  productId     Int
+  product       Product @relation(fields: [productId], references: [id])
+  
+  quantity      Int
+  price         Float
+  discount      Float    @default(0)
+}
+
+model Finance {
+  id          Int      @id @default(autoincrement())
+  type        String   // PAYABLE (Hutang), RECEIVABLE (Piutang), EXPENSE (Pengeluaran Usaha)
+  amount      Float
+  description String
+  date        DateTime @default(now())
+  status      String   @default("PENDING") // PENDING, PAID
+  
+  customerId  Int?
+  customer    Customer? @relation("CustomerReceivables", fields: [customerId], references: [id])
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Promo {
+  id          Int      @id @default(autoincrement())
+  name        String
+  type        String   // PRODUCT, TRANSACTION
+  value       Float    // Discount percentage or flat amount
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
