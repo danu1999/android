@@ -116,9 +116,10 @@ export default function Kasir() {
     searchBox: { flex:1, display:'flex', alignItems:'center', gap:'8px', background:'#F1F3FF', borderRadius:'12px', padding:'10px 14px' },
     searchInput: { border:'none', background:'transparent', outline:'none', fontSize:'0.9rem', width:'100%', color:'#1F2937' },
     queueBtn: { padding:'10px 14px', borderRadius:'12px', border:'none', background:'#EEF2FF', color:'#4F46E5', fontWeight:700, fontSize:'0.82rem', cursor:'pointer', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:'6px' },
-    grid: { display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:'10px', padding:'12px 12px 160px', overflowY:'auto', flex:1 },
-    card: { background:'white', borderRadius:'14px', overflow:'hidden', boxShadow:'0 2px 8px rgba(0,0,0,0.06)', cursor:'pointer', transition:'transform 0.15s, box-shadow 0.15s', userSelect:'none', padding:'12px', display:'flex', flexDirection:'column', gap:'4px', minHeight:'72px', justifyContent:'center' },
-    cardBody: { padding:0 },
+    grid: { display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:'8px', padding:'12px 12px 160px', overflowY:'auto', flex:1 },
+    card: { background:'white', borderRadius:'12px', boxShadow:'0 1px 6px rgba(0,0,0,0.07)', cursor:'pointer', transition:'transform 0.15s', userSelect:'none', display:'flex', flexDirection:'column', overflow:'hidden' },
+    cardThumb: { width:'100%', height:'80px', background:'#EEF2FF', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden', flexShrink:0 },
+    cardBody: { padding:'8px 10px 10px', display:'flex', flexDirection:'column', gap:'2px' },
     cardName: { fontWeight:600, fontSize:'0.85rem', color:'#1F2937', lineHeight:1.3, marginBottom:'4px' },
     cardPrice: { fontWeight:800, fontSize:'0.95rem', color:'#4F46E5' },
     cardStock: { fontSize:'0.7rem', color:'#9CA3AF', marginTop:'3px' },
@@ -163,15 +164,25 @@ export default function Kasir() {
             onTouchStart={e => e.currentTarget.style.transform = 'scale(0.97)'}
             onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}
           >
-            {p.stock <= 5 && p.stock > 0 && (
-              <div style={{ fontSize:'0.65rem', fontWeight:800, color:'#F59E0B', marginBottom:'2px' }}>⚠️ Sisa {p.stock}</div>
-            )}
-            {p.stock === 0 && (
-              <div style={{ fontSize:'0.65rem', fontWeight:800, color:'#EF4444', marginBottom:'2px' }}>⛔ HABIS</div>
-            )}
-            <div style={{ fontWeight:700, fontSize:'0.85rem', color:'#1F2937', lineHeight:1.3 }}>{p.name}</div>
-            <div style={{ fontWeight:800, fontSize:'0.95rem', color:'#4F46E5' }}>Rp {p.price.toLocaleString('id-ID')}</div>
-            <div style={{ fontSize:'0.7rem', color:'#9CA3AF' }}>{p.stock} {p.unit||'pcs'}</div>
+            {/* Image thumbnail */}
+            <div style={{ ...S.cardThumb, position:'relative' }}>
+              {p.image
+                ? <img src={p.image} alt={p.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                : <span style={{ fontSize:'1.8rem' }}>🛒</span>
+              }
+              {p.stock > 0 && p.stock <= 5 && (
+                <span style={{ position:'absolute', top:4, right:4, background:'#F59E0B', color:'white', fontSize:'0.6rem', fontWeight:800, padding:'1px 5px', borderRadius:'99px' }}>Sisa {p.stock}</span>
+              )}
+              {p.stock === 0 && (
+                <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.4)', display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontSize:'0.7rem', fontWeight:800 }}>HABIS</div>
+              )}
+            </div>
+            {/* Info */}
+            <div style={S.cardBody}>
+              <div style={{ fontWeight:700, fontSize:'0.78rem', color:'#1F2937', lineHeight:1.3 }}>{p.name}</div>
+              <div style={{ fontWeight:800, fontSize:'0.82rem', color:'#4F46E5' }}>Rp {p.price.toLocaleString('id-ID')}</div>
+              <div style={{ fontSize:'0.65rem', color:'#9CA3AF' }}>{p.stock} {p.unit||'pcs'}</div>
+            </div>
           </div>
         ))}
       </div>
