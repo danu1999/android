@@ -117,9 +117,8 @@ export default function Kasir() {
     searchInput: { border:'none', background:'transparent', outline:'none', fontSize:'0.9rem', width:'100%', color:'#1F2937' },
     queueBtn: { padding:'10px 14px', borderRadius:'12px', border:'none', background:'#EEF2FF', color:'#4F46E5', fontWeight:700, fontSize:'0.82rem', cursor:'pointer', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:'6px' },
     grid: { display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:'10px', padding:'12px 12px 160px', overflowY:'auto', flex:1 },
-    card: { background:'white', borderRadius:'16px', overflow:'hidden', boxShadow:'0 2px 8px rgba(0,0,0,0.06)', cursor:'pointer', transition:'transform 0.15s, box-shadow 0.15s', userSelect:'none' },
-    cardImg: { height:'110px', background:'#F1F3FF', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden' },
-    cardBody: { padding:'10px 12px 12px' },
+    card: { background:'white', borderRadius:'14px', overflow:'hidden', boxShadow:'0 2px 8px rgba(0,0,0,0.06)', cursor:'pointer', transition:'transform 0.15s, box-shadow 0.15s', userSelect:'none', padding:'12px', display:'flex', flexDirection:'column', gap:'4px', minHeight:'72px', justifyContent:'center' },
+    cardBody: { padding:0 },
     cardName: { fontWeight:600, fontSize:'0.85rem', color:'#1F2937', lineHeight:1.3, marginBottom:'4px' },
     cardPrice: { fontWeight:800, fontSize:'0.95rem', color:'#4F46E5' },
     cardStock: { fontSize:'0.7rem', color:'#9CA3AF', marginTop:'3px' },
@@ -164,27 +163,15 @@ export default function Kasir() {
             onTouchStart={e => e.currentTarget.style.transform = 'scale(0.97)'}
             onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}
           >
-            <div style={S.cardImg}>
-              {p.image
-                ? <img src={p.image} alt={p.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                : <span style={{ fontSize:'2.5rem' }}>🛒</span>
-              }
-              {p.stock <= 5 && p.stock > 0 && (
-                <div style={{ position:'absolute', top:6, right:6, background:'#F59E0B', color:'white', fontSize:'0.65rem', fontWeight:800, padding:'2px 6px', borderRadius:'99px' }}>
-                  Sisa {p.stock}
-                </div>
-              )}
-              {p.stock === 0 && (
-                <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontWeight:800, fontSize:'0.8rem', borderRadius:'16px 16px 0 0' }}>
-                  HABIS
-                </div>
-              )}
-            </div>
-            <div style={S.cardBody}>
-              <div style={S.cardName}>{p.name}</div>
-              <div style={S.cardPrice}>Rp {p.price.toLocaleString('id-ID')}</div>
-              <div style={S.cardStock}>{p.stock} {p.unit||'pcs'}</div>
-            </div>
+            {p.stock <= 5 && p.stock > 0 && (
+              <div style={{ fontSize:'0.65rem', fontWeight:800, color:'#F59E0B', marginBottom:'2px' }}>⚠️ Sisa {p.stock}</div>
+            )}
+            {p.stock === 0 && (
+              <div style={{ fontSize:'0.65rem', fontWeight:800, color:'#EF4444', marginBottom:'2px' }}>⛔ HABIS</div>
+            )}
+            <div style={{ fontWeight:700, fontSize:'0.85rem', color:'#1F2937', lineHeight:1.3 }}>{p.name}</div>
+            <div style={{ fontWeight:800, fontSize:'0.95rem', color:'#4F46E5' }}>Rp {p.price.toLocaleString('id-ID')}</div>
+            <div style={{ fontSize:'0.7rem', color:'#9CA3AF' }}>{p.stock} {p.unit||'pcs'}</div>
           </div>
         ))}
       </div>
