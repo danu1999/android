@@ -116,18 +116,18 @@ export default function Kasir() {
     searchBox: { flex:1, display:'flex', alignItems:'center', gap:'8px', background:'#F1F3FF', borderRadius:'12px', padding:'10px 14px' },
     searchInput: { border:'none', background:'transparent', outline:'none', fontSize:'0.9rem', width:'100%', color:'#1F2937' },
     queueBtn: { padding:'10px 14px', borderRadius:'12px', border:'none', background:'#EEF2FF', color:'#4F46E5', fontWeight:700, fontSize:'0.82rem', cursor:'pointer', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:'6px' },
-    grid: { display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:'10px', padding:'12px 12px 120px', overflowY:'auto', flex:1 },
+    grid: { display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:'10px', padding:'12px 12px 160px', overflowY:'auto', flex:1 },
     card: { background:'white', borderRadius:'16px', overflow:'hidden', boxShadow:'0 2px 8px rgba(0,0,0,0.06)', cursor:'pointer', transition:'transform 0.15s, box-shadow 0.15s', userSelect:'none' },
     cardImg: { height:'110px', background:'#F1F3FF', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden' },
     cardBody: { padding:'10px 12px 12px' },
     cardName: { fontWeight:600, fontSize:'0.85rem', color:'#1F2937', lineHeight:1.3, marginBottom:'4px' },
     cardPrice: { fontWeight:800, fontSize:'0.95rem', color:'#4F46E5' },
     cardStock: { fontSize:'0.7rem', color:'#9CA3AF', marginTop:'3px' },
-    // bottom bar
-    bottomBar: { position:'fixed', bottom:0, left:0, right:0, zIndex:60 },
+    // bottom bar — sits above the mobile-bottom-nav (~65px)
+    bottomBar: { position:'fixed', bottom:'65px', left:0, right:0, zIndex:55 },
     backdrop: { position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', backdropFilter:'blur(3px)', zIndex:-1 },
-    sheet: (open) => ({ background:'white', borderRadius: open?'20px 20px 0 0':'16px 16px 0 0', boxShadow:'0 -6px 30px rgba(0,0,0,0.12)', transition:'max-height 0.4s cubic-bezier(0.4,0,0.2,1)', maxHeight: open?'88dvh':'68px', overflow:'hidden', display:'flex', flexDirection:'column' }),
-    sheetHandle: { padding:'0 16px', borderBottom: cartOpen?'1px solid #F3F4F6':'none', cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'space-between', minHeight:'68px', background:'white' },
+    sheet: (open) => ({ background:'white', borderRadius: open?'20px 20px 0 0':'16px 16px 0 0', boxShadow:'0 -6px 30px rgba(0,0,0,0.12)', transition:'max-height 0.4s cubic-bezier(0.4,0,0.2,1)', maxHeight: open?'65dvh':'56px', overflow:'hidden', display:'flex', flexDirection:'column' }),
+    sheetHandle: { padding:'0 16px', borderBottom: cartOpen?'1px solid #F3F4F6':'none', cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'space-between', minHeight:'56px', background:'white' },
     sheetBody: { overflowY:'auto', flex:1, padding:'0 16px 8px' },
     input: { width:'100%', padding:'11px 14px', borderRadius:'10px', border:'1.5px solid #E5E7EB', outline:'none', fontSize:'0.9rem', boxSizing:'border-box', background:'#FAFAFA' },
     pill: (active) => ({ padding:'12px 24px', borderRadius:'12px', border:'none', fontWeight:700, fontSize:'0.9rem', cursor:'pointer', background: active?'#4F46E5':'#EEF2FF', color: active?'white':'#4F46E5', transition:'all 0.2s' }),
@@ -203,7 +203,7 @@ export default function Kasir() {
                 )}
               </div>
               <span style={{ fontWeight:700, fontSize:'1rem', color:'#1F2937' }}>
-                {totalItems > 0 ? `${totalItems} item` : 'Keranjang'}
+                {totalItems > 0 ? `${totalItems} item` : 'Buka Keranjang'}
               </span>
             </div>
             <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
