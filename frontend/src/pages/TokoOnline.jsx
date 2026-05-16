@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingBag, Search, ExternalLink } from 'lucide-react';
+import { ShoppingBag, Search, X, ZoomIn } from 'lucide-react';
 import api from '../api';
 
 export default function TokoOnline() {
   const [products, setProducts] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-
   const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
 
   useEffect(() => {
-    // In a real app, this would be a public endpoint without auth needed
     const fetchProducts = async () => {
       try {
         const res = await api.get('/products');
@@ -22,7 +21,7 @@ export default function TokoOnline() {
     fetchProducts();
   }, []);
 
-  const filteredProducts = products.filter(p => 
+  const filteredProducts = products.filter(p =>
     p.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -33,9 +32,9 @@ export default function TokoOnline() {
     }
     const existing = cart.find(item => item.product.id === product.id);
     if (existing) {
-      setCart(cart.map(item => 
-        item.product.id === product.id 
-          ? { ...item, quantity: item.quantity + 1 } 
+      setCart(cart.map(item =>
+        item.product.id === product.id
+          ? { ...item, quantity: item.quantity + 1 }
           : item
       ));
     } else {
@@ -62,168 +61,350 @@ export default function TokoOnline() {
 
   const checkoutWhatsApp = () => {
     if (cart.length === 0) return;
-    
     let message = "Halo, saya ingin memesan dari katalog online:\n\n";
     cart.forEach((item, index) => {
       message += `${index + 1}. ${item.product.name}\n   ${item.quantity} x Rp ${item.product.price.toLocaleString('id-ID')} = Rp ${(item.quantity * item.product.price).toLocaleString('id-ID')}\n`;
     });
     message += `\n*Total Belanja: Rp ${cartTotal.toLocaleString('id-ID')}*\n\nTerima kasih.`;
-    
-    // Ganti nomor WhatsApp di bawah ini dengan nomor toko yang sebenarnya
-    const waNumber = "6281234567890"; 
+    const waNumber = "6281234567890";
     const encodedMessage = encodeURIComponent(message);
     window.open(`https://wa.me/${waNumber}?text=${encodedMessage}`, '_blank');
   };
 
   return (
-    <div className="page-container" style={{ padding: '0', background: '#F9FAFB', minHeight: '100vh' }}>
-      {/* Public Header */}
-      <header className="bg-white shadow-sm px-6 py-4 flex justify-between items-center mb-6 sticky top-0 z-10">
-        <div className="flex items-center gap-2 text-indigo-600 font-bold text-xl">
-          <ShoppingBag size={24} />
+    <div style={{ padding: '0', background: '#F1F5F9', minHeight: '100vh' }}>
+
+      {/* Header */}
+      <header style={{
+        background: '#fff',
+        boxShadow: '0 1px 8px rgba(0,0,0,0.07)',
+        padding: '12px 20px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        position: 'sticky',
+        top: 0,
+        zIndex: 40,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#4F46E5', fontWeight: 800, fontSize: 18 }}>
+          <ShoppingBag size={22} />
           <span>POSBah Online</span>
         </div>
-        <button 
-          className="btn btn-primary text-sm flex items-center gap-2 relative"
+        <button
           onClick={() => setIsCartOpen(true)}
+          style={{
+            position: 'relative',
+            background: '#4F46E5',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 12,
+            padding: '8px 16px',
+            fontWeight: 700,
+            fontSize: 14,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
         >
-          <ShoppingBag size={18} /> Keranjang
+          <ShoppingBag size={16} />
+          Keranjang
           {cartItemsCount > 0 && (
-            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full">
+            <span style={{
+              position: 'absolute', top: -8, right: -8,
+              background: '#EF4444', color: '#fff',
+              width: 20, height: 20, borderRadius: '50%',
+              fontSize: 11, fontWeight: 800,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
               {cartItemsCount}
             </span>
           )}
         </button>
       </header>
 
-      <div className="max-w-5xl mx-auto px-4 pb-12">
-        <div className="text-center mb-10">
-          <h1 className="text-3xl font-extrabold text-gray-900 mb-4">Katalog Digital Kami</h1>
-          <p className="text-gray-500 max-w-2xl mx-auto">
-            Selamat datang di toko online kami. Jelajahi produk-produk unggulan kami dan pesan dengan mudah melalui WhatsApp.
-          </p>
+      <div style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px 60px' }}>
+
+        {/* Title */}
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+          <h1 style={{ fontSize: 26, fontWeight: 900, color: '#1E293B', marginBottom: 8 }}>Katalog Digital Kami</h1>
+          <p style={{ color: '#64748B', fontSize: 14 }}>Pilih produk favorit Anda dan pesan langsung via WhatsApp.</p>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm p-2 flex items-center gap-2 mb-8 max-w-lg mx-auto border border-gray-100">
-          <Search className="text-gray-400 ml-2" size={20} />
-          <input 
-            type="text" 
-            placeholder="Cari produk yang Anda inginkan..." 
-            className="w-full p-2 outline-none text-gray-700 bg-transparent"
+        {/* Search */}
+        <div style={{
+          background: '#fff',
+          borderRadius: 16,
+          border: '1px solid #E2E8F0',
+          padding: '8px 14px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          maxWidth: 480,
+          margin: '0 auto 28px',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+        }}>
+          <Search size={18} color="#94A3B8" />
+          <input
+            type="text"
+            placeholder="Cari produk..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ border: 'none', outline: 'none', width: '100%', fontSize: 14, color: '#334155', background: 'transparent' }}
           />
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-          {filteredProducts.length > 0 ? (
-            filteredProducts.map(product => (
-              <div key={product.id} className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow overflow-hidden border border-gray-100 flex flex-col">
-                <div className="h-40 md:h-48 bg-gray-100 flex items-center justify-center relative">
-                  {product.image ? (
-                    <img src={product.image} alt={product.name} className="w-full h-full object-contain p-2" />
-                  ) : (
-                    <ShoppingBag size={40} className="text-gray-300" />
-                  )}
-                  {product.stock < 1 && (
-                    <div className="absolute top-2 right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded">
-                      Habis
+        {/* Product Grid */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+          gap: 16,
+        }}>
+          {filteredProducts.length > 0 ? filteredProducts.map(product => (
+            <div key={product.id} style={{
+              background: '#fff',
+              borderRadius: 16,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
+              overflow: 'hidden',
+              border: '1px solid #E2E8F0',
+              display: 'flex',
+              flexDirection: 'column',
+              transition: 'transform 0.15s, box-shadow 0.15s',
+            }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(0,0,0,0.12)'; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.07)'; }}
+            >
+              {/* Image Box */}
+              <div
+                onClick={() => product.image && setSelectedImage(product.image)}
+                style={{
+                  width: '100%',
+                  aspectRatio: '1 / 1',
+                  background: '#F8FAFC',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  position: 'relative',
+                  cursor: product.image ? 'zoom-in' : 'default',
+                  overflow: 'hidden',
+                }}
+              >
+                {product.image ? (
+                  <>
+                    <img
+                      src={product.image}
+                      alt={product.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 8 }}
+                    />
+                    {/* Zoom hint overlay */}
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      background: 'rgba(79,70,229,0)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      transition: 'background 0.2s',
+                    }}
+                      className="img-hover-overlay"
+                    >
+                      <ZoomIn size={28} color="white" style={{ opacity: 0, transition: 'opacity 0.2s' }} className="zoom-icon" />
                     </div>
-                  )}
-                </div>
-                <div className="p-4 flex-1 flex flex-col">
-                  <h3 className="font-semibold text-gray-800 mb-1 line-clamp-2">{product.name}</h3>
-                  <div className="text-indigo-600 font-bold mt-auto">
-                    Rp {product.price.toLocaleString('id-ID')}
+                  </>
+                ) : (
+                  <ShoppingBag size={40} color="#CBD5E1" />
+                )}
+                {product.stock < 1 && (
+                  <div style={{
+                    position: 'absolute', top: 8, right: 8,
+                    background: '#EF4444', color: '#fff',
+                    fontSize: 10, fontWeight: 700,
+                    padding: '2px 8px', borderRadius: 99,
+                  }}>
+                    Habis
                   </div>
-                  <button 
-                    className={`mt-3 w-full py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-1 transition-colors ${
-                      product.stock < 1 
-                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                        : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-                    }`}
-                    onClick={() => addToCart(product)}
-                    disabled={product.stock < 1}
-                  >
-                    + Keranjang
-                  </button>
-                </div>
+                )}
               </div>
-            ))
-          ) : (
-            <div className="col-span-full text-center py-12 text-gray-500">
+
+              {/* Product Info */}
+              <div style={{ padding: '10px 12px 12px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: '#1E293B', marginBottom: 4, lineHeight: 1.3 }}>
+                  {product.name}
+                </div>
+                <div style={{ color: '#4F46E5', fontWeight: 800, fontSize: 14, marginBottom: 10 }}>
+                  Rp {product.price.toLocaleString('id-ID')}
+                </div>
+                <button
+                  onClick={() => addToCart(product)}
+                  disabled={product.stock < 1}
+                  style={{
+                    width: '100%',
+                    padding: '7px 0',
+                    borderRadius: 10,
+                    border: 'none',
+                    fontWeight: 700,
+                    fontSize: 13,
+                    cursor: product.stock < 1 ? 'not-allowed' : 'pointer',
+                    background: product.stock < 1 ? '#F1F5F9' : '#EEF2FF',
+                    color: product.stock < 1 ? '#94A3B8' : '#4F46E5',
+                    transition: 'background 0.15s',
+                    marginTop: 'auto',
+                  }}
+                >
+                  + Keranjang
+                </button>
+              </div>
+            </div>
+          )) : (
+            <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '40px 0', color: '#94A3B8' }}>
               Produk tidak ditemukan.
             </div>
           )}
         </div>
       </div>
 
-      {/* Cart Modal Overlay */}
+      {/* === IMAGE ZOOM MODAL === */}
+      {selectedImage && (
+        <div
+          onClick={() => setSelectedImage(null)}
+          style={{
+            position: 'fixed', inset: 0,
+            background: 'rgba(0,0,0,0.85)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+            backdropFilter: 'blur(4px)',
+            cursor: 'zoom-out',
+            animation: 'fadeIn 0.2s ease',
+          }}
+        >
+          <img
+            src={selectedImage}
+            alt="Zoom"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '90vw',
+              maxHeight: '85vh',
+              objectFit: 'contain',
+              borderRadius: 16,
+              boxShadow: '0 24px 60px rgba(0,0,0,0.5)',
+              cursor: 'default',
+            }}
+          />
+          <button
+            onClick={() => setSelectedImage(null)}
+            style={{
+              position: 'absolute', top: 16, right: 16,
+              background: 'rgba(255,255,255,0.15)',
+              border: 'none',
+              borderRadius: '50%',
+              width: 40, height: 40,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer',
+              color: '#fff',
+              backdropFilter: 'blur(8px)',
+              transition: 'background 0.2s',
+            }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+      )}
+
+      {/* === CART SIDEBAR === */}
       {isCartOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-end">
-          <div className="bg-white w-full max-w-md h-full shadow-2xl flex flex-col transform transition-transform duration-300">
-            <div className="p-4 border-b flex justify-between items-center bg-indigo-50">
-              <h2 className="text-lg font-bold text-indigo-800 flex items-center gap-2">
+        <div style={{
+          position: 'fixed', inset: 0,
+          background: 'rgba(0,0,0,0.5)',
+          zIndex: 50,
+          display: 'flex',
+          justifyContent: 'flex-end',
+        }}>
+          <div style={{
+            background: '#fff',
+            width: '100%',
+            maxWidth: 400,
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            boxShadow: '-4px 0 24px rgba(0,0,0,0.15)',
+            animation: 'slideIn 0.25s ease',
+          }}>
+            <div style={{
+              padding: '16px 20px',
+              borderBottom: '1px solid #E2E8F0',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: '#EEF2FF',
+            }}>
+              <h2 style={{ fontWeight: 800, color: '#3730A3', display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
                 <ShoppingBag size={20} /> Keranjang Belanja
               </h2>
-              <button 
-                className="text-gray-500 hover:text-gray-800 p-2"
-                onClick={() => setIsCartOpen(false)}
-              >
-                Tutup
+              <button onClick={() => setIsCartOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}>
+                <X size={22} />
               </button>
             </div>
-            
-            <div className="flex-1 overflow-y-auto p-4">
+
+            <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
               {cart.length === 0 ? (
-                <div className="text-center text-gray-500 mt-10">
-                  Keranjang Anda masih kosong.
-                </div>
+                <div style={{ textAlign: 'center', color: '#94A3B8', marginTop: 60 }}>Keranjang masih kosong.</div>
               ) : (
-                <div className="flex flex-col gap-4">
-                  {cart.map(item => (
-                    <div key={item.product.id} className="flex justify-between items-center border-b pb-4">
-                      <div className="flex gap-3 items-center w-full">
-                        {item.product.image ? (
-                          <img src={item.product.image} className="w-12 h-12 object-cover rounded-md" />
-                        ) : (
-                          <div className="w-12 h-12 bg-gray-200 rounded-md flex items-center justify-center"><ShoppingBag size={16} className="text-gray-400" /></div>
-                        )}
-                        <div className="flex-1">
-                          <h4 className="font-semibold text-sm line-clamp-1">{item.product.name}</h4>
-                          <div className="text-indigo-600 font-bold text-sm">Rp {item.product.price.toLocaleString('id-ID')}</div>
-                        </div>
-                        <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
-                          <button className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm text-gray-600" onClick={() => updateQuantity(item.product.id, -1)}>-</button>
-                          <span className="text-sm font-bold w-4 text-center">{item.quantity}</span>
-                          <button className="w-6 h-6 flex items-center justify-center bg-white rounded shadow-sm text-gray-600" onClick={() => updateQuantity(item.product.id, 1)}>+</button>
-                        </div>
-                        <button className="text-red-500 hover:text-red-700 ml-2 p-2" onClick={() => removeFromCart(item.product.id)}>
-                          Hapus
-                        </button>
-                      </div>
+                cart.map(item => (
+                  <div key={item.product.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    borderBottom: '1px solid #F1F5F9', paddingBottom: 16, marginBottom: 16,
+                  }}>
+                    {item.product.image
+                      ? <img src={item.product.image} style={{ width: 52, height: 52, objectFit: 'contain', borderRadius: 10, border: '1px solid #E2E8F0' }} alt={item.product.name} />
+                      : <div style={{ width: 52, height: 52, background: '#F1F5F9', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ShoppingBag size={18} color="#CBD5E1" /></div>
+                    }
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: '#1E293B' }}>{item.product.name}</div>
+                      <div style={{ color: '#4F46E5', fontWeight: 800, fontSize: 13 }}>Rp {item.product.price.toLocaleString('id-ID')}</div>
                     </div>
-                  ))}
-                </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#F8FAFC', borderRadius: 10, padding: '4px 8px' }}>
+                      <button onClick={() => updateQuantity(item.product.id, -1)} style={{ width: 24, height: 24, border: '1px solid #E2E8F0', borderRadius: 6, background: '#fff', cursor: 'pointer', fontWeight: 700 }}>-</button>
+                      <span style={{ fontWeight: 800, minWidth: 20, textAlign: 'center', fontSize: 14 }}>{item.quantity}</span>
+                      <button onClick={() => updateQuantity(item.product.id, 1)} style={{ width: 24, height: 24, border: '1px solid #E2E8F0', borderRadius: 6, background: '#fff', cursor: 'pointer', fontWeight: 700 }}>+</button>
+                    </div>
+                    <button onClick={() => removeFromCart(item.product.id)} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                      <X size={16} />
+                    </button>
+                  </div>
+                ))
               )}
             </div>
 
-            <div className="p-4 border-t bg-gray-50">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-gray-600 font-semibold">Total Belanja:</span>
-                <span className="text-xl font-bold text-gray-900">Rp {cartTotal.toLocaleString('id-ID')}</span>
+            <div style={{ padding: '16px 20px', borderTop: '1px solid #E2E8F0', background: '#F8FAFC' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
+                <span style={{ color: '#64748B', fontWeight: 600 }}>Total Belanja:</span>
+                <span style={{ fontWeight: 900, fontSize: 18, color: '#1E293B' }}>Rp {cartTotal.toLocaleString('id-ID')}</span>
               </div>
-              <button 
-                className={`w-full py-3 rounded-xl font-bold text-white flex justify-center items-center gap-2 ${cart.length === 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-500 hover:bg-green-600 shadow-lg'}`}
+              <button
                 onClick={checkoutWhatsApp}
                 disabled={cart.length === 0}
+                style={{
+                  width: '100%', padding: '13px 0',
+                  borderRadius: 14, border: 'none',
+                  fontWeight: 800, fontSize: 15,
+                  cursor: cart.length === 0 ? 'not-allowed' : 'pointer',
+                  background: cart.length === 0 ? '#CBD5E1' : '#22C55E',
+                  color: '#fff',
+                  boxShadow: cart.length > 0 ? '0 4px 14px rgba(34,197,94,0.35)' : 'none',
+                  transition: 'background 0.2s',
+                }}
               >
-                {cart.length > 0 ? 'Pesan via WhatsApp Sekarang' : 'Keranjang Kosong'}
+                {cart.length > 0 ? '🛒 Pesan via WhatsApp' : 'Keranjang Kosong'}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes slideIn { from { transform: translateX(100%) } to { transform: translateX(0) } }
+      `}</style>
     </div>
   );
 }
