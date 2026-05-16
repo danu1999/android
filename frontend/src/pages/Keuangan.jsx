@@ -20,6 +20,9 @@ export default function Keuangan() {
 
   useEffect(() => {
     if (!isLockedTab) {
+      if (activeTab !== 'REKAP' && activeTab !== 'MARGIN') {
+        setFinances([]);
+      }
       fetchData();
     }
   }, [activeTab, isPremium]);
@@ -305,8 +308,8 @@ export default function Keuangan() {
                       <div className="text-xs text-gray-500">{item.type} • {item.items?.length || 0} item</div>
                     </td>
                     <td>
-                      <div className="font-bold text-gray-800">Rp {item.total.toLocaleString('id-ID')}</div>
-                      {item.discount > 0 && <div className="text-xs text-red-500">Diskon: Rp {item.discount.toLocaleString('id-ID')}</div>}
+                      <div className="font-bold text-gray-800">Rp {Number(item.total || 0).toLocaleString('id-ID')}</div>
+                      {item.discount > 0 && <div className="text-xs text-red-500">Diskon: Rp {Number(item.discount || 0).toLocaleString('id-ID')}</div>}
                     </td>
                     <td>
                       <span className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full font-bold">
