@@ -234,7 +234,7 @@ export default function Kasir() {
               <input type="text" placeholder="Cari produk..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
             <button className="btn btn-secondary" style={{ whiteSpace: 'nowrap' }} onClick={fetchQueue}>
-              <ClipboardList size={18} /> <span className="hidden md:inline">Daftar Antrian</span>
+              <ClipboardList size={18} /> Antrian
             </button>
           </div>
 
