@@ -358,9 +358,15 @@ h1 {
 
 .kasir-sidebar {
   width: 350px;
-  display: flex;
   flex-direction: column;
   padding: 1.5rem;
+  /* display is controlled by React classes on mobile */
+}
+
+@media (min-width: 768px) {
+  .kasir-sidebar {
+    display: flex;
+  }
 }
 
 .product-grid {
