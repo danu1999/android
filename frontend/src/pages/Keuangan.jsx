@@ -115,6 +115,12 @@ export default function Keuangan() {
         Riwayat Transaksi
       </button>
       <button 
+        className={`font-semibold pb-2 ${activeTab === 'EXPENSE' ? 'text-primary border-b-2 border-primary' : 'text-gray-500'}`}
+        onClick={() => setActiveTab('EXPENSE')}
+      >
+        Pengeluaran Usaha
+      </button>
+      <button 
         className={`font-semibold pb-2 ${activeTab === 'MARGIN' ? 'text-primary border-b-2 border-primary' : 'text-gray-500'}`}
         onClick={() => setActiveTab('MARGIN')}
       >
@@ -124,19 +130,13 @@ export default function Keuangan() {
         className={`font-semibold pb-2 ${activeTab === 'PAYABLE' ? 'text-primary border-b-2 border-primary' : 'text-gray-500'}`}
         onClick={() => setActiveTab('PAYABLE')}
       >
-        Hutang (Payable)
+        🔒 Hutang (Payable)
       </button>
       <button 
         className={`font-semibold pb-2 ${activeTab === 'RECEIVABLE' ? 'text-primary border-b-2 border-primary' : 'text-gray-500'}`}
         onClick={() => setActiveTab('RECEIVABLE')}
       >
-        Piutang (Receivable)
-      </button>
-      <button 
-        className={`font-semibold pb-2 ${activeTab === 'EXPENSE' ? 'text-primary border-b-2 border-primary' : 'text-gray-500'}`}
-        onClick={() => setActiveTab('EXPENSE')}
-      >
-        Pengeluaran Usaha
+        🔒 Piutang (Receivable)
       </button>
     </div>
   );

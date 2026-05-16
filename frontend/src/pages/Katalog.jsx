@@ -299,39 +299,32 @@ export default function Katalog() {
               </div>
 
               {/* Harga Grosir Toggle */}
-              {isPremium ? (
-                <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 10, padding: '12px 14px', marginBottom: 14 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 700, color: '#C2410C' }}>
-                    <input
-                      type="checkbox"
-                      checked={formData.wholesaleEnabled}
-                      onChange={(e) => setFormData({ ...formData, wholesaleEnabled: e.target.checked })}
-                      style={{ width: 18, height: 18, accentColor: '#C2410C' }}
-                    />
-                    🏷️ Aktifkan Harga Grosir
-                  </label>
-                  {formData.wholesaleEnabled && (
-                    <div style={{ marginTop: 12 }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 6 }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: '#78350F' }}>Min. Qty (beli)</span>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: '#78350F' }}>Harga per item (Rp)</span>
-                      </div>
-                      {formData.wholesalePrices.map((tier, i) => (
-                        <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 6 }}>
-                          <input type="number" placeholder={`Min qty tier ${i + 1}`} value={tier.minQty} onChange={(e) => handleWholesaleChange(i, 'minQty', e.target.value)} style={{ padding: '8px 10px', border: '1px solid #FED7AA', borderRadius: 8, fontSize: 13, outline: 'none' }} />
-                          <input type="number" placeholder="Harga grosir" value={tier.price} onChange={(e) => handleWholesaleChange(i, 'price', e.target.value)} style={{ padding: '8px 10px', border: '1px solid #FED7AA', borderRadius: 8, fontSize: 13, outline: 'none' }} />
-                        </div>
-                      ))}
-                      <p style={{ fontSize: 11, color: '#92400E', marginTop: 4 }}>* Maksimal 5 tingkatan harga. Kosongkan baris yang tidak dipakai.</p>
+              <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 10, padding: '12px 14px', marginBottom: 14 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 700, color: '#C2410C' }}>
+                  <input
+                    type="checkbox"
+                    checked={formData.wholesaleEnabled}
+                    onChange={(e) => setFormData({ ...formData, wholesaleEnabled: e.target.checked })}
+                    style={{ width: 18, height: 18, accentColor: '#C2410C' }}
+                  />
+                  🏷️ Aktifkan Harga Grosir
+                </label>
+                {formData.wholesaleEnabled && (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 6 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#78350F' }}>Min. Qty (beli)</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#78350F' }}>Harga per item (Rp)</span>
                     </div>
-                  )}
-                </div>
-              ) : (
-                <div style={{ background: '#F8FAFC', border: '1px dashed #CBD5E1', borderRadius: 10, padding: '12px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <Lock size={18} color="#94A3B8" />
-                  <span style={{ color: '#94A3B8', fontSize: 13, fontWeight: 600 }}>Harga Grosir — Fitur Premium (masukkan kode lisensi di menu Keuangan)</span>
-                </div>
-              )}
+                    {formData.wholesalePrices.map((tier, i) => (
+                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 6 }}>
+                        <input type="number" placeholder={`Min qty tier ${i + 1}`} value={tier.minQty} onChange={(e) => handleWholesaleChange(i, 'minQty', e.target.value)} style={{ padding: '8px 10px', border: '1px solid #FED7AA', borderRadius: 8, fontSize: 13, outline: 'none' }} />
+                        <input type="number" placeholder="Harga grosir" value={tier.price} onChange={(e) => handleWholesaleChange(i, 'price', e.target.value)} style={{ padding: '8px 10px', border: '1px solid #FED7AA', borderRadius: 8, fontSize: 13, outline: 'none' }} />
+                      </div>
+                    ))}
+                    <p style={{ fontSize: 11, color: '#92400E', marginTop: 4 }}>* Maksimal 5 tingkatan harga. Kosongkan baris yang tidak dipakai.</p>
+                  </div>
+                )}
+              </div>
 
               <div className="modal-actions">
                 <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Batal</button>
