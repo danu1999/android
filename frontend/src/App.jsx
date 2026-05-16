@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Calculator, Package, Wallet, Users, Contact, Globe, Menu, X } from 'lucide-react';
+import { Calculator, Package, LayoutDashboard } from 'lucide-react';
 import Kasir from './pages/Kasir';
 import Katalog from './pages/Katalog';
 import Keuangan from './pages/Keuangan';
 import Pelanggan from './pages/Pelanggan';
 import Karyawan from './pages/Karyawan';
 import TokoOnline from './pages/TokoOnline';
+import Dashboard from './pages/Dashboard';
 import './index.css';
 
 const Navigation = () => {
@@ -21,10 +22,7 @@ const Navigation = () => {
   const navItems = [
     { path: '/', label: 'Kasir', icon: <Calculator size={20} /> },
     { path: '/katalog', label: 'Katalog', icon: <Package size={20} /> },
-    { path: '/keuangan', label: 'Keuangan', icon: <Wallet size={20} /> },
-    { path: '/pelanggan', label: 'Pelanggan', icon: <Contact size={20} /> },
-    { path: '/karyawan', label: 'Karyawan', icon: <Users size={20} /> },
-    { path: '/toko-online', label: 'Online', icon: <Globe size={20} /> },
+    { path: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
   ];
 
   return (
@@ -82,6 +80,7 @@ function AppContent() {
         <Routes>
           <Route path="/" element={<Kasir />} />
           <Route path="/katalog" element={<Katalog />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/keuangan" element={<Keuangan />} />
           <Route path="/pelanggan" element={<Pelanggan />} />
           <Route path="/karyawan" element={<Karyawan />} />
