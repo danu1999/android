@@ -15,6 +15,7 @@ export default function Kasir() {
   const [notes, setNotes] = useState('');
   const [isQueueModalOpen, setIsQueueModalOpen] = useState(false);
   const [queuedTransactions, setQueuedTransactions] = useState([]);
+  const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
 
   useEffect(() => {
     fetchProducts();
@@ -129,6 +130,7 @@ export default function Kasir() {
       setCustomerName('');
       setNotes('');
       setIsPaymentModalOpen(false);
+      setIsMobileCartOpen(false);
       fetchProducts(); // Refresh stock
     } catch (err) {
       console.error('Checkout failed', err);
@@ -243,8 +245,19 @@ export default function Kasir() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <button className="btn btn-secondary whitespace-nowrap" onClick={fetchQueue}>
+          <button className="btn btn-secondary whitespace-nowrap hidden md:flex" onClick={fetchQueue}>
             Daftar Antrian
+          </button>
+          <button className="btn btn-primary md:hidden whitespace-nowrap relative" onClick={() => setIsMobileCartOpen(true)}>
+            <ShoppingCart size={20} />
+            {cart.length > 0 && (
+              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                {cart.reduce((sum, item) => sum + item.quantity, 0)}
+              </span>
+            )}
+          </button>
+          <button className="btn btn-secondary md:hidden whitespace-nowrap" onClick={fetchQueue} title="Antrian">
+            Antrian
           </button>
         </div>
 
@@ -287,14 +300,19 @@ export default function Kasir() {
       </div>
 
       {/* Right: Cart */}
-      <div className="kasir-sidebar glass-panel w-full md:w-80 lg:w-96 mt-4 md:mt-0 max-h-screen overflow-y-auto">
+      <div className={`kasir-sidebar glass-panel overflow-y-auto flex-col ${isMobileCartOpen ? 'fixed inset-2 z-50 bg-white shadow-2xl flex' : 'hidden md:flex w-80 lg:w-96 relative max-h-screen'}`}>
         <div className="cart-header">
           <h2><ShoppingCart size={20} /> Keranjang</h2>
-          {cart.length > 0 && (
-            <button className="btn-icon btn-danger" onClick={() => setCart([])} title="Kosongkan">
-              <Trash2 size={16} />
+          <div className="flex gap-2 items-center">
+            {cart.length > 0 && (
+              <button className="btn-icon btn-danger" onClick={() => setCart([])} title="Kosongkan">
+                <Trash2 size={16} />
+              </button>
+            )}
+            <button className="btn btn-secondary text-xs px-2 py-1 md:hidden" onClick={() => setIsMobileCartOpen(false)}>
+              Tutup
             </button>
-          )}
+          </div>
         </div>
 
         <div className="cart-items flex-1 overflow-y-auto">
