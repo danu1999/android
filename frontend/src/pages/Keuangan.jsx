@@ -198,7 +198,7 @@ export default function Keuangan() {
                 ) : (
                   <>
                     <td>{item.description}</td>
-                    <td className="font-semibold text-gray-700">{item.amount.toLocaleString('id-ID')}</td>
+                    <td className="font-semibold text-gray-700">Rp {Number(item.amount || 0).toLocaleString('id-ID')}</td>
                     {activeTab !== 'EXPENSE' && (
                       <td>
                         <button 
@@ -240,13 +240,26 @@ export default function Keuangan() {
       csvContent += "Total Pengeluaran," + reports.totalExpenses + "\n";
       csvContent += "Pendapatan Bersih," + reports.netIncome + "\n";
       csvContent += "Piutang Tertunda," + reports.pendingReceivables + "\n";
+    } else if (activeTab === 'SALES') {
+      csvContent += "Tanggal,No Struk,Tipe,Total (Rp),Diskon (Rp),Metode Bayar\n";
+      finances.forEach(item => {
+        const row = [
+          new Date(item.date).toLocaleDateString('id-ID'),
+          item.receiptNumber || `#${item.id}`,
+          item.type,
+          item.total || 0,
+          item.discount || 0,
+          item.paymentMethod || '-'
+        ].join(",");
+        csvContent += row + "\n";
+      });
     } else {
       csvContent += "Tanggal,Deskripsi,Jumlah (Rp),Status\n";
       finances.forEach(item => {
         const row = [
           new Date(item.date).toLocaleDateString('id-ID'),
-          `"${item.description}"`,
-          item.amount,
+          `"${item.description || ''}"`,
+          Number(item.amount || 0),
           item.status || '-'
         ].join(",");
         csvContent += row + "\n";
@@ -294,23 +307,38 @@ export default function Keuangan() {
           <div class="summary-box"><strong>Piutang Tertunda:</strong><br><br> Rp ${reports.pendingReceivables.toLocaleString('id-ID')}</div>
         </div>
       `;
-    } else {
+    } else if (activeTab === 'SALES') {
       content += `
         <table>
           <thead>
             <tr>
-              <th>Tanggal</th>
-              <th>Deskripsi</th>
-              <th>Jumlah (Rp)</th>
-              <th>Status</th>
+              <th>Tanggal</th><th>No Struk</th><th>Tipe</th><th>Total (Rp)</th><th>Metode Bayar</th>
             </tr>
           </thead>
           <tbody>
             ${finances.map(item => `
               <tr>
                 <td>${new Date(item.date).toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year:'numeric'})}</td>
-                <td>${item.description}</td>
-                <td>${item.amount.toLocaleString('id-ID')}</td>
+                <td>${item.receiptNumber || '#' + item.id}</td>
+                <td>${item.type}</td>
+                <td>Rp ${Number(item.total || 0).toLocaleString('id-ID')}</td>
+                <td>${item.paymentMethod || '-'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+      content += `
+        <table>
+          <thead>
+            <tr><th>Tanggal</th><th>Deskripsi</th><th>Jumlah (Rp)</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            ${finances.map(item => `
+              <tr>
+                <td>${new Date(item.date).toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year:'numeric'})}</td>
+                <td>${item.description || '-'}</td>
+                <td>Rp ${Number(item.amount || 0).toLocaleString('id-ID')}</td>
                 <td>${item.status || '-'}</td>
               </tr>
             `).join('')}
