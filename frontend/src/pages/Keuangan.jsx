@@ -127,19 +127,19 @@ export default function Keuangan() {
         className={`font-semibold pb-2 ${activeTab === 'MARGIN' ? 'text-primary border-b-2 border-primary' : 'text-gray-500'}`}
         onClick={() => setActiveTab('MARGIN')}
       >
-        🔒 Analisis Margin
+        Analisis Margin
       </button>
       <button 
         className={`font-semibold pb-2 ${activeTab === 'PAYABLE' ? 'text-primary border-b-2 border-primary' : 'text-gray-500'}`}
         onClick={() => setActiveTab('PAYABLE')}
       >
-        🔒 Hutang (Payable)
+        Hutang
       </button>
       <button 
         className={`font-semibold pb-2 ${activeTab === 'RECEIVABLE' ? 'text-primary border-b-2 border-primary' : 'text-gray-500'}`}
         onClick={() => setActiveTab('RECEIVABLE')}
       >
-        🔒 Piutang (Receivable)
+        Piutang
       </button>
     </div>
   );
@@ -559,8 +559,8 @@ export default function Keuangan() {
                 <label>Tipe</label>
                 <select name="type" value={formData.type} onChange={(e) => setFormData({...formData, type: e.target.value})} required disabled={activeTab !== 'REKAP' && activeTab !== 'EXPENSE' && activeTab !== 'PAYABLE' && activeTab !== 'RECEIVABLE'}>
                   <option value="EXPENSE">Pengeluaran Usaha</option>
-                  <option value="PAYABLE">Hutang (Payable)</option>
-                  <option value="RECEIVABLE">Piutang (Receivable)</option>
+                  <option value="PAYABLE">Hutang</option>
+                  <option value="RECEIVABLE">Piutang</option>
                 </select>
               </div>
               <div className="form-group">
