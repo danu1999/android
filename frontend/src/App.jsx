@@ -67,22 +67,34 @@ const Navigation = () => {
   );
 };
 
+function AppContent() {
+  const location = useLocation();
+  const isPublicStore = location.pathname === '/toko-online';
+
+  if (isPublicStore) {
+    return <TokoOnline />;
+  }
+
+  return (
+    <div className="app-layout">
+      <Navigation />
+      <main className="main-content">
+        <Routes>
+          <Route path="/" element={<Kasir />} />
+          <Route path="/katalog" element={<Katalog />} />
+          <Route path="/keuangan" element={<Keuangan />} />
+          <Route path="/pelanggan" element={<Pelanggan />} />
+          <Route path="/karyawan" element={<Karyawan />} />
+        </Routes>
+      </main>
+    </div>
+  );
+}
+
 function App() {
   return (
     <BrowserRouter>
-      <div className="app-layout">
-        <Navigation />
-        <main className="main-content">
-          <Routes>
-            <Route path="/" element={<Kasir />} />
-            <Route path="/katalog" element={<Katalog />} />
-            <Route path="/keuangan" element={<Keuangan />} />
-            <Route path="/pelanggan" element={<Pelanggan />} />
-            <Route path="/karyawan" element={<Karyawan />} />
-            <Route path="/toko-online" element={<TokoOnline />} />
-          </Routes>
-        </main>
-      </div>
+      <AppContent />
     </BrowserRouter>
   );
 }
