@@ -21,7 +21,6 @@ export default function Login({ onLogin }) {
     setError('');
     try {
       const res = await api.post('/auth/login', { name: name.trim(), pin });
-      localStorage.setItem('posbah_user', JSON.stringify(res.data));
       onLogin(res.data);
     } catch (err) {
       setError(err.response?.data?.error || 'Login gagal, coba lagi');
@@ -29,6 +28,11 @@ export default function Login({ onLogin }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDemo = () => {
+    const expiresAt = Date.now() + 3 * 24 * 60 * 60 * 1000; // 3 days
+    onLogin({ id: 0, name: 'Demo User', role: 'OWNER', isDemo: true, expiresAt });
   };
 
   const numpad = ['1','2','3','4','5','6','7','8','9','','0','⌫'];
@@ -187,6 +191,36 @@ export default function Login({ onLogin }) {
           }}
         >
           {loading ? 'Memproses...' : 'Masuk'}
+        </button>
+
+        {/* Demo separator */}
+        <div style={{ display:'flex', alignItems:'center', gap:'10px', margin:'16px 0 0' }}>
+          <div style={{ flex:1, height:'1px', background:'rgba(255,255,255,0.15)' }} />
+          <span style={{ color:'rgba(255,255,255,0.35)', fontSize:'0.75rem' }}>atau</span>
+          <div style={{ flex:1, height:'1px', background:'rgba(255,255,255,0.15)' }} />
+        </div>
+
+        {/* Demo Button */}
+        <button
+          onClick={handleDemo}
+          style={{
+            width: '100%',
+            padding: '14px',
+            borderRadius: '14px',
+            border: '1.5px solid rgba(255,255,255,0.2)',
+            background: 'rgba(255,255,255,0.06)',
+            color: 'rgba(255,255,255,0.7)',
+            fontSize: '0.9rem',
+            fontWeight: 600,
+            cursor: 'pointer',
+            marginTop: '10px',
+            transition: 'all 0.2s',
+            letterSpacing: '0.01em',
+          }}
+          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
+        >
+          🎯 Coba Demo Gratis (3 Hari)
         </button>
 
         <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem', marginTop: '1.5rem', marginBottom: 0 }}>

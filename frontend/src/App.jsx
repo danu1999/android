@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import { Calculator, Package, LayoutDashboard, LogOut } from 'lucide-react';
+import { Calculator, Package, LayoutDashboard, LogOut, Clock } from 'lucide-react';
 import Kasir from './pages/Kasir';
 import Katalog from './pages/Katalog';
 import Keuangan from './pages/Keuangan';
@@ -115,9 +115,21 @@ function App() {
   const [user, setUser] = useState(() => {
     try {
       const stored = localStorage.getItem('posbah_user');
-      return stored ? JSON.parse(stored) : null;
+      if (!stored) return null;
+      const parsed = JSON.parse(stored);
+      // Check demo expiry
+      if (parsed.isDemo && parsed.expiresAt && Date.now() > parsed.expiresAt) {
+        localStorage.removeItem('posbah_user');
+        return null;
+      }
+      return parsed;
     } catch { return null; }
   });
+
+  // Demo days remaining
+  const demoDaysLeft = user?.isDemo && user?.expiresAt
+    ? Math.ceil((user.expiresAt - Date.now()) / (1000 * 60 * 60 * 24))
+    : null;
 
   const handleLogin = (userData) => {
     localStorage.setItem('posbah_user', JSON.stringify(userData));
@@ -133,7 +145,21 @@ function App() {
 
   return (
     <BrowserRouter>
-      <AppContent user={user} onLogout={handleLogout} />
+      {demoDaysLeft !== null && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+          background: 'linear-gradient(90deg, #F59E0B, #EF4444)',
+          color: 'white', textAlign: 'center',
+          padding: '6px 16px', fontSize: '0.8rem', fontWeight: 700,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+        }}>
+          <Clock size={14} />
+          Mode Demo — Sisa {demoDaysLeft} hari · Hubungi kami untuk berlangganan
+        </div>
+      )}
+      <div style={{ paddingTop: demoDaysLeft !== null ? '32px' : 0, height: '100dvh', boxSizing: 'border-box' }}>
+        <AppContent user={user} onLogout={handleLogout} />
+      </div>
     </BrowserRouter>
   );
 }
