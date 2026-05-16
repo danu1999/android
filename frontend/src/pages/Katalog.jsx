@@ -6,7 +6,7 @@ export default function Katalog() {
   const [products, setProducts] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [formData, setFormData] = useState({ id: null, name: '', price: '', stock: '', image: '' });
+  const [formData, setFormData] = useState({ id: null, name: '', price: '', stock: '', unit: 'pcs', image: '' });
 
   const fetchProducts = async () => {
     try {
@@ -54,7 +54,7 @@ export default function Katalog() {
     if (product) {
       setFormData(product);
     } else {
-      setFormData({ id: null, name: '', price: '', stock: '', image: '' });
+      setFormData({ id: null, name: '', price: '', stock: '', unit: 'pcs', image: '' });
     }
     setIsModalOpen(true);
   };
@@ -117,6 +117,7 @@ export default function Katalog() {
               <th>Nama Produk</th>
               <th>Harga</th>
               <th>Stok</th>
+              <th>Satuan</th>
               <th className="text-right">Aksi</th>
             </tr>
           </thead>
@@ -134,6 +135,11 @@ export default function Katalog() {
                   <td>{product.name}</td>
                   <td>Rp {product.price.toLocaleString('id-ID')}</td>
                   <td>{product.stock}</td>
+                  <td>
+                    <span style={{ background: '#EEF2FF', color: '#4F46E5', padding: '2px 8px', borderRadius: 99, fontSize: 12, fontWeight: 700 }}>
+                      {product.unit || 'pcs'}
+                    </span>
+                  </td>
                   <td className="text-right action-btns">
                     <button className="btn btn-icon btn-edit" onClick={() => handleOpenModal(product)}>
                       <Edit2 size={16} />
@@ -146,7 +152,7 @@ export default function Katalog() {
               ))
             ) : (
               <tr>
-                <td colSpan="5" className="text-center p-4">Tidak ada data produk.</td>
+                <td colSpan="6" className="text-center p-4">Tidak ada data produk.</td>
               </tr>
             )}
           </tbody>
@@ -180,6 +186,19 @@ export default function Katalog() {
               <div className="form-group">
                 <label>Stok</label>
                 <input type="number" name="stock" value={formData.stock} onChange={handleInputChange} required />
+              </div>
+              <div className="form-group">
+                <label>Satuan</label>
+                <select name="unit" value={formData.unit || 'pcs'} onChange={handleInputChange} style={{ width: '100%', padding: '10px 12px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, outline: 'none', background: '#fff' }}>
+                  <option value="pcs">Pcs (Satuan)</option>
+                  <option value="Kg">Kg (Kilogram)</option>
+                  <option value="Gram">Gram</option>
+                  <option value="Liter">Liter</option>
+                  <option value="Lusin">Lusin</option>
+                  <option value="Pack">Pack</option>
+                  <option value="Box">Box</option>
+                  <option value="Meter">Meter</option>
+                </select>
               </div>
               <div className="modal-actions">
                 <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Batal</button>

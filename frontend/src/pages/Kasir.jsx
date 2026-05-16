@@ -205,7 +205,7 @@ export default function Kasir() {
               <div className="product-info p-2 md:p-4 flex-1 flex flex-col">
                 <div className="product-name text-sm md:text-base">{product.name}</div>
                 <div className="product-price text-sm md:text-base">Rp {product.price.toLocaleString('id-ID')}</div>
-                <div className="product-stock text-xs mt-auto">Stok: {product.stock}</div>
+                <div className="product-stock text-xs mt-auto">Stok: {product.stock} {product.unit || 'pcs'}</div>
               </div>
             </div>
           ))}

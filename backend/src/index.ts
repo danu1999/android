@@ -22,9 +22,9 @@ app.get('/api/products', async (req, res) => {
 
 app.post('/api/products', async (req, res) => {
   try {
-    const { name, price, stock, image } = req.body;
+    const { name, price, stock, unit, image } = req.body;
     const product = await prisma.product.create({
-      data: { name, price: Number(price), stock: Number(stock), image }
+      data: { name, price: Number(price), stock: Number(stock), unit: unit || 'pcs', image }
     });
     res.json(product);
   } catch (error) {
@@ -35,10 +35,10 @@ app.post('/api/products', async (req, res) => {
 app.put('/api/products/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, price, stock, image } = req.body;
+    const { name, price, stock, unit, image } = req.body;
     const product = await prisma.product.update({
       where: { id: Number(id) },
-      data: { name, price: Number(price), stock: Number(stock), image }
+      data: { name, price: Number(price), stock: Number(stock), unit: unit || 'pcs', image }
     });
     res.json(product);
   } catch (error) {
