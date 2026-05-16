@@ -14,6 +14,22 @@ app.get('/', (req, res) => {
   res.send('POSBah API is running');
 });
 
+// Auth - Login with name + PIN
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { name, pin } = req.body;
+    if (!name || !pin) return res.status(400).json({ error: 'Nama dan PIN wajib diisi' });
+    const employee = await prisma.employee.findFirst({
+      where: { name: { equals: name, mode: 'insensitive' }, pin }
+    });
+    if (!employee) return res.status(401).json({ error: 'Nama atau PIN salah' });
+    res.json({ id: employee.id, name: employee.name, role: employee.role });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Login gagal' });
+  }
+});
+
 // Products
 app.get('/api/products', async (req, res) => {
   const products = await prisma.product.findMany();
