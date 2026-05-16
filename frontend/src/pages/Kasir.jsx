@@ -1,443 +1,349 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Search, ShoppingCart, Trash2, CreditCard, QrCode, Printer, X, ChevronUp, ClipboardList } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, ShoppingCart, Trash2, CreditCard, QrCode, Printer, X, ChevronUp, ClipboardList, Plus, Minus } from 'lucide-react';
 import api from '../api';
+
+const getEffectivePrice = (product, quantity) => {
+  if (!product.wholesaleEnabled || !product.wholesalePrices) return product.price;
+  try {
+    const tiers = typeof product.wholesalePrices === 'string' ? JSON.parse(product.wholesalePrices) : product.wholesalePrices;
+    const applicable = tiers.filter(t => quantity >= t.minQty).sort((a, b) => b.minQty - a.minQty);
+    return applicable.length > 0 ? applicable[0].price : product.price;
+  } catch { return product.price; }
+};
 
 export default function Kasir() {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState('CASH');
-  const [receiptData, setReceiptData] = useState(null);
-  const [isBackdate, setIsBackdate] = useState(false);
-  const [transactionDate, setTransactionDate] = useState('');
+  const [cartOpen, setCartOpen] = useState(false);
+  const [payModal, setPayModal] = useState(false);
+  const [payMethod, setPayMethod] = useState('CASH');
+  const [receipt, setReceipt] = useState(null);
+  const [queueModal, setQueueModal] = useState(false);
+  const [queues, setQueues] = useState([]);
   const [customerName, setCustomerName] = useState('');
   const [notes, setNotes] = useState('');
-  const [isQueueModalOpen, setIsQueueModalOpen] = useState(false);
-  const [queuedTransactions, setQueuedTransactions] = useState([]);
-  const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
+  const [globalDiscount, setGlobalDiscount] = useState(0);
+  const [isBackdate, setIsBackdate] = useState(false);
+  const [txDate, setTxDate] = useState('');
 
-  useEffect(() => {
-    fetchProducts();
-  }, []);
+  useEffect(() => { fetchProducts(); }, []);
 
   const fetchProducts = async () => {
-    try {
-      const res = await api.get('/products');
-      setProducts(res.data);
-    } catch (err) {
-      console.error('Failed to fetch products', err);
-    }
+    try { const r = await api.get('/products'); setProducts(r.data); } catch {}
   };
 
-  const addToCart = (product) => {
-    const existing = cart.find(item => item.product.id === product.id);
-    if (existing) {
-      if (existing.quantity >= product.stock) { alert('Stok tidak cukup!'); return; }
-      setCart(cart.map(item => item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item));
-    } else {
-      if (product.stock < 1) { alert('Stok habis!'); return; }
-      setCart([...cart, { product, quantity: 1, discount: 0 }]);
-    }
-  };
-
-  const removeFromCart = (productId) => setCart(cart.filter(item => item.product.id !== productId));
-
-  const updateQuantity = (productId, delta) => {
-    setCart(cart.map(item => {
-      if (item.product.id === productId) {
-        const newQty = item.quantity + delta;
-        if (newQty > 0 && newQty <= item.product.stock) return { ...item, quantity: newQty };
+  const addToCart = (p) => {
+    if (p.stock < 1) { alert('Stok habis!'); return; }
+    setCart(prev => {
+      const ex = prev.find(i => i.product.id === p.id);
+      if (ex) {
+        if (ex.quantity >= p.stock) { alert('Stok tidak cukup!'); return prev; }
+        return prev.map(i => i.product.id === p.id ? { ...i, quantity: i.quantity + 1 } : i);
       }
-      return item;
-    }));
+      return [...prev, { product: p, quantity: 1, discount: 0 }];
+    });
   };
 
-  const getEffectivePrice = (product, quantity) => {
-    if (!product.wholesaleEnabled || !product.wholesalePrices) return product.price;
+  const updateQty = (id, delta) => setCart(prev => prev.map(i => {
+    if (i.product.id !== id) return i;
+    const nq = i.quantity + delta;
+    if (nq < 1) return i;
+    if (nq > i.product.stock) return i;
+    return { ...i, quantity: nq };
+  }));
+
+  const removeItem = (id) => setCart(prev => prev.filter(i => i.product.id !== id));
+
+  const total = cart.reduce((s, i) => s + (getEffectivePrice(i.product, i.quantity) - i.discount) * i.quantity, 0) - globalDiscount;
+  const totalItems = cart.reduce((s, i) => s + i.quantity, 0);
+
+  const checkout = async (isQueue = false) => {
+    if (!cart.length) return;
     try {
-      const tiers = typeof product.wholesalePrices === 'string' ? JSON.parse(product.wholesalePrices) : product.wholesalePrices;
-      const applicable = tiers.filter(t => quantity >= t.minQty).sort((a, b) => b.minQty - a.minQty);
-      return applicable.length > 0 ? applicable[0].price : product.price;
-    } catch (_) { return product.price; }
-  };
-
-  const [globalDiscount, setGlobalDiscount] = useState(0);
-  const totalAmount = cart.reduce((sum, item) => {
-    const effectivePrice = getEffectivePrice(item.product, item.quantity);
-    return sum + ((effectivePrice - item.discount) * item.quantity);
-  }, 0) - globalDiscount;
-
-  const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
-
-  const updateItemDiscount = (productId, discount) => {
-    setCart(cart.map(item => item.product.id === productId ? { ...item, discount: Number(discount) || 0 } : item));
-  };
-
-  const handleCheckout = async (isQueue = false) => {
-    try {
-      const transactionData = {
-        items: cart.map(item => ({
-          productId: item.product.id,
-          quantity: item.quantity,
-          price: item.product.price,
-          discount: item.discount
-        })),
-        total: totalAmount,
-        discount: globalDiscount,
-        paymentMethod: isQueue ? 'PENDING' : paymentMethod,
+      const r = await api.post('/transactions', {
+        items: cart.map(i => ({ productId: i.product.id, quantity: i.quantity, price: i.product.price, discount: i.discount })),
+        total, discount: globalDiscount,
+        paymentMethod: isQueue ? 'PENDING' : payMethod,
         status: isQueue ? 'PENDING' : 'COMPLETED',
-        notes,
-        customerName,
+        notes, customerName,
         type: isBackdate ? 'BACKDATE' : 'SALES',
-        date: isBackdate ? transactionDate : undefined
-      };
-      const res = await api.post('/transactions', transactionData);
-      if (!isQueue) {
-        setReceiptData(res.data);
-      } else {
-        alert('Berhasil ditambahkan ke antrian!');
-      }
-      setCart([]);
-      setGlobalDiscount(0);
-      setCustomerName('');
-      setNotes('');
-      setIsPaymentModalOpen(false);
-      setIsMobileCartOpen(false);
-      fetchProducts();
-    } catch (err) {
-      console.error('Checkout failed', err);
-      alert('Gagal memproses transaksi');
-    }
+        date: isBackdate ? txDate : undefined
+      });
+      if (!isQueue) setReceipt(r.data);
+      else alert('Ditambahkan ke antrian!');
+      setCart([]); setGlobalDiscount(0); setCustomerName(''); setNotes('');
+      setPayModal(false); setCartOpen(false); fetchProducts();
+    } catch { alert('Transaksi gagal'); }
   };
 
   const fetchQueue = async () => {
     try {
-      const res = await api.get('/transactions');
-      setQueuedTransactions(res.data.filter(t => t.status === 'PENDING'));
-      setIsQueueModalOpen(true);
-    } catch(err) { console.error('Failed to fetch queue', err); }
+      const r = await api.get('/transactions');
+      setQueues(r.data.filter(t => t.status === 'PENDING'));
+      setQueueModal(true);
+    } catch {}
   };
 
   const payQueue = async (id, method) => {
     try {
       await api.put(`/transactions/${id}`, { status: 'COMPLETED', paymentMethod: method });
-      alert('Pembayaran antrian berhasil!');
-      setIsQueueModalOpen(false);
-    } catch(err) { alert('Gagal memproses pembayaran antrian'); }
+      alert('Pembayaran berhasil!'); setQueueModal(false);
+    } catch { alert('Gagal'); }
   };
 
   const printReceipt = (size) => {
-    const printWindow = window.open('', '_blank');
-    const width = size === '58mm' ? '58mm' : '80mm';
-    printWindow.document.write(`
-      <html><head><style>
-        body { font-family: monospace; width: ${width}; margin: 0 auto; padding: 10px; font-size: 12px; }
-        .text-center { text-align: center; } .bold { font-weight: bold; }
-        table { width: 100%; font-size: 12px; border-collapse: collapse; margin-top: 10px; }
-        th, td { text-align: left; padding: 4px 0; } .right { text-align: right; }
-        .divider { border-top: 1px dashed #000; margin: 5px 0; }
-      </style></head><body>
-        <div class="text-center bold" style="font-size: 16px;">POSBah</div>
-        <div class="text-center">Struk Pembayaran</div>
-        <div class="divider"></div>
-        <div>No: ${receiptData?.receiptNumber}</div>
-        <div>Metode: ${receiptData?.paymentMethod}</div>
-        <div class="divider"></div>
-        <table>${receiptData?.items.map(item => {
-          const prod = products.find(p => p.id === item.productId);
-          return `<tr><td colspan="3">${prod?.name || 'Item'}</td></tr>
-            <tr><td>${item.quantity} x</td><td>Rp ${item.price}</td><td class="right">Rp ${item.quantity * item.price}</td></tr>
-            ${item.discount > 0 ? `<tr><td colspan="2">Diskon Item</td><td class="right">-Rp ${item.discount * item.quantity}</td></tr>` : ''}`;
-        }).join('')}</table>
-        <div class="divider"></div>
-        <table>
-          ${receiptData?.discount > 0 ? `<tr><td>Diskon Trx</td><td class="right">-Rp ${receiptData.discount}</td></tr>` : ''}
-          <tr><td class="bold">TOTAL</td><td class="right bold">Rp ${receiptData?.total}</td></tr>
-        </table>
-        <div class="divider"></div>
-        <div class="text-center">Terima Kasih</div>
-        <script>window.print(); window.onafterprint = function() { window.close(); }</script>
-      </body></html>
-    `);
-    printWindow.document.close();
+    const w = window.open('', '_blank');
+    w.document.write(`<html><head><style>body{font-family:monospace;width:${size};margin:0 auto;padding:10px;font-size:12px}.c{text-align:center}.b{font-weight:bold}.r{text-align:right}hr{border-top:1px dashed #000}</style></head><body>
+      <div class="c b" style="font-size:16px">POSBah</div><div class="c">Struk Pembayaran</div><hr>
+      <div>No: ${receipt?.receiptNumber}</div><div>Metode: ${receipt?.paymentMethod}</div><hr>
+      <table width="100%">${receipt?.items.map(item => {
+        const prod = products.find(p => p.id === item.productId);
+        return `<tr><td colspan="3">${prod?.name||'Item'}</td></tr><tr><td>${item.quantity}x</td><td>Rp${item.price}</td><td class="r">Rp${item.quantity*item.price}</td></tr>`;
+      }).join('')}</table><hr>
+      <table width="100%"><tr><td class="b">TOTAL</td><td class="r b">Rp${receipt?.total}</td></tr></table><hr>
+      <div class="c">Terima Kasih!</div>
+      <script>window.print();window.onafterprint=()=>window.close()</script></body></html>`);
+    w.document.close();
   };
 
-  const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filtered = products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  // Shared cart content (reused in both desktop sidebar and mobile sheet)
-  const CartContent = () => (
-    <>
-      <div className="cart-items" style={{ flex: 1, overflowY: 'auto', maxHeight: isMobileCartOpen ? '40vh' : undefined }}>
-        {cart.length === 0 ? (
-          <div className="text-center text-gray-500 mt-4 text-sm">Keranjang kosong</div>
-        ) : (
-          cart.map(item => (
-            <div key={item.product.id} className="cart-item border-b pb-2 mb-2">
-              <div className="cart-item-info">
-                <div className="cart-item-name text-sm">{item.product.name}</div>
-                <div className="cart-item-price text-sm">Rp {item.product.price.toLocaleString('id-ID')}</div>
-              </div>
-              <div className="flex justify-between items-center mt-1">
-                <div className="flex items-center gap-1">
-                  <span className="text-xs text-gray-500">Diskon:</span>
-                  <input type="number" className="w-16 p-1 text-xs border rounded outline-none" value={item.discount} onChange={(e) => updateItemDiscount(item.product.id, e.target.value)} />
-                </div>
-                <div className="cart-item-actions">
-                  <button onClick={() => updateQuantity(item.product.id, -1)}>-</button>
-                  <span>{item.quantity}</span>
-                  <button onClick={() => updateQuantity(item.product.id, 1)}>+</button>
-                  <button className="btn-icon text-red-500" onClick={() => removeFromCart(item.product.id)}><Trash2 size={14} /></button>
-                </div>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      <div className="cart-summary" style={{ marginTop: 'auto' }}>
-        <div className="flex flex-col gap-2 mb-3 border-t pt-3">
-          <input type="text" placeholder="Nama / No. Meja (opsional)" className="p-2 border rounded outline-none text-sm w-full" value={customerName} onChange={e => setCustomerName(e.target.value)} />
-          <textarea placeholder="Catatan Pesanan (opsional)" className="p-2 border rounded outline-none text-xs w-full" rows={2} value={notes} onChange={e => setNotes(e.target.value)} />
-        </div>
-        <div className="flex justify-between items-center mb-2 text-sm">
-          <span>Diskon Transaksi:</span>
-          <input type="number" className="w-24 p-1 border rounded outline-none text-right" value={globalDiscount} onChange={(e) => setGlobalDiscount(Number(e.target.value) || 0)} />
-        </div>
-        <div className="summary-row font-bold text-xl pt-2 border-t">
-          <span>Total</span>
-          <span>Rp {totalAmount > 0 ? totalAmount.toLocaleString('id-ID') : 0}</span>
-        </div>
-        <div className="flex flex-col gap-2 mt-3">
-          <button className="btn btn-secondary w-full justify-center py-2 text-sm" disabled={cart.length === 0} onClick={() => handleCheckout(true)}>
-            Tambahkan Antrian (Bayar Nanti)
-          </button>
-          <button className="btn btn-primary w-full justify-center py-3 text-base" disabled={cart.length === 0} onClick={() => setIsPaymentModalOpen(true)}>
-            Bayar Sekarang
-          </button>
-        </div>
-      </div>
-    </>
-  );
+  // ---- STYLES ----
+  const S = {
+    wrap: { display:'flex', flexDirection:'column', height:'100%', background:'#F8F9FF', position:'relative' },
+    topbar: { padding:'12px 16px', background:'white', display:'flex', gap:'10px', alignItems:'center', boxShadow:'0 1px 4px rgba(0,0,0,0.06)', flexShrink:0 },
+    searchBox: { flex:1, display:'flex', alignItems:'center', gap:'8px', background:'#F1F3FF', borderRadius:'12px', padding:'10px 14px' },
+    searchInput: { border:'none', background:'transparent', outline:'none', fontSize:'0.9rem', width:'100%', color:'#1F2937' },
+    queueBtn: { padding:'10px 14px', borderRadius:'12px', border:'none', background:'#EEF2FF', color:'#4F46E5', fontWeight:700, fontSize:'0.82rem', cursor:'pointer', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:'6px' },
+    grid: { display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:'10px', padding:'12px 12px 120px', overflowY:'auto', flex:1 },
+    card: { background:'white', borderRadius:'16px', overflow:'hidden', boxShadow:'0 2px 8px rgba(0,0,0,0.06)', cursor:'pointer', transition:'transform 0.15s, box-shadow 0.15s', userSelect:'none' },
+    cardImg: { height:'110px', background:'#F1F3FF', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden' },
+    cardBody: { padding:'10px 12px 12px' },
+    cardName: { fontWeight:600, fontSize:'0.85rem', color:'#1F2937', lineHeight:1.3, marginBottom:'4px' },
+    cardPrice: { fontWeight:800, fontSize:'0.95rem', color:'#4F46E5' },
+    cardStock: { fontSize:'0.7rem', color:'#9CA3AF', marginTop:'3px' },
+    // bottom bar
+    bottomBar: { position:'fixed', bottom:0, left:0, right:0, zIndex:60 },
+    backdrop: { position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', backdropFilter:'blur(3px)', zIndex:-1 },
+    sheet: (open) => ({ background:'white', borderRadius: open?'20px 20px 0 0':'16px 16px 0 0', boxShadow:'0 -6px 30px rgba(0,0,0,0.12)', transition:'max-height 0.4s cubic-bezier(0.4,0,0.2,1)', maxHeight: open?'88dvh':'68px', overflow:'hidden', display:'flex', flexDirection:'column' }),
+    sheetHandle: { padding:'0 16px', borderBottom: cartOpen?'1px solid #F3F4F6':'none', cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'space-between', minHeight:'68px', background:'white' },
+    sheetBody: { overflowY:'auto', flex:1, padding:'0 16px 8px' },
+    input: { width:'100%', padding:'11px 14px', borderRadius:'10px', border:'1.5px solid #E5E7EB', outline:'none', fontSize:'0.9rem', boxSizing:'border-box', background:'#FAFAFA' },
+    pill: (active) => ({ padding:'12px 24px', borderRadius:'12px', border:'none', fontWeight:700, fontSize:'0.9rem', cursor:'pointer', background: active?'#4F46E5':'#EEF2FF', color: active?'white':'#4F46E5', transition:'all 0.2s' }),
+    btnPrimary: { width:'100%', padding:'15px', borderRadius:'14px', border:'none', background:'linear-gradient(135deg,#6366F1,#4F46E5)', color:'white', fontWeight:800, fontSize:'1rem', cursor:'pointer', boxShadow:'0 4px 14px rgba(99,102,241,0.4)' },
+    btnSecondary: { width:'100%', padding:'13px', borderRadius:'14px', border:'1.5px solid #E5E7EB', background:'white', color:'#374151', fontWeight:700, fontSize:'0.9rem', cursor:'pointer' },
+  };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
-
-      {/* ===== DESKTOP LAYOUT ===== */}
-      <div className="kasir-layout" style={{ flex: 1, overflow: 'hidden' }}>
-        {/* Left: Products */}
-        <div className="kasir-main">
-          {/* Top bar */}
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '1rem' }}>
-            <div className="glass-panel search-bar" style={{ flex: 1, marginBottom: 0 }}>
-              <Search size={20} className="text-gray-400" />
-              <input type="text" placeholder="Cari produk..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-            </div>
-            <button className="btn btn-secondary" style={{ whiteSpace: 'nowrap' }} onClick={fetchQueue}>
-              <ClipboardList size={18} /> Antrian
-            </button>
-          </div>
-
-          {/* Low Stock Alert */}
-          {products.filter(p => p.stock > 0 && p.stock <= 5).length > 0 && (
-            <div style={{ background: '#FEF9C3', border: '1px solid #FDE047', borderRadius: 10, padding: '8px 14px', marginBottom: 10, fontSize: 13, color: '#854D0E', fontWeight: 600 }}>
-              ⚠️ Stok menipis: {products.filter(p => p.stock > 0 && p.stock <= 5).map(p => `${p.name} (${p.stock})`).join(' · ')}
-            </div>
-          )}
-
-          {/* Product Grid — with extra bottom padding on mobile for the floating bar */}
-          <div className="product-grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4" style={{ paddingBottom: '5rem' }}>
-            {filteredProducts.map(product => (
-              <div key={product.id} className="product-card glass-panel flex flex-col" onClick={() => addToCart(product)} style={{ position: 'relative' }}>
-                {product.stock > 0 && product.stock <= 5 && (
-                  <div style={{ position: 'absolute', top: 6, right: 6, background: '#F59E0B', color: '#fff', fontSize: 10, fontWeight: 800, padding: '2px 6px', borderRadius: 99, zIndex: 1 }}>
-                    Sisa {product.stock}
-                  </div>
-                )}
-                <div className="product-image h-24 md:h-32">
-                  {product.image ? (
-                    <img src={product.image} alt={product.name} className="w-full h-full object-contain p-2" />
-                  ) : (
-                    <div className="image-placeholder">No Image</div>
-                  )}
-                </div>
-                <div className="product-info p-2 md:p-4 flex-1 flex flex-col">
-                  <div className="product-name text-sm md:text-base">{product.name}</div>
-                  <div className="product-price text-sm md:text-base">Rp {product.price.toLocaleString('id-ID')}</div>
-                  <div className="product-stock text-xs mt-auto">Stok: {product.stock} {product.unit || 'pcs'}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+    <div style={S.wrap}>
+      {/* Top Bar */}
+      <div style={S.topbar}>
+        <div style={S.searchBox}>
+          <Search size={18} color="#9CA3AF" />
+          <input style={S.searchInput} placeholder="Cari produk..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+          {searchQuery && <button onClick={() => setSearchQuery('')} style={{ background:'none', border:'none', cursor:'pointer', padding:0, color:'#9CA3AF' }}><X size={16} /></button>}
         </div>
-
-        {/* Right: Desktop Sidebar Cart */}
-        <div className="kasir-sidebar glass-panel" style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-          <div className="cart-header">
-            <h2><ShoppingCart size={20} /> Keranjang</h2>
-            {cart.length > 0 && (
-              <button className="btn-icon btn-danger" onClick={() => setCart([])} title="Kosongkan"><Trash2 size={16} /></button>
-            )}
-          </div>
-          <CartContent />
-        </div>
+        <button style={S.queueBtn} onClick={fetchQueue}><ClipboardList size={16} /> Antrian</button>
       </div>
 
-      {/* ===== MOBILE FLOATING CART BAR (bottom) ===== */}
-      <div
-        className="md:hidden"
-        style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          zIndex: 60,
-        }}
-      >
-        {/* Backdrop when sheet is open */}
-        {isMobileCartOpen && (
-          <div
-            onClick={() => setIsMobileCartOpen(false)}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: -1, backdropFilter: 'blur(2px)' }}
-          />
-        )}
+      {/* Low stock warning */}
+      {products.some(p => p.stock > 0 && p.stock <= 5) && (
+        <div style={{ background:'#FEF9C3', padding:'8px 16px', fontSize:'0.78rem', color:'#92400E', fontWeight:600, flexShrink:0 }}>
+          ⚠️ {products.filter(p => p.stock > 0 && p.stock <= 5).map(p => `${p.name} (sisa ${p.stock})`).join(' · ')}
+        </div>
+      )}
 
-        {/* Bottom Sheet */}
-        <div
-          style={{
-            background: 'white',
-            borderRadius: isMobileCartOpen ? '20px 20px 0 0' : '16px 16px 0 0',
-            boxShadow: '0 -4px 30px rgba(0,0,0,0.15)',
-            padding: '0 1rem 1rem',
-            transition: 'max-height 0.35s cubic-bezier(0.4,0,0.2,1)',
-            maxHeight: isMobileCartOpen ? '85dvh' : '64px',
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
-          {/* Handle / toggle bar */}
-          <button
-            onClick={() => setIsMobileCartOpen(!isMobileCartOpen)}
-            style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '12px 4px',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-            }}
+      {/* Product Grid */}
+      <div style={S.grid}>
+        {filtered.map(p => (
+          <div key={p.id} style={S.card}
+            onClick={() => addToCart(p)}
+            onMouseDown={e => e.currentTarget.style.transform = 'scale(0.97)'}
+            onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
+            onTouchStart={e => e.currentTarget.style.transform = 'scale(0.97)'}
+            onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <ShoppingCart size={22} color="#4F46E5" />
-              <span style={{ fontWeight: 700, fontSize: '1rem', color: '#1F2937' }}>
-                Keranjang {totalItems > 0 ? `(${totalItems})` : ''}
+            <div style={S.cardImg}>
+              {p.image
+                ? <img src={p.image} alt={p.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                : <span style={{ fontSize:'2.5rem' }}>🛒</span>
+              }
+              {p.stock <= 5 && p.stock > 0 && (
+                <div style={{ position:'absolute', top:6, right:6, background:'#F59E0B', color:'white', fontSize:'0.65rem', fontWeight:800, padding:'2px 6px', borderRadius:'99px' }}>
+                  Sisa {p.stock}
+                </div>
+              )}
+              {p.stock === 0 && (
+                <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontWeight:800, fontSize:'0.8rem', borderRadius:'16px 16px 0 0' }}>
+                  HABIS
+                </div>
+              )}
+            </div>
+            <div style={S.cardBody}>
+              <div style={S.cardName}>{p.name}</div>
+              <div style={S.cardPrice}>Rp {p.price.toLocaleString('id-ID')}</div>
+              <div style={S.cardStock}>{p.stock} {p.unit||'pcs'}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Bottom Sheet Cart */}
+      <div style={S.bottomBar}>
+        {cartOpen && <div style={S.backdrop} onClick={() => setCartOpen(false)} />}
+        <div style={S.sheet(cartOpen)}>
+          {/* Handle */}
+          <div style={S.sheetHandle} onClick={() => setCartOpen(o => !o)}>
+            <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
+              <div style={{ position:'relative' }}>
+                <ShoppingCart size={22} color="#4F46E5" />
+                {totalItems > 0 && (
+                  <span style={{ position:'absolute', top:'-8px', right:'-8px', background:'#EF4444', color:'white', borderRadius:'99px', fontSize:'0.65rem', fontWeight:800, padding:'1px 5px', minWidth:'16px', textAlign:'center' }}>{totalItems}</span>
+                )}
+              </div>
+              <span style={{ fontWeight:700, fontSize:'1rem', color:'#1F2937' }}>
+                {totalItems > 0 ? `${totalItems} item` : 'Keranjang'}
               </span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {totalAmount > 0 && (
-                <span style={{ fontWeight: 700, color: '#4F46E5', fontSize: '0.95rem' }}>
-                  Rp {totalAmount.toLocaleString('id-ID')}
-                </span>
-              )}
-              <ChevronUp size={22} color="#6B7280" style={{ transform: isMobileCartOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s' }} />
+            <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
+              {total > 0 && <span style={{ fontWeight:800, color:'#4F46E5', fontSize:'1rem' }}>Rp {total.toLocaleString('id-ID')}</span>}
+              <ChevronUp size={22} color="#9CA3AF" style={{ transform: cartOpen ? 'rotate(180deg)' : 'none', transition:'transform 0.3s' }} />
             </div>
-          </button>
+          </div>
 
-          {/* Cart content inside sheet */}
-          <div style={{ overflowY: 'auto', flex: 1, paddingBottom: '1rem' }}>
-            <CartContent />
+          {/* Cart Body */}
+          <div style={S.sheetBody}>
+            {cart.length === 0 ? (
+              <div style={{ textAlign:'center', padding:'24px 0', color:'#9CA3AF', fontSize:'0.9rem' }}>Belum ada item 🛒</div>
+            ) : (
+              cart.map(item => {
+                const ep = getEffectivePrice(item.product, item.quantity);
+                return (
+                  <div key={item.product.id} style={{ borderBottom:'1px solid #F3F4F6', padding:'12px 0', display:'flex', flexDirection:'column', gap:'8px' }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontWeight:600, fontSize:'0.9rem', color:'#1F2937' }}>{item.product.name}</div>
+                        <div style={{ fontSize:'0.8rem', color:'#4F46E5', fontWeight:700 }}>Rp {ep.toLocaleString('id-ID')}{item.discount>0&&<span style={{color:'#EF4444'}}> -Rp {item.discount.toLocaleString('id-ID')}</span>}</div>
+                      </div>
+                      <button onClick={() => removeItem(item.product.id)} style={{ background:'#FEE2E2', border:'none', borderRadius:'8px', padding:'6px', cursor:'pointer', color:'#EF4444', display:'flex', alignItems:'center' }}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:'4px' }}>
+                        <span style={{ fontSize:'0.72rem', color:'#9CA3AF' }}>Diskon:</span>
+                        <input type="number" value={item.discount} min={0}
+                          onChange={e => setCart(prev => prev.map(i => i.product.id===item.product.id ? {...i, discount:Number(e.target.value)||0} : i))}
+                          style={{ width:'60px', padding:'4px 6px', border:'1px solid #E5E7EB', borderRadius:'7px', fontSize:'0.8rem', outline:'none', textAlign:'right' }} />
+                      </div>
+                      <div style={{ display:'flex', alignItems:'center', gap:'0', border:'1.5px solid #E5E7EB', borderRadius:'10px', overflow:'hidden' }}>
+                        <button onClick={() => updateQty(item.product.id,-1)} style={{ padding:'6px 12px', border:'none', background:'#F9FAFB', cursor:'pointer', fontWeight:800, color:'#374151', fontSize:'1rem' }}>−</button>
+                        <span style={{ padding:'6px 12px', fontWeight:700, fontSize:'0.95rem', color:'#1F2937', minWidth:'36px', textAlign:'center' }}>{item.quantity}</span>
+                        <button onClick={() => updateQty(item.product.id,1)} style={{ padding:'6px 12px', border:'none', background:'#F9FAFB', cursor:'pointer', fontWeight:800, color:'#4F46E5', fontSize:'1rem' }}>+</button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+
+            {/* Summary section */}
+            <div style={{ paddingTop:'12px' }}>
+              <div style={{ display:'flex', flexDirection:'column', gap:'8px', marginBottom:'12px' }}>
+                <input style={S.input} placeholder="Nama / No. Meja (opsional)" value={customerName} onChange={e => setCustomerName(e.target.value)} />
+                <textarea style={{ ...S.input, resize:'none', fontFamily:'inherit' }} rows={2} placeholder="Catatan pesanan (opsional)" value={notes} onChange={e => setNotes(e.target.value)} />
+              </div>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'8px' }}>
+                <span style={{ fontSize:'0.85rem', color:'#6B7280' }}>Diskon Transaksi</span>
+                <input type="number" value={globalDiscount} min={0}
+                  onChange={e => setGlobalDiscount(Number(e.target.value)||0)}
+                  style={{ width:'100px', padding:'6px 10px', border:'1.5px solid #E5E7EB', borderRadius:'8px', fontSize:'0.9rem', textAlign:'right', outline:'none' }} />
+              </div>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 0', borderTop:'2px solid #EEF2FF', marginBottom:'14px' }}>
+                <span style={{ fontWeight:700, color:'#1F2937', fontSize:'1rem' }}>Total</span>
+                <span style={{ fontWeight:800, color:'#4F46E5', fontSize:'1.2rem' }}>Rp {Math.max(0,total).toLocaleString('id-ID')}</span>
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:'10px', paddingBottom:'16px' }}>
+                <button style={{ ...S.btnSecondary, opacity: cart.length?1:0.5 }} disabled={!cart.length} onClick={() => checkout(true)}>
+                  🕐 Simpan sebagai Antrian
+                </button>
+                <button style={{ ...S.btnPrimary, opacity: cart.length?1:0.5 }} disabled={!cart.length} onClick={() => setPayModal(true)}>
+                  Bayar Sekarang →
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ===== MODALS ===== */}
-
       {/* Payment Modal */}
-      {isPaymentModalOpen && (
+      {payModal && (
         <div className="modal-overlay">
-          <div className="modal-content glass-panel text-center">
-            <h2>Pilih Metode Pembayaran</h2>
-            <div className="text-left mt-4 mb-2 p-3 border rounded bg-gray-50 flex flex-col gap-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={isBackdate} onChange={(e) => setIsBackdate(e.target.checked)} />
-                <span className="font-semibold text-gray-700">Gunakan Backdate Kasir</span>
-              </label>
-              {isBackdate && (
-                <div className="mt-2">
-                  <label className="block text-sm text-gray-600 mb-1">Pilih Tanggal Transaksi</label>
-                  <input type="datetime-local" className="p-2 border rounded w-full" value={transactionDate} onChange={(e) => setTransactionDate(e.target.value)} />
-                </div>
-              )}
+          <div className="modal-content glass-panel" style={{ maxWidth:380 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'16px' }}>
+              <h2 style={{ margin:0, fontSize:'1.2rem' }}>Pembayaran</h2>
+              <button onClick={() => setPayModal(false)} style={{ background:'#F3F4F6', border:'none', borderRadius:'8px', padding:'6px', cursor:'pointer' }}><X size={18} /></button>
             </div>
-            <div className="payment-options mt-4 flex justify-center gap-4">
-              <button className={`btn ${paymentMethod === 'CASH' ? 'btn-primary' : 'btn-secondary'} flex-col p-4 w-32`} onClick={() => setPaymentMethod('CASH')}>
-                <CreditCard size={32} className="mb-2" />CASH
-              </button>
-              <button className={`btn ${paymentMethod === 'QRIS' ? 'btn-primary' : 'btn-secondary'} flex-col p-4 w-32`} onClick={() => setPaymentMethod('QRIS')}>
-                <QrCode size={32} className="mb-2" />QRIS
-              </button>
+            <div style={{ display:'flex', gap:'10px', marginBottom:'16px' }}>
+              <button style={S.pill(payMethod==='CASH')} onClick={() => setPayMethod('CASH')}><CreditCard size={16} style={{marginRight:6}} />Cash</button>
+              <button style={S.pill(payMethod==='QRIS')} onClick={() => setPayMethod('QRIS')}><QrCode size={16} style={{marginRight:6}} />QRIS</button>
             </div>
-            {paymentMethod === 'QRIS' && (
-              <div className="mt-4 p-4 border rounded-lg bg-white inline-block">
-                <div style={{width: 150, height: 150, background: '#ccc', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>QRIS Mockup</div>
-              </div>
-            )}
-            <div className="summary-row mt-6 text-xl font-bold">
-              <span>Total Tagihan:</span>
-              <span>Rp {totalAmount.toLocaleString('id-ID')}</span>
+            <label style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'12px', fontSize:'0.85rem', color:'#6B7280', cursor:'pointer' }}>
+              <input type="checkbox" checked={isBackdate} onChange={e => setIsBackdate(e.target.checked)} />
+              Backdate (transaksi lampau)
+            </label>
+            {isBackdate && <input type="datetime-local" value={txDate} onChange={e => setTxDate(e.target.value)} style={{ ...S.input, marginBottom:'12px' }} />}
+            <div style={{ display:'flex', justifyContent:'space-between', padding:'14px 0', borderTop:'2px solid #EEF2FF', marginBottom:'16px' }}>
+              <span style={{ fontWeight:700 }}>Total Tagihan</span>
+              <span style={{ fontWeight:800, color:'#4F46E5', fontSize:'1.1rem' }}>Rp {Math.max(0,total).toLocaleString('id-ID')}</span>
             </div>
-            <div className="modal-actions justify-center mt-6">
-              <button className="btn btn-secondary" onClick={() => setIsPaymentModalOpen(false)}>Batal</button>
-              <button className="btn btn-primary px-8" onClick={() => handleCheckout(false)}>Proses Pembayaran</button>
-            </div>
+            <button style={S.btnPrimary} onClick={() => checkout(false)}>Proses Pembayaran</button>
           </div>
         </div>
       )}
 
       {/* Receipt Modal */}
-      {receiptData && (
+      {receipt && (
         <div className="modal-overlay">
           <div className="modal-content glass-panel text-center">
-            <h2 className="text-green-600 mb-2">Pembayaran Berhasil!</h2>
-            <p>No. Transaksi: {receiptData.receiptNumber}</p>
-            <div className="mt-6 flex flex-col gap-3">
-              <button className="btn btn-primary justify-center" onClick={() => printReceipt('58mm')}><Printer size={18} /> Cetak Struk (58mm)</button>
-              <button className="btn btn-primary justify-center" onClick={() => printReceipt('80mm')}><Printer size={18} /> Cetak Struk (80mm)</button>
-              <button className="btn btn-secondary justify-center mt-2" onClick={() => setReceiptData(null)}>Tutup</button>
+            <div style={{ fontSize:'3rem', marginBottom:'8px' }}>✅</div>
+            <h2 style={{ color:'#16A34A', margin:'0 0 4px' }}>Berhasil!</h2>
+            <p style={{ color:'#6B7280', fontSize:'0.85rem', marginBottom:'20px' }}>{receipt.receiptNumber}</p>
+            <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
+              <button style={S.btnPrimary} onClick={() => printReceipt('58mm')}><Printer size={16} style={{marginRight:8}} />Cetak Struk 58mm</button>
+              <button style={S.btnPrimary} onClick={() => printReceipt('80mm')}><Printer size={16} style={{marginRight:8}} />Cetak Struk 80mm</button>
+              <button style={S.btnSecondary} onClick={() => setReceipt(null)}>Tutup</button>
             </div>
           </div>
         </div>
       )}
 
       {/* Queue Modal */}
-      {isQueueModalOpen && (
+      {queueModal && (
         <div className="modal-overlay">
-          <div className="modal-content glass-panel" style={{ maxWidth: 600 }}>
-            <div className="flex justify-between items-center mb-4">
-              <h2>Daftar Antrian</h2>
-              <button className="btn btn-secondary" onClick={() => setIsQueueModalOpen(false)}>Tutup</button>
+          <div className="modal-content glass-panel" style={{ maxWidth:500 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'16px' }}>
+              <h2 style={{ margin:0 }}>Daftar Antrian</h2>
+              <button onClick={() => setQueueModal(false)} style={{ background:'#F3F4F6', border:'none', borderRadius:'8px', padding:'6px', cursor:'pointer' }}><X size={18} /></button>
             </div>
-            <div className="max-h-96 overflow-y-auto pr-2">
-              {queuedTransactions.length === 0 ? (
-                <p className="text-center text-gray-500 py-4">Tidak ada antrian.</p>
-              ) : (
-                queuedTransactions.map(trx => (
-                  <div key={trx.id} className="border p-3 rounded mb-2 flex justify-between items-center bg-gray-50">
-                    <div>
-                      <div className="font-bold">{trx.customerName || trx.receiptNumber}</div>
-                      <div className="text-xs text-gray-600">Total: Rp {trx.total.toLocaleString('id-ID')} ({trx.items.length} item)</div>
-                      {trx.notes && <div className="text-xs text-blue-600 mt-1">Catatan: {trx.notes}</div>}
+            <div style={{ maxHeight:'60vh', overflowY:'auto', display:'flex', flexDirection:'column', gap:'10px' }}>
+              {queues.length === 0
+                ? <p style={{ textAlign:'center', color:'#9CA3AF', padding:'20px 0' }}>Tidak ada antrian 🎉</p>
+                : queues.map(t => (
+                  <div key={t.id} style={{ background:'#F8F9FF', borderRadius:'12px', padding:'12px 14px' }}>
+                    <div style={{ fontWeight:700, marginBottom:'4px' }}>{t.customerName || t.receiptNumber}</div>
+                    <div style={{ fontSize:'0.8rem', color:'#6B7280', marginBottom:'8px' }}>
+                      Rp {t.total.toLocaleString('id-ID')} · {t.items?.length||0} item
+                      {t.notes && <span style={{ color:'#4F46E5' }}> · {t.notes}</span>}
                     </div>
-                    <div className="flex flex-col md:flex-row gap-2">
-                      <button className="btn btn-primary text-xs" onClick={() => payQueue(trx.id, 'CASH')}>Bayar CASH</button>
-                      <button className="btn btn-primary text-xs" onClick={() => payQueue(trx.id, 'QRIS')}>Bayar QRIS</button>
+                    <div style={{ display:'flex', gap:'8px' }}>
+                      <button style={{ ...S.pill(true), padding:'8px 16px', fontSize:'0.8rem', flex:1 }} onClick={() => payQueue(t.id,'CASH')}>Cash</button>
+                      <button style={{ ...S.pill(true), padding:'8px 16px', fontSize:'0.8rem', flex:1 }} onClick={() => payQueue(t.id,'QRIS')}>QRIS</button>
                     </div>
                   </div>
                 ))
-              )}
+              }
             </div>
           </div>
         </div>
