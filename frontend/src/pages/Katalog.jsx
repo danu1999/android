@@ -154,8 +154,6 @@ export default function Katalog() {
               <th>Gambar</th>
               <th>Nama Produk</th>
               <th>Harga Jual</th>
-              <th>Harga Modal</th>
-              <th>Margin</th>
               <th>Stok</th>
               <th>Satuan</th>
               <th>Grosir</th>
@@ -177,20 +175,6 @@ export default function Katalog() {
                     </td>
                     <td className="font-semibold">{product.name}</td>
                     <td className="font-bold text-indigo-700">Rp {product.price.toLocaleString('id-ID')}</td>
-                    <td className="text-gray-500">
-                      {product.costPrice > 0 ? `Rp ${product.costPrice.toLocaleString('id-ID')}` : '-'}
-                    </td>
-                    <td>
-                      {margin !== null ? (
-                        <span style={{
-                          background: margin >= 20 ? '#DCFCE7' : margin >= 10 ? '#FEF9C3' : '#FEE2E2',
-                          color: margin >= 20 ? '#166534' : margin >= 10 ? '#854D0E' : '#991B1B',
-                          padding: '2px 8px', borderRadius: 99, fontSize: 12, fontWeight: 700
-                        }}>
-                          {margin}%
-                        </span>
-                      ) : '-'}
-                    </td>
                     <td>{product.stock}</td>
                     <td>
                       <span style={{ background: '#EEF2FF', color: '#4F46E5', padding: '2px 8px', borderRadius: 99, fontSize: 12, fontWeight: 700 }}>
@@ -219,7 +203,7 @@ export default function Katalog() {
               })
             ) : (
               <tr>
-                <td colSpan="9" className="text-center p-4">Tidak ada data produk.</td>
+                <td colSpan="7" className="text-center p-4">Tidak ada data produk.</td>
               </tr>
             )}
           </tbody>

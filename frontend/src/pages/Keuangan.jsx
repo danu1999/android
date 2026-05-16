@@ -4,15 +4,16 @@ import api from '../api';
 
 export default function Keuangan() {
   const [isPremium, setIsPremium] = useState(localStorage.getItem('posbah_premium') === 'true');
-  const [activeTab, setActiveTab] = useState('REKAP'); // REKAP, PAYABLE, RECEIVABLE, EXPENSE
+  const [activeTab, setActiveTab] = useState('REKAP');
   const [finances, setFinances] = useState([]);
   const [reports, setReports] = useState(null);
+  const [products, setProducts] = useState([]);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({ id: null, type: 'EXPENSE', amount: '', description: '', date: '', status: 'PENDING' });
 
-  // REKAP & SALES = bebas, PAYABLE/RECEIVABLE/EXPENSE = premium
-  const PREMIUM_TABS = ['PAYABLE', 'RECEIVABLE', 'EXPENSE'];
+  // REKAP & SALES = bebas, PAYABLE/RECEIVABLE/EXPENSE/MARGIN = premium
+  const PREMIUM_TABS = ['PAYABLE', 'RECEIVABLE', 'EXPENSE', 'MARGIN'];
   const isLockedTab = PREMIUM_TABS.includes(activeTab) && !isPremium;
 
   useEffect(() => {
@@ -29,6 +30,9 @@ export default function Keuangan() {
       } else if (activeTab === 'SALES') {
         const res = await api.get('/transactions');
         setFinances(res.data);
+      } else if (activeTab === 'MARGIN') {
+        const res = await api.get('/products');
+        setProducts(res.data);
       } else {
         const res = await api.get('/finances');
         setFinances(res.data.filter(f => f.type === activeTab));
@@ -109,6 +113,12 @@ export default function Keuangan() {
         Riwayat Transaksi
       </button>
       <button 
+        className={`font-semibold pb-2 ${activeTab === 'MARGIN' ? 'text-primary border-b-2 border-primary' : 'text-gray-500'}`}
+        onClick={() => setActiveTab('MARGIN')}
+      >
+        🔒 Analisis Margin
+      </button>
+      <button 
         className={`font-semibold pb-2 ${activeTab === 'PAYABLE' ? 'text-primary border-b-2 border-primary' : 'text-gray-500'}`}
         onClick={() => setActiveTab('PAYABLE')}
       >
@@ -128,6 +138,89 @@ export default function Keuangan() {
       </button>
     </div>
   );
+
+  const renderMargin = () => {
+    const withCost = products.filter(p => p.costPrice > 0);
+    const totalRevenuePotential = withCost.reduce((s, p) => s + p.price * p.stock, 0);
+    const totalCostValue = withCost.reduce((s, p) => s + p.costPrice * p.stock, 0);
+    const avgMargin = withCost.length > 0
+      ? Math.round(withCost.reduce((s, p) => s + ((p.price - p.costPrice) / p.price) * 100, 0) / withCost.length)
+      : 0;
+
+    return (
+      <div>
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="glass-panel p-5 border-l-4 border-green-500 flex items-center gap-4">
+            <TrendingUp size={36} className="text-green-500" />
+            <div>
+              <div className="text-gray-500 text-sm font-semibold">Rata-rata Margin</div>
+              <div className="text-2xl font-bold text-green-700">{avgMargin}%</div>
+            </div>
+          </div>
+          <div className="glass-panel p-5 border-l-4 border-blue-500 flex items-center gap-4">
+            <CreditCard size={36} className="text-blue-500" />
+            <div>
+              <div className="text-gray-500 text-sm font-semibold">Nilai Stok (Harga Jual)</div>
+              <div className="text-2xl font-bold">Rp {totalRevenuePotential.toLocaleString('id-ID')}</div>
+            </div>
+          </div>
+          <div className="glass-panel p-5 border-l-4 border-orange-500 flex items-center gap-4">
+            <ArrowDownCircle size={36} className="text-orange-500" />
+            <div>
+              <div className="text-gray-500 text-sm font-semibold">Nilai Stok (Harga Modal)</div>
+              <div className="text-2xl font-bold">Rp {totalCostValue.toLocaleString('id-ID')}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Product Margin Table */}
+        <div className="glass-panel table-container">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Nama Produk</th>
+                <th>Harga Jual</th>
+                <th>Harga Modal</th>
+                <th>Profit/item</th>
+                <th>Margin %</th>
+                <th>Stok</th>
+                <th>Potensi Profit</th>
+              </tr>
+            </thead>
+            <tbody>
+              {products.length > 0 ? products.map(p => {
+                const margin = p.costPrice > 0 ? Math.round(((p.price - p.costPrice) / p.price) * 100) : null;
+                const profitPerItem = p.costPrice > 0 ? p.price - p.costPrice : null;
+                const potentialProfit = profitPerItem !== null ? profitPerItem * p.stock : null;
+                return (
+                  <tr key={p.id}>
+                    <td className="font-semibold">{p.name}</td>
+                    <td className="text-indigo-700 font-bold">Rp {p.price.toLocaleString('id-ID')}</td>
+                    <td className="text-gray-500">{p.costPrice > 0 ? `Rp ${p.costPrice.toLocaleString('id-ID')}` : <span className="text-gray-300">—</span>}</td>
+                    <td className="text-green-700 font-semibold">{profitPerItem !== null ? `Rp ${profitPerItem.toLocaleString('id-ID')}` : <span className="text-gray-300">—</span>}</td>
+                    <td>
+                      {margin !== null ? (
+                        <span style={{
+                          background: margin >= 20 ? '#DCFCE7' : margin >= 10 ? '#FEF9C3' : '#FEE2E2',
+                          color: margin >= 20 ? '#166534' : margin >= 10 ? '#854D0E' : '#991B1B',
+                          padding: '2px 10px', borderRadius: 99, fontSize: 12, fontWeight: 700
+                        }}>{margin}%</span>
+                      ) : <span className="text-gray-300">—</span>}
+                    </td>
+                    <td>{p.stock} {p.unit}</td>
+                    <td className="font-bold text-emerald-700">{potentialProfit !== null ? `Rp ${potentialProfit.toLocaleString('id-ID')}` : <span className="text-gray-300">—</span>}</td>
+                  </tr>
+                );
+              }) : (
+                <tr><td colSpan="7" className="text-center p-4">Belum ada data produk.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
 
   const renderRekap = () => {
     if (!reports) return <p>Loading...</p>;
@@ -419,7 +512,9 @@ export default function Keuangan() {
 
       {isLockedTab
         ? renderPaywall()
-        : activeTab === 'REKAP' ? renderRekap() : renderTable()
+        : activeTab === 'REKAP' ? renderRekap()
+        : activeTab === 'MARGIN' ? renderMargin()
+        : renderTable()
       }
 
       {isModalOpen && (
