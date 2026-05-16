@@ -29,14 +29,17 @@ model Customer {
 }
 
 model Product {
-  id          Int      @id @default(autoincrement())
-  name        String
-  price       Float
-  stock       Int      @default(0)
-  unit        String   @default("pcs")
-  image       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id               Int      @id @default(autoincrement())
+  name             String
+  price            Float                          // Harga Jual
+  costPrice        Float    @default(0)           // Harga Modal
+  stock            Int      @default(0)
+  unit             String   @default("pcs")
+  wholesaleEnabled Boolean  @default(false)
+  wholesalePrices  String?                        // JSON: [{minQty, price}, ...]
+  image            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
   transactionItems TransactionItem[]
 }
 

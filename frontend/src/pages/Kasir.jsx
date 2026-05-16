@@ -60,9 +60,29 @@ export default function Kasir() {
     }));
   };
 
+  // Harga efektif: cek harga grosir jika aktif
+  const getEffectivePrice = (product, quantity) => {
+    if (!product.wholesaleEnabled || !product.wholesalePrices) return product.price;
+    try {
+      const tiers = typeof product.wholesalePrices === 'string'
+        ? JSON.parse(product.wholesalePrices)
+        : product.wholesalePrices;
+      // Cari tier tertinggi yang memenuhi syarat
+      const applicable = tiers
+        .filter(t => quantity >= t.minQty)
+        .sort((a, b) => b.minQty - a.minQty);
+      return applicable.length > 0 ? applicable[0].price : product.price;
+    } catch (_) {
+      return product.price;
+    }
+  };
+
   const [globalDiscount, setGlobalDiscount] = useState(0);
 
-  const totalAmount = cart.reduce((sum, item) => sum + ((item.product.price - item.discount) * item.quantity), 0) - globalDiscount;
+  const totalAmount = cart.reduce((sum, item) => {
+    const effectivePrice = getEffectivePrice(item.product, item.quantity);
+    return sum + ((effectivePrice - item.discount) * item.quantity);
+  }, 0) - globalDiscount;
 
   const updateItemDiscount = (productId, discount) => {
     setCart(cart.map(item => {
