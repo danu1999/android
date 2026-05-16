@@ -14,8 +14,8 @@ export default function Keuangan() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({ id: null, type: 'EXPENSE', amount: '', description: '', date: '', status: 'PENDING' });
 
-  // REKAP & SALES = bebas, PAYABLE/RECEIVABLE/EXPENSE/MARGIN = premium
-  const PREMIUM_TABS = ['PAYABLE', 'RECEIVABLE', 'EXPENSE', 'MARGIN'];
+  // REKAP, SALES, EXPENSE = bebas; PAYABLE, RECEIVABLE, MARGIN = premium
+  const PREMIUM_TABS = ['PAYABLE', 'RECEIVABLE', 'MARGIN'];
   const isLockedTab = PREMIUM_TABS.includes(activeTab) && !isPremium;
 
   useEffect(() => {
