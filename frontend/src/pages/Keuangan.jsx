@@ -182,7 +182,7 @@ export default function Keuangan() {
                 {activeTab === 'SALES' ? (
                   <>
                     <td>
-                      <div className="font-bold">{item.id.substring(0, 8).toUpperCase()}</div>
+                      <div className="font-bold">{item.receiptNumber || `#${item.id}`}</div>
                       <div className="text-xs text-gray-500">{item.type} • {item.items?.length || 0} item</div>
                     </td>
                     <td>
