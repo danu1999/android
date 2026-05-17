@@ -154,82 +154,178 @@ export default function Keuangan() {
 
   const renderMargin = () => {
     const withCost = products.filter(p => p.costPrice > 0);
-    const totalRevenuePotential = withCost.reduce((s, p) => s + p.price * p.stock, 0);
-    const totalCostValue = withCost.reduce((s, p) => s + p.costPrice * p.stock, 0);
-    const avgMargin = withCost.length > 0
-      ? Math.round(withCost.reduce((s, p) => s + ((p.price - p.costPrice) / p.price) * 100, 0) / withCost.length)
+
+    // ── Weighted average margin (bobot = stok) ──────────────────
+    const totalStockWithCost = withCost.reduce((s, p) => s + p.stock, 0);
+    const avgMargin = totalStockWithCost > 0
+      ? Math.round(
+          withCost.reduce((s, p) => s + ((p.price - p.costPrice) / p.price) * 100 * p.stock, 0)
+          / totalStockWithCost
+        )
       : 0;
+
+    const totalRevenuePotential = withCost.reduce((s, p) => s + p.price * p.stock, 0);
+    const totalCostValue        = withCost.reduce((s, p) => s + p.costPrice * p.stock, 0);
+    const totalPotentialProfit  = totalRevenuePotential - totalCostValue;
+
+    const maxMargin = Math.max(...withCost.map(p => Math.round(((p.price - p.costPrice) / p.price) * 100)), 1);
+    const lowMarginProducts = withCost.filter(p => ((p.price - p.costPrice) / p.price) * 100 < 10 && p.stock > 0);
+
+    // warna kartu margin berdasarkan nilai
+    const marginColor = avgMargin >= 25
+      ? { border: '#10B981', text: '#065F46', bg: 'linear-gradient(135deg,#D1FAE5,#A7F3D0)' }
+      : avgMargin >= 15
+      ? { border: '#F59E0B', text: '#78350F', bg: 'linear-gradient(135deg,#FEF3C7,#FDE68A)' }
+      : { border: '#EF4444', text: '#7F1D1D', bg: 'linear-gradient(135deg,#FEE2E2,#FECACA)' };
+
+    const sortedProducts = [...withCost].sort((a, b) => {
+      const mA = (a.price - a.costPrice) / a.price;
+      const mB = (b.price - b.costPrice) / b.price;
+      return mB - mA;
+    });
+    const allProducts = [
+      ...sortedProducts,
+      ...products.filter(p => p.costPrice <= 0)
+    ];
 
     return (
       <div>
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="glass-panel p-5 border-l-4 border-green-500 flex items-center gap-4">
-            <TrendingUp size={36} className="text-green-500" />
+        {/* ── Warning bar produk margin rendah ─────────────────── */}
+        {lowMarginProducts.length > 0 && (
+          <div style={{
+            display: 'flex', alignItems: 'flex-start', gap: 10,
+            background: '#FFF7ED', border: '1px solid #FED7AA',
+            borderRadius: 12, padding: '10px 16px', marginBottom: 20, fontSize: 13
+          }}>
+            <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
             <div>
-              <div className="text-gray-500 text-sm font-semibold">Rata-rata Margin</div>
-              <div className="text-2xl font-bold text-green-700">{avgMargin}%</div>
+              <span style={{ fontWeight: 700, color: '#C2410C' }}>Margin Rendah (&lt;10%): </span>
+              <span style={{ color: '#9A3412' }}>
+                {lowMarginProducts.map(p => p.name).join(', ')}
+              </span>
+              <span style={{ color: '#EA580C' }}> — pertimbangkan kenaikan harga jual.</span>
             </div>
           </div>
-          <div className="glass-panel p-5 border-l-4 border-blue-500 flex items-center gap-4">
-            <CreditCard size={36} className="text-blue-500" />
-            <div>
-              <div className="text-gray-500 text-sm font-semibold">Nilai Stok (Harga Jual)</div>
-              <div className="text-2xl font-bold">Rp {totalRevenuePotential.toLocaleString('id-ID')}</div>
+        )}
+
+        {/* ── Summary Cards ─────────────────────────────────────── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 14, marginBottom: 24 }}>
+
+          {/* Rata-rata Margin (Weighted) */}
+          <div style={{
+            borderRadius: 16, padding: '18px 20px',
+            background: marginColor.bg,
+            border: `2px solid ${marginColor.border}`,
+            display: 'flex', flexDirection: 'column', gap: 6
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: marginColor.text, opacity: 0.8, textTransform: 'uppercase', letterSpacing: 1 }}>
+              Rata-rata Margin ²
+            </div>
+            <div style={{ fontSize: 32, fontWeight: 900, color: marginColor.text, lineHeight: 1 }}>
+              {avgMargin}%
+            </div>
+            <div style={{ fontSize: 11, color: marginColor.text, opacity: 0.7 }}>
+              {avgMargin >= 25 ? '🟢 Sangat Baik' : avgMargin >= 15 ? '🟡 Cukup' : '🔴 Perlu Perhatian'}
+            </div>
+            <div style={{ fontSize: 10, color: marginColor.text, opacity: 0.6, marginTop: 2 }}>
+              ² Tertimbang berdasarkan stok
             </div>
           </div>
-          <div className="glass-panel p-5 border-l-4 border-orange-500 flex items-center gap-4">
-            <ArrowDownCircle size={36} className="text-orange-500" />
-            <div>
-              <div className="text-gray-500 text-sm font-semibold">Nilai Stok (Harga Modal)</div>
-              <div className="text-2xl font-bold">Rp {totalCostValue.toLocaleString('id-ID')}</div>
+
+          {/* Potensi Profit */}
+          <div style={{ borderRadius: 16, padding: '18px 20px', background: 'linear-gradient(135deg,#EDE9FE,#DDD6FE)', border: '2px solid #7C3AED', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#4C1D95', opacity: 0.8, textTransform: 'uppercase', letterSpacing: 1 }}>Potensi Profit Stok</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: '#4C1D95', lineHeight: 1.1 }}>
+              Rp {totalPotentialProfit.toLocaleString('id-ID')}
             </div>
+            <div style={{ fontSize: 11, color: '#5B21B6', opacity: 0.7 }}>Jika semua stok terjual</div>
+          </div>
+
+          {/* Nilai Stok Jual */}
+          <div style={{ borderRadius: 16, padding: '18px 20px', background: 'linear-gradient(135deg,#DBEAFE,#BFDBFE)', border: '2px solid #2563EB', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#1E3A8A', opacity: 0.8, textTransform: 'uppercase', letterSpacing: 1 }}>Nilai Stok (Jual)</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: '#1E3A8A', lineHeight: 1.1 }}>
+              Rp {totalRevenuePotential.toLocaleString('id-ID')}
+            </div>
+            <div style={{ fontSize: 11, color: '#1D4ED8', opacity: 0.7 }}>Harga jual × stok</div>
+          </div>
+
+          {/* Nilai Stok Modal */}
+          <div style={{ borderRadius: 16, padding: '18px 20px', background: 'linear-gradient(135deg,#FEF3C7,#FDE68A)', border: '2px solid #D97706', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#78350F', opacity: 0.8, textTransform: 'uppercase', letterSpacing: 1 }}>Nilai Stok (Modal)</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: '#78350F', lineHeight: 1.1 }}>
+              Rp {totalCostValue.toLocaleString('id-ID')}
+            </div>
+            <div style={{ fontSize: 11, color: '#92400E', opacity: 0.7 }}>Harga modal × stok</div>
           </div>
         </div>
 
-        {/* Product Margin Table */}
-        <div className="glass-panel table-container">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Nama Produk</th>
-                <th>Harga Jual</th>
-                <th>Harga Modal</th>
-                <th>Profit/item</th>
-                <th>Margin %</th>
-                <th>Stok</th>
-                <th>Potensi Profit</th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.length > 0 ? products.map(p => {
-                const margin = p.costPrice > 0 ? Math.round(((p.price - p.costPrice) / p.price) * 100) : null;
-                const profitPerItem = p.costPrice > 0 ? p.price - p.costPrice : null;
-                const potentialProfit = profitPerItem !== null ? profitPerItem * p.stock : null;
-                return (
-                  <tr key={p.id}>
-                    <td className="font-semibold">{p.name}</td>
-                    <td className="text-indigo-700 font-bold">Rp {p.price.toLocaleString('id-ID')}</td>
-                    <td className="text-gray-500">{p.costPrice > 0 ? `Rp ${p.costPrice.toLocaleString('id-ID')}` : <span className="text-gray-300">—</span>}</td>
-                    <td className="text-green-700 font-semibold">{profitPerItem !== null ? `Rp ${profitPerItem.toLocaleString('id-ID')}` : <span className="text-gray-300">—</span>}</td>
-                    <td>
-                      {margin !== null ? (
-                        <span style={{
-                          background: margin >= 20 ? '#DCFCE7' : margin >= 10 ? '#FEF9C3' : '#FEE2E2',
-                          color: margin >= 20 ? '#166534' : margin >= 10 ? '#854D0E' : '#991B1B',
-                          padding: '2px 10px', borderRadius: 99, fontSize: 12, fontWeight: 700
-                        }}>{margin}%</span>
-                      ) : <span className="text-gray-300">—</span>}
-                    </td>
-                    <td>{p.stock} {p.unit}</td>
-                    <td className="font-bold text-emerald-700">{potentialProfit !== null ? `Rp ${potentialProfit.toLocaleString('id-ID')}` : <span className="text-gray-300">—</span>}</td>
-                  </tr>
-                );
-              }) : (
-                <tr><td colSpan="7" className="text-center p-4">Belum ada data produk.</td></tr>
-              )}
-            </tbody>
-          </table>
+        {/* ── Tabel Produk ──────────────────────────────────────── */}
+        <div className="glass-panel" style={{ overflow: 'hidden', borderRadius: 16 }}>
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid #F3F4F6', background: '#FAFAFA', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontWeight: 800, fontSize: 15, color: '#111827' }}>Detail Per Produk</span>
+            <span style={{ fontSize: 12, color: '#9CA3AF' }}>Diurutkan: margin tertinggi → terendah</span>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="data-table" style={{ minWidth: 680 }}>
+              <thead>
+                <tr>
+                  <th>Nama Produk</th>
+                  <th>Harga Jual</th>
+                  <th>Harga Modal</th>
+                  <th>Profit/item</th>
+                  <th style={{ minWidth: 160 }}>Margin %</th>
+                  <th>Stok</th>
+                  <th>Potensi Profit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allProducts.length > 0 ? allProducts.map(p => {
+                  const hasCost = p.costPrice > 0;
+                  const margin = hasCost ? ((p.price - p.costPrice) / p.price) * 100 : null;
+                  const marginRound = margin !== null ? Math.round(margin) : null;
+                  const profitPerItem = hasCost ? p.price - p.costPrice : null;
+                  const potentialProfit = profitPerItem !== null ? profitPerItem * p.stock : null;
+
+                  const barColor = marginRound >= 20 ? '#10B981' : marginRound >= 10 ? '#F59E0B' : '#EF4444';
+                  const barPct = marginRound !== null ? Math.min((marginRound / maxMargin) * 100, 100) : 0;
+
+                  return (
+                    <tr key={p.id} style={{ opacity: hasCost ? 1 : 0.5 }}>
+                      <td className="font-semibold">{p.name}</td>
+                      <td className="text-indigo-700 font-bold">Rp {p.price.toLocaleString('id-ID')}</td>
+                      <td className="text-gray-500">
+                        {hasCost ? `Rp ${p.costPrice.toLocaleString('id-ID')}` : <span style={{ color: '#D1D5DB', fontSize: 12 }}>Belum diisi</span>}
+                      </td>
+                      <td style={{ color: hasCost ? '#059669' : '#D1D5DB', fontWeight: 600 }}>
+                        {profitPerItem !== null ? `Rp ${profitPerItem.toLocaleString('id-ID')}` : '—'}
+                      </td>
+                      <td>
+                        {marginRound !== null ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ flex: 1, height: 6, background: '#F3F4F6', borderRadius: 99, overflow: 'hidden', minWidth: 60 }}>
+                              <div style={{ width: `${barPct}%`, height: '100%', background: barColor, borderRadius: 99, transition: 'width 0.5s' }} />
+                            </div>
+                            <span style={{
+                              background: marginRound >= 20 ? '#D1FAE5' : marginRound >= 10 ? '#FEF3C7' : '#FEE2E2',
+                              color: marginRound >= 20 ? '#065F46' : marginRound >= 10 ? '#78350F' : '#7F1D1D',
+                              padding: '2px 8px', borderRadius: 99, fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap'
+                            }}>{marginRound}%</span>
+                          </div>
+                        ) : <span style={{ color: '#D1D5DB', fontSize: 12 }}>—</span>}
+                      </td>
+                      <td>{p.stock} <span style={{ color: '#9CA3AF', fontSize: 12 }}>{p.unit}</span></td>
+                      <td style={{ fontWeight: 700, color: potentialProfit > 0 ? '#059669' : '#D1D5DB' }}>
+                        {potentialProfit !== null ? `Rp ${potentialProfit.toLocaleString('id-ID')}` : '—'}
+                      </td>
+                    </tr>
+                  );
+                }) : (
+                  <tr><td colSpan="7" className="text-center p-4">Belum ada data produk.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     );
