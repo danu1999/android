@@ -76,12 +76,44 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// Queue endpoints — Bisa diakses KASIR (semua role)
+// ─────────────────────────────────────────────────────────────
+
+// Antrian aktif (PENDING + ada queueNumber) — untuk cek slot yang terpakai
+app.get('/api/queues/active', async (req, res) => {
+  try {
+    const queues = await prisma.transaction.findMany({
+      where: { status: 'PENDING', queueNumber: { not: null } },
+      select: { id: true, queueNumber: true, customerName: true, total: true }
+    });
+    res.json(queues);
+  } catch (error) {
+    res.status(400).json({ error: 'Failed to fetch active queues' });
+  }
+});
+
+// Semua transaksi PENDING — untuk tampil di modal Daftar Antrian
+app.get('/api/queues/pending', async (req, res) => {
+  try {
+    const queues = await prisma.transaction.findMany({
+      where: { status: 'PENDING' },
+      include: { items: { include: { product: true } }, customer: true },
+      orderBy: { date: 'asc' }
+    });
+    res.json(queues);
+  } catch (error) {
+    res.status(400).json({ error: 'Failed to fetch pending queues' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
 // Products  (READ: semua | WRITE: ADMIN+)
 // ─────────────────────────────────────────────────────────────
 app.get('/api/products', async (req, res) => {
   const products = await prisma.product.findMany();
   res.json(products);
 });
+
 
 app.post('/api/products', requireAdmin, async (req, res) => {
   try {

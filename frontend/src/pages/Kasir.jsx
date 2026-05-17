@@ -40,22 +40,21 @@ export default function Kasir() {
   }, []);
 
   const fetchCustomers = async () => {
-    try { const r = await api.get('/customers'); setCustomers(r.data); } catch { }
+    try { const r = await api.get('/customers/list'); setCustomers(r.data); } catch { }
   };
 
   const fetchActiveQueues = async () => {
     try {
-      const r = await api.get('/transactions');
-      setActiveQueues(r.data.filter(t => t.status === 'PENDING' && t.queueNumber).map(t => t.queueNumber));
+      const r = await api.get('/queues/active');
+      setActiveQueues(r.data.map(t => t.queueNumber));
     } catch { }
   };
 
   const resetAllQueues = async () => {
     if (!window.confirm('Yakin ingin reset/kosongkan semua nomor antrian yang dipakai?')) return;
     try {
-      const r = await api.get('/transactions');
-      const pendings = r.data.filter(t => t.status === 'PENDING' && t.queueNumber);
-      await Promise.all(pendings.map(t => api.put(`/transactions/${t.id}`, { queueNumber: null })));
+      const r = await api.get('/queues/active');
+      await Promise.all(r.data.map(t => api.put(`/transactions/${t.id}`, { queueNumber: null })));
       fetchActiveQueues();
     } catch { alert('Gagal mereset antrian'); }
   };
@@ -113,8 +112,8 @@ export default function Kasir() {
 
   const fetchQueue = async () => {
     try {
-      const r = await api.get('/transactions');
-      setQueues(r.data.filter(t => t.status === 'PENDING'));
+      const r = await api.get('/queues/pending');
+      setQueues(r.data);
       setQueueModal(true);
     } catch { }
   };
