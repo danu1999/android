@@ -193,7 +193,7 @@ export default function Kasir() {
     searchBox: { flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: '#F1F3FF', borderRadius: '12px', padding: '10px 14px' },
     searchInput: { border: 'none', background: 'transparent', outline: 'none', fontSize: '0.9rem', width: '100%', color: '#1F2937' },
     queueBtn: { padding: '10px 14px', borderRadius: '12px', border: 'none', background: '#EEF2FF', color: '#4F46E5', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' },
-    grid: { display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: '4px', padding: '12px 12px 160px', overflowY: 'auto', flex: 1 },
+    grid: { display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: '16px', padding: '12px 12px 160px', overflowY: 'auto', flex: 1 },
     card: { background: 'white', borderRadius: '16px', boxShadow: '0 2px 10px rgba(0,0,0,0.05)', cursor: 'pointer', transition: 'transform 0.15s', userSelect: 'none', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
     cardThumb: { width: '100%', height: '120px', background: '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 },
     cardBody: { padding: '12px 14px', display: 'flex', flexDirection: 'column' },
