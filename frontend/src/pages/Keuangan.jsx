@@ -3,6 +3,12 @@ import { CreditCard, ArrowDownCircle, ArrowUpCircle, TrendingUp, Plus, Edit2, Tr
 import api from '../api';
 import { useDemoBlock } from '../AuthContext';
 
+/** Konversi Date ke string datetime-local sesuai timezone lokal browser */
+const toLocalDatetime = (date = new Date()) => {
+  const d = new Date(date);
+  const offset = d.getTimezoneOffset() * 60000; // offset dalam ms
+  return new Date(d.getTime() - offset).toISOString().slice(0, 16);
+};
 
 export default function Keuangan() {
   const { showDemoBlock, isDemo } = useDemoBlock();
@@ -55,7 +61,7 @@ export default function Keuangan() {
     if (finance) {
       setFormData({
         ...finance,
-        date: new Date(finance.date).toISOString().slice(0, 16)
+        date: toLocalDatetime(finance.date)
       });
     } else {
       setFormData({
@@ -63,9 +69,10 @@ export default function Keuangan() {
         type: activeTab === 'REKAP' ? 'EXPENSE' : activeTab,
         amount: '',
         description: '',
-        date: new Date().toISOString().slice(0, 16),
+        date: toLocalDatetime(), // waktu sekarang sesuai timezone lokal
         status: 'PENDING'
       });
+
     }
     setIsModalOpen(true);
   };
