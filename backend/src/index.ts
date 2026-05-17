@@ -332,10 +332,28 @@ app.put('/api/customers/:id', requireAdmin, async (req, res) => {
 app.delete('/api/customers/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    await prisma.customer.delete({ where: { id: Number(id) } });
+    const numId = Number(id);
+
+    // Cek apakah pelanggan masih punya transaksi
+    const txCount = await prisma.transaction.count({ where: { customerId: numId } });
+    if (txCount > 0) {
+      return res.status(400).json({
+        error: `Tidak dapat menghapus pelanggan ini karena masih memiliki ${txCount} transaksi. Hapus transaksi terkait terlebih dahulu.`
+      });
+    }
+
+    // Cek apakah pelanggan masih punya data keuangan (piutang/hutang)
+    const finCount = await prisma.finance.count({ where: { customerId: numId } });
+    if (finCount > 0) {
+      return res.status(400).json({
+        error: `Tidak dapat menghapus pelanggan ini karena masih memiliki ${finCount} catatan keuangan. Hapus catatan keuangan terkait terlebih dahulu.`
+      });
+    }
+
+    await prisma.customer.delete({ where: { id: numId } });
     res.json({ success: true });
   } catch (error) {
-    res.status(400).json({ error: 'Failed to delete customer' });
+    res.status(400).json({ error: 'Gagal menghapus pelanggan.' });
   }
 });
 
@@ -413,10 +431,19 @@ app.delete('/api/employees/:id', requireOwner, async (req, res) => {
     if (Number(id) === Number(employeeIdHeader)) {
       return res.status(400).json({ error: 'Tidak dapat menghapus akun sendiri' });
     }
+
+    // Cek apakah karyawan masih punya transaksi
+    const txCount = await prisma.transaction.count({ where: { employeeId: Number(id) } });
+    if (txCount > 0) {
+      return res.status(400).json({
+        error: `Tidak dapat menghapus karyawan ini karena masih memiliki ${txCount} transaksi tercatat. Pertimbangkan untuk mengubah role menjadi KASIR saja.`
+      });
+    }
+
     await prisma.employee.delete({ where: { id: Number(id) } });
     res.json({ success: true });
   } catch (error) {
-    res.status(400).json({ error: 'Failed to delete employee' });
+    res.status(400).json({ error: 'Gagal menghapus karyawan.' });
   }
 });
 
