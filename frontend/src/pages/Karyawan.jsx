@@ -151,10 +151,12 @@ export default function Karyawan() {
                         <span style={{display:'inline-block',marginTop:3,fontSize:11,fontWeight:800,background:c.badge.bg,color:c.badge.color,padding:'2px 10px',borderRadius:99}}>{c.label}</span>
                       </div>
                     </div>
-                    <div style={{display:'flex',justifyContent:'space-between',background:'#F8FAFC',borderRadius:10,padding:'6px 12px',marginBottom:10,border:'1px solid #F1F5F9'}}>
-                      <span style={{fontSize:11,color:'#6B7280',fontWeight:600}}>Gaji Pokok</span>
-                      <span style={{fontSize:12,fontWeight:800,color:emp.salary?'#059669':'#9CA3AF'}}>{emp.salary?`Rp ${fmt(emp.salary)}`:'Belum diset'}</span>
-                    </div>
+                    {emp.role !== 'OWNER' && (
+                      <div style={{display:'flex',justifyContent:'space-between',background:'#F8FAFC',borderRadius:10,padding:'6px 12px',marginBottom:10,border:'1px solid #F1F5F9'}}>
+                        <span style={{fontSize:11,color:'#6B7280',fontWeight:600}}>Gaji Pokok</span>
+                        <span style={{fontSize:12,fontWeight:800,color:emp.salary?'#059669':'#9CA3AF'}}>{emp.salary?`Rp ${fmt(emp.salary)}`:'Belum diset'}</span>
+                      </div>
+                    )}
                     <div style={{display:'flex',gap:8}}>
                       {isOwner?(
                         <>
@@ -266,10 +268,12 @@ export default function Karyawan() {
                   ))}
                 </select>
               </div>
-              <div className="form-group">
-                <label style={{fontWeight:700}}>💰 Gaji Pokok (Rp/bulan)</label>
-                <input type="number" value={formData.salary} onChange={e=>setForm({...formData,salary:e.target.value})} placeholder="0" disabled={isViewOnly} style={{border:`1.5px solid ${cfg(formData.role).border}`}}/>
-              </div>
+              {formData.role !== 'OWNER' && (
+                <div className="form-group">
+                  <label style={{fontWeight:700}}>💰 Gaji Pokok (Rp/bulan)</label>
+                  <input type="number" value={formData.salary} onChange={e=>setForm({...formData,salary:e.target.value})} placeholder="0" disabled={isViewOnly} style={{border:`1.5px solid ${cfg(formData.role).border}`}}/>
+                </div>
+              )}
               {!isViewOnly&&(
                 <div className="form-group">
                   <label style={{fontWeight:700}}>PIN {formData.id?'(kosong = tidak diubah)':'(untuk Login)'}</label>
