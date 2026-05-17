@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Shield, Users, Crown, Eye } from 'lucide-react';
 import api from '../api';
-import { useAuth, useIsOwner, useIsAdmin } from '../AuthContext';
+import { useAuth, useIsOwner, useIsAdmin, useDemoBlock } from '../AuthContext';
+
 
 export default function Karyawan() {
   const { user } = useAuth();
   const isOwner = useIsOwner();
-  const isAdmin = useIsAdmin(); // true for ADMIN & OWNER
+  const isAdmin = useIsAdmin();
+  const { showDemoBlock, isDemo } = useDemoBlock();
 
   const [employees, setEmployees] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -42,7 +44,9 @@ export default function Karyawan() {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (isDemo) { showDemoBlock('Mengelola karyawan hanya tersedia di akun berbayar.'); return; }
     if (!isOwner) return;
+
     try {
       if (formData.id) {
         await api.put(`/employees/${formData.id}`, formData);
@@ -58,8 +62,10 @@ export default function Karyawan() {
   };
 
   const handleDelete = async (id) => {
+    if (isDemo) { showDemoBlock('Menghapus karyawan hanya tersedia di akun berbayar.'); return; }
     if (!isOwner) return;
     if (id === user?.id) { alert('Tidak dapat menghapus akun sendiri.'); return; }
+
     if (window.confirm('Yakin ingin menghapus karyawan ini?')) {
       try {
         await api.delete(`/employees/${id}`);

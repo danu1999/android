@@ -351,6 +351,11 @@ app.get('/api/employees', requireAdmin, async (req, res) => {
 
 app.post('/api/employees', requireOwner, async (req, res) => {
   try {
+    const employeeIdHeader = req.headers['x-employee-id'] as string;
+    // Blokir demo user (id = 0)
+    if (Number(employeeIdHeader) === 0) {
+      return res.status(403).json({ error: 'Akun demo tidak dapat menambah karyawan' });
+    }
     const count = await prisma.employee.count();
     if (count >= 10) {
       return res.status(400).json({ error: 'Maksimal 10 karyawan telah tercapai' });
@@ -373,6 +378,11 @@ app.post('/api/employees', requireOwner, async (req, res) => {
 app.put('/api/employees/:id', requireOwner, async (req, res) => {
   try {
     const { id } = req.params;
+    const employeeIdHeader = req.headers['x-employee-id'] as string;
+    // Blokir demo user (id = 0)
+    if (Number(employeeIdHeader) === 0) {
+      return res.status(403).json({ error: 'Akun demo tidak dapat mengubah karyawan' });
+    }
     const { name, role, pin } = req.body;
 
     const requesterRole = req.headers['x-employee-role'] as string;
@@ -394,6 +404,10 @@ app.delete('/api/employees/:id', requireOwner, async (req, res) => {
   try {
     const { id } = req.params;
     const employeeIdHeader = req.headers['x-employee-id'] as string;
+    // Blokir demo user (id = 0)
+    if (Number(employeeIdHeader) === 0) {
+      return res.status(403).json({ error: 'Akun demo tidak dapat menghapus karyawan' });
+    }
     if (Number(id) === Number(employeeIdHeader)) {
       return res.status(400).json({ error: 'Tidak dapat menghapus akun sendiri' });
     }
