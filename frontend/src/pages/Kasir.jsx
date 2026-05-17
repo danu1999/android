@@ -126,6 +126,19 @@ export default function Kasir() {
     } catch { }
   };
 
+  const cancelQueue = async (id) => {
+    if (isDemo) {
+      showDemoBlock('Membatalkan antrian hanya tersedia di akun berbayar.');
+      return;
+    }
+    if (!window.confirm('Batalkan pesanan antrian ini?')) return;
+    try {
+      await api.put(`/transactions/${id}`, { status: 'CANCELLED' });
+      setQueues(prev => prev.filter(q => q.id !== id));
+      fetchActiveQueues();
+    } catch { alert('Gagal membatalkan antrian'); }
+  };
+
   const payQueue = async (id, method) => {
     try {
       if (method === 'HUTANG') {
@@ -457,10 +470,23 @@ export default function Kasir() {
                         </div>
                       </div>
                     ) : (
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button style={{ ...S.pill(true), padding: '8px 16px', fontSize: '0.8rem', flex: 1 }} onClick={() => payQueue(t.id, 'CASH')}>Cash</button>
-                        <button style={{ ...S.pill(true), padding: '8px 16px', fontSize: '0.8rem', flex: 1 }} onClick={() => payQueue(t.id, 'QRIS')}>QRIS</button>
-                        <button style={{ ...S.pill(false), padding: '8px 16px', fontSize: '0.8rem', flex: 1, color: '#EA580C', background: '#FFEDD5' }} onClick={() => setDebtTransactionId(t.id)}>Hutang</button>
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                        <button style={{ ...S.pill(true), padding: '8px 12px', fontSize: '0.8rem', flex: 1 }} onClick={() => payQueue(t.id, 'CASH')}>Cash</button>
+                        <button style={{ ...S.pill(true), padding: '8px 12px', fontSize: '0.8rem', flex: 1 }} onClick={() => payQueue(t.id, 'QRIS')}>QRIS</button>
+                        <button style={{ ...S.pill(false), padding: '8px 12px', fontSize: '0.8rem', flex: 1, color: '#EA580C', background: '#FFEDD5' }} onClick={() => setDebtTransactionId(t.id)}>Hutang</button>
+                        {/* Tombol Batalkan — semua role bisa, kasir yang langsung handle pelanggan */}
+                        <button
+                          onClick={() => cancelQueue(t.id)}
+                          title="Batalkan antrian ini"
+                          style={{
+                            padding: '8px 10px', borderRadius: '12px', border: 'none',
+                            background: '#FEE2E2', color: '#EF4444',
+                            cursor: 'pointer', display: 'flex', alignItems: 'center',
+                            fontWeight: 700, flexShrink: 0
+                          }}
+                        >
+                          <Trash2 size={15} />
+                        </button>
                       </div>
                     )}
                   </div>
