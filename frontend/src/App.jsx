@@ -40,15 +40,16 @@ const Navigation = ({ user, onLogout }) => {
   const roleStyle = ROLE_STYLE[user?.role] || ROLE_STYLE['KASIR'];
 
   const allNavItems = [
-    { path: '/',           label: 'Kasir',     icon: <Calculator size={20} />,    minRole: 'KASIR'  },
-    { path: '/katalog',    label: 'Katalog',   icon: <Package size={20} />,       minRole: 'KASIR'  },
-    { path: '/dashboard',  label: 'Dashboard', icon: <LayoutDashboard size={20}/>, minRole: 'ADMIN' },
-    { path: '/keuangan',   label: 'Keuangan',  icon: <DollarSign size={20} />,    minRole: 'ADMIN'  },
-    { path: '/pelanggan',  label: 'Pelanggan', icon: <Users size={20} />,         minRole: 'ADMIN'  },
-    { path: '/karyawan',   label: 'Karyawan',  icon: <UserCog size={20} />,       minRole: 'ADMIN'  },
+    { path: '/',           label: 'Kasir',     icon: <Calculator size={20} />,     minRole: 'KASIR', showInNav: true  },
+    { path: '/katalog',    label: 'Katalog',   icon: <Package size={20} />,        minRole: 'KASIR', showInNav: true  },
+    { path: '/dashboard',  label: 'Dashboard', icon: <LayoutDashboard size={20}/>, minRole: 'ADMIN', showInNav: true  },
+    // Keuangan, Pelanggan, Karyawan — bisa diakses via URL/Dashboard, tidak tampil di nav
+    { path: '/keuangan',   label: 'Keuangan',  icon: <DollarSign size={20} />,     minRole: 'ADMIN', showInNav: false },
+    { path: '/pelanggan',  label: 'Pelanggan', icon: <Users size={20} />,          minRole: 'ADMIN', showInNav: false },
+    { path: '/karyawan',   label: 'Karyawan',  icon: <UserCog size={20} />,        minRole: 'ADMIN', showInNav: false },
   ];
 
-  const navItems = allNavItems.filter(item => hasRole(user?.role, item.minRole));
+  const navItems = allNavItems.filter(item => hasRole(user?.role, item.minRole) && item.showInNav);
 
   const RoleBadge = () => (
     <span style={{
