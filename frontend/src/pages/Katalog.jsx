@@ -146,20 +146,13 @@ export default function Katalog() {
   };
 
   const handleDelete = async (id) => {
-    if (isDemo && products.length <= DEMO_LIMITS.PRODUCTS) {
-      // Izinkan hapus di demo agar tidak stuck
-    } else if (isDemo) {
-      showDemoBlock('Menghapus produk hanya tersedia di akun berbayar.');
-      return;
-    }
     if (window.confirm('Yakin ingin menghapus produk ini?')) {
-
       try {
         await api.delete(`/products/${id}`);
         setIsModalOpen(false);
         fetchProducts();
       } catch (err) {
-        console.error('Failed to delete product', err);
+        alert(err.response?.data?.error || 'Gagal menghapus produk. Produk mungkin masih digunakan dalam transaksi.');
       }
     }
   };
