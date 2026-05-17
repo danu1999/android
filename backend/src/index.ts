@@ -110,7 +110,7 @@ app.get('/api/transactions', async (req, res) => {
 
 app.post('/api/transactions', async (req, res) => {
   try {
-    const { items, total, discount, paymentMethod, type, customerId, date, status, notes, customerName } = req.body;
+    const { items, total, discount, paymentMethod, type, customerId, date, status, notes, customerName, queueNumber } = req.body;
     
     // items = [{ productId, quantity, price, discount }]
     // Find admin for demo (in reality, from auth token)
@@ -130,6 +130,7 @@ app.post('/api/transactions', async (req, res) => {
         status: status || 'COMPLETED',
         notes: notes || null,
         customerName: customerName || null,
+        queueNumber: queueNumber ? Number(queueNumber) : null,
         type: type || 'SALES',
         date: date ? new Date(date) : new Date(),
         employeeId: employee!.id,
@@ -166,10 +167,16 @@ app.post('/api/transactions', async (req, res) => {
 app.put('/api/transactions/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { paymentMethod, status } = req.body;
+    const { paymentMethod, status, queueNumber } = req.body;
+    
+    const updateData: any = {};
+    if (paymentMethod !== undefined) updateData.paymentMethod = paymentMethod;
+    if (status !== undefined) updateData.status = status;
+    if (queueNumber !== undefined) updateData.queueNumber = queueNumber;
+
     const transaction = await prisma.transaction.update({
       where: { id: Number(id) },
-      data: { paymentMethod, status }
+      data: updateData
     });
     res.json(transaction);
   } catch (error) {

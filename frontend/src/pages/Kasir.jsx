@@ -15,6 +15,10 @@ export default function Kasir() {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [customers, setCustomers] = useState([]);
+  const [customerId, setCustomerId] = useState('');
+  const [queueNumber, setQueueNumber] = useState('');
+  const [activeQueues, setActiveQueues] = useState([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [payModal, setPayModal] = useState(false);
   const [payMethod, setPayMethod] = useState('CASH');
@@ -27,7 +31,32 @@ export default function Kasir() {
   const [isBackdate, setIsBackdate] = useState(false);
   const [txDate, setTxDate] = useState('');
 
-  useEffect(() => { fetchProducts(); }, []);
+  useEffect(() => { 
+    fetchProducts(); 
+    fetchCustomers();
+    fetchActiveQueues();
+  }, []);
+
+  const fetchCustomers = async () => {
+    try { const r = await api.get('/customers'); setCustomers(r.data); } catch { }
+  };
+
+  const fetchActiveQueues = async () => {
+    try {
+      const r = await api.get('/transactions');
+      setActiveQueues(r.data.filter(t => t.status === 'PENDING' && t.queueNumber).map(t => t.queueNumber));
+    } catch { }
+  };
+
+  const resetAllQueues = async () => {
+    if (!window.confirm('Yakin ingin reset/kosongkan semua nomor antrian yang dipakai?')) return;
+    try {
+      const r = await api.get('/transactions');
+      const pendings = r.data.filter(t => t.status === 'PENDING' && t.queueNumber);
+      await Promise.all(pendings.map(t => api.put(`/transactions/${t.id}`, { queueNumber: null })));
+      fetchActiveQueues();
+    } catch { alert('Gagal mereset antrian'); }
+  };
 
   const fetchProducts = async () => {
     try { const r = await api.get('/products'); setProducts(r.data); } catch { }
@@ -66,14 +95,17 @@ export default function Kasir() {
         total, discount: globalDiscount,
         paymentMethod: isQueue ? 'PENDING' : payMethod,
         status: isQueue ? 'PENDING' : 'COMPLETED',
-        notes, customerName,
+        notes, 
+        customerName: customers.find(c => c.id === Number(customerId))?.name || '',
+        customerId: customerId ? Number(customerId) : null,
+        queueNumber: queueNumber ? Number(queueNumber) : null,
         type: isBackdate ? 'BACKDATE' : 'SALES',
         date: isBackdate ? txDate : undefined
       });
       if (!isQueue) setReceipt(r.data);
       else alert('Ditambahkan ke antrian!');
-      setCart([]); setGlobalDiscount(0); setCustomerName(''); setNotes('');
-      setPayModal(false); setCartOpen(false); fetchProducts();
+      setCart([]); setGlobalDiscount(0); setCustomerId(''); setCustomerName(''); setQueueNumber(''); setNotes('');
+      setPayModal(false); setCartOpen(false); fetchProducts(); fetchActiveQueues();
     } catch { alert('Transaksi gagal'); }
   };
 
@@ -258,9 +290,47 @@ export default function Kasir() {
             <div style={{ paddingTop: '12px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '12px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4b5563' }}>Nama Pelanggan / No. Meja</label>
-                  <input style={S.input} placeholder="Masukkan nama (opsional)" value={customerName} onChange={e => setCustomerName(e.target.value)} />
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4b5563' }}>Pelanggan</label>
+                  <select style={S.input} value={customerId} onChange={e => setCustomerId(e.target.value)}>
+                    <option value="">-- Pelanggan Umum / Walk-in --</option>
+                    {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
                 </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4b5563' }}>No. Antrian</label>
+                    <button onClick={resetAllQueues} style={{ background: '#FEE2E2', color: '#EF4444', border: 'none', borderRadius: '6px', padding: '4px 8px', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer' }}>Reset Antrian</button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '4px' }}>
+                    {Array.from({ length: 20 }, (_, i) => i + 1).map(num => {
+                      const isUsed = activeQueues.includes(num);
+                      const isSelected = queueNumber === num;
+                      return (
+                        <button
+                          key={num}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) setQueueNumber('');
+                            else if (!isUsed) setQueueNumber(num);
+                          }}
+                          disabled={isUsed}
+                          style={{
+                            aspectRatio: '1/1', borderRadius: '6px', border: 'none',
+                            background: isSelected ? '#4F46E5' : isUsed ? '#FEE2E2' : '#F3F4F6',
+                            color: isSelected ? 'white' : isUsed ? '#EF4444' : '#374151',
+                            fontWeight: 700, fontSize: '0.85rem',
+                            cursor: isUsed ? 'not-allowed' : 'pointer',
+                            opacity: isUsed ? 0.5 : 1, padding: 0
+                          }}
+                        >
+                          {num}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4b5563' }}>Catatan Pesanan</label>
                   <textarea style={{ ...S.input, resize: 'none', fontFamily: 'inherit' }} rows={2} placeholder="Masukkan catatan (opsional)" value={notes} onChange={e => setNotes(e.target.value)} />

@@ -59,6 +59,7 @@ model Transaction {
   customerId      Int?
   customer        Customer? @relation(fields: [customerId], references: [id])
   customerName    String?
+  queueNumber     Int?
   notes           String?
   
   items           TransactionItem[]
