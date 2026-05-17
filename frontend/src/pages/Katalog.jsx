@@ -114,6 +114,7 @@ export default function Katalog() {
     if (window.confirm('Yakin ingin menghapus produk ini?')) {
       try {
         await api.delete(`/products/${id}`);
+        setIsModalOpen(false);
         fetchProducts();
       } catch (err) {
         console.error('Failed to delete product', err);
@@ -178,7 +179,6 @@ export default function Katalog() {
               <th>Stok</th>
               <th>Satuan</th>
               <th>Grosir</th>
-              <th className="text-right">Aksi</th>
             </tr>
           </thead>
           <tbody>
@@ -186,7 +186,7 @@ export default function Katalog() {
               filteredProducts.map((product) => {
                 const margin = getMargin(product.price, product.costPrice);
                 return (
-                  <tr key={product.id}>
+                  <tr key={product.id} onClick={() => handleOpenModal(product)} style={{ cursor: 'pointer' }} className="hover:bg-gray-50 transition-colors">
                     <td>
                       {product.image ? (
                         <img src={product.image} alt={product.name} style={{ width: '40px', height: '40px', objectFit: 'contain', borderRadius: '4px' }} />
@@ -211,20 +211,12 @@ export default function Katalog() {
                         <span style={{ color: '#9CA3AF', fontSize: 12 }}>—</span>
                       )}
                     </td>
-                    <td className="text-right action-btns">
-                      <button className="btn btn-icon btn-edit" onClick={() => handleOpenModal(product)}>
-                        <Edit2 size={16} />
-                      </button>
-                      <button className="btn btn-icon btn-danger" onClick={() => handleDelete(product.id)}>
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
                   </tr>
                 );
               })
             ) : (
               <tr>
-                <td colSpan="7" className="text-center p-4">Tidak ada data produk.</td>
+                <td colSpan="6" className="text-center p-4">Tidak ada data produk.</td>
               </tr>
             )}
           </tbody>
@@ -326,9 +318,16 @@ export default function Katalog() {
                 )}
               </div>
 
-              <div className="modal-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Batal</button>
-                <button type="submit" className="btn btn-primary">Simpan</button>
+              <div className="modal-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginTop: '20px' }}>
+                {formData.id ? (
+                  <button type="button" className="btn btn-danger" style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#FEE2E2', color: '#DC2626', border: 'none' }} onClick={() => handleDelete(formData.id)}>
+                    <Trash2 size={16} /> Hapus
+                  </button>
+                ) : <div></div>}
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Batal</button>
+                  <button type="submit" className="btn btn-primary">Simpan</button>
+                </div>
               </div>
             </form>
           </div>
