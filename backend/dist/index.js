@@ -203,12 +203,16 @@ app.post('/api/transactions', (req, res) => __awaiter(void 0, void 0, void 0, fu
     try {
         const { items, total, discount, paymentMethod, type, customerId, date, status, notes, customerName, queueNumber } = req.body;
         const employeeIdHeader = req.headers['x-employee-id'];
+        // Blokir akun demo (id=0) agar tidak menulis ke database nyata
+        if (employeeIdHeader === '0') {
+            return res.status(403).json({ error: 'Akun demo tidak dapat menyimpan transaksi ke database.' });
+        }
         let employeeId;
         if (employeeIdHeader && employeeIdHeader !== '0') {
             employeeId = Number(employeeIdHeader);
         }
         else {
-            // Demo atau fallback: cari/buat employee default
+            // Fallback: cari/buat employee default
             let employee = yield prisma.employee.findFirst();
             if (!employee) {
                 employee = yield prisma.employee.create({
