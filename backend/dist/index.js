@@ -375,13 +375,13 @@ app.post('/api/employees', requireOwner, (req, res) => __awaiter(void 0, void 0,
         if (count >= 10) {
             return res.status(400).json({ error: 'Maksimal 10 karyawan telah tercapai' });
         }
-        const { name, role, pin } = req.body;
+        const { name, role, pin, salary } = req.body;
         // OWNER bisa tambah OWNER/ADMIN/KASIR; ADMIN hanya bisa tambah KASIR
         const requesterRole = req.headers['x-employee-role'];
         if (requesterRole !== 'OWNER' && role === 'OWNER') {
             return res.status(403).json({ error: 'Hanya OWNER yang dapat membuat akun OWNER' });
         }
-        const employee = yield prisma.employee.create({ data: { name, role: role || 'KASIR', pin } });
+        const employee = yield prisma.employee.create({ data: { name, role: role || 'KASIR', pin, salary: Number(salary || 0) } });
         res.json(employee);
     }
     catch (error) {
@@ -396,14 +396,14 @@ app.put('/api/employees/:id', requireOwner, (req, res) => __awaiter(void 0, void
         if (Number(employeeIdHeader) === 0) {
             return res.status(403).json({ error: 'Akun demo tidak dapat mengubah karyawan' });
         }
-        const { name, role, pin } = req.body;
+        const { name, role, pin, salary } = req.body;
         const requesterRole = req.headers['x-employee-role'];
         if (requesterRole !== 'OWNER' && role === 'OWNER') {
             return res.status(403).json({ error: 'Hanya OWNER yang dapat mengubah role menjadi OWNER' });
         }
         const employee = yield prisma.employee.update({
             where: { id: Number(id) },
-            data: { name, role, pin }
+            data: Object.assign({ name, role, pin }, (salary !== undefined ? { salary: Number(salary) } : {}))
         });
         res.json(employee);
     }
@@ -530,6 +530,76 @@ app.get('/api/reports', requireAdmin, (req, res) => __awaiter(void 0, void 0, vo
     catch (error) {
         console.error('Error generating report:', error);
         res.status(400).json({ error: 'Failed to generate report' });
+    }
+}));
+// ─────────────────────────────────────────────────────────────
+// Payroll  (OWNER only)
+// Terintegrasi ke Finance sebagai tipe EXPENSE dengan prefix [Gaji]
+// ─────────────────────────────────────────────────────────────
+/** Ambil riwayat penggajian bulan tertentu */
+app.get('/api/payroll/history', requireOwner, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { month, year } = req.query;
+        const m = Number(month) || new Date().getMonth() + 1;
+        const y = Number(year) || new Date().getFullYear();
+        const start = new Date(y, m - 1, 1);
+        const end = new Date(y, m, 1);
+        const records = yield prisma.finance.findMany({
+            where: {
+                description: { startsWith: '[Gaji]' },
+                date: { gte: start, lt: end }
+            },
+            orderBy: { date: 'desc' }
+        });
+        res.json(records);
+    }
+    catch (error) {
+        res.status(400).json({ error: 'Gagal mengambil riwayat gaji' });
+    }
+}));
+/** Bayar gaji satu karyawan → buat Finance EXPENSE */
+app.post('/api/payroll/pay', requireOwner, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const employeeIdHeader = req.headers['x-employee-id'];
+        if (Number(employeeIdHeader) === 0) {
+            return res.status(403).json({ error: 'Akun demo tidak dapat membayar gaji' });
+        }
+        const { employeeId, month, year, amount, note } = req.body;
+        const m = Number(month) || new Date().getMonth() + 1;
+        const y = Number(year) || new Date().getFullYear();
+        // Ambil data karyawan
+        const emp = yield prisma.employee.findUnique({ where: { id: Number(employeeId) } });
+        if (!emp)
+            return res.status(404).json({ error: 'Karyawan tidak ditemukan' });
+        // Cek sudah dibayar bulan ini?
+        const start = new Date(y, m - 1, 1);
+        const end = new Date(y, m, 1);
+        const prefix = `[Gaji] ID:${emp.id} -`;
+        const existing = yield prisma.finance.findFirst({
+            where: { description: { startsWith: prefix }, date: { gte: start, lt: end } }
+        });
+        if (existing) {
+            return res.status(400).json({ error: `Gaji ${emp.name} sudah dibayarkan untuk bulan ini.` });
+        }
+        const payAmount = Number(amount) || emp.salary;
+        if (payAmount <= 0) {
+            return res.status(400).json({ error: 'Nominal gaji harus lebih dari 0. Set gaji pokok karyawan terlebih dahulu.' });
+        }
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+        const record = yield prisma.finance.create({
+            data: {
+                type: 'EXPENSE',
+                amount: payAmount,
+                description: `[Gaji] ID:${emp.id} - ${emp.name} (${monthNames[m - 1]} ${y})${note ? ' · ' + note : ''}`,
+                date: new Date(),
+                status: 'PAID',
+            }
+        });
+        res.json(record);
+    }
+    catch (error) {
+        console.error(error);
+        res.status(400).json({ error: 'Gagal memproses pembayaran gaji' });
     }
 }));
 // ─────────────────────────────────────────────────────────────

@@ -16,6 +16,7 @@ model Employee {
   /// OWNER  - akses penuh termasuk kelola karyawan
   role      String   @default("KASIR")
   pin       String
+  salary    Float    @default(0)           // Gaji pokok per bulan
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   transactions Transaction[]
