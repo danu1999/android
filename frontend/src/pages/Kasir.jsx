@@ -117,12 +117,12 @@ export default function Kasir() {
     searchInput: { border:'none', background:'transparent', outline:'none', fontSize:'0.9rem', width:'100%', color:'#1F2937' },
     queueBtn: { padding:'10px 14px', borderRadius:'12px', border:'none', background:'#EEF2FF', color:'#4F46E5', fontWeight:700, fontSize:'0.82rem', cursor:'pointer', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:'6px' },
     grid: { display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:'8px', padding:'12px 12px 160px', overflowY:'auto', flex:1 },
-    card: { background:'white', borderRadius:'12px', boxShadow:'0 1px 6px rgba(0,0,0,0.07)', cursor:'pointer', transition:'transform 0.15s', userSelect:'none', display:'flex', flexDirection:'column', overflow:'hidden' },
-    cardThumb: { width:'100%', height:'80px', background:'#EEF2FF', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden', flexShrink:0 },
-    cardBody: { padding:'8px 10px 10px', display:'flex', flexDirection:'column', gap:'2px' },
-    cardName: { fontWeight:600, fontSize:'0.85rem', color:'#1F2937', lineHeight:1.3, marginBottom:'4px' },
-    cardPrice: { fontWeight:800, fontSize:'0.95rem', color:'#4F46E5' },
-    cardStock: { fontSize:'0.7rem', color:'#9CA3AF', marginTop:'3px' },
+    card: { background:'white', borderRadius:'16px', boxShadow:'0 2px 10px rgba(0,0,0,0.05)', cursor:'pointer', transition:'transform 0.15s', userSelect:'none', display:'flex', flexDirection:'column', overflow:'hidden' },
+    cardThumb: { width:'100%', height:'120px', background:'#EEF2FF', display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden', flexShrink:0 },
+    cardBody: { padding:'12px 14px', display:'flex', flexDirection:'column' },
+    cardName: { fontWeight:800, fontSize:'0.95rem', color:'#111827', lineHeight:1.3, marginBottom:'8px' },
+    cardPrice: { fontWeight:800, fontSize:'0.9rem', color:'#3B82F6' },
+    cardStock: { fontWeight:600, fontSize:'0.8rem', color:'#9CA3AF' },
     // bottom bar — sits above the mobile-bottom-nav (~65px)
     bottomBar: { position:'fixed', bottom:'65px', left:0, right:0, zIndex:55 },
     backdrop: { position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', backdropFilter:'blur(3px)', zIndex:-1 },
@@ -179,9 +179,11 @@ export default function Kasir() {
             </div>
             {/* Info */}
             <div style={S.cardBody}>
-              <div style={{ fontWeight:700, fontSize:'0.78rem', color:'#1F2937', lineHeight:1.3 }}>{p.name}</div>
-              <div style={{ fontWeight:800, fontSize:'0.82rem', color:'#4F46E5' }}>Rp {p.price.toLocaleString('id-ID')}</div>
-              <div style={{ fontSize:'0.65rem', color:'#9CA3AF' }}>{p.stock} {p.unit||'pcs'}</div>
+              <div style={S.cardName}>{p.name}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={S.cardPrice}>Rp {p.price.toLocaleString('id-ID')}</div>
+                <div style={S.cardStock}>{p.stock} {p.unit||'pcs'}</div>
+              </div>
             </div>
           </div>
         ))}
