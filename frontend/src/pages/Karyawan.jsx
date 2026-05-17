@@ -80,7 +80,7 @@ export default function Karyawan() {
     }catch(err){ alert(err.response?.data?.error||'Gagal bayar gaji.'); }
   };
 
-  const totalGaji   = employees.reduce((s,e)=>s+Number(e.salary||0),0);
+  const totalGaji   = employees.filter(e=>e.role!=='OWNER').reduce((s,e)=>s+Number(e.salary||0),0);
   const totalDibayar= payHistory.reduce((s,h)=>s+h.amount,0);
   const sudahBayar  = paidIds.size;
 
@@ -204,7 +204,7 @@ export default function Karyawan() {
 
           {/* Payroll list */}
           <div style={{display:'flex',flexDirection:'column',gap:10}}>
-            {employees.map(emp=>{
+            {employees.filter(e=>e.role!=='OWNER').map(emp=>{
               const c=cfg(emp.role); const paid=paidIds.has(emp.id);
               const histItem=payHistory.find(h=>h.description?.includes(`ID:${emp.id}`));
               return(
