@@ -35,3 +35,10 @@ export const useIsOwner  = () => { const { user } = useAuth(); return user?.role
 export const useIsAdmin  = () => { const { user } = useAuth(); return hasRole(user?.role, ROLES.ADMIN); };
 export const useIsKasir  = () => { const { user } = useAuth(); return user?.role === ROLES.KASIR || user?.role === 'CASHIER'; };
 export const useIsDemo   = () => { const { user } = useAuth(); return user?.isDemo === true; };
+
+export const DEMO_LIMITS = {
+  TRANSACTIONS: 20,
+  PRODUCTS: 5,
+  EMPLOYEES: 2,
+  CUSTOMERS: 5
+};

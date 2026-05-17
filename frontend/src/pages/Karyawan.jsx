@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Shield, Users, Crown, Eye, UserCog, Banknote, CheckCircle, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 import api from '../api';
-import { useAuth, useIsOwner, useDemoBlock } from '../AuthContext';
+import { useAuth, useIsOwner, useDemoBlock, DEMO_LIMITS } from '../AuthContext';
 
 const MONTH_NAMES = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
@@ -78,12 +78,18 @@ export default function Karyawan() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (isDemo) { showDemoBlock('Mengelola karyawan hanya tersedia di akun berbayar.'); return; }
     if (!isOwner) return;
     try {
       const payload = { ...formData, salary: Number(formData.salary || 0) };
-      if (formData.id) await api.put(`/employees/${formData.id}`, payload);
-      else await api.post('/employees', payload);
+      if (formData.id) {
+        await api.put(`/employees/${formData.id}`, payload);
+      } else {
+        if (isDemo && employees.length >= DEMO_LIMITS.EMPLOYEES) {
+          showDemoBlock(`Batas maksimal ${DEMO_LIMITS.EMPLOYEES} karyawan untuk akun demo. Upgrade untuk karyawan tidak terbatas!`);
+          return;
+        }
+        await api.post('/employees', payload);
+      }
       setModal(false); fetchEmp();
     } catch (err) { alert(err.response?.data?.error || 'Gagal menyimpan.'); }
   };

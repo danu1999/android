@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Search, User } from 'lucide-react';
 import api from '../api';
-import { useDemoBlock } from '../AuthContext';
+import { useDemoBlock, DEMO_LIMITS } from '../AuthContext';
 
 
 export default function Pelanggan() {
@@ -36,7 +36,10 @@ export default function Pelanggan() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (isDemo) { showDemoBlock('Menambah atau mengubah data pelanggan hanya tersedia di akun berbayar.'); return; }
+    if (isDemo && !formData.id && customers.length >= DEMO_LIMITS.CUSTOMERS) {
+      showDemoBlock(`Batas maksimal ${DEMO_LIMITS.CUSTOMERS} pelanggan untuk akun demo. Upgrade untuk pelanggan tidak terbatas!`);
+      return;
+    }
 
     try {
       if (formData.id) {
@@ -53,7 +56,7 @@ export default function Pelanggan() {
   };
 
   const handleDelete = async (id) => {
-    if (isDemo) { showDemoBlock('Menghapus data pelanggan hanya tersedia di akun berbayar.'); return; }
+    if (false) { /* delete diizinkan di demo */ }
     if (window.confirm('Yakin ingin menghapus pelanggan ini?')) {
 
       try {

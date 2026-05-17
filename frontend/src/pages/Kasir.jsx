@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, ShoppingCart, Trash2, CreditCard, QrCode, Printer, X, ChevronUp, ClipboardList, Plus, Minus } from 'lucide-react';
 import api from '../api';
-import { useDemoBlock } from '../AuthContext';
+import { useDemoBlock, DEMO_LIMITS } from '../AuthContext';
 
 const getEffectivePrice = (product, quantity) => {
   if (!product.wholesaleEnabled || !product.wholesalePrices) return product.price;
@@ -34,11 +34,15 @@ export default function Kasir() {
   const [globalDiscount, setGlobalDiscount] = useState(0);
   const [isBackdate, setIsBackdate] = useState(false);
   const [txDate, setTxDate] = useState('');
+  const [demoTxCount, setDemoTxCount] = useState(0);
 
   useEffect(() => { 
     fetchProducts(); 
     fetchCustomers();
     fetchActiveQueues();
+    if (isDemo) {
+      api.get('/transactions').then(r => setDemoTxCount(r.data?.length || 0)).catch(() => {});
+    }
   }, []);
 
   const fetchCustomers = async () => {
@@ -92,10 +96,8 @@ export default function Kasir() {
 
   const checkout = async (isQueue = false) => {
     if (!cart.length) return;
-    if (isDemo) {
-      showDemoBlock(isQueue
-        ? 'Menyimpan antrian hanya tersedia di akun berbayar. Upgrade untuk mulai menerima pesanan!'
-        : 'Memproses pembayaran hanya tersedia di akun berbayar. Upgrade untuk mulai berjualan!');
+    if (isDemo && demoTxCount >= DEMO_LIMITS.TRANSACTIONS) {
+      showDemoBlock(`Batas maksimal ${DEMO_LIMITS.TRANSACTIONS} transaksi untuk akun demo. Upgrade untuk transaksi tidak terbatas!`);
       return;
     }
     try {
@@ -113,6 +115,8 @@ export default function Kasir() {
       });
       if (!isQueue) setReceipt(r.data);
       else alert('Ditambahkan ke antrian!');
+      if (isDemo) setDemoTxCount(c => c + 1);
+
       setCart([]); setGlobalDiscount(0); setCustomerId(''); setCustomerName(''); setQueueNumber(''); setNotes('');
       setPayModal(false); setCartOpen(false); fetchProducts(); fetchActiveQueues();
     } catch { alert('Transaksi gagal'); }

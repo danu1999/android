@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Search, AlertTriangle, Eye, Tag } from 'lucide-react';
 import api from '../api';
-import { useAuth, useIsAdmin, useDemoBlock } from '../AuthContext';
+import { useAuth, useIsAdmin, useDemoBlock, DEMO_LIMITS } from '../AuthContext';
 
 
 const EMPTY_VARIANT = { name: '', stock: '', price: '' };
@@ -104,7 +104,10 @@ export default function Katalog() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (isDemo) { showDemoBlock('Menambah atau mengubah produk hanya tersedia di akun berbayar.'); return; }
+    if (isDemo && !formData.id && products.length >= DEMO_LIMITS.PRODUCTS) {
+      showDemoBlock(`Batas maksimal ${DEMO_LIMITS.PRODUCTS} produk untuk akun demo. Upgrade untuk produk tidak terbatas!`);
+      return;
+    }
 
     try {
       // Filter hanya wholesale yang terisi
@@ -143,7 +146,12 @@ export default function Katalog() {
   };
 
   const handleDelete = async (id) => {
-    if (isDemo) { showDemoBlock('Menghapus produk hanya tersedia di akun berbayar.'); return; }
+    if (isDemo && products.length <= DEMO_LIMITS.PRODUCTS) {
+      // Izinkan hapus di demo agar tidak stuck
+    } else if (isDemo) {
+      showDemoBlock('Menghapus produk hanya tersedia di akun berbayar.');
+      return;
+    }
     if (window.confirm('Yakin ingin menghapus produk ini?')) {
 
       try {
