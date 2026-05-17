@@ -39,8 +39,8 @@ export default function Karyawan() {
   const [masterOk, setMasterOk] = useState(false);
   const [pinError, setPinError] = useState(false);
 
-  const MASTER_PIN = '901020';
-  const MASTER_NAME = 'Muizz9001!';
+  const MASTER_PIN = 'Po-kuew=?=mEf?o';
+  const MASTER_NAME = 'muizz';
 
   const handleTabClick = (id) => {
     if (id === 'penggajian' && !isUltra) { setShowUpgrade(true); return; }
@@ -406,7 +406,7 @@ export default function Karyawan() {
                   <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 6, fontWeight: 600 }}>Masukkan PIN Master Admin:</div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <input
-                      type="password" maxLength="6" value={masterPin}
+                      type="password" value={masterPin}
                       onChange={e => { setMasterPin(e.target.value); setPinError(false); }}
                       placeholder="PIN Master"
                       style={{ flex: 1, border: `1.5px solid ${pinError ? '#EF4444' : '#E5E7EB'}`, borderRadius: 10, padding: '9px 12px', fontSize: 15, fontWeight: 700, letterSpacing: 4, outline: 'none' }}
