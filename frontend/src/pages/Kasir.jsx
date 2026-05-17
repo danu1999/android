@@ -19,6 +19,8 @@ export default function Kasir() {
   const [customerId, setCustomerId] = useState('');
   const [queueNumber, setQueueNumber] = useState('');
   const [activeQueues, setActiveQueues] = useState([]);
+  const [debtTransactionId, setDebtTransactionId] = useState(null);
+  const [debtDueDate, setDebtDueDate] = useState('');
   const [cartOpen, setCartOpen] = useState(false);
   const [payModal, setPayModal] = useState(false);
   const [payMethod, setPayMethod] = useState('CASH');
@@ -119,9 +121,28 @@ export default function Kasir() {
 
   const payQueue = async (id, method) => {
     try {
-      await api.put(`/transactions/${id}`, { status: 'COMPLETED', paymentMethod: method });
-      alert('Pembayaran berhasil!'); setQueueModal(false);
-    } catch { alert('Gagal'); }
+      if (method === 'HUTANG') {
+        if (!debtDueDate) { alert('Silakan pilih tanggal jatuh tempo!'); return; }
+        const t = queues.find(q => q.id === id);
+        
+        await api.put(`/transactions/${id}`, { status: 'COMPLETED', paymentMethod: 'HUTANG' });
+        await api.post('/finances', {
+          type: 'RECEIVABLE',
+          amount: t.total,
+          description: `Hutang (Jatuh tempo: ${debtDueDate}) - ${t.customerName || t.receiptNumber}`,
+          date: new Date().toISOString(),
+          status: 'PENDING',
+          customerId: t.customerId
+        });
+        alert('Pembayaran tercatat sebagai Hutang (Piutang)!');
+        setDebtTransactionId(null);
+        setDebtDueDate('');
+      } else {
+        await api.put(`/transactions/${id}`, { status: 'COMPLETED', paymentMethod: method });
+        alert('Pembayaran berhasil!'); 
+      }
+      setQueueModal(false);
+    } catch { alert('Gagal memproses pembayaran'); }
   };
 
   const printReceipt = (size) => {
@@ -419,10 +440,22 @@ export default function Kasir() {
                       Rp {t.total.toLocaleString('id-ID')} · {t.items?.length || 0} item
                       {t.notes && <span style={{ color: '#4F46E5' }}> · {t.notes}</span>}
                     </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button style={{ ...S.pill(true), padding: '8px 16px', fontSize: '0.8rem', flex: 1 }} onClick={() => payQueue(t.id, 'CASH')}>Cash</button>
-                      <button style={{ ...S.pill(true), padding: '8px 16px', fontSize: '0.8rem', flex: 1 }} onClick={() => payQueue(t.id, 'QRIS')}>QRIS</button>
-                    </div>
+                    {debtTransactionId === t.id ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: '#FFF7ED', padding: '10px', borderRadius: '8px', border: '1px solid #FED7AA' }}>
+                        <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#9A3412' }}>Tanggal Jatuh Tempo:</label>
+                        <input type="date" value={debtDueDate} onChange={(e) => setDebtDueDate(e.target.value)} style={{ padding: '8px', borderRadius: '6px', border: '1px solid #FDBA74', fontSize: '0.9rem', outline: 'none' }} />
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button style={{ ...S.btnSecondary, flex: 1, padding: '8px', fontSize: '0.8rem' }} onClick={() => setDebtTransactionId(null)}>Batal</button>
+                          <button style={{ ...S.btnPrimary, flex: 1, padding: '8px', fontSize: '0.8rem', background: '#F59E0B', boxShadow: 'none' }} onClick={() => payQueue(t.id, 'HUTANG')}>Konfirmasi Hutang</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button style={{ ...S.pill(true), padding: '8px 16px', fontSize: '0.8rem', flex: 1 }} onClick={() => payQueue(t.id, 'CASH')}>Cash</button>
+                        <button style={{ ...S.pill(true), padding: '8px 16px', fontSize: '0.8rem', flex: 1 }} onClick={() => payQueue(t.id, 'QRIS')}>QRIS</button>
+                        <button style={{ ...S.pill(false), padding: '8px 16px', fontSize: '0.8rem', flex: 1, color: '#EA580C', background: '#FFEDD5' }} onClick={() => setDebtTransactionId(t.id)}>Hutang</button>
+                      </div>
+                    )}
                   </div>
                 ))
               }
