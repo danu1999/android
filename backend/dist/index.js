@@ -172,11 +172,21 @@ app.put('/api/products/:id', requireAdmin, (req, res) => __awaiter(void 0, void 
 app.delete('/api/products/:id', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { id } = req.params;
-        yield prisma.product.delete({ where: { id: Number(id) } });
+        const productId = Number(id);
+        // Cek apakah produk masih dipakai di transaksi
+        const usedInTransaction = yield prisma.transactionItem.findFirst({
+            where: { productId }
+        });
+        if (usedInTransaction) {
+            return res.status(400).json({
+                error: 'Produk tidak dapat dihapus karena sudah pernah digunakan dalam transaksi. Anda bisa mengubah nama atau stoknya menjadi 0.'
+            });
+        }
+        yield prisma.product.delete({ where: { id: productId } });
         res.json({ success: true });
     }
     catch (error) {
-        res.status(400).json({ error: 'Failed to delete product' });
+        res.status(400).json({ error: 'Gagal menghapus produk.' });
     }
 }));
 // ─────────────────────────────────────────────────────────────
