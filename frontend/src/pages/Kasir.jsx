@@ -256,9 +256,15 @@ export default function Kasir() {
 
             {/* Summary section */}
             <div style={{ paddingTop: '12px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
-                <input style={S.input} placeholder="Nama / No. Meja (opsional)" value={customerName} onChange={e => setCustomerName(e.target.value)} />
-                <textarea style={{ ...S.input, resize: 'none', fontFamily: 'inherit' }} rows={2} placeholder="Catatan pesanan (opsional)" value={notes} onChange={e => setNotes(e.target.value)} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '12px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4b5563' }}>Nama Pelanggan / No. Meja</label>
+                  <input style={S.input} placeholder="Masukkan nama (opsional)" value={customerName} onChange={e => setCustomerName(e.target.value)} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4b5563' }}>Catatan Pesanan</label>
+                  <textarea style={{ ...S.input, resize: 'none', fontFamily: 'inherit' }} rows={2} placeholder="Masukkan catatan (opsional)" value={notes} onChange={e => setNotes(e.target.value)} />
+                </div>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <span style={{ fontSize: '0.85rem', color: '#6B7280' }}>Diskon Transaksi</span>
