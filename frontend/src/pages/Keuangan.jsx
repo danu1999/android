@@ -396,13 +396,20 @@ export default function Keuangan() {
             <th>{activeTab === 'SALES' ? 'ID Transaksi / Tipe' : 'Deskripsi'}</th>
             <th>{activeTab === 'SALES' ? 'Total / Diskon' : 'Jumlah (Rp)'}</th>
             {activeTab !== 'EXPENSE' && <th>Status / Info</th>}
-            {activeTab !== 'SALES' && <th className="text-right">Aksi</th>}
           </tr>
         </thead>
         <tbody>
           {finances.length > 0 ? (
             finances.map((item) => (
-              <tr key={item.id}>
+              <tr
+                key={item.id}
+                onClick={() => activeTab !== 'SALES' && handleOpenModal(item)}
+                style={{
+                  cursor: activeTab !== 'SALES' ? 'pointer' : 'default',
+                  transition: 'background 0.15s'
+                }}
+                className={activeTab !== 'SALES' ? 'hover-row' : ''}
+              >
                 <td>{new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
 
                 {activeTab === 'SALES' ? (
@@ -426,7 +433,7 @@ export default function Keuangan() {
                     <td>{item.description}</td>
                     <td className="font-semibold text-gray-700">Rp {Number(item.amount || 0).toLocaleString('id-ID')}</td>
                     {activeTab !== 'EXPENSE' && (
-                      <td>
+                      <td onClick={e => e.stopPropagation()}>
                         <button
                           className={`px-3 py-1 text-xs rounded-full font-bold ${item.status === 'PAID' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}
                           onClick={() => handleUpdateStatus(item.id, item.status)}
@@ -435,14 +442,6 @@ export default function Keuangan() {
                         </button>
                       </td>
                     )}
-                    <td className="text-right action-btns">
-                      <button className="btn btn-icon btn-edit" onClick={() => handleOpenModal(item)}>
-                        <Edit2 size={16} />
-                      </button>
-                      <button className="btn btn-icon btn-danger" onClick={() => handleDelete(item.id)}>
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
                   </>
                 )}
               </tr>
@@ -454,6 +453,11 @@ export default function Keuangan() {
           )}
         </tbody>
       </table>
+      {activeTab !== 'SALES' && (
+        <div style={{ padding: '8px 16px', borderTop: '1px solid #F3F4F6', background: '#FAFAFA', fontSize: 12, color: '#9CA3AF', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span>💡</span> Klik baris untuk edit
+        </div>
+      )}
     </div>
   );
 
@@ -688,7 +692,22 @@ export default function Keuangan() {
                   </select>
                 </div>
               )}
-              <div className="modal-actions">
+              <div className="modal-actions" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {/* Tombol Hapus hanya muncul saat Edit (bukan Tambah baru) */}
+                {formData.id && (
+                  <button
+                    type="button"
+                    onClick={() => { handleDelete(formData.id); }}
+                    style={{
+                      padding: '10px 16px', borderRadius: 10, border: 'none',
+                      background: '#FEE2E2', color: '#DC2626',
+                      fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 6, marginRight: 'auto'
+                    }}
+                  >
+                    <Trash2 size={15} /> Hapus
+                  </button>
+                )}
                 <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Batal</button>
                 <button type="submit" className="btn btn-primary">Simpan</button>
               </div>

@@ -247,6 +247,14 @@ h1 {
   color: #4B5563;
 }
 
+/* Clickable table rows */
+.data-table tr.hover-row:hover {
+  background: rgba(79, 70, 229, 0.04);
+}
+.data-table tr.hover-row:active {
+  background: rgba(79, 70, 229, 0.09);
+}
+
 .text-right {
   text-align: right !important;
 }
