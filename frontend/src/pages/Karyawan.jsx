@@ -24,12 +24,41 @@ export default function Karyawan() {
   const [payHistory, setHist]   = useState([]);
   const [isModalOpen, setModal] = useState(false);
   const [isViewOnly, setView]   = useState(false);
-  const [payModal, setPayModal] = useState(null); // {employee}
+  const [payModal, setPayModal] = useState(null);
   const [payNote, setPayNote]   = useState('');
   const [payAmt, setPayAmt]     = useState('');
   const [selMonth, setSelMonth] = useState(new Date().getMonth()+1);
   const [selYear,  setSelYear]  = useState(new Date().getFullYear());
   const [formData, setForm]     = useState({ id:null, name:'', role:'KASIR', pin:'', salary:'' });
+
+  // ── Mode Ultra ──────────────────────────────────────────────
+  const ultraKey = `posbah_ultra_${user?.id}`;
+  const [isUltra,      setIsUltra]      = useState(() => localStorage.getItem(`posbah_ultra_${user?.id}`) === 'true');
+  const [showUpgrade,  setShowUpgrade]  = useState(false);
+  const [masterPin,    setMasterPin]    = useState('');
+  const [masterOk,     setMasterOk]     = useState(false);
+  const [pinError,     setPinError]     = useState(false);
+
+  const MASTER_PIN  = '901020';
+  const MASTER_NAME = 'Muizz9001!';
+
+  const handleTabClick = (id) => {
+    if (id === 'penggajian' && !isUltra) { setShowUpgrade(true); return; }
+    setTab(id);
+  };
+
+  const checkMasterPin = () => {
+    if (masterPin === MASTER_PIN) { setMasterOk(true); setPinError(false); }
+    else { setPinError(true); }
+  };
+
+  const handleApproveUltra = () => {
+    localStorage.setItem(ultraKey, 'true');
+    setIsUltra(true);
+    setShowUpgrade(false);
+    setMasterPin(''); setMasterOk(false);
+    setTab('penggajian');
+  };
 
   useEffect(()=>{ fetchEmp(); }, []);
   useEffect(()=>{ if(tab==='penggajian') fetchHistory(); }, [tab, selMonth, selYear]);
@@ -110,8 +139,8 @@ export default function Karyawan() {
 
       {/* ── Tabs ── */}
       <div style={{display:'flex',gap:8,marginBottom:16}}>
-        {[{id:'karyawan',label:'👥 Daftar Karyawan'},...(isOwner?[{id:'penggajian',label:'💰 Penggajian'}]:[])].map(t=>(
-          <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:'9px 18px',borderRadius:12,border:'none',fontWeight:700,fontSize:13,cursor:'pointer',background:tab===t.id?'linear-gradient(135deg,#4F46E5,#7C3AED)':'white',color:tab===t.id?'white':'#6B7280',boxShadow:tab===t.id?'0 4px 12px rgba(79,70,229,0.3)':'0 1px 4px rgba(0,0,0,0.08)',transition:'all 0.2s'}}>{t.label}</button>
+        {[{id:'karyawan',label:'👥 Daftar Karyawan'},...(isOwner?[{id:'penggajian',label: isUltra ? '💰 Penggajian ⚡Ultra' : '💰 Penggajian 🔒'}]:[])].map(t=>(
+          <button key={t.id} onClick={()=>handleTabClick(t.id)} style={{padding:'9px 18px',borderRadius:12,border:'none',fontWeight:700,fontSize:13,cursor:'pointer',background:tab===t.id?'linear-gradient(135deg,#4F46E5,#7C3AED)':'white',color:tab===t.id?'white':'#6B7280',boxShadow:tab===t.id?'0 4px 12px rgba(79,70,229,0.3)':'0 1px 4px rgba(0,0,0,0.08)',transition:'all 0.2s'}}>{t.label}</button>
         ))}
       </div>
 
@@ -322,6 +351,83 @@ export default function Karyawan() {
               <button type="button" onClick={confirmPay} disabled={!payAmt||Number(payAmt)<=0} style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:6,background:'linear-gradient(135deg,#059669,#10B981)',color:'white',border:'none',borderRadius:10,padding:'10px',fontWeight:800,fontSize:14,cursor:'pointer',opacity:!payAmt||Number(payAmt)<=0?0.5:1}}>
                 <Banknote size={16}/> Konfirmasi Bayar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ══ Modal Upgrade Mode Ultra ══ */}
+      {showUpgrade && (
+        <div className="modal-overlay">
+          <div className="modal-content glass-panel" style={{maxWidth:420,width:'100%',padding:0,overflow:'hidden',borderRadius:24}}>
+
+            {/* Hero banner */}
+            <div style={{background:'linear-gradient(135deg,#7C3AED,#4F46E5,#06B6D4)',padding:'28px 24px 20px',textAlign:'center',position:'relative'}}>
+              <div style={{fontSize:40,marginBottom:8}}>⚡</div>
+              <div style={{color:'white',fontWeight:900,fontSize:20,marginBottom:4}}>Mode Ultra</div>
+              <div style={{color:'rgba(255,255,255,0.8)',fontSize:13}}>Buka fitur Penggajian lengkap</div>
+              <div style={{display:'inline-block',marginTop:12,background:'rgba(255,255,255,0.2)',borderRadius:99,padding:'6px 18px',color:'white',fontWeight:800,fontSize:16}}>
+                Rp 45.000<span style={{fontSize:12,fontWeight:500}}>/bulan</span>
+              </div>
+            </div>
+
+            <div style={{padding:'20px 24px'}}>
+              {/* Features */}
+              <div style={{marginBottom:18}}>
+                {['✅ Sistem Penggajian Karyawan','✅ Bayar gaji otomatis tercatat ke Keuangan','✅ Riwayat penggajian per bulan','✅ Laporan penggajian lengkap'].map((f,i)=>(
+                  <div key={i} style={{fontSize:13,color:'#374151',padding:'4px 0',fontWeight:600}}>{f}</div>
+                ))}
+              </div>
+
+              {/* WA CTA */}
+              <a
+                href={`https://wa.me/6282245077959?text=${encodeURIComponent(`Halo, saya ingin mengaktifkan Mode Ultra POSBah.\nNama Owner: ${user?.name}\nID: ${user?.id}\nNominal: Rp 45.000/bulan`)}`}
+                target="_blank" rel="noreferrer"
+                style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,width:'100%',padding:'13px',borderRadius:14,background:'linear-gradient(135deg,#22C55E,#16A34A)',color:'white',fontWeight:800,fontSize:15,textDecoration:'none',marginBottom:16,boxShadow:'0 4px 14px rgba(34,197,94,0.35)',boxSizing:'border-box'}}
+              >
+                <span style={{fontSize:18}}>💬</span> Hubungi WhatsApp Sekarang
+              </a>
+
+              {/* Divider */}
+              <div style={{display:'flex',alignItems:'center',gap:8,margin:'16px 0'}}>
+                <div style={{flex:1,height:1,background:'#E5E7EB'}}/>
+                <span style={{fontSize:11,color:'#9CA3AF',fontWeight:600}}>AKTIVASI OLEH MASTER ADMIN</span>
+                <div style={{flex:1,height:1,background:'#E5E7EB'}}/>
+              </div>
+
+              {/* Owner info for master admin */}
+              <div style={{background:'#F8FAFC',borderRadius:12,padding:'10px 14px',marginBottom:12,border:'1px solid #E5E7EB'}}>
+                <div style={{fontSize:11,color:'#6B7280',fontWeight:600,marginBottom:4}}>Informasi Akun yang Meminta Upgrade:</div>
+                <div style={{fontSize:13,fontWeight:800,color:'#111827'}}>👤 {user?.name}</div>
+                <div style={{fontSize:12,color:'#6B7280'}}>Role: {user?.role} · ID: {user?.id}</div>
+              </div>
+
+              {!masterOk ? (
+                <>
+                  <div style={{fontSize:12,color:'#6B7280',marginBottom:6,fontWeight:600}}>Masukkan PIN Master Admin ({MASTER_NAME}):</div>
+                  <div style={{display:'flex',gap:8}}>
+                    <input
+                      type="password" maxLength="6" value={masterPin}
+                      onChange={e=>{setMasterPin(e.target.value);setPinError(false);}}
+                      placeholder="PIN Master"
+                      style={{flex:1,border:`1.5px solid ${pinError?'#EF4444':'#E5E7EB'}`,borderRadius:10,padding:'9px 12px',fontSize:15,fontWeight:700,letterSpacing:4,outline:'none'}}
+                    />
+                    <button onClick={checkMasterPin} style={{background:'linear-gradient(135deg,#4F46E5,#7C3AED)',color:'white',border:'none',borderRadius:10,padding:'9px 16px',fontWeight:700,cursor:'pointer'}}>Cek</button>
+                  </div>
+                  {pinError && <div style={{color:'#EF4444',fontSize:12,marginTop:6,fontWeight:600}}>❌ PIN salah</div>}
+                </>
+              ) : (
+                <>
+                  <div style={{background:'#ECFDF5',border:'1px solid #6EE7B7',borderRadius:12,padding:'12px 14px',marginBottom:12,textAlign:'center'}}>
+                    <div style={{fontSize:13,color:'#065F46',fontWeight:700}}>✅ Master Admin Terverifikasi: {MASTER_NAME}</div>
+                    <div style={{fontSize:12,color:'#059669',marginTop:4}}>Klik Approve untuk mengaktifkan Mode Ultra bagi <b>{user?.name}</b></div>
+                  </div>
+                  <button onClick={handleApproveUltra} style={{width:'100%',padding:'13px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#7C3AED,#4F46E5)',color:'white',fontWeight:900,fontSize:15,cursor:'pointer',boxShadow:'0 4px 14px rgba(124,58,237,0.4)'}}>
+                    ⚡ Approve Mode Ultra
+                  </button>
+                </>
+              )}
+
+              <button onClick={()=>{setShowUpgrade(false);setMasterPin('');setMasterOk(false);setPinError(false);}} style={{width:'100%',marginTop:10,padding:'10px',borderRadius:12,border:'1.5px solid #E5E7EB',background:'white',color:'#6B7280',fontWeight:700,fontSize:13,cursor:'pointer'}}>Tutup</button>
             </div>
           </div>
         </div>
