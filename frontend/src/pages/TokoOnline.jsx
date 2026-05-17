@@ -9,16 +9,23 @@ export default function TokoOnline() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
 
+  const [lastUpdated, setLastUpdated] = useState(null);
+
+  const fetchProducts = async () => {
+    try {
+      const res = await api.get('/products');
+      setProducts(res.data);
+      setLastUpdated(new Date());
+    } catch (err) {
+      console.error('Failed to fetch products', err);
+    }
+  };
+
   useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        const res = await api.get('/products');
-        setProducts(res.data);
-      } catch (err) {
-        console.error('Failed to fetch products', err);
-      }
-    };
     fetchProducts();
+    // Auto-refresh setiap 30 detik agar stok selalu real-time
+    const interval = setInterval(fetchProducts, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const filteredProducts = products.filter(p =>
@@ -129,6 +136,12 @@ export default function TokoOnline() {
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <h1 style={{ fontSize: 26, fontWeight: 900, color: '#1E293B', marginBottom: 8 }}>Katalog Digital Kami</h1>
           <p style={{ color: '#64748B', fontSize: 14 }}>Pilih produk favorit Anda dan pesan langsung via WhatsApp.</p>
+          {lastUpdated && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6, background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 99, padding: '3px 12px', fontSize: 11, color: '#16A34A', fontWeight: 600 }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#22C55E', display: 'inline-block', animation: 'pulse 2s infinite' }} />
+              Stok diperbarui {lastUpdated.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} · Auto-refresh 30s
+            </div>
+          )}
         </div>
 
         {/* Search */}
@@ -228,8 +241,18 @@ export default function TokoOnline() {
                 <div style={{ fontWeight: 700, fontSize: 13, color: '#1E293B', marginBottom: 4, lineHeight: 1.3 }}>
                   {product.name}
                 </div>
-                <div style={{ color: '#4F46E5', fontWeight: 800, fontSize: 14, marginBottom: 10 }}>
+                <div style={{ color: '#4F46E5', fontWeight: 800, fontSize: 14, marginBottom: 6 }}>
                   Rp {product.price.toLocaleString('id-ID')}
+                </div>
+                {/* Stock badge */}
+                <div style={{ marginBottom: 8 }}>
+                  {product.stock === 0 ? (
+                    <span style={{ fontSize: 11, fontWeight: 700, background: '#FEE2E2', color: '#DC2626', padding: '2px 8px', borderRadius: 99 }}>🚫 Stok Habis</span>
+                  ) : product.stock <= 5 ? (
+                    <span style={{ fontSize: 11, fontWeight: 700, background: '#FEF3C7', color: '#D97706', padding: '2px 8px', borderRadius: 99 }}>⚠️ Sisa {product.stock} {product.unit||'pcs'}</span>
+                  ) : (
+                    <span style={{ fontSize: 11, fontWeight: 700, background: '#DCFCE7', color: '#16A34A', padding: '2px 8px', borderRadius: 99 }}>✓ Tersedia {product.stock} {product.unit||'pcs'}</span>
+                  )}
                 </div>
                 <button
                   onClick={() => addToCart(product)}
@@ -404,6 +427,7 @@ export default function TokoOnline() {
       <style>{`
         @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
         @keyframes slideIn { from { transform: translateX(100%) } to { transform: translateX(0) } }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
       `}</style>
     </div>
   );
