@@ -110,7 +110,7 @@ export default function Karyawan() {
 
       {/* ── Tabs ── */}
       <div style={{display:'flex',gap:8,marginBottom:16}}>
-        {[{id:'karyawan',label:'👥 Daftar Karyawan'},{id:'penggajian',label:'💰 Penggajian'}].map(t=>(
+        {[{id:'karyawan',label:'👥 Daftar Karyawan'},...(isOwner?[{id:'penggajian',label:'💰 Penggajian'}]:[])].map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:'9px 18px',borderRadius:12,border:'none',fontWeight:700,fontSize:13,cursor:'pointer',background:tab===t.id?'linear-gradient(135deg,#4F46E5,#7C3AED)':'white',color:tab===t.id?'white':'#6B7280',boxShadow:tab===t.id?'0 4px 12px rgba(79,70,229,0.3)':'0 1px 4px rgba(0,0,0,0.08)',transition:'all 0.2s'}}>{t.label}</button>
         ))}
       </div>
@@ -151,7 +151,7 @@ export default function Karyawan() {
                         <span style={{display:'inline-block',marginTop:3,fontSize:11,fontWeight:800,background:c.badge.bg,color:c.badge.color,padding:'2px 10px',borderRadius:99}}>{c.label}</span>
                       </div>
                     </div>
-                    {emp.role !== 'OWNER' && (
+                    {isOwner && emp.role !== 'OWNER' && (
                       <div style={{display:'flex',justifyContent:'space-between',background:'#F8FAFC',borderRadius:10,padding:'6px 12px',marginBottom:10,border:'1px solid #F1F5F9'}}>
                         <span style={{fontSize:11,color:'#6B7280',fontWeight:600}}>Gaji Pokok</span>
                         <span style={{fontSize:12,fontWeight:800,color:emp.salary?'#059669':'#9CA3AF'}}>{emp.salary?`Rp ${fmt(emp.salary)}`:'Belum diset'}</span>
