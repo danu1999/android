@@ -403,7 +403,7 @@ export default function Karyawan() {
 
               {!masterOk ? (
                 <>
-                  <div style={{fontSize:12,color:'#6B7280',marginBottom:6,fontWeight:600}}>Masukkan PIN Master Admin ({MASTER_NAME}):</div>
+                  <div style={{fontSize:12,color:'#6B7280',marginBottom:6,fontWeight:600}}>Masukkan PIN Master Admin:</div>
                   <div style={{display:'flex',gap:8}}>
                     <input
                       type="password" maxLength="6" value={masterPin}
@@ -418,7 +418,7 @@ export default function Karyawan() {
               ) : (
                 <>
                   <div style={{background:'#ECFDF5',border:'1px solid #6EE7B7',borderRadius:12,padding:'12px 14px',marginBottom:12,textAlign:'center'}}>
-                    <div style={{fontSize:13,color:'#065F46',fontWeight:700}}>✅ Master Admin Terverifikasi: {MASTER_NAME}</div>
+                    <div style={{fontSize:13,color:'#065F46',fontWeight:700}}>✅ Master Admin Terverifikasi</div>
                     <div style={{fontSize:12,color:'#059669',marginTop:4}}>Klik Approve untuk mengaktifkan Mode Ultra bagi <b>{user?.name}</b></div>
                   </div>
                   <button onClick={handleApproveUltra} style={{width:'100%',padding:'13px',borderRadius:14,border:'none',background:'linear-gradient(135deg,#7C3AED,#4F46E5)',color:'white',fontWeight:900,fontSize:15,cursor:'pointer',boxShadow:'0 4px 14px rgba(124,58,237,0.4)'}}>
