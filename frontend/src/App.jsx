@@ -61,7 +61,7 @@ function DemoBlockModal({ message, onClose }) {
 
         {/* CTA */}
         <a
-          href="https://wa.me/6281234567890?text=Halo%2C%20saya%20ingin%20berlangganan%20POSBah"
+          href="https://wa.me/6282245077959?text=Halo%2C%20saya%20ingin%20berlangganan%20POSBah"
           target="_blank"
           rel="noreferrer"
           style={{
@@ -233,7 +233,7 @@ function DemoBanner({ daysLeft, hoursLeft }) {
         <span style={{ fontWeight: 400, opacity: 0.85 }}>· Beberapa fitur dinonaktifkan</span>
       </div>
       <a
-        href="https://wa.me/6281234567890?text=Halo%2C%20saya%20ingin%20berlangganan%20POSBah"
+        href="https://wa.me/6282245077959?text=Halo%2C%20saya%20ingin%20berlangganan%20POSBah"
         target="_blank"
         rel="noreferrer"
         style={{
