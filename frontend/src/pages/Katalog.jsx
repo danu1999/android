@@ -391,70 +391,91 @@ export default function Katalog() {
                 </label>
                 {formData.variantEnabled && (
                   <div style={{ marginTop: 12 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: '#5B21B6' }}>Nama Varian *</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: '#5B21B6' }}>Stok</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: '#5B21B6' }}>Harga (Rp)</span>
-                      <span></span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {formData.variants.map((v, i) => (
+                        <div key={i} style={{
+                          background: 'white', border: '1px solid #C4B5FD',
+                          borderRadius: 10, padding: '10px 12px', position: 'relative'
+                        }}>
+                          {/* Nomor + Hapus */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: '#7C3AED', background: '#EDE9FE', padding: '2px 8px', borderRadius: 99 }}>
+                              Varian {i + 1}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const upd = formData.variants.filter((_, idx) => idx !== i);
+                                setFormData({ ...formData, variants: upd.length ? upd : [{ ...EMPTY_VARIANT }] });
+                              }}
+                              style={{ background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: 7, padding: '4px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600 }}
+                            >
+                              <Trash2 size={12} /> Hapus
+                            </button>
+                          </div>
+
+                          {/* Nama Varian — full width */}
+                          <input
+                            type="text"
+                            placeholder="Nama varian (mis. Merah-L, 500ml, Size 40...)"
+                            value={v.name}
+                            onChange={e => {
+                              const upd = [...formData.variants];
+                              upd[i] = { ...upd[i], name: e.target.value };
+                              setFormData({ ...formData, variants: upd });
+                            }}
+                            style={{ width: '100%', padding: '8px 10px', border: '1px solid #DDD6FE', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box', marginBottom: 8 }}
+                          />
+
+                          {/* Stok + Harga — 2 kolom */}
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                            <div>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: '#7C3AED', marginBottom: 4 }}>Stok (opsional)</div>
+                              <input
+                                type="number"
+                                placeholder="mis. 10"
+                                value={v.stock}
+                                onChange={e => {
+                                  const upd = [...formData.variants];
+                                  upd[i] = { ...upd[i], stock: e.target.value };
+                                  setFormData({ ...formData, variants: upd });
+                                }}
+                                style={{ width: '100%', padding: '8px 10px', border: '1px solid #DDD6FE', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                              />
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: '#7C3AED', marginBottom: 4 }}>Harga Rp (opsional)</div>
+                              <input
+                                type="number"
+                                placeholder="Default = harga produk"
+                                value={v.price}
+                                onChange={e => {
+                                  const upd = [...formData.variants];
+                                  upd[i] = { ...upd[i], price: e.target.value };
+                                  setFormData({ ...formData, variants: upd });
+                                }}
+                                style={{ width: '100%', padding: '8px 10px', border: '1px solid #DDD6FE', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    {formData.variants.map((v, i) => (
-                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 6, marginBottom: 6, alignItems: 'center' }}>
-                        <input
-                          type="text"
-                          placeholder={`mis. Merah-L, 500ml...`}
-                          value={v.name}
-                          onChange={e => {
-                            const upd = [...formData.variants];
-                            upd[i] = { ...upd[i], name: e.target.value };
-                            setFormData({ ...formData, variants: upd });
-                          }}
-                          style={{ padding: '8px 10px', border: '1px solid #C4B5FD', borderRadius: 8, fontSize: 13, outline: 'none' }}
-                        />
-                        <input
-                          type="number"
-                          placeholder="Stok"
-                          value={v.stock}
-                          onChange={e => {
-                            const upd = [...formData.variants];
-                            upd[i] = { ...upd[i], stock: e.target.value };
-                            setFormData({ ...formData, variants: upd });
-                          }}
-                          style={{ padding: '8px 10px', border: '1px solid #C4B5FD', borderRadius: 8, fontSize: 13, outline: 'none' }}
-                        />
-                        <input
-                          type="number"
-                          placeholder="Default"
-                          value={v.price}
-                          onChange={e => {
-                            const upd = [...formData.variants];
-                            upd[i] = { ...upd[i], price: e.target.value };
-                            setFormData({ ...formData, variants: upd });
-                          }}
-                          style={{ padding: '8px 10px', border: '1px solid #C4B5FD', borderRadius: 8, fontSize: 13, outline: 'none' }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const upd = formData.variants.filter((_, idx) => idx !== i);
-                            setFormData({ ...formData, variants: upd.length ? upd : [{ ...EMPTY_VARIANT }] });
-                          }}
-                          style={{ background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: 8, padding: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    ))}
+
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, variants: [...formData.variants, { ...EMPTY_VARIANT }] })}
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, background: '#EDE9FE', color: '#6D28D9', border: 'none', borderRadius: 8, padding: '7px 14px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, width: '100%', justifyContent: 'center', background: '#EDE9FE', color: '#6D28D9', border: '1.5px dashed #A78BFA', borderRadius: 10, padding: '9px 14px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
                     >
                       <Plus size={14} /> Tambah Varian
                     </button>
-                    <p style={{ fontSize: 11, color: '#6D28D9', marginTop: 6, opacity: 0.7 }}>* Stok & Harga kosong = menggunakan nilai produk utama.</p>
+                    <p style={{ fontSize: 11, color: '#7C3AED', marginTop: 6, opacity: 0.7, textAlign: 'center' }}>
+                      * Stok &amp; Harga kosong → menggunakan nilai produk utama
+                    </p>
                   </div>
                 )}
               </div>
+
 
               <div className="modal-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginTop: '20px' }}>
                 {isAdmin && formData.id ? (
