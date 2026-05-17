@@ -10,8 +10,12 @@ generator client {
 model Employee {
   id        Int      @id @default(autoincrement())
   name      String
-  role      String   @default("KASIR") // KASIR or ADMIN
-  pin       String   
+  /// Valid values: KASIR | ADMIN | OWNER
+  /// KASIR  - transaksi & lihat katalog saja
+  /// ADMIN  - kelola produk, pelanggan, keuangan
+  /// OWNER  - akses penuh termasuk kelola karyawan
+  role      String   @default("KASIR")
+  pin       String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   transactions Transaction[]

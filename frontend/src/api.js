@@ -9,4 +9,17 @@ const api = axios.create({
   },
 });
 
+// Inject user ID & role ke setiap request agar backend bisa validasi akses
+api.interceptors.request.use((config) => {
+  try {
+    const stored = localStorage.getItem('posbah_user');
+    if (stored) {
+      const user = JSON.parse(stored);
+      if (user?.id) config.headers['x-employee-id'] = user.id;
+      if (user?.role) config.headers['x-employee-role'] = user.role;
+    }
+  } catch (_) {}
+  return config;
+});
+
 export default api;

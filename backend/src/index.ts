@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
 
@@ -9,12 +9,57 @@ const port = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
+// ─────────────────────────────────────────────────────────────
+// Role hierarchy helpers
+// ─────────────────────────────────────────────────────────────
+const ROLE_HIERARCHY: Record<string, number> = { KASIR: 1, ADMIN: 2, OWNER: 3 };
+
+const hasRole = (userRole: string | undefined, required: string): boolean => {
+  if (!userRole) return false;
+  return (ROLE_HIERARCHY[userRole] || 0) >= (ROLE_HIERARCHY[required] || 99);
+};
+
+/** Middleware: pastikan minimal role ADMIN */
+const requireAdmin = async (req: Request, res: Response, next: NextFunction) => {
+  const role = req.headers['x-employee-role'] as string;
+  const employeeId = req.headers['x-employee-id'] as string;
+
+  // Demo user (id=0) tidak punya akses backend sensitif
+  if (employeeId === '0') {
+    return res.status(403).json({ error: 'Demo mode tidak mengizinkan operasi ini' });
+  }
+
+  if (!hasRole(role, 'ADMIN')) {
+    return res.status(403).json({ error: 'Akses ditolak. Minimal role ADMIN diperlukan.' });
+  }
+  next();
+};
+
+/** Middleware: pastikan minimal role OWNER */
+const requireOwner = async (req: Request, res: Response, next: NextFunction) => {
+  const role = req.headers['x-employee-role'] as string;
+  const employeeId = req.headers['x-employee-id'] as string;
+
+  if (employeeId === '0') {
+    return res.status(403).json({ error: 'Demo mode tidak mengizinkan operasi ini' });
+  }
+
+  if (!hasRole(role, 'OWNER')) {
+    return res.status(403).json({ error: 'Akses ditolak. Hanya OWNER yang dapat melakukan ini.' });
+  }
+  next();
+};
+
+// ─────────────────────────────────────────────────────────────
 // Basic sanity check
+// ─────────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
   res.send('POSBah API is running');
 });
 
+// ─────────────────────────────────────────────────────────────
 // Auth - Login with name + PIN
+// ─────────────────────────────────────────────────────────────
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { name, pin } = req.body;
@@ -30,13 +75,15 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Products
+// ─────────────────────────────────────────────────────────────
+// Products  (READ: semua | WRITE: ADMIN+)
+// ─────────────────────────────────────────────────────────────
 app.get('/api/products', async (req, res) => {
   const products = await prisma.product.findMany();
   res.json(products);
 });
 
-app.post('/api/products', async (req, res) => {
+app.post('/api/products', requireAdmin, async (req, res) => {
   try {
     const { name, price, costPrice, stock, unit, wholesaleEnabled, wholesalePrices, image } = req.body;
     const product = await prisma.product.create({
@@ -58,7 +105,7 @@ app.post('/api/products', async (req, res) => {
   }
 });
 
-app.put('/api/products/:id', async (req, res) => {
+app.put('/api/products/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, price, costPrice, stock, unit, wholesaleEnabled, wholesalePrices, image } = req.body;
@@ -81,7 +128,7 @@ app.put('/api/products/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/products/:id', async (req, res) => {
+app.delete('/api/products/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     await prisma.product.delete({ where: { id: Number(id) } });
@@ -91,7 +138,10 @@ app.delete('/api/products/:id', async (req, res) => {
   }
 });
 
-app.get('/api/transactions', async (req, res) => {
+// ─────────────────────────────────────────────────────────────
+// Transactions  (CREATE: semua | READ detail: ADMIN+)
+// ─────────────────────────────────────────────────────────────
+app.get('/api/transactions', requireAdmin, async (req, res) => {
   try {
     const transactions = await prisma.transaction.findMany({
       include: {
@@ -111,14 +161,21 @@ app.get('/api/transactions', async (req, res) => {
 app.post('/api/transactions', async (req, res) => {
   try {
     const { items, total, discount, paymentMethod, type, customerId, date, status, notes, customerName, queueNumber } = req.body;
-    
-    // items = [{ productId, quantity, price, discount }]
-    // Find admin for demo (in reality, from auth token)
-    let employee = await prisma.employee.findFirst();
-    if (!employee) {
-      employee = await prisma.employee.create({
-        data: { name: 'Admin Default', role: 'ADMIN', pin: '1234' }
-      });
+
+    const employeeIdHeader = req.headers['x-employee-id'] as string;
+    let employeeId: number;
+
+    if (employeeIdHeader && employeeIdHeader !== '0') {
+      employeeId = Number(employeeIdHeader);
+    } else {
+      // Demo atau fallback: cari/buat employee default
+      let employee = await prisma.employee.findFirst();
+      if (!employee) {
+        employee = await prisma.employee.create({
+          data: { name: 'Admin Default', role: 'ADMIN', pin: '1234' }
+        });
+      }
+      employeeId = employee.id;
     }
 
     const transaction = await prisma.transaction.create({
@@ -133,7 +190,7 @@ app.post('/api/transactions', async (req, res) => {
         queueNumber: queueNumber ? Number(queueNumber) : null,
         type: type || 'SALES',
         date: date ? new Date(date) : new Date(),
-        employeeId: employee!.id,
+        employeeId,
         customerId: customerId || null,
         items: {
           create: items.map((item: any) => ({
@@ -147,8 +204,6 @@ app.post('/api/transactions', async (req, res) => {
       include: { items: true }
     });
 
-    // Update stock ONLY if it's not pending/queue, or maybe we update stock even for queue to reserve it?
-    // Usually queue reserves stock. Let's keep it updating stock.
     for (const item of items) {
       await prisma.product.update({
         where: { id: item.productId },
@@ -163,12 +218,11 @@ app.post('/api/transactions', async (req, res) => {
   }
 });
 
-// Update transaction (e.g. paying a pending queue)
-app.put('/api/transactions/:id', async (req, res) => {
+app.put('/api/transactions/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { paymentMethod, status, queueNumber } = req.body;
-    
+
     const updateData: any = {};
     if (paymentMethod !== undefined) updateData.paymentMethod = paymentMethod;
     if (status !== undefined) updateData.status = status;
@@ -185,25 +239,23 @@ app.put('/api/transactions/:id', async (req, res) => {
   }
 });
 
-// Seed Initial Data (for demo)
-app.post('/api/seed', async (req, res) => {
+// ─────────────────────────────────────────────────────────────
+// Customers  (READ: ADMIN+ | WRITE: ADMIN+)
+// ─────────────────────────────────────────────────────────────
+app.get('/api/customers', requireAdmin, async (req, res) => {
   try {
-    const admin = await prisma.employee.create({
-      data: { name: 'Admin', role: 'ADMIN', pin: '1234' }
-    });
-    const product = await prisma.product.create({
-      data: { name: 'Kopi Susu', price: 20000, stock: 100 }
-    });
-    res.json({ message: 'Seeded successfully', admin, product });
+    const customers = await prisma.customer.findMany({ orderBy: { name: 'asc' } });
+    res.json(customers);
   } catch (error) {
-    res.status(500).json({ error: 'Already seeded or error occurred' });
+    res.status(400).json({ error: 'Failed to fetch customers' });
   }
 });
 
-// Customers
-app.get('/api/customers', async (req, res) => {
+// Kasir perlu lookup pelanggan saat checkout — endpoint terpisah (read-only, publik)
+app.get('/api/customers/list', async (req, res) => {
   try {
     const customers = await prisma.customer.findMany({
+      select: { id: true, name: true, phone: true },
       orderBy: { name: 'asc' }
     });
     res.json(customers);
@@ -212,19 +264,17 @@ app.get('/api/customers', async (req, res) => {
   }
 });
 
-app.post('/api/customers', async (req, res) => {
+app.post('/api/customers', requireAdmin, async (req, res) => {
   try {
     const { name, phone, address } = req.body;
-    const customer = await prisma.customer.create({
-      data: { name, phone, address }
-    });
+    const customer = await prisma.customer.create({ data: { name, phone, address } });
     res.json(customer);
   } catch (error) {
     res.status(400).json({ error: 'Failed to create customer' });
   }
 });
 
-app.put('/api/customers/:id', async (req, res) => {
+app.put('/api/customers/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, phone, address } = req.body;
@@ -238,7 +288,7 @@ app.put('/api/customers/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/customers/:id', async (req, res) => {
+app.delete('/api/customers/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     await prisma.customer.delete({ where: { id: Number(id) } });
@@ -248,39 +298,49 @@ app.delete('/api/customers/:id', async (req, res) => {
   }
 });
 
-// Employees
-app.get('/api/employees', async (req, res) => {
+// ─────────────────────────────────────────────────────────────
+// Employees  (READ: ADMIN+ | WRITE: OWNER only)
+// ─────────────────────────────────────────────────────────────
+app.get('/api/employees', requireAdmin, async (req, res) => {
   try {
-    const employees = await prisma.employee.findMany({
-      orderBy: { name: 'asc' }
-    });
+    const employees = await prisma.employee.findMany({ orderBy: { name: 'asc' } });
     res.json(employees);
   } catch (error) {
     res.status(400).json({ error: 'Failed to fetch employees' });
   }
 });
 
-app.post('/api/employees', async (req, res) => {
+app.post('/api/employees', requireOwner, async (req, res) => {
   try {
     const count = await prisma.employee.count();
     if (count >= 10) {
       return res.status(400).json({ error: 'Maksimal 10 karyawan telah tercapai' });
     }
-    
     const { name, role, pin } = req.body;
-    const employee = await prisma.employee.create({
-      data: { name, role: role || 'CASHIER', pin }
-    });
+
+    // OWNER bisa tambah OWNER/ADMIN/KASIR; ADMIN hanya bisa tambah KASIR
+    const requesterRole = req.headers['x-employee-role'] as string;
+    if (requesterRole !== 'OWNER' && role === 'OWNER') {
+      return res.status(403).json({ error: 'Hanya OWNER yang dapat membuat akun OWNER' });
+    }
+
+    const employee = await prisma.employee.create({ data: { name, role: role || 'KASIR', pin } });
     res.json(employee);
   } catch (error) {
     res.status(400).json({ error: 'Failed to create employee' });
   }
 });
 
-app.put('/api/employees/:id', async (req, res) => {
+app.put('/api/employees/:id', requireOwner, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, role, pin } = req.body;
+
+    const requesterRole = req.headers['x-employee-role'] as string;
+    if (requesterRole !== 'OWNER' && role === 'OWNER') {
+      return res.status(403).json({ error: 'Hanya OWNER yang dapat mengubah role menjadi OWNER' });
+    }
+
     const employee = await prisma.employee.update({
       where: { id: Number(id) },
       data: { name, role, pin }
@@ -291,9 +351,13 @@ app.put('/api/employees/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/employees/:id', async (req, res) => {
+app.delete('/api/employees/:id', requireOwner, async (req, res) => {
   try {
     const { id } = req.params;
+    const employeeIdHeader = req.headers['x-employee-id'] as string;
+    if (Number(id) === Number(employeeIdHeader)) {
+      return res.status(400).json({ error: 'Tidak dapat menghapus akun sendiri' });
+    }
     await prisma.employee.delete({ where: { id: Number(id) } });
     res.json({ success: true });
   } catch (error) {
@@ -301,8 +365,10 @@ app.delete('/api/employees/:id', async (req, res) => {
   }
 });
 
-// Finance (Hutang, Piutang, Pengeluaran Usaha)
-app.get('/api/finances', async (req, res) => {
+// ─────────────────────────────────────────────────────────────
+// Finance  (READ/WRITE: ADMIN+)
+// ─────────────────────────────────────────────────────────────
+app.get('/api/finances', requireAdmin, async (req, res) => {
   try {
     const finances = await prisma.finance.findMany({
       include: { customer: true },
@@ -314,12 +380,12 @@ app.get('/api/finances', async (req, res) => {
   }
 });
 
-app.post('/api/finances', async (req, res) => {
+app.post('/api/finances', requireAdmin, async (req, res) => {
   try {
     const { type, amount, description, date, status, customerId } = req.body;
     const finance = await prisma.finance.create({
       data: {
-        type, // PAYABLE, RECEIVABLE, EXPENSE
+        type,
         amount: Number(amount),
         description,
         date: date ? new Date(date) : new Date(),
@@ -333,19 +399,16 @@ app.post('/api/finances', async (req, res) => {
   }
 });
 
-app.put('/api/finances/:id', async (req, res) => {
+app.put('/api/finances/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { type, amount, description, date, status, customerId } = req.body;
     const finance = await prisma.finance.update({
       where: { id: Number(id) },
       data: {
-        type,
-        amount: Number(amount),
-        description,
+        type, amount: Number(amount), description,
         date: date ? new Date(date) : undefined,
-        status,
-        customerId: customerId ? Number(customerId) : null,
+        status, customerId: customerId ? Number(customerId) : null,
       }
     });
     res.json(finance);
@@ -354,7 +417,7 @@ app.put('/api/finances/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/finances/:id', async (req, res) => {
+app.delete('/api/finances/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     await prisma.finance.delete({ where: { id: Number(id) } });
@@ -364,29 +427,27 @@ app.delete('/api/finances/:id', async (req, res) => {
   }
 });
 
-// Rekap Laporan
-app.get('/api/reports', async (req, res) => {
+// ─────────────────────────────────────────────────────────────
+// Reports  (ADMIN+)
+// ─────────────────────────────────────────────────────────────
+app.get('/api/reports', requireAdmin, async (req, res) => {
   try {
     const totalSales = await prisma.transaction.aggregate({
       where: { type: 'SALES' },
       _sum: { total: true }
     });
-    
     const expenses = await prisma.finance.aggregate({
       where: { type: 'EXPENSE' },
       _sum: { amount: true }
     });
-    
     const receivables = await prisma.finance.aggregate({
       where: { type: 'RECEIVABLE', status: 'PENDING' },
       _sum: { amount: true }
     });
-    
     const payables = await prisma.finance.aggregate({
       where: { type: 'PAYABLE', status: 'PENDING' },
       _sum: { amount: true }
     });
-
     res.json({
       totalSales: totalSales._sum.total || 0,
       totalExpenses: expenses._sum.amount || 0,
@@ -397,6 +458,23 @@ app.get('/api/reports', async (req, res) => {
   } catch (error) {
     console.error('Error generating report:', error);
     res.status(400).json({ error: 'Failed to generate report' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Seed  (OWNER only)
+// ─────────────────────────────────────────────────────────────
+app.post('/api/seed', requireOwner, async (req, res) => {
+  try {
+    const admin = await prisma.employee.create({
+      data: { name: 'Admin', role: 'ADMIN', pin: '1234' }
+    });
+    const product = await prisma.product.create({
+      data: { name: 'Kopi Susu', price: 20000, stock: 100 }
+    });
+    res.json({ message: 'Seeded successfully', admin, product });
+  } catch (error) {
+    res.status(500).json({ error: 'Already seeded or error occurred' });
   }
 });
 

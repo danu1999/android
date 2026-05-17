@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, Search, AlertTriangle, Lock } from 'lucide-react';
+import { Plus, Trash2, Search, AlertTriangle, Eye } from 'lucide-react';
 import api from '../api';
+import { useAuth, useIsAdmin } from '../AuthContext';
 
 const EMPTY_FORM = {
   id: null, name: '', price: '', costPrice: '',
@@ -16,11 +17,12 @@ const EMPTY_FORM = {
 };
 
 export default function Katalog() {
+  const isAdmin = useIsAdmin(); // true for ADMIN & OWNER
   const [products, setProducts] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isViewOnly, setIsViewOnly] = useState(false); // modal view-only untuk kasir
   const [formData, setFormData] = useState(EMPTY_FORM);
-  const [isPremium] = useState(localStorage.getItem('posbah_premium') === 'true');
   const LOW_STOCK_THRESHOLD = 5;
 
   const fetchProducts = async () => {
@@ -66,14 +68,12 @@ export default function Katalog() {
     };
   };
 
-  const handleOpenModal = (product = null) => {
+  const handleOpenModal = (product = null, viewOnly = false) => {
     if (product) {
-      // Parse wholesalePrices dari JSON string jika ada
       let wholesalePrices = EMPTY_FORM.wholesalePrices;
       if (product.wholesalePrices) {
         try {
           const parsed = JSON.parse(product.wholesalePrices);
-          // Isi 5 slot, sisanya kosong
           wholesalePrices = [...parsed, ...EMPTY_FORM.wholesalePrices].slice(0, 5);
         } catch (_) {}
       }
@@ -81,6 +81,7 @@ export default function Katalog() {
     } else {
       setFormData({ ...EMPTY_FORM });
     }
+    setIsViewOnly(viewOnly);
     setIsModalOpen(true);
   };
 
@@ -134,10 +135,19 @@ export default function Katalog() {
   return (
     <div className="page-container">
       <div className="header-actions">
-        <h1>Katalog Produk</h1>
-        <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-          <Plus size={18} /> Tambah Produk
-        </button>
+        <div>
+          <h1>Katalog Produk</h1>
+          {!isAdmin && (
+            <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: '#6B7280' }}>
+              👁️ Mode lihat saja — Hubungi Admin untuk mengubah produk
+            </p>
+          )}
+        </div>
+        {isAdmin && (
+          <button className="btn btn-primary" onClick={() => handleOpenModal()}>
+            <Plus size={18} /> Tambah Produk
+          </button>
+        )}
       </div>
 
       {/* Low Stock Alert Banner */}
@@ -186,7 +196,12 @@ export default function Katalog() {
               filteredProducts.map((product) => {
                 const margin = getMargin(product.price, product.costPrice);
                 return (
-                  <tr key={product.id} onClick={() => handleOpenModal(product)} style={{ cursor: 'pointer' }} className="hover:bg-gray-50 transition-colors">
+                  <tr
+                    key={product.id}
+                    onClick={() => handleOpenModal(product, !isAdmin)}
+                    style={{ cursor: 'pointer' }}
+                    className="hover:bg-gray-50 transition-colors"
+                  >
                     <td>
                       {product.image ? (
                         <img src={product.image} alt={product.name} style={{ width: '40px', height: '40px', objectFit: 'contain', borderRadius: '4px' }} />
@@ -226,8 +241,12 @@ export default function Katalog() {
       {isModalOpen && (
         <div className="modal-overlay">
           <div className="modal-content glass-panel" style={{ maxHeight: '92vh', overflowY: 'auto', maxWidth: 480, width: '100%' }}>
-            <h2>{formData.id ? 'Edit Produk' : 'Tambah Produk'}</h2>
-            <form onSubmit={handleSave}>
+            <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {isViewOnly ? <Eye size={20} color="#6B7280" /> : null}
+              {isViewOnly ? 'Detail Produk' : formData.id ? 'Edit Produk' : 'Tambah Produk'}
+              {isViewOnly && <span style={{ fontSize: '0.7rem', background: '#F3F4F6', color: '#6B7280', padding: '2px 8px', borderRadius: 99, fontWeight: 600 }}>Hanya Lihat</span>}
+            </h2>
+            <form onSubmit={isViewOnly ? (e) => { e.preventDefault(); setIsModalOpen(false); } : handleSave}>
 
               {/* Gambar */}
               <div className="form-group" style={{ textAlign: 'center' }}>
@@ -319,14 +338,14 @@ export default function Katalog() {
               </div>
 
               <div className="modal-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginTop: '20px' }}>
-                {formData.id ? (
+                {isAdmin && formData.id ? (
                   <button type="button" className="btn btn-danger" style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#FEE2E2', color: '#DC2626', border: 'none' }} onClick={() => handleDelete(formData.id)}>
                     <Trash2 size={16} /> Hapus
                   </button>
                 ) : <div></div>}
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Batal</button>
-                  <button type="submit" className="btn btn-primary">Simpan</button>
+                  <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Tutup</button>
+                  {isAdmin && <button type="submit" className="btn btn-primary">Simpan</button>}
                 </div>
               </div>
             </form>
