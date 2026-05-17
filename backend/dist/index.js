@@ -124,7 +124,7 @@ app.get('/api/products', (req, res) => __awaiter(void 0, void 0, void 0, functio
 }));
 app.post('/api/products', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { name, price, costPrice, stock, unit, wholesaleEnabled, wholesalePrices, image } = req.body;
+        const { name, price, costPrice, stock, unit, wholesaleEnabled, wholesalePrices, variants, image } = req.body;
         const product = yield prisma.product.create({
             data: {
                 name,
@@ -134,6 +134,7 @@ app.post('/api/products', requireAdmin, (req, res) => __awaiter(void 0, void 0, 
                 unit: unit || 'pcs',
                 wholesaleEnabled: Boolean(wholesaleEnabled),
                 wholesalePrices: wholesalePrices ? JSON.stringify(wholesalePrices) : null,
+                variants: variants && variants.length > 0 ? JSON.stringify(variants) : null,
                 image
             }
         });
@@ -147,7 +148,7 @@ app.post('/api/products', requireAdmin, (req, res) => __awaiter(void 0, void 0, 
 app.put('/api/products/:id', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { id } = req.params;
-        const { name, price, costPrice, stock, unit, wholesaleEnabled, wholesalePrices, image } = req.body;
+        const { name, price, costPrice, stock, unit, wholesaleEnabled, wholesalePrices, variants, image } = req.body;
         const product = yield prisma.product.update({
             where: { id: Number(id) },
             data: {
@@ -158,6 +159,7 @@ app.put('/api/products/:id', requireAdmin, (req, res) => __awaiter(void 0, void 
                 unit: unit || 'pcs',
                 wholesaleEnabled: Boolean(wholesaleEnabled),
                 wholesalePrices: wholesalePrices ? JSON.stringify(wholesalePrices) : null,
+                variants: variants && variants.length > 0 ? JSON.stringify(variants) : null,
                 image
             }
         });

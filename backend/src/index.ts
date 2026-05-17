@@ -122,7 +122,7 @@ app.get('/api/products', async (req, res) => {
 
 app.post('/api/products', requireAdmin, async (req, res) => {
   try {
-    const { name, price, costPrice, stock, unit, wholesaleEnabled, wholesalePrices, image } = req.body;
+    const { name, price, costPrice, stock, unit, wholesaleEnabled, wholesalePrices, variants, image } = req.body;
     const product = await prisma.product.create({
       data: {
         name,
@@ -132,6 +132,7 @@ app.post('/api/products', requireAdmin, async (req, res) => {
         unit: unit || 'pcs',
         wholesaleEnabled: Boolean(wholesaleEnabled),
         wholesalePrices: wholesalePrices ? JSON.stringify(wholesalePrices) : null,
+        variants: variants && variants.length > 0 ? JSON.stringify(variants) : null,
         image
       }
     });
@@ -145,7 +146,7 @@ app.post('/api/products', requireAdmin, async (req, res) => {
 app.put('/api/products/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, price, costPrice, stock, unit, wholesaleEnabled, wholesalePrices, image } = req.body;
+    const { name, price, costPrice, stock, unit, wholesaleEnabled, wholesalePrices, variants, image } = req.body;
     const product = await prisma.product.update({
       where: { id: Number(id) },
       data: {
@@ -156,6 +157,7 @@ app.put('/api/products/:id', requireAdmin, async (req, res) => {
         unit: unit || 'pcs',
         wholesaleEnabled: Boolean(wholesaleEnabled),
         wholesalePrices: wholesalePrices ? JSON.stringify(wholesalePrices) : null,
+        variants: variants && variants.length > 0 ? JSON.stringify(variants) : null,
         image
       }
     });
