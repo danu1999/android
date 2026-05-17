@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Search, User } from 'lucide-react';
 import api from '../api';
+import { useDemoBlock } from '../AuthContext';
+
 
 export default function Pelanggan() {
+  const { showDemoBlock, isDemo } = useDemoBlock();
   const [customers, setCustomers] = useState([]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({ id: null, name: '', phone: '', address: '' });
@@ -32,6 +36,8 @@ export default function Pelanggan() {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (isDemo) { showDemoBlock('Menambah atau mengubah data pelanggan hanya tersedia di akun berbayar.'); return; }
+
     try {
       if (formData.id) {
         await api.put(`/customers/${formData.id}`, formData);
@@ -47,7 +53,9 @@ export default function Pelanggan() {
   };
 
   const handleDelete = async (id) => {
+    if (isDemo) { showDemoBlock('Menghapus data pelanggan hanya tersedia di akun berbayar.'); return; }
     if (window.confirm('Yakin ingin menghapus pelanggan ini?')) {
+
       try {
         await api.delete(`/customers/${id}`);
         fetchCustomers();

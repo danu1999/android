@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { CreditCard, ArrowDownCircle, ArrowUpCircle, TrendingUp, Plus, Edit2, Trash2, Lock } from 'lucide-react';
 import api from '../api';
+import { useDemoBlock } from '../AuthContext';
+
 
 export default function Keuangan() {
+  const { showDemoBlock, isDemo } = useDemoBlock();
   const [isPremium, setIsPremium] = useState(localStorage.getItem('posbah_premium') === 'true');
+
   const [activeTab, setActiveTab] = useState('REKAP');
   const [finances, setFinances] = useState([]);
   const [reports, setReports] = useState(null);
@@ -68,6 +72,8 @@ export default function Keuangan() {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (isDemo) { showDemoBlock('Menambah catatan keuangan hanya tersedia di akun berbayar.'); return; }
+
     try {
       if (formData.id) {
         await api.put(`/finances/${formData.id}`, formData);
@@ -83,7 +89,9 @@ export default function Keuangan() {
   };
 
   const handleDelete = async (id) => {
+    if (isDemo) { showDemoBlock('Menghapus data keuangan hanya tersedia di akun berbayar.'); return; }
     if (window.confirm('Yakin ingin menghapus data ini?')) {
+
       try {
         await api.delete(`/finances/${id}`);
         fetchData();

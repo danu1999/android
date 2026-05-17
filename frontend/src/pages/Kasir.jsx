@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, ShoppingCart, Trash2, CreditCard, QrCode, Printer, X, ChevronUp, ClipboardList, Plus, Minus } from 'lucide-react';
 import api from '../api';
+import { useDemoBlock } from '../AuthContext';
 
 const getEffectivePrice = (product, quantity) => {
   if (!product.wholesaleEnabled || !product.wholesalePrices) return product.price;
@@ -12,6 +13,7 @@ const getEffectivePrice = (product, quantity) => {
 };
 
 export default function Kasir() {
+  const { showDemoBlock, isDemo } = useDemoBlock();
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -90,6 +92,12 @@ export default function Kasir() {
 
   const checkout = async (isQueue = false) => {
     if (!cart.length) return;
+    if (isDemo) {
+      showDemoBlock(isQueue
+        ? 'Menyimpan antrian hanya tersedia di akun berbayar. Upgrade untuk mulai menerima pesanan!'
+        : 'Memproses pembayaran hanya tersedia di akun berbayar. Upgrade untuk mulai berjualan!');
+      return;
+    }
     try {
       const r = await api.post('/transactions', {
         items: cart.map(i => ({ productId: i.product.id, quantity: i.quantity, price: i.product.price, discount: i.discount })),

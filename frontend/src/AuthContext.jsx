@@ -1,8 +1,10 @@
 import React, { createContext, useContext } from 'react';
 
 export const AuthContext = createContext(null);
+export const DemoContext = createContext({ showDemoBlock: () => {} });
 
 export const useAuth = () => useContext(AuthContext);
+export const useDemoBlock = () => useContext(DemoContext);
 
 /**
  * Role hierarchy:
@@ -31,4 +33,5 @@ export const hasRole = (userRole, requiredRole) => {
 /** Shorthand hooks */
 export const useIsOwner  = () => { const { user } = useAuth(); return user?.role === ROLES.OWNER; };
 export const useIsAdmin  = () => { const { user } = useAuth(); return hasRole(user?.role, ROLES.ADMIN); };
-export const useIsKasir  = () => { const { user } = useAuth(); return user?.role === ROLES.KASIR; };
+export const useIsKasir  = () => { const { user } = useAuth(); return user?.role === ROLES.KASIR || user?.role === 'CASHIER'; };
+export const useIsDemo   = () => { const { user } = useAuth(); return user?.isDemo === true; };

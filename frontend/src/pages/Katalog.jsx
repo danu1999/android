@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Search, AlertTriangle, Eye } from 'lucide-react';
 import api from '../api';
-import { useAuth, useIsAdmin } from '../AuthContext';
+import { useAuth, useIsAdmin, useDemoBlock } from '../AuthContext';
+
 
 const EMPTY_FORM = {
   id: null, name: '', price: '', costPrice: '',
@@ -17,7 +18,8 @@ const EMPTY_FORM = {
 };
 
 export default function Katalog() {
-  const isAdmin = useIsAdmin(); // true for ADMIN & OWNER
+  const isAdmin = useIsAdmin();
+  const { showDemoBlock, isDemo } = useDemoBlock();
   const [products, setProducts] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -87,6 +89,8 @@ export default function Katalog() {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (isDemo) { showDemoBlock('Menambah atau mengubah produk hanya tersedia di akun berbayar.'); return; }
+
     try {
       // Filter hanya wholesale yang terisi
       const filledWholesale = formData.wholesalePrices.filter(
@@ -112,7 +116,9 @@ export default function Katalog() {
   };
 
   const handleDelete = async (id) => {
+    if (isDemo) { showDemoBlock('Menghapus produk hanya tersedia di akun berbayar.'); return; }
     if (window.confirm('Yakin ingin menghapus produk ini?')) {
+
       try {
         await api.delete(`/products/${id}`);
         setIsModalOpen(false);
