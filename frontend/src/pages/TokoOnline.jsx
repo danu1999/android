@@ -23,9 +23,20 @@ export default function TokoOnline() {
 
   useEffect(() => {
     fetchProducts();
-    // Auto-refresh setiap 30 detik agar stok selalu real-time
-    const interval = setInterval(fetchProducts, 30000);
-    return () => clearInterval(interval);
+
+    // Refresh hanya saat tab kembali aktif/difokus (hemat server)
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') fetchProducts();
+    };
+    const onFocus = () => fetchProducts();
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('focus', onFocus);
+    };
   }, []);
 
   const filteredProducts = products.filter(p =>
@@ -139,7 +150,7 @@ export default function TokoOnline() {
           {lastUpdated && (
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6, background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 99, padding: '3px 12px', fontSize: 11, color: '#16A34A', fontWeight: 600 }}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#22C55E', display: 'inline-block', animation: 'pulse 2s infinite' }} />
-              Stok diperbarui {lastUpdated.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} · Auto-refresh 30s
+              Stok diperbarui {lastUpdated.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} · Refresh saat tab aktif
             </div>
           )}
         </div>
