@@ -157,32 +157,33 @@ export default function Kasir() {
       {/* Product Grid */}
       <div style={S.grid}>
         {filtered.map(p => (
-          <div key={p.id} style={S.card}
-            onClick={() => addToCart(p)}
-            onMouseDown={e => e.currentTarget.style.transform = 'scale(0.97)'}
-            onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
-            onTouchStart={e => e.currentTarget.style.transform = 'scale(0.97)'}
-            onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}
-          >
-            {/* Image thumbnail */}
-            <div style={{ ...S.cardThumb, position:'relative' }}>
-              {p.image
-                ? <img src={p.image} alt={p.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                : <span style={{ fontSize:'1.8rem' }}>🛒</span>
-              }
+          <div key={p.id} className="kasir-card" onClick={() => addToCart(p)}>
+            <div className="kasir-card__shine"></div>
+            <div className="kasir-card__glow"></div>
+            
+            <div className="kasir-card__content">
               {p.stock > 0 && p.stock <= 5 && (
-                <span style={{ position:'absolute', top:4, right:4, background:'#F59E0B', color:'white', fontSize:'0.6rem', fontWeight:800, padding:'1px 5px', borderRadius:'99px' }}>Sisa {p.stock}</span>
+                <div className="kasir-card__badge visible">Sisa {p.stock}</div>
               )}
               {p.stock === 0 && (
-                <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.4)', display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontSize:'0.7rem', fontWeight:800 }}>HABIS</div>
+                <div className="kasir-card__badge visible" style={{background: '#EF4444'}}>HABIS</div>
               )}
-            </div>
-            {/* Info */}
-            <div style={S.cardBody}>
-              <div style={S.cardName}>{p.name}</div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={S.cardPrice}>Rp {p.price.toLocaleString('id-ID')}</div>
-                <div style={S.cardStock}>{p.stock} {p.unit||'pcs'}</div>
+              
+              <div className="kasir-card__image">
+                {p.image ? (
+                  <img src={p.image} alt={p.name} />
+                ) : (
+                  <div style={{width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'2rem'}}>🛒</div>
+                )}
+              </div>
+
+              <div className="kasir-card__text">
+                <p className="kasir-card__title">{p.name}</p>
+              </div>
+
+              <div className="kasir-card__footer">
+                <span className="kasir-card__price">Rp {p.price.toLocaleString('id-ID')}</span>
+                <span className="kasir-card__description">{p.stock} {p.unit||'pcs'}</span>
               </div>
             </div>
           </div>
