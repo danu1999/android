@@ -23,7 +23,12 @@ app.use(express_1.default.json());
 // ─────────────────────────────────────────────────────────────
 // Role hierarchy helpers
 // ─────────────────────────────────────────────────────────────
-const ROLE_HIERARCHY = { KASIR: 1, ADMIN: 2, OWNER: 3 };
+// CASHIER is an alias for KASIR (legacy role name support)
+const ROLE_HIERARCHY = {
+    KASIR: 1, CASHIER: 1, // CASHIER = alias lama dari KASIR
+    ADMIN: 2,
+    OWNER: 3
+};
 const hasRole = (userRole, required) => {
     if (!userRole)
         return false;
@@ -273,22 +278,23 @@ app.put('/api/transactions/:id', requireAdmin, (req, res) => __awaiter(void 0, v
 // ─────────────────────────────────────────────────────────────
 // Customers  (READ: ADMIN+ | WRITE: ADMIN+)
 // ─────────────────────────────────────────────────────────────
-app.get('/api/customers', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const customers = yield prisma.customer.findMany({ orderBy: { name: 'asc' } });
-        res.json(customers);
-    }
-    catch (error) {
-        res.status(400).json({ error: 'Failed to fetch customers' });
-    }
-}));
 // Kasir perlu lookup pelanggan saat checkout — endpoint terpisah (read-only, publik)
+// HARUS di atas /api/customers agar tidak ter-override
 app.get('/api/customers/list', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const customers = yield prisma.customer.findMany({
             select: { id: true, name: true, phone: true },
             orderBy: { name: 'asc' }
         });
+        res.json(customers);
+    }
+    catch (error) {
+        res.status(400).json({ error: 'Failed to fetch customers' });
+    }
+}));
+app.get('/api/customers', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const customers = yield prisma.customer.findMany({ orderBy: { name: 'asc' } });
         res.json(customers);
     }
     catch (error) {

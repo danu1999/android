@@ -12,7 +12,12 @@ app.use(express.json());
 // ─────────────────────────────────────────────────────────────
 // Role hierarchy helpers
 // ─────────────────────────────────────────────────────────────
-const ROLE_HIERARCHY: Record<string, number> = { KASIR: 1, ADMIN: 2, OWNER: 3 };
+// CASHIER is an alias for KASIR (legacy role name support)
+const ROLE_HIERARCHY: Record<string, number> = {
+  KASIR: 1, CASHIER: 1,   // CASHIER = alias lama dari KASIR
+  ADMIN: 2,
+  OWNER: 3
+};
 
 const hasRole = (userRole: string | undefined, required: string): boolean => {
   if (!userRole) return false;
@@ -274,22 +279,24 @@ app.put('/api/transactions/:id', requireAdmin, async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 // Customers  (READ: ADMIN+ | WRITE: ADMIN+)
 // ─────────────────────────────────────────────────────────────
-app.get('/api/customers', requireAdmin, async (req, res) => {
-  try {
-    const customers = await prisma.customer.findMany({ orderBy: { name: 'asc' } });
-    res.json(customers);
-  } catch (error) {
-    res.status(400).json({ error: 'Failed to fetch customers' });
-  }
-});
 
 // Kasir perlu lookup pelanggan saat checkout — endpoint terpisah (read-only, publik)
+// HARUS di atas /api/customers agar tidak ter-override
 app.get('/api/customers/list', async (req, res) => {
   try {
     const customers = await prisma.customer.findMany({
       select: { id: true, name: true, phone: true },
       orderBy: { name: 'asc' }
     });
+    res.json(customers);
+  } catch (error) {
+    res.status(400).json({ error: 'Failed to fetch customers' });
+  }
+});
+
+app.get('/api/customers', requireAdmin, async (req, res) => {
+  try {
+    const customers = await prisma.customer.findMany({ orderBy: { name: 'asc' } });
     res.json(customers);
   } catch (error) {
     res.status(400).json({ error: 'Failed to fetch customers' });

@@ -20,9 +20,11 @@ export const ROLES = {
 
 /** Cek apakah user punya role tertentu atau lebih tinggi */
 export const hasRole = (userRole, requiredRole) => {
+  // Normalisasi: CASHIER = alias lama dari KASIR
+  const normalize = (r) => (r === 'CASHIER' ? 'KASIR' : r);
   const hierarchy = [ROLES.KASIR, ROLES.ADMIN, ROLES.OWNER];
-  const userIdx = hierarchy.indexOf(userRole);
-  const reqIdx  = hierarchy.indexOf(requiredRole);
+  const userIdx = hierarchy.indexOf(normalize(userRole));
+  const reqIdx  = hierarchy.indexOf(normalize(requiredRole));
   return userIdx >= reqIdx;
 };
 
