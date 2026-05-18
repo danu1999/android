@@ -55,6 +55,15 @@ const requireOwner = async (req: Request, res: Response, next: NextFunction) => 
   next();
 };
 
+/** Middleware: blokir akun demo (id=0) dari semua operasi tulis */
+const requireNotDemo = (req: Request, res: Response, next: NextFunction) => {
+  const employeeId = req.headers['x-employee-id'] as string;
+  if (employeeId === '0') {
+    return res.status(403).json({ error: 'Akun demo tidak dapat menyimpan data. Upgrade untuk menggunakan fitur penuh.' });
+  }
+  next();
+};
+
 // ─────────────────────────────────────────────────────────────
 // Basic sanity check
 // ─────────────────────────────────────────────────────────────
@@ -210,16 +219,11 @@ app.get('/api/transactions', requireAdmin, async (req, res) => {
   }
 });
 
-app.post('/api/transactions', async (req, res) => {
+app.post('/api/transactions', requireNotDemo, async (req, res) => {
   try {
     const { items, total, discount, paymentMethod, type, customerId, date, status, notes, customerName, queueNumber } = req.body;
 
     const employeeIdHeader = req.headers['x-employee-id'] as string;
-
-    // Blokir akun demo (id=0) agar tidak menulis ke database nyata
-    if (employeeIdHeader === '0') {
-      return res.status(403).json({ error: 'Akun demo tidak dapat menyimpan transaksi ke database.' });
-    }
 
     let employeeId: number;
 

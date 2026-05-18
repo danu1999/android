@@ -59,6 +59,14 @@ const requireOwner = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
     }
     next();
 });
+/** Middleware: blokir akun demo (id=0) dari semua operasi tulis */
+const requireNotDemo = (req, res, next) => {
+    const employeeId = req.headers['x-employee-id'];
+    if (employeeId === '0') {
+        return res.status(403).json({ error: 'Akun demo tidak dapat menyimpan data. Upgrade untuk menggunakan fitur penuh.' });
+    }
+    next();
+};
 // ─────────────────────────────────────────────────────────────
 // Basic sanity check
 // ─────────────────────────────────────────────────────────────
@@ -209,14 +217,10 @@ app.get('/api/transactions', requireAdmin, (req, res) => __awaiter(void 0, void 
         res.status(400).json({ error: 'Failed to fetch transactions' });
     }
 }));
-app.post('/api/transactions', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+app.post('/api/transactions', requireNotDemo, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { items, total, discount, paymentMethod, type, customerId, date, status, notes, customerName, queueNumber } = req.body;
         const employeeIdHeader = req.headers['x-employee-id'];
-        // Blokir akun demo (id=0) agar tidak menulis ke database nyata
-        if (employeeIdHeader === '0') {
-            return res.status(403).json({ error: 'Akun demo tidak dapat menyimpan transaksi ke database.' });
-        }
         let employeeId;
         if (employeeIdHeader && employeeIdHeader !== '0') {
             employeeId = Number(employeeIdHeader);

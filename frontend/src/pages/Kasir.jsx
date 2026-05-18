@@ -96,8 +96,8 @@ export default function Kasir() {
 
   const checkout = async (isQueue = false) => {
     if (!cart.length) return;
-    if (isDemo && demoTxCount >= DEMO_LIMITS.TRANSACTIONS) {
-      showDemoBlock(`Batas maksimal ${DEMO_LIMITS.TRANSACTIONS} transaksi untuk akun demo. Upgrade untuk transaksi tidak terbatas!`);
+    if (isDemo) {
+      showDemoBlock('Memproses transaksi hanya tersedia di akun berbayar. Data demo tidak akan tersimpan ke database. Upgrade untuk mulai berjualan!');
       return;
     }
     try {
