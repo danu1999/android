@@ -29,8 +29,8 @@ const requireAdmin = async (req: Request, res: Response, next: NextFunction) => 
   const role = req.headers['x-employee-role'] as string;
   const employeeId = req.headers['x-employee-id'] as string;
 
-  // Demo user (id=0) tidak punya akses backend sensitif
-  if (employeeId === '0') {
+  // Blokir demo (id=0) atau request tanpa ID
+  if (!employeeId || employeeId === '0') {
     return res.status(403).json({ error: 'Demo mode tidak mengizinkan operasi ini' });
   }
 
@@ -45,7 +45,8 @@ const requireOwner = async (req: Request, res: Response, next: NextFunction) => 
   const role = req.headers['x-employee-role'] as string;
   const employeeId = req.headers['x-employee-id'] as string;
 
-  if (employeeId === '0') {
+  // Blokir demo (id=0) atau request tanpa ID
+  if (!employeeId || employeeId === '0') {
     return res.status(403).json({ error: 'Demo mode tidak mengizinkan operasi ini' });
   }
 
@@ -55,10 +56,10 @@ const requireOwner = async (req: Request, res: Response, next: NextFunction) => 
   next();
 };
 
-/** Middleware: blokir akun demo (id=0) dari semua operasi tulis */
+/** Middleware: blokir akun demo (id=0) atau tanpa ID dari semua operasi tulis */
 const requireNotDemo = (req: Request, res: Response, next: NextFunction) => {
   const employeeId = req.headers['x-employee-id'] as string;
-  if (employeeId === '0') {
+  if (!employeeId || employeeId === '0') {
     return res.status(403).json({ error: 'Akun demo tidak dapat menyimpan data. Upgrade untuk menggunakan fitur penuh.' });
   }
   next();

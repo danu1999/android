@@ -38,8 +38,8 @@ const hasRole = (userRole, required) => {
 const requireAdmin = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     const role = req.headers['x-employee-role'];
     const employeeId = req.headers['x-employee-id'];
-    // Demo user (id=0) tidak punya akses backend sensitif
-    if (employeeId === '0') {
+    // Blokir demo (id=0) atau request tanpa ID
+    if (!employeeId || employeeId === '0') {
         return res.status(403).json({ error: 'Demo mode tidak mengizinkan operasi ini' });
     }
     if (!hasRole(role, 'ADMIN')) {
@@ -51,7 +51,8 @@ const requireAdmin = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
 const requireOwner = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     const role = req.headers['x-employee-role'];
     const employeeId = req.headers['x-employee-id'];
-    if (employeeId === '0') {
+    // Blokir demo (id=0) atau request tanpa ID
+    if (!employeeId || employeeId === '0') {
         return res.status(403).json({ error: 'Demo mode tidak mengizinkan operasi ini' });
     }
     if (!hasRole(role, 'OWNER')) {
@@ -59,10 +60,10 @@ const requireOwner = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
     }
     next();
 });
-/** Middleware: blokir akun demo (id=0) dari semua operasi tulis */
+/** Middleware: blokir akun demo (id=0) atau tanpa ID dari semua operasi tulis */
 const requireNotDemo = (req, res, next) => {
     const employeeId = req.headers['x-employee-id'];
-    if (employeeId === '0') {
+    if (!employeeId || employeeId === '0') {
         return res.status(403).json({ error: 'Akun demo tidak dapat menyimpan data. Upgrade untuk menggunakan fitur penuh.' });
     }
     next();

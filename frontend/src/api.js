@@ -15,7 +15,7 @@ api.interceptors.request.use((config) => {
     const stored = localStorage.getItem('posbah_user');
     if (stored) {
       const user = JSON.parse(stored);
-      if (user?.id) config.headers['x-employee-id'] = user.id;
+      if (user?.id !== undefined && user?.id !== null) config.headers['x-employee-id'] = String(user.id);
       if (user?.role) config.headers['x-employee-role'] = user.role;
     }
   } catch (_) {}
