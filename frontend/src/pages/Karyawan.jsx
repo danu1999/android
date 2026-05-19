@@ -39,7 +39,7 @@ export default function Karyawan() {
   const [masterOk, setMasterOk] = useState(false);
   const [pinError, setPinError] = useState(false);
 
-  const MASTER_PIN = 'Po-kuew=?=mEf?o';
+  const MASTER_PIN = '!9jJs./2r0dSfds';
   const MASTER_NAME = 'muizz';
 
   const handleTabClick = (id) => {
