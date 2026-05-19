@@ -35,6 +35,7 @@ export default function Kasir() {
   const [isBackdate, setIsBackdate] = useState(false);
   const [txDate, setTxDate] = useState('');
   const [demoTxCount, setDemoTxCount] = useState(0);
+  const [variantModal, setVariantModal] = useState(null); // product with variants
 
   useEffect(() => { 
     fetchProducts(); 
@@ -70,28 +71,51 @@ export default function Kasir() {
   };
 
   const addToCart = (p) => {
+    if (p.variantEnabled && p.variants && p.variants.length > 0) {
+      setVariantModal(p); return;
+    }
     if (p.stock < 1) { alert('Stok habis!'); return; }
+    const key = String(p.id);
     setCart(prev => {
-      const ex = prev.find(i => i.product.id === p.id);
+      const ex = prev.find(i => i.cartKey === key);
       if (ex) {
         if (ex.quantity >= p.stock) { alert('Stok tidak cukup!'); return prev; }
-        return prev.map(i => i.product.id === p.id ? { ...i, quantity: i.quantity + 1 } : i);
+        return prev.map(i => i.cartKey === key ? { ...i, quantity: i.quantity + 1 } : i);
       }
-      return [...prev, { product: p, quantity: 1, discount: 0 }];
+      return [...prev, { cartKey: key, product: p, variantId: null, variantName: null, variantPrice: null, quantity: 1, discount: 0 }];
     });
   };
 
-  const updateQty = (id, delta) => setCart(prev => prev.map(i => {
-    if (i.product.id !== id) return i;
+  const addVariantToCart = (product, variant) => {
+    const stock = variant.stock !== null && variant.stock !== undefined ? variant.stock : product.stock;
+    if (stock < 1) { alert('Stok varian ini habis!'); return; }
+    const key = `${product.id}-v${variant.id}`;
+    setCart(prev => {
+      const ex = prev.find(i => i.cartKey === key);
+      if (ex) {
+        if (ex.quantity >= stock) { alert('Stok tidak cukup!'); return prev; }
+        return prev.map(i => i.cartKey === key ? { ...i, quantity: i.quantity + 1 } : i);
+      }
+      return [...prev, { cartKey: key, product, variantId: variant.id, variantName: variant.name, variantPrice: variant.price || null, quantity: 1, discount: 0 }];
+    });
+    setVariantModal(null);
+  };
+
+  const updateQty = (cartKey, delta) => setCart(prev => prev.map(i => {
+    if (i.cartKey !== cartKey) return i;
     const nq = i.quantity + delta;
     if (nq < 1) return i;
-    if (nq > i.product.stock) return i;
+    const maxStock = i.variantId
+      ? (i.product.variants?.find(v => v.id === i.variantId)?.stock ?? i.product.stock)
+      : i.product.stock;
+    if (nq > maxStock) return i;
     return { ...i, quantity: nq };
   }));
 
-  const removeItem = (id) => setCart(prev => prev.filter(i => i.product.id !== id));
+  const removeItem = (cartKey) => setCart(prev => prev.filter(i => i.cartKey !== cartKey));
 
-  const total = cart.reduce((s, i) => s + (getEffectivePrice(i.product, i.quantity) - i.discount) * i.quantity, 0) - globalDiscount;
+  const getItemPrice = (item) => item.variantPrice || getEffectivePrice(item.product, item.quantity);
+  const total = cart.reduce((s, i) => s + (getItemPrice(i) - i.discount) * i.quantity, 0) - globalDiscount;
   const totalItems = cart.reduce((s, i) => s + i.quantity, 0);
 
   const checkout = async (isQueue = false) => {
@@ -102,7 +126,7 @@ export default function Kasir() {
     }
     try {
       const r = await api.post('/transactions', {
-        items: cart.map(i => ({ productId: i.product.id, quantity: i.quantity, price: i.product.price, discount: i.discount })),
+        items: cart.map(i => ({ productId: i.product.id, variantId: i.variantId || null, quantity: i.quantity, price: i.variantPrice || i.product.price, discount: i.discount })),
         total, discount: globalDiscount,
         paymentMethod: isQueue ? 'PENDING' : payMethod,
         status: isQueue ? 'PENDING' : 'COMPLETED',
@@ -236,35 +260,30 @@ export default function Kasir() {
         {filtered.map(p => (
           <div key={p.id} className="card" onClick={() => addToCart(p)}>
 
-            {/* Badge Stok (Tetap dipertahankan di pojok kanan atas gambar karena penting untuk POS) */}
-            {p.stock > 0 && p.stock <= 5 && (
+            {/* Badge varian */}
+            {p.variantEnabled && p.variants?.length > 0 && (
+              <div style={{ position: 'absolute', top: 8, left: 8, background: '#4F46E5', color: 'white', padding: '2px 8px', borderRadius: 6, fontSize: '10px', fontWeight: 700, zIndex: 10 }}>{p.variants.length} Varian</div>
+            )}
+            {!p.variantEnabled && p.stock > 0 && p.stock <= 5 && (
               <div style={{ position: 'absolute', top: 8, right: 8, background: '#F59E0B', color: 'white', padding: '2px 8px', borderRadius: 6, fontSize: '10px', fontWeight: 700, zIndex: 10 }}>Sisa {p.stock}</div>
             )}
-            {p.stock === 0 && (
+            {!p.variantEnabled && p.stock === 0 && (
               <div style={{ position: 'absolute', top: 8, right: 8, background: '#EF4444', color: 'white', padding: '2px 8px', borderRadius: 6, fontSize: '10px', fontWeight: 700, zIndex: 10 }}>HABIS</div>
             )}
 
-            {/* Gambar Produk (Menggunakan background-image agar otomatis terpotong rapi/cover) */}
-            <div
-              className="card__image"
-              style={p.image ? { backgroundImage: `url(${p.image})` } : { backgroundColor: '#E5E7EB' }}
-            >
-              {!p.image && <span style={{ fontSize: '2rem' }}>🛒</span>}
+            <div className="card__image" style={p.image ? { backgroundImage: `url(${p.image})` } : { backgroundColor: '#E5E7EB' }}>
+              {!p.image && <span style={{ fontSize: '2rem' }}>{p.variantEnabled ? '🎨' : '🛒'}</span>}
             </div>
 
-            {/* Info Produk */}
             <div className="card__content">
               <div className="card__text">
                 <p className="card__title">{p.name}</p>
               </div>
-
-              {/* Harga & Keterangan Tambahan (Varian/Stok) */}
               <div className="card__footer">
                 <div className="card__price">Rp{p.price.toLocaleString('id-ID')}</div>
-
-                {/* Anda bisa mengganti tulisan ini menjadi "1 Varian" persis seperti di foto, 
-                    tapi karena ini kasir, menampilkan sisa stok akan sangat membantu */}
-                <div className="card__variant">{p.stock} {p.unit || 'pcs'}</div>
+                <div className="card__variant">
+                  {p.variantEnabled && p.variants?.length > 0 ? 'Pilih varian ›' : `${p.stock} ${p.unit || 'pcs'}`}
+                </div>
               </div>
             </div>
 
@@ -301,15 +320,18 @@ export default function Kasir() {
               <div style={{ textAlign: 'center', padding: '24px 0', color: '#9CA3AF', fontSize: '0.9rem' }}>Belum ada item 🛒</div>
             ) : (
               cart.map(item => {
-                const ep = getEffectivePrice(item.product, item.quantity);
+                const ep = getItemPrice(item);
                 return (
-                  <div key={item.product.id} style={{ borderBottom: '1px solid #F3F4F6', padding: '12px 0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div key={item.cartKey} style={{ borderBottom: '1px solid #F3F4F6', padding: '12px 0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#1F2937' }}>{item.product.name}</div>
+                        <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#1F2937' }}>
+                          {item.product.name}
+                          {item.variantName && <span style={{ marginLeft: 6, fontSize: '0.75rem', background: '#EEF2FF', color: '#4F46E5', padding: '1px 7px', borderRadius: 99, fontWeight: 700 }}>{item.variantName}</span>}
+                        </div>
                         <div style={{ fontSize: '0.8rem', color: '#4F46E5', fontWeight: 700 }}>Rp {ep.toLocaleString('id-ID')}{item.discount > 0 && <span style={{ color: '#EF4444' }}> -Rp {item.discount.toLocaleString('id-ID')}</span>}</div>
                       </div>
-                      <button onClick={() => removeItem(item.product.id)} style={{ background: '#FEE2E2', border: 'none', borderRadius: '8px', padding: '6px', cursor: 'pointer', color: '#EF4444', display: 'flex', alignItems: 'center' }}>
+                      <button onClick={() => removeItem(item.cartKey)} style={{ background: '#FEE2E2', border: 'none', borderRadius: '8px', padding: '6px', cursor: 'pointer', color: '#EF4444', display: 'flex', alignItems: 'center' }}>
                         <Trash2 size={14} />
                       </button>
                     </div>
@@ -317,13 +339,13 @@ export default function Kasir() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <span style={{ fontSize: '0.72rem', color: '#9CA3AF' }}>Diskon:</span>
                         <input type="number" value={item.discount} min={0}
-                          onChange={e => setCart(prev => prev.map(i => i.product.id === item.product.id ? { ...i, discount: Number(e.target.value) || 0 } : i))}
+                          onChange={e => setCart(prev => prev.map(i => i.cartKey === item.cartKey ? { ...i, discount: Number(e.target.value) || 0 } : i))}
                           style={{ width: '60px', padding: '4px 6px', border: '1px solid #E5E7EB', borderRadius: '7px', fontSize: '0.8rem', outline: 'none', textAlign: 'right' }} />
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0', border: '1.5px solid #E5E7EB', borderRadius: '10px', overflow: 'hidden' }}>
-                        <button onClick={() => updateQty(item.product.id, -1)} style={{ padding: '6px 12px', border: 'none', background: '#F9FAFB', cursor: 'pointer', fontWeight: 800, color: '#374151', fontSize: '1rem' }}>−</button>
+                        <button onClick={() => updateQty(item.cartKey, -1)} style={{ padding: '6px 12px', border: 'none', background: '#F9FAFB', cursor: 'pointer', fontWeight: 800, color: '#374151', fontSize: '1rem' }}>−</button>
                         <span style={{ padding: '6px 12px', fontWeight: 700, fontSize: '0.95rem', color: '#1F2937', minWidth: '36px', textAlign: 'center' }}>{item.quantity}</span>
-                        <button onClick={() => updateQty(item.product.id, 1)} style={{ padding: '6px 12px', border: 'none', background: '#F9FAFB', cursor: 'pointer', fontWeight: 800, color: '#4F46E5', fontSize: '1rem' }}>+</button>
+                        <button onClick={() => updateQty(item.cartKey, 1)} style={{ padding: '6px 12px', border: 'none', background: '#F9FAFB', cursor: 'pointer', fontWeight: 800, color: '#4F46E5', fontSize: '1rem' }}>+</button>
                       </div>
                     </div>
                   </div>
@@ -496,6 +518,35 @@ export default function Kasir() {
                   </div>
                 ))
               }
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal Pilih Varian */}
+      {variantModal && (
+        <div onClick={() => setVariantModal(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(3px)', zIndex: 9999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'white', borderRadius: '20px 20px 0 0', padding: '20px 16px 32px', width: '100%', maxWidth: '480px', maxHeight: '70vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <div style={{ fontWeight: 900, fontSize: '1rem', color: '#111827' }}>Pilih Varian</div>
+              <button onClick={() => setVariantModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 4 }}><X size={20} /></button>
+            </div>
+            <div style={{ fontSize: '0.82rem', color: '#6B7280', marginBottom: 14 }}>{variantModal.name}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {variantModal.variants.map(v => {
+                const stock = v.stock !== null && v.stock !== undefined ? v.stock : variantModal.stock;
+                const price = v.price || variantModal.price;
+                const outOfStock = stock < 1;
+                return (
+                  <button key={v.id} onClick={() => !outOfStock && addVariantToCart(variantModal, v)} disabled={outOfStock}
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 16px', borderRadius: 14, border: `1.5px solid ${outOfStock ? '#F3F4F6' : '#E5E7EB'}`, background: outOfStock ? '#F9FAFB' : 'white', cursor: outOfStock ? 'not-allowed' : 'pointer', opacity: outOfStock ? 0.5 : 1, width: '100%', textAlign: 'left' }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.95rem', color: outOfStock ? '#9CA3AF' : '#111827' }}>{v.name}</div>
+                      <div style={{ fontSize: '0.75rem', color: outOfStock ? '#EF4444' : '#10B981', fontWeight: 600, marginTop: 2 }}>{outOfStock ? 'Stok Habis' : `Stok: ${stock}`}</div>
+                    </div>
+                    <div style={{ fontWeight: 800, fontSize: '1rem', color: '#4F46E5' }}>Rp {price.toLocaleString('id-ID')}</div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
