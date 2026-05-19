@@ -142,7 +142,46 @@ export default function Keuangan() {
   );
 
   const renderMargin = () => {
-    const withCost = products.filter(p => p.costPrice > 0);
+    const flattenedProducts = [];
+
+    products.forEach(p => {
+      let variants = [];
+      try {
+        if (p.variants) variants = JSON.parse(p.variants);
+      } catch (e) {}
+
+      if (!p.variantEnabled || variants.length === 0) {
+        flattenedProducts.push({
+          ...p,
+          isVariant: false
+        });
+      } else {
+        // Original option
+        flattenedProducts.push({
+          ...p,
+          id: p.id + '-original',
+          name: p.name + ' (Original)',
+          isVariant: false,
+          isOriginal: true
+        });
+
+        // Variants
+        variants.forEach((v, idx) => {
+          flattenedProducts.push({
+            ...p,
+            id: p.id + '-v' + idx,
+            name: p.name + ' - ' + v.name,
+            price: v.price != null && v.price !== '' ? Number(v.price) : p.price,
+            costPrice: v.costPrice != null && v.costPrice !== '' ? Number(v.costPrice) : p.costPrice,
+            stock: v.stock != null && v.stock !== '' ? Number(v.stock) : p.stock,
+            isVariant: true,
+            isOriginal: false
+          });
+        });
+      }
+    });
+
+    const withCost = flattenedProducts.filter(p => p.costPrice > 0);
 
     // ── Weighted average margin (bobot = stok) ──────────────────
     const totalStockWithCost = withCost.reduce((s, p) => s + p.stock, 0);
@@ -174,7 +213,7 @@ export default function Keuangan() {
     });
     const allProducts = [
       ...sortedProducts,
-      ...products.filter(p => p.costPrice <= 0)
+      ...flattenedProducts.filter(p => p.costPrice <= 0)
     ];
 
     return (

@@ -4,7 +4,7 @@ import api from '../api';
 import { useAuth, useIsAdmin, useDemoBlock, DEMO_LIMITS } from '../AuthContext';
 
 
-const EMPTY_VARIANT = { name: '', stock: '', price: '' };
+const EMPTY_VARIANT = { name: '', stock: '', price: '', costPrice: '' };
 
 const EMPTY_FORM = {
   id: null, name: '', price: '', costPrice: '',
@@ -123,6 +123,7 @@ export default function Katalog() {
               name: v.name.trim(),
               stock: v.stock !== '' ? Number(v.stock) : null,
               price: v.price !== '' ? Number(v.price) : null,
+              costPrice: v.costPrice !== '' ? Number(v.costPrice) : null,
             }))
         : [];
 
@@ -472,7 +473,7 @@ export default function Katalog() {
                             style={{ width: '100%', padding: '8px 10px', border: '1px solid #DDD6FE', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box', marginBottom: 8 }}
                           />
 
-                          {/* Stok + Harga — 2 kolom */}
+                          {/* Stok + Harga Jual + Harga Modal */}
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                             <div>
                               <div style={{ fontSize: 11, fontWeight: 600, color: '#7C3AED', marginBottom: 4 }}>Stok (opsional)</div>
@@ -489,7 +490,7 @@ export default function Katalog() {
                               />
                             </div>
                             <div>
-                              <div style={{ fontSize: 11, fontWeight: 600, color: '#7C3AED', marginBottom: 4 }}>Harga Rp (opsional)</div>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: '#7C3AED', marginBottom: 4 }}>Harga Jual Rp (opsional)</div>
                               <input
                                 type="number"
                                 placeholder="Default = harga produk"
@@ -497,6 +498,20 @@ export default function Katalog() {
                                 onChange={e => {
                                   const upd = [...formData.variants];
                                   upd[i] = { ...upd[i], price: e.target.value };
+                                  setFormData({ ...formData, variants: upd });
+                                }}
+                                style={{ width: '100%', padding: '8px 10px', border: '1px solid #DDD6FE', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                              />
+                            </div>
+                            <div style={{ gridColumn: '1 / -1' }}>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: '#7C3AED', marginBottom: 4 }}>📦 Harga Modal Rp (opsional, untuk analisis margin)</div>
+                              <input
+                                type="number"
+                                placeholder="Default = harga modal produk"
+                                value={v.costPrice ?? ''}
+                                onChange={e => {
+                                  const upd = [...formData.variants];
+                                  upd[i] = { ...upd[i], costPrice: e.target.value };
                                   setFormData({ ...formData, variants: upd });
                                 }}
                                 style={{ width: '100%', padding: '8px 10px', border: '1px solid #DDD6FE', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
@@ -515,7 +530,7 @@ export default function Katalog() {
                       <Plus size={14} /> Tambah Varian
                     </button>
                     <p style={{ fontSize: 11, color: '#7C3AED', marginTop: 6, opacity: 0.7, textAlign: 'center' }}>
-                      * Stok &amp; Harga kosong → menggunakan nilai produk utama
+                      * Stok &amp; Harga Jual kosong → pakai nilai produk utama · Harga Modal kosong → pakai modal produk
                     </p>
                   </div>
                 )}
