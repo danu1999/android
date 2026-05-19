@@ -571,56 +571,6 @@ export default function Keuangan() {
     </div>
   );
 
-  const renderTabs = () => (
-    <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 12, marginBottom: 16, scrollbarWidth: 'none' }}>
-      {['REKAP', 'SALES', 'EXPENSE', 'PAYABLE', 'RECEIVABLE', 'MARGIN'].map(tab => (
-        <button
-          key={tab}
-          onClick={() => setActiveTab(tab)}
-          style={{
-            whiteSpace: 'nowrap',
-            padding: '8px 16px',
-            borderRadius: 20,
-            border: 'none',
-            fontWeight: 600,
-            fontSize: '0.85rem',
-            background: activeTab === tab ? '#4F46E5' : '#F3F4F6',
-            color: activeTab === tab ? 'white' : '#4B5563',
-            cursor: 'pointer'
-          }}
-        >
-          {tab === 'REKAP' ? '📊 Rekap' : tab === 'SALES' ? '💰 Penjualan' : tab === 'EXPENSE' ? '📉 Pengeluaran' : tab === 'PAYABLE' ? '💳 Hutang' : tab === 'RECEIVABLE' ? '📑 Piutang' : '📈 Margin'}
-        </button>
-      ))}
-    </div>
-  );
-
-  const renderCards = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {finances.length > 0 ? (
-        finances.map(item => (
-          <div key={item.id} className="glass-panel" onClick={() => handleOpenModal(item)} style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
-            <div>
-              <div style={{ fontSize: '0.75rem', color: '#9CA3AF' }}>{new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
-              <div style={{ fontWeight: 700 }}>{item.description || item.receiptNumber || `#${item.id}`}</div>
-              {item.type && <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>{item.type}</div>}
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontWeight: 800, color: '#1F2937' }}>Rp {Number(item.amount || item.total || 0).toLocaleString('id-ID')}</div>
-              {item.status && (
-                <span style={{ fontSize: '0.65rem', padding: '2px 8px', borderRadius: 10, background: item.status === 'PAID' ? '#DCFCE7' : '#FEF9C3', color: item.status === 'PAID' ? '#166534' : '#854D0E' }}>
-                  {item.status}
-                </span>
-              )}
-            </div>
-          </div>
-        ))
-      ) : (
-        <div style={{ textAlign: 'center', padding: '40px', color: '#9CA3AF' }}>Tidak ada data.</div>
-      )}
-    </div>
-  );
-
   return (
     <div className="page-container">
       {/* Header */}
