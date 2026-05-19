@@ -168,113 +168,157 @@ export default function Katalog() {
 
   return (
     <div className="page-container">
-      <div className="header-actions">
+
+      {/* ── Header ── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, gap: 12 }}>
         <div>
-          <h1>Katalog Produk</h1>
+          <h1 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 900, color: '#1E293B' }}>Katalog Produk</h1>
           {!isAdmin && (
-            <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: '#6B7280' }}>
+            <p style={{ margin: '3px 0 0', fontSize: '0.78rem', color: '#6B7280' }}>
               👁️ Mode lihat saja — Hubungi Admin untuk mengubah produk
             </p>
           )}
         </div>
         {isAdmin && (
-          <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-            <Plus size={18} /> Tambah Produk
+          <button
+            onClick={() => handleOpenModal()}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', background: 'linear-gradient(135deg,#6366F1,#4F46E5)', color: 'white', border: 'none', borderRadius: 14, fontWeight: 800, fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 4px 12px rgba(99,102,241,0.35)', flexShrink: 0 }}
+          >
+            <Plus size={17} /> Tambah
           </button>
         )}
       </div>
 
-      {/* Low Stock Alert Banner */}
+      {/* ── Alert Banners ── */}
       {products.filter(p => p.stock <= LOW_STOCK_THRESHOLD && p.stock > 0).length > 0 && (
-        <div style={{ background: '#FEF9C3', border: '1px solid #FDE047', borderRadius: 12, padding: '10px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <AlertTriangle size={20} color="#CA8A04" />
-          <span style={{ fontWeight: 600, color: '#854D0E', fontSize: 14 }}>
-            ⚠️ {products.filter(p => p.stock <= LOW_STOCK_THRESHOLD && p.stock > 0).length} produk stok menipis (≤ {LOW_STOCK_THRESHOLD} {' '}item):
-            {' '}{products.filter(p => p.stock <= LOW_STOCK_THRESHOLD && p.stock > 0).map(p => `${p.name} (${p.stock})`).join(', ')}
+        <div style={{ background: '#FEF9C3', border: '1px solid #FDE047', borderRadius: 12, padding: '10px 14px', marginBottom: 10, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+          <AlertTriangle size={17} color="#CA8A04" style={{ flexShrink: 0, marginTop: 2 }} />
+          <span style={{ fontWeight: 600, color: '#854D0E', fontSize: 13, lineHeight: 1.5 }}>
+            ⚠️ Stok menipis: {products.filter(p => p.stock <= LOW_STOCK_THRESHOLD && p.stock > 0).map(p => `${p.name} (${p.stock})`).join(', ')}
           </span>
         </div>
       )}
       {products.filter(p => p.stock === 0).length > 0 && (
-        <div style={{ background: '#FEE2E2', border: '1px solid #FCA5A5', borderRadius: 12, padding: '10px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <AlertTriangle size={20} color="#DC2626" />
-          <span style={{ fontWeight: 600, color: '#991B1B', fontSize: 14 }}>
+        <div style={{ background: '#FEE2E2', border: '1px solid #FCA5A5', borderRadius: 12, padding: '10px 14px', marginBottom: 10, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+          <AlertTriangle size={17} color="#DC2626" style={{ flexShrink: 0, marginTop: 2 }} />
+          <span style={{ fontWeight: 600, color: '#991B1B', fontSize: 13, lineHeight: 1.5 }}>
             🚫 Stok habis: {products.filter(p => p.stock === 0).map(p => p.name).join(', ')}
           </span>
         </div>
       )}
 
-      <div className="glass-panel search-bar">
-        <Search size={20} className="text-gray-400" />
+      {/* ── Search ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'white', border: '1.5px solid #E5E7EB', borderRadius: 14, padding: '10px 14px', marginBottom: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+        <Search size={18} color="#94A3B8" />
         <input
           type="text"
-          placeholder="Cari produk (Nama)..."
+          placeholder="Cari produk..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
+          style={{ border: 'none', outline: 'none', width: '100%', fontSize: 14, color: '#1E293B', background: 'transparent' }}
         />
+        {searchQuery && (
+          <button onClick={() => setSearchQuery('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 0 }}>✕</button>
+        )}
       </div>
 
-      <div className="glass-panel table-container">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Gambar</th>
-              <th>Nama Produk</th>
-              <th>Harga Jual</th>
-              <th>Stok</th>
-              <th>Satuan</th>
-              <th>Varian / Grosir</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredProducts.length > 0 ? (
-              filteredProducts.map((product) => {
-                const margin = getMargin(product.price, product.costPrice);
-                return (
-                  <tr
-                    key={product.id}
-                    onClick={() => handleOpenModal(product, !isAdmin)}
-                    style={{ cursor: 'pointer' }}
-                    className="hover:bg-gray-50 transition-colors"
-                  >
-                    <td>
-                      {product.image ? (
-                        <img src={product.image} alt={product.name} style={{ width: '40px', height: '40px', objectFit: 'contain', borderRadius: '4px' }} />
-                      ) : (
-                        <div style={{ width: '40px', height: '40px', backgroundColor: '#e5e7eb', borderRadius: '4px' }}></div>
-                      )}
-                    </td>
-                    <td className="font-semibold">{product.name}</td>
-                    <td className="font-bold text-indigo-700">Rp {product.price.toLocaleString('id-ID')}</td>
-                    <td>{product.stock}</td>
-                    <td>
-                      <span style={{ background: '#EEF2FF', color: '#4F46E5', padding: '2px 8px', borderRadius: 99, fontSize: 12, fontWeight: 700 }}>
-                        {product.unit || 'pcs'}
-                      </span>
-                    </td>
-                    <td>
-                      {product.variants ? (
-                        <span style={{ background: '#EDE9FE', color: '#6D28D9', padding: '2px 8px', borderRadius: 99, fontSize: 12, fontWeight: 700 }}>
-                          🎨 {JSON.parse(product.variants).length} Varian
-                        </span>
-                      ) : product.wholesaleEnabled ? (
-                        <span style={{ background: '#FFF7ED', color: '#C2410C', padding: '2px 8px', borderRadius: 99, fontSize: 12, fontWeight: 700 }}>
-                          ✓ Grosir
-                        </span>
-                      ) : (
-                        <span style={{ color: '#9CA3AF', fontSize: 12 }}>—</span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })
-            ) : (
-              <tr>
-                <td colSpan="6" className="text-center p-4">Tidak ada data produk.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      {/* ── Stats Bar ── */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, overflowX: 'auto', paddingBottom: 2 }}>
+        {[
+          { label: 'Total', value: products.length, color: '#4F46E5', bg: '#EEF2FF' },
+          { label: 'Stok Habis', value: products.filter(p => p.stock === 0).length, color: '#DC2626', bg: '#FEE2E2' },
+          { label: 'Menipis', value: products.filter(p => p.stock > 0 && p.stock <= LOW_STOCK_THRESHOLD).length, color: '#D97706', bg: '#FEF3C7' },
+          { label: 'Varian', value: products.filter(p => p.variants).length, color: '#7C3AED', bg: '#EDE9FE' },
+        ].map(s => (
+          <div key={s.label} style={{ background: s.bg, borderRadius: 12, padding: '7px 14px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+            <span style={{ fontWeight: 900, fontSize: 16, color: s.color }}>{s.value}</span>
+            <span style={{ fontSize: 11, color: s.color, marginLeft: 5, fontWeight: 600 }}>{s.label}</span>
+          </div>
+        ))}
       </div>
+
+      {/* ── Product Cards ── */}
+      {filteredProducts.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '48px 0', color: '#94A3B8' }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>📦</div>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>Tidak ada produk</div>
+          <div style={{ fontSize: 13, marginTop: 4 }}>Coba ubah kata kunci pencarian</div>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+          {filteredProducts.map((product) => {
+            const margin = getMargin(product.price, product.costPrice);
+            const isLowStock = product.stock > 0 && product.stock <= LOW_STOCK_THRESHOLD;
+            const isOutStock = product.stock === 0;
+            const hasVariant = !!product.variants;
+            const hasWholesale = !!product.wholesaleEnabled;
+            return (
+              <div
+                key={product.id}
+                onClick={() => handleOpenModal(product, !isAdmin)}
+                style={{
+                  background: 'white', borderRadius: 18, overflow: 'hidden',
+                  boxShadow: '0 2px 10px rgba(0,0,0,0.07)',
+                  border: `1.5px solid ${isOutStock ? '#FCA5A5' : isLowStock ? '#FDE68A' : '#F1F5F9'}`,
+                  cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s',
+                  position: 'relative', display: 'flex', flexDirection: 'column',
+                }}
+                onTouchStart={e => e.currentTarget.style.transform = 'scale(0.98)'}
+                onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                {/* Image */}
+                <div style={{ width: '100%', aspectRatio: '1/1', background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
+                  {product.image
+                    ? <img src={product.image} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 8 }} />
+                    : <div style={{ fontSize: 36, opacity: 0.25 }}>📦</div>
+                  }
+                  {/* Top badges */}
+                  {hasVariant && (
+                    <div style={{ position: 'absolute', top: 7, left: 7, background: '#7C3AED', color: 'white', fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 99 }}>
+                      🎨 {(() => { try { return JSON.parse(product.variants).length; } catch { return '?'; } })()} Varian
+                    </div>
+                  )}
+                  {hasWholesale && !hasVariant && (
+                    <div style={{ position: 'absolute', top: 7, left: 7, background: '#C2410C', color: 'white', fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 99 }}>
+                      🏷️ Grosir
+                    </div>
+                  )}
+                  {isOutStock && (
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <span style={{ background: '#EF4444', color: 'white', fontWeight: 900, fontSize: 12, padding: '4px 12px', borderRadius: 99 }}>HABIS</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Body */}
+                <div style={{ padding: '10px 12px 12px', flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ fontWeight: 800, fontSize: 13, color: '#1E293B', lineHeight: 1.3, marginBottom: 2 }}>{product.name}</div>
+                  <div style={{ fontWeight: 900, fontSize: 15, color: '#4F46E5' }}>
+                    Rp {product.price.toLocaleString('id-ID')}
+                  </div>
+                  {margin !== null && (
+                    <div style={{ fontSize: 11, color: '#10B981', fontWeight: 700 }}>Margin {margin}%</div>
+                  )}
+
+                  {/* Stock + Unit row */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                    <span style={{
+                      fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
+                      background: isOutStock ? '#FEE2E2' : isLowStock ? '#FEF3C7' : '#DCFCE7',
+                      color: isOutStock ? '#DC2626' : isLowStock ? '#D97706' : '#16A34A',
+                    }}>
+                      {isOutStock ? '✕ Habis' : `${product.stock} ${product.unit || 'pcs'}`}
+                    </span>
+                    {!isOutStock && isLowStock && (
+                      <span style={{ fontSize: 10, color: '#D97706', fontWeight: 700 }}>⚠️ Menipis</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {isModalOpen && (
         <div className="modal-overlay">
