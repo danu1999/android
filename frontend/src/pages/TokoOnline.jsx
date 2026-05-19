@@ -2,12 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { ShoppingBag, Search, X, ZoomIn } from 'lucide-react';
 import api from '../api';
 
+const parseVariants = (p) => {
+  if (!p.variants) return [];
+  try {
+    const arr = typeof p.variants === 'string' ? JSON.parse(p.variants) : p.variants;
+    return Array.isArray(arr) ? arr.map((v, i) => ({ id: v.id ?? i, ...v })) : [];
+  } catch { return []; }
+};
+
 export default function TokoOnline() {
   const [products, setProducts] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
+  const [variantModal, setVariantModal] = useState(null);
+  const [waQueueModal, setWaQueueModal] = useState(false);
+  const [waQueueNum, setWaQueueNum] = useState('');
 
   const [lastUpdated, setLastUpdated] = useState(null);
 
@@ -44,49 +55,61 @@ export default function TokoOnline() {
   );
 
   const addToCart = (product) => {
-    if (product.stock < 1) {
-      alert('Maaf, stok produk habis.');
-      return;
-    }
-    const existing = cart.find(item => item.product.id === product.id);
-    if (existing) {
-      setCart(cart.map(item =>
-        item.product.id === product.id
-          ? { ...item, quantity: item.quantity + 1 }
-          : item
-      ));
-    } else {
-      setCart([...cart, { product, quantity: 1 }]);
-    }
+    const variants = parseVariants(product);
+    if (variants.length > 0) { setVariantModal({ ...product, _variants: variants }); return; }
+    if (product.stock < 1) { alert('Maaf, stok produk habis.'); return; }
+    const key = String(product.id);
+    setCart(prev => {
+      const ex = prev.find(i => i.cartKey === key);
+      if (ex) return prev.map(i => i.cartKey === key ? { ...i, quantity: i.quantity + 1 } : i);
+      return [...prev, { cartKey: key, product, variantId: null, variantName: null, variantPrice: null, quantity: 1 }];
+    });
   };
 
-  const removeFromCart = (productId) => {
-    setCart(cart.filter(item => item.product.id !== productId));
+  const addVariantToCart = (product, variant) => {
+    const stock = variant.stock !== null && variant.stock !== undefined ? variant.stock : product.stock;
+    if (stock < 1) { alert('Stok varian ini habis!'); return; }
+    const key = `${product.id}-v${variant.id}`;
+    setCart(prev => {
+      const ex = prev.find(i => i.cartKey === key);
+      if (ex) return prev.map(i => i.cartKey === key ? { ...i, quantity: i.quantity + 1 } : i);
+      return [...prev, { cartKey: key, product, variantId: variant.id, variantName: variant.name, variantPrice: variant.price || null, quantity: 1 }];
+    });
+    setVariantModal(null);
   };
 
-  const updateQuantity = (productId, delta) => {
+  const removeFromCart = (cartKey) => setCart(cart.filter(i => i.cartKey !== cartKey));
+
+  const updateQuantity = (cartKey, delta) => {
     setCart(cart.map(item => {
-      if (item.product.id === productId) {
-        const newQty = item.quantity + delta;
-        return newQty > 0 ? { ...item, quantity: newQty } : item;
-      }
-      return item;
+      if (item.cartKey !== cartKey) return item;
+      const newQty = item.quantity + delta;
+      return newQty > 0 ? { ...item, quantity: newQty } : item;
     }));
   };
 
-  const cartTotal = cart.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+  const getItemPrice = (item) => item.variantPrice || item.product.price;
+  const cartTotal = cart.reduce((sum, item) => sum + getItemPrice(item) * item.quantity, 0);
   const cartItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+  const sendWhatsApp = (queueNum) => {
+    let message = `Halo, saya ingin memesan dari katalog online:\n`;
+    if (queueNum) message += `*No. Antrian: ${queueNum}*\n`;
+    message += `\n`;
+    cart.forEach((item, index) => {
+      const price = getItemPrice(item);
+      const variantStr = item.variantName ? ` (${item.variantName})` : '';
+      message += `${index + 1}. ${item.product.name}${variantStr}\n   ${item.quantity} x Rp ${price.toLocaleString('id-ID')} = Rp ${(item.quantity * price).toLocaleString('id-ID')}\n`;
+    });
+    message += `\n*Total: Rp ${cartTotal.toLocaleString('id-ID')}*\n\nTerima kasih.`;
+    const waNumber = "6281234567890";
+    window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`, '_blank');
+    setWaQueueModal(false); setWaQueueNum('');
+  };
 
   const checkoutWhatsApp = () => {
     if (cart.length === 0) return;
-    let message = "Halo, saya ingin memesan dari katalog online:\n\n";
-    cart.forEach((item, index) => {
-      message += `${index + 1}. ${item.product.name}\n   ${item.quantity} x Rp ${item.product.price.toLocaleString('id-ID')} = Rp ${(item.quantity * item.product.price).toLocaleString('id-ID')}\n`;
-    });
-    message += `\n*Total Belanja: Rp ${cartTotal.toLocaleString('id-ID')}*\n\nTerima kasih.`;
-    const waNumber = "6281234567890";
-    const encodedMessage = encodeURIComponent(message);
-    window.open(`https://wa.me/${waNumber}?text=${encodedMessage}`, '_blank');
+    setWaQueueModal(true);
   };
 
   return (
@@ -255,34 +278,29 @@ export default function TokoOnline() {
                 <div style={{ color: '#4F46E5', fontWeight: 800, fontSize: 14, marginBottom: 6 }}>
                   Rp {product.price.toLocaleString('id-ID')}
                 </div>
-                {/* Stock badge */}
+                {/* Variant / Stock badge */}
                 <div style={{ marginBottom: 8 }}>
-                  {product.stock === 0 ? (
-                    <span style={{ fontSize: 11, fontWeight: 700, background: '#FEE2E2', color: '#DC2626', padding: '2px 8px', borderRadius: 99 }}>🚫 Stok Habis</span>
-                  ) : product.stock <= 5 ? (
-                    <span style={{ fontSize: 11, fontWeight: 700, background: '#FEF3C7', color: '#D97706', padding: '2px 8px', borderRadius: 99 }}>⚠️ Sisa {product.stock} {product.unit||'pcs'}</span>
-                  ) : (
-                    <span style={{ fontSize: 11, fontWeight: 700, background: '#DCFCE7', color: '#16A34A', padding: '2px 8px', borderRadius: 99 }}>✓ Tersedia {product.stock} {product.unit||'pcs'}</span>
-                  )}
+                  {(() => {
+                    const vars = parseVariants(product);
+                    if (vars.length > 0) return <span style={{ fontSize: 11, fontWeight: 700, background: '#EEF2FF', color: '#4F46E5', padding: '2px 8px', borderRadius: 99 }}>🎨 {vars.length} Varian</span>;
+                    if (product.stock === 0) return <span style={{ fontSize: 11, fontWeight: 700, background: '#FEE2E2', color: '#DC2626', padding: '2px 8px', borderRadius: 99 }}>🚫 Stok Habis</span>;
+                    if (product.stock <= 5) return <span style={{ fontSize: 11, fontWeight: 700, background: '#FEF3C7', color: '#D97706', padding: '2px 8px', borderRadius: 99 }}>⚠️ Sisa {product.stock} {product.unit||'pcs'}</span>;
+                    return <span style={{ fontSize: 11, fontWeight: 700, background: '#DCFCE7', color: '#16A34A', padding: '2px 8px', borderRadius: 99 }}>✓ Tersedia {product.stock} {product.unit||'pcs'}</span>;
+                  })()}
                 </div>
                 <button
                   onClick={() => addToCart(product)}
-                  disabled={product.stock < 1}
+                  disabled={product.stock < 1 && parseVariants(product).length === 0}
                   style={{
-                    width: '100%',
-                    padding: '7px 0',
-                    borderRadius: 10,
-                    border: 'none',
-                    fontWeight: 700,
-                    fontSize: 13,
-                    cursor: product.stock < 1 ? 'not-allowed' : 'pointer',
-                    background: product.stock < 1 ? '#F1F5F9' : '#EEF2FF',
-                    color: product.stock < 1 ? '#94A3B8' : '#4F46E5',
-                    transition: 'background 0.15s',
-                    marginTop: 'auto',
+                    width: '100%', padding: '7px 0', borderRadius: 10, border: 'none',
+                    fontWeight: 700, fontSize: 13,
+                    cursor: (product.stock < 1 && parseVariants(product).length === 0) ? 'not-allowed' : 'pointer',
+                    background: (product.stock < 1 && parseVariants(product).length === 0) ? '#F1F5F9' : '#EEF2FF',
+                    color: (product.stock < 1 && parseVariants(product).length === 0) ? '#94A3B8' : '#4F46E5',
+                    transition: 'background 0.15s', marginTop: 'auto',
                   }}
                 >
-                  + Keranjang
+                  {parseVariants(product).length > 0 ? 'Pilih Varian ›' : '+ Keranjang'}
                 </button>
               </div>
             </div>
@@ -384,7 +402,7 @@ export default function TokoOnline() {
                 <div style={{ textAlign: 'center', color: '#94A3B8', marginTop: 60 }}>Keranjang masih kosong.</div>
               ) : (
                 cart.map(item => (
-                  <div key={item.product.id} style={{
+                  <div key={item.cartKey} style={{
                     display: 'flex', alignItems: 'center', gap: 12,
                     borderBottom: '1px solid #F1F5F9', paddingBottom: 16, marginBottom: 16,
                   }}>
@@ -393,15 +411,18 @@ export default function TokoOnline() {
                       : <div style={{ width: 52, height: 52, background: '#F1F5F9', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ShoppingBag size={18} color="#CBD5E1" /></div>
                     }
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: '#1E293B' }}>{item.product.name}</div>
-                      <div style={{ color: '#4F46E5', fontWeight: 800, fontSize: 13 }}>Rp {item.product.price.toLocaleString('id-ID')}</div>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: '#1E293B' }}>
+                        {item.product.name}
+                        {item.variantName && <span style={{ marginLeft: 5, fontSize: 11, background: '#EEF2FF', color: '#4F46E5', padding: '1px 6px', borderRadius: 99, fontWeight: 700 }}>{item.variantName}</span>}
+                      </div>
+                      <div style={{ color: '#4F46E5', fontWeight: 800, fontSize: 13 }}>Rp {getItemPrice(item).toLocaleString('id-ID')}</div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#F8FAFC', borderRadius: 10, padding: '4px 8px' }}>
-                      <button onClick={() => updateQuantity(item.product.id, -1)} style={{ width: 24, height: 24, border: '1px solid #E2E8F0', borderRadius: 6, background: '#fff', cursor: 'pointer', fontWeight: 700 }}>-</button>
+                      <button onClick={() => updateQuantity(item.cartKey, -1)} style={{ width: 24, height: 24, border: '1px solid #E2E8F0', borderRadius: 6, background: '#fff', cursor: 'pointer', fontWeight: 700 }}>-</button>
                       <span style={{ fontWeight: 800, minWidth: 20, textAlign: 'center', fontSize: 14 }}>{item.quantity}</span>
-                      <button onClick={() => updateQuantity(item.product.id, 1)} style={{ width: 24, height: 24, border: '1px solid #E2E8F0', borderRadius: 6, background: '#fff', cursor: 'pointer', fontWeight: 700 }}>+</button>
+                      <button onClick={() => updateQuantity(item.cartKey, 1)} style={{ width: 24, height: 24, border: '1px solid #E2E8F0', borderRadius: 6, background: '#fff', cursor: 'pointer', fontWeight: 700 }}>+</button>
                     </div>
-                    <button onClick={() => removeFromCart(item.product.id)} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                    <button onClick={() => removeFromCart(item.cartKey)} style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
                       <X size={16} />
                     </button>
                   </div>
@@ -431,6 +452,55 @@ export default function TokoOnline() {
                 {cart.length > 0 ? '🛒 Pesan via WhatsApp' : 'Keranjang Kosong'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Variant Modal */}
+      {variantModal && (
+        <div onClick={() => setVariantModal(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(3px)', zIndex: 9999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'white', borderRadius: '20px 20px 0 0', padding: '20px 16px 32px', width: '100%', maxWidth: '480px', maxHeight: '70vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <div style={{ fontWeight: 900, fontSize: '1rem', color: '#111827' }}>Pilih Varian</div>
+              <button onClick={() => setVariantModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF' }}><X size={20} /></button>
+            </div>
+            <div style={{ fontSize: '0.82rem', color: '#6B7280', marginBottom: 14 }}>{variantModal.name}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {(variantModal._variants || []).map(v => {
+                const stock = v.stock !== null && v.stock !== undefined ? v.stock : variantModal.stock;
+                const price = v.price || variantModal.price;
+                const outOfStock = stock < 1;
+                return (
+                  <button key={v.id} onClick={() => !outOfStock && addVariantToCart(variantModal, v)} disabled={outOfStock}
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 16px', borderRadius: 14, border: `1.5px solid ${outOfStock ? '#F3F4F6' : '#E5E7EB'}`, background: outOfStock ? '#F9FAFB' : 'white', cursor: outOfStock ? 'not-allowed' : 'pointer', opacity: outOfStock ? 0.5 : 1, width: '100%', textAlign: 'left' }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.95rem', color: outOfStock ? '#9CA3AF' : '#111827' }}>{v.name}</div>
+                      <div style={{ fontSize: '0.75rem', color: outOfStock ? '#EF4444' : '#10B981', fontWeight: 600, marginTop: 2 }}>{outOfStock ? 'Stok Habis' : `Stok: ${stock}`}</div>
+                    </div>
+                    <div style={{ fontWeight: 800, fontSize: '1rem', color: '#4F46E5' }}>Rp {price.toLocaleString('id-ID')}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WA Queue Number Modal */}
+      {waQueueModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(3px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: 'white', borderRadius: 20, padding: '24px 20px', width: '100%', maxWidth: 360, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+            <div style={{ fontSize: '2rem', textAlign: 'center', marginBottom: 8 }}>🎫</div>
+            <h3 style={{ textAlign: 'center', margin: '0 0 6px', color: '#1E293B', fontWeight: 900 }}>No. Antrian</h3>
+            <p style={{ textAlign: 'center', fontSize: 13, color: '#64748B', marginBottom: 18 }}>Masukkan nomor antrian Anda (opsional)</p>
+            <input
+              type="number" min="1" placeholder="Contoh: 5"
+              value={waQueueNum}
+              onChange={e => setWaQueueNum(e.target.value)}
+              style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: '1.5px solid #E2E8F0', fontSize: 16, outline: 'none', boxSizing: 'border-box', textAlign: 'center', fontWeight: 700, marginBottom: 14 }}
+            />
+            <button onClick={() => sendWhatsApp(waQueueNum)} style={{ width: '100%', padding: '13px 0', borderRadius: 12, border: 'none', background: '#22C55E', color: 'white', fontWeight: 800, fontSize: 15, cursor: 'pointer', marginBottom: 8 }}>🛒 Kirim ke WhatsApp</button>
+            <button onClick={() => { setWaQueueModal(false); setWaQueueNum(''); }} style={{ width: '100%', padding: '11px 0', borderRadius: 12, border: '1.5px solid #E2E8F0', background: 'white', color: '#64748B', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Batal</button>
           </div>
         </div>
       )}
