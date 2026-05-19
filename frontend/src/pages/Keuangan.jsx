@@ -119,43 +119,25 @@ export default function Keuangan() {
   };
 
   const renderTabs = () => (
-    <div className="flex gap-4 mb-6 border-b border-gray-200 pb-2" style={{ overflowX: 'auto', whiteSpace: 'nowrap', WebkitOverflowScrolling: 'touch' }}>
-      <button
-        className={`font-semibold pb-2 ${activeTab === 'REKAP' ? 'text-primary border-b-2 border-primary' : 'text-gray-500'}`}
-        onClick={() => setActiveTab('REKAP')}
-      >
-        Rekap Laporan
-      </button>
-      <button
-        className={`font-semibold pb-2 ${activeTab === 'SALES' ? 'text-primary border-b-2 border-primary' : 'text-gray-500'}`}
-        onClick={() => setActiveTab('SALES')}
-      >
-        Riwayat Transaksi
-      </button>
-      <button
-        className={`font-semibold pb-2 ${activeTab === 'EXPENSE' ? 'text-primary border-b-2 border-primary' : 'text-gray-500'}`}
-        onClick={() => setActiveTab('EXPENSE')}
-      >
-        Pengeluaran Usaha
-      </button>
-      <button
-        className={`font-semibold pb-2 ${activeTab === 'MARGIN' ? 'text-primary border-b-2 border-primary' : 'text-gray-500'}`}
-        onClick={() => setActiveTab('MARGIN')}
-      >
-        Analisis Margin
-      </button>
-      <button
-        className={`font-semibold pb-2 ${activeTab === 'PAYABLE' ? 'text-primary border-b-2 border-primary' : 'text-gray-500'}`}
-        onClick={() => setActiveTab('PAYABLE')}
-      >
-        Hutang
-      </button>
-      <button
-        className={`font-semibold pb-2 ${activeTab === 'RECEIVABLE' ? 'text-primary border-b-2 border-primary' : 'text-gray-500'}`}
-        onClick={() => setActiveTab('RECEIVABLE')}
-      >
-        Piutang
-      </button>
+    <div style={{ display: 'flex', gap: 8, overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: 4, marginBottom: 16, scrollbarWidth: 'none' }}>
+      {[
+        { id: 'REKAP', label: '📊 Rekap' },
+        { id: 'SALES', label: '🛒 Transaksi' },
+        { id: 'EXPENSE', label: '💸 Pengeluaran' },
+        { id: 'MARGIN', label: '📈 Margin' },
+        { id: 'PAYABLE', label: '🔴 Hutang' },
+        { id: 'RECEIVABLE', label: '🟢 Piutang' },
+      ].map(tab => (
+        <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+          padding: '9px 18px', borderRadius: 99, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+          fontWeight: 700, fontSize: 13, flexShrink: 0, transition: 'all 0.2s',
+          background: activeTab === tab.id ? 'linear-gradient(135deg,#6366F1,#4F46E5)' : '#F1F5F9',
+          color: activeTab === tab.id ? 'white' : '#64748B',
+          boxShadow: activeTab === tab.id ? '0 4px 12px rgba(99,102,241,0.3)' : 'none',
+        }}>
+          {tab.label}{PREMIUM_TABS.includes(tab.id) && !isPremium ? ' 🔒' : ''}
+        </button>
+      ))}
     </div>
   );
 
@@ -267,76 +249,54 @@ export default function Keuangan() {
           </div>
         </div>
 
-        {/* ── Tabel Produk ──────────────────────────────────────── */}
-        <div className="glass-panel" style={{ overflow: 'hidden', borderRadius: 16 }}>
-          <div style={{ padding: '14px 20px', borderBottom: '1px solid #F3F4F6', background: '#FAFAFA', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontWeight: 800, fontSize: 15, color: '#111827' }}>Detail Per Produk</span>
-            <span style={{ fontSize: 12, color: '#9CA3AF' }}>Diurutkan: margin tertinggi → terendah</span>
-          </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table className="data-table" style={{ minWidth: 680 }}>
-              <thead>
-                <tr>
-                  <th>Nama Produk</th>
-                  <th>Harga Jual</th>
-                  <th>Harga Modal</th>
-                  <th>Profit/item</th>
-                  <th style={{ minWidth: 160 }}>Margin %</th>
-                  <th>Stok</th>
-                  <th>Potensi Profit</th>
-                </tr>
-              </thead>
-              <tbody>
-                {allProducts.length > 0 ? allProducts.map(p => {
-                  const hasCost = p.costPrice > 0;
-                  const margin = hasCost ? ((p.price - p.costPrice) / p.price) * 100 : null;
-                  const marginRound = margin !== null ? Math.round(margin) : null;
-                  const profitPerItem = hasCost ? p.price - p.costPrice : null;
-                  const potentialProfit = profitPerItem !== null ? profitPerItem * p.stock : null;
-
-                  const barColor = marginRound >= 20 ? '#10B981' : marginRound >= 10 ? '#F59E0B' : '#EF4444';
-                  const barPct = marginRound !== null ? Math.min((marginRound / maxMargin) * 100, 100) : 0;
-
-                  return (
-                    <tr key={p.id} style={{ opacity: hasCost ? 1 : 0.5 }}>
-                      <td className="font-semibold">{p.name}</td>
-                      <td className="text-indigo-700 font-bold">Rp {p.price.toLocaleString('id-ID')}</td>
-                      <td className="text-gray-500">
-                        {hasCost ? `Rp ${p.costPrice.toLocaleString('id-ID')}` : <span style={{ color: '#D1D5DB', fontSize: 12 }}>Belum diisi</span>}
-                      </td>
-                      <td style={{ color: hasCost ? '#059669' : '#D1D5DB', fontWeight: 600 }}>
-                        {profitPerItem !== null ? `Rp ${profitPerItem.toLocaleString('id-ID')}` : '—'}
-                      </td>
-                      <td>
-                        {marginRound !== null ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ flex: 1, height: 6, background: '#F3F4F6', borderRadius: 99, overflow: 'hidden', minWidth: 60 }}>
-                              <div style={{ width: `${barPct}%`, height: '100%', background: barColor, borderRadius: 99, transition: 'width 0.5s' }} />
-                            </div>
-                            <span style={{
-                              background: marginRound >= 20 ? '#D1FAE5' : marginRound >= 10 ? '#FEF3C7' : '#FEE2E2',
-                              color: marginRound >= 20 ? '#065F46' : marginRound >= 10 ? '#78350F' : '#7F1D1D',
-                              padding: '2px 8px', borderRadius: 99, fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap'
-                            }}>{marginRound}%</span>
-                          </div>
-                        ) : <span style={{ color: '#D1D5DB', fontSize: 12 }}>—</span>}
-                      </td>
-                      <td>{p.stock} <span style={{ color: '#9CA3AF', fontSize: 12 }}>{p.unit}</span></td>
-                      <td style={{ fontWeight: 700, color: potentialProfit > 0 ? '#059669' : '#D1D5DB' }}>
-                        {potentialProfit !== null ? `Rp ${potentialProfit.toLocaleString('id-ID')}` : '—'}
-                      </td>
-                    </tr>
-                  );
-                }) : (
-                  <tr><td colSpan="7" className="text-center p-4">Belum ada data produk.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      {/* Card list per produk */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {allProducts.length === 0
+          ? <div style={{ textAlign: 'center', padding: '32px', color: '#94A3B8' }}>Belum ada data produk.</div>
+          : allProducts.map(p => {
+              const hasCost = p.costPrice > 0;
+              const margin = hasCost ? Math.round(((p.price - p.costPrice) / p.price) * 100) : null;
+              const profitPerItem = hasCost ? p.price - p.costPrice : null;
+              const potentialProfit = profitPerItem !== null ? profitPerItem * p.stock : null;
+              const badgeBg = margin >= 20 ? '#D1FAE5' : margin >= 10 ? '#FEF3C7' : '#FEE2E2';
+              const badgeColor = margin >= 20 ? '#065F46' : margin >= 10 ? '#78350F' : '#7F1D1D';
+              const barColor = margin >= 20 ? '#10B981' : margin >= 10 ? '#F59E0B' : '#EF4444';
+              const hasVariant = !!p.variants;
+              const hasWholesale = !!p.wholesaleEnabled;
+              return (
+                <div key={p.id} style={{ background: 'white', borderRadius: 14, padding: '12px 14px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', border: '1.5px solid #F1F5F9', opacity: hasCost ? 1 : 0.55 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span style={{ fontWeight: 800, fontSize: 14, color: '#1E293B' }}>{p.name}</span>
+                        {hasVariant && <span style={{ fontSize: 10, fontWeight: 800, background: '#EDE9FE', color: '#6D28D9', padding: '1px 6px', borderRadius: 99 }}>🎨 Varian</span>}
+                        {hasWholesale && <span style={{ fontSize: 10, fontWeight: 800, background: '#FFF7ED', color: '#C2410C', padding: '1px 6px', borderRadius: 99 }}>🏷️ Grosir</span>}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#6B7280', marginTop: 3 }}>
+                        Jual: Rp {p.price.toLocaleString('id-ID')} · Modal: {hasCost ? `Rp ${p.costPrice.toLocaleString('id-ID')}` : <span style={{ color: '#D1D5DB' }}>Belum diisi</span>}
+                      </div>
+                      {profitPerItem !== null && <div style={{ fontSize: 12, color: '#059669', fontWeight: 700, marginTop: 2 }}>+Rp {profitPerItem.toLocaleString('id-ID')}/item · Stok: {p.stock} {p.unit || 'pcs'}</div>}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+                      {margin !== null
+                        ? <span style={{ fontSize: 13, fontWeight: 900, padding: '3px 10px', borderRadius: 99, background: badgeBg, color: badgeColor }}>{margin}%</span>
+                        : <span style={{ fontSize: 12, color: '#D1D5DB' }}>—</span>}
+                      {potentialProfit !== null && <div style={{ fontSize: 11, color: '#7C3AED', fontWeight: 700 }}>Rp {potentialProfit.toLocaleString('id-ID')}</div>}
+                    </div>
+                  </div>
+                  {margin !== null && (
+                    <div style={{ marginTop: 8, height: 5, background: '#F3F4F6', borderRadius: 99, overflow: 'hidden' }}>
+                      <div style={{ width: `${Math.min((margin / maxMargin) * 100, 100)}%`, height: '100%', background: barColor, borderRadius: 99 }} />
+                    </div>
+                  )}
+                </div>
+              );
+            })
+        }
       </div>
-    );
-  };
+    </div>
+  );
+};
 
   const renderRekap = () => {
     if (!reports) return <p>Loading...</p>;
@@ -349,47 +309,29 @@ export default function Keuangan() {
     return (
       <div>
         {/* Filter Tanggal */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap', background: '#F8FAFC', padding: '12px 16px', borderRadius: 12, border: '1px solid #E2E8F0' }}>
-          <span style={{ fontWeight: 700, fontSize: 13, color: '#475569' }}>📅 Filter Periode:</span>
-          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13 }} />
-          <span style={{ color: '#94A3B8' }}>s/d</span>
-          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ padding: '6px 10px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13 }} />
-          {(dateFrom || dateTo) && (
-            <button onClick={() => { setDateFrom(''); setDateTo(''); }} style={{ padding: '6px 12px', background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer', fontSize: 12 }}>✕ Reset</button>
-          )}
-          <span style={{ fontSize: 12, color: '#64748B', marginLeft: 'auto' }}>{filterInfo}</span>
-        </div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', background: '#F8FAFC', padding: '12px', borderRadius: 14, border: '1px solid #E2E8F0' }}>
+        <span style={{ fontWeight: 700, fontSize: 13, color: '#475569', width: '100%' }}>📅 Filter Periode</span>
+        <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ flex: 1, minWidth: 130, padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 10, fontSize: 13 }} />
+        <span style={{ alignSelf: 'center', color: '#94A3B8' }}>–</span>
+        <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ flex: 1, minWidth: 130, padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 10, fontSize: 13 }} />
+        {(dateFrom || dateTo) && <button onClick={() => { setDateFrom(''); setDateTo(''); }} style={{ padding: '8px 12px', background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 12 }}>✕ Reset</button>}
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-          <div className="glass-panel p-6 flex items-center gap-4 border-l-4 border-blue-500">
-            <TrendingUp size={40} className="text-blue-500" />
-            <div>
-              <div className="text-gray-500 text-sm font-semibold">Total Penjualan</div>
-              <div className="text-2xl font-bold">Rp {reports.totalSales.toLocaleString('id-ID')}</div>
-            </div>
+      {/* Stat cards 2×2 */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
+        {[
+          { icon: '📈', label: 'Total Penjualan', value: reports.totalSales, color: '#3B82F6', bg: '#EFF6FF', border: '#BFDBFE' },
+          { icon: '💸', label: 'Pengeluaran', value: reports.totalExpenses, color: '#EF4444', bg: '#FEF2F2', border: '#FECACA' },
+          { icon: '💰', label: 'Pendapatan Bersih', value: reports.netIncome, color: reports.netIncome >= 0 ? '#10B981' : '#EF4444', bg: reports.netIncome >= 0 ? '#F0FDF4' : '#FEF2F2', border: reports.netIncome >= 0 ? '#A7F3D0' : '#FECACA' },
+          { icon: '⏳', label: 'Piutang Pending', value: reports.pendingReceivables, color: '#F59E0B', bg: '#FFFBEB', border: '#FDE68A' },
+        ].map(s => (
+          <div key={s.label} style={{ background: s.bg, border: `1.5px solid ${s.border}`, borderRadius: 16, padding: '14px 14px' }}>
+            <div style={{ fontSize: 20, marginBottom: 4 }}>{s.icon}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: s.color, opacity: 0.8, marginBottom: 4 }}>{s.label}</div>
+            <div style={{ fontSize: 16, fontWeight: 900, color: s.color, lineHeight: 1.2 }}>Rp {s.value.toLocaleString('id-ID')}</div>
           </div>
-          <div className="glass-panel p-6 flex items-center gap-4 border-l-4 border-red-500">
-            <ArrowDownCircle size={40} className="text-red-500" />
-            <div>
-              <div className="text-gray-500 text-sm font-semibold">Total Pengeluaran</div>
-              <div className="text-2xl font-bold">Rp {reports.totalExpenses.toLocaleString('id-ID')}</div>
-            </div>
-          </div>
-          <div className="glass-panel p-6 flex items-center gap-4 border-l-4 border-green-500">
-            <CreditCard size={40} className="text-green-500" />
-            <div>
-              <div className="text-gray-500 text-sm font-semibold">Pendapatan Bersih (Net)</div>
-              <div className="text-2xl font-bold">Rp {reports.netIncome.toLocaleString('id-ID')}</div>
-            </div>
-          </div>
-          <div className="glass-panel p-6 flex items-center gap-4 border-l-4 border-yellow-500">
-            <ArrowUpCircle size={40} className="text-yellow-500" />
-            <div>
-              <div className="text-gray-500 text-sm font-semibold">Piutang Tertunda</div>
-              <div className="text-2xl font-bold">Rp {reports.pendingReceivables.toLocaleString('id-ID')}</div>
-            </div>
-          </div>
-        </div>
+        ))}
+      </div>
       </div>
     );
   };
@@ -629,28 +571,73 @@ export default function Keuangan() {
     </div>
   );
 
+  const renderTabs = () => (
+    <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 12, marginBottom: 16, scrollbarWidth: 'none' }}>
+      {['REKAP', 'SALES', 'EXPENSE', 'PAYABLE', 'RECEIVABLE', 'MARGIN'].map(tab => (
+        <button
+          key={tab}
+          onClick={() => setActiveTab(tab)}
+          style={{
+            whiteSpace: 'nowrap',
+            padding: '8px 16px',
+            borderRadius: 20,
+            border: 'none',
+            fontWeight: 600,
+            fontSize: '0.85rem',
+            background: activeTab === tab ? '#4F46E5' : '#F3F4F6',
+            color: activeTab === tab ? 'white' : '#4B5563',
+            cursor: 'pointer'
+          }}
+        >
+          {tab === 'REKAP' ? '📊 Rekap' : tab === 'SALES' ? '💰 Penjualan' : tab === 'EXPENSE' ? '📉 Pengeluaran' : tab === 'PAYABLE' ? '💳 Hutang' : tab === 'RECEIVABLE' ? '📑 Piutang' : '📈 Margin'}
+        </button>
+      ))}
+    </div>
+  );
+
+  const renderCards = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {finances.length > 0 ? (
+        finances.map(item => (
+          <div key={item.id} className="glass-panel" onClick={() => handleOpenModal(item)} style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}>
+            <div>
+              <div style={{ fontSize: '0.75rem', color: '#9CA3AF' }}>{new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+              <div style={{ fontWeight: 700 }}>{item.description || item.receiptNumber || `#${item.id}`}</div>
+              {item.type && <div style={{ fontSize: '0.75rem', color: '#6B7280' }}>{item.type}</div>}
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontWeight: 800, color: '#1F2937' }}>Rp {Number(item.amount || item.total || 0).toLocaleString('id-ID')}</div>
+              {item.status && (
+                <span style={{ fontSize: '0.65rem', padding: '2px 8px', borderRadius: 10, background: item.status === 'PAID' ? '#DCFCE7' : '#FEF9C3', color: item.status === 'PAID' ? '#166534' : '#854D0E' }}>
+                  {item.status}
+                </span>
+              )}
+            </div>
+          </div>
+        ))
+      ) : (
+        <div style={{ textAlign: 'center', padding: '40px', color: '#9CA3AF' }}>Tidak ada data.</div>
+      )}
+    </div>
+  );
+
   return (
     <div className="page-container">
-      <div className="header-actions">
-        <h1>Keuangan & Laporan</h1>
-        <div className="flex gap-2 flex-wrap">
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 12 }}>
+        <h1 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 900, color: '#1E293B' }}>Keuangan &amp; Laporan</h1>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
           {isPremium ? (
             <>
-              <button className="btn btn-secondary" onClick={handleExportExcel}>
-                📊 Excel (CSV)
-              </button>
-              <button className="btn btn-secondary" onClick={handleExportPDF}>
-                🖨️ Cetak PDF
-              </button>
+              <button title="Export CSV" onClick={handleExportExcel} style={{ padding: '8px 12px', borderRadius: 12, border: '1.5px solid #E5E7EB', background: 'white', cursor: 'pointer', fontSize: 16 }}>📊</button>
+              <button title="Cetak PDF" onClick={handleExportPDF} style={{ padding: '8px 12px', borderRadius: 12, border: '1.5px solid #E5E7EB', background: 'white', cursor: 'pointer', fontSize: 16 }}>🖨️</button>
             </>
           ) : (
-            <button className="btn btn-secondary" style={{ opacity: 0.5, cursor: 'not-allowed', display: 'flex', alignItems: 'center', gap: 6 }} title="Fitur Premium" disabled>
-              🔒 Export (Premium)
-            </button>
+            <button disabled title="Export (Premium)" style={{ padding: '8px 12px', borderRadius: 12, border: '1.5px solid #E5E7EB', background: '#F9FAFB', opacity: 0.6, cursor: 'not-allowed', fontSize: 16 }}>🔒</button>
           )}
           {activeTab !== 'REKAP' && activeTab !== 'SALES' && activeTab !== 'MARGIN' && !isLockedTab && (
-            <button className="btn btn-primary" onClick={() => handleOpenModal()}>
-              <Plus size={18} /> Tambah {activeTab === 'EXPENSE' ? 'Pengeluaran' : activeTab === 'PAYABLE' ? 'Hutang' : 'Piutang'}
+            <button onClick={() => handleOpenModal()} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 14px', background: 'linear-gradient(135deg,#6366F1,#4F46E5)', color: 'white', border: 'none', borderRadius: 12, fontWeight: 800, fontSize: 13, cursor: 'pointer', boxShadow: '0 4px 12px rgba(99,102,241,0.3)' }}>
+              <Plus size={16} /> Tambah
             </button>
           )}
         </div>
