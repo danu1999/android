@@ -44,7 +44,9 @@ export default function Kasir() {
   const [isBackdate, setIsBackdate] = useState(false);
   const [txDate, setTxDate] = useState('');
   const [demoTxCount, setDemoTxCount] = useState(0);
-  const [variantModal, setVariantModal] = useState(null); // product with variants
+  const [variantModal, setVariantModal] = useState(null);
+  const [lastCart, setLastCart] = useState([]);       // snapshot cart saat checkout untuk print
+  const [queueToPrint, setQueueToPrint] = useState(null); // antrian yang baru dibayar → print
 
   useEffect(() => { 
     fetchProducts(); 
@@ -151,6 +153,7 @@ export default function Kasir() {
       else alert('Ditambahkan ke antrian!');
       if (isDemo) setDemoTxCount(c => c + 1);
 
+      setLastCart([...cart]); // simpan snapshot cart untuk print varian
       setCart([]); setGlobalDiscount(0); setCustomerId(''); setCustomerName(''); setQueueNumber(''); setNotes('');
       setPayModal(false); setCartOpen(false); fetchProducts(); fetchActiveQueues();
     } catch { alert('Transaksi gagal'); }
@@ -196,23 +199,71 @@ export default function Kasir() {
         setDebtTransactionId(null);
         setDebtDueDate('');
       } else {
+        const t = queues.find(q => q.id === id);
         await api.put(`/transactions/${id}`, { status: 'COMPLETED', paymentMethod: method });
-        alert('Pembayaran berhasil!'); 
+        setQueueModal(false);
+        setQueueToPrint({ ...t, paymentMethod: method }); // buka struk
       }
-      setQueueModal(false);
+      if (queues.find(q => q.id === id) && !['CASH','QRIS'].includes(method)) setQueueModal(false);
     } catch { alert('Gagal memproses pembayaran'); }
   };
 
+  // Cari nama varian dari produk berdasarkan harga item
+  const findVariantName = (product, price) => {
+    const vars = parseVariants(product);
+    if (!vars.length) return null;
+    const matched = vars.find(v => v.price != null && Math.abs(Number(v.price) - Number(price)) < 0.01);
+    return matched?.name || null;
+  };
+
+  const RECEIPT_STYLE = (size) =>
+    `body{font-family:monospace;width:${size};margin:0 auto;padding:10px;font-size:12px}` +
+    `.c{text-align:center}.b{font-weight:bold}.r{text-align:right}hr{border-top:1px dashed #000}` +
+    `td{vertical-align:top;padding:1px 2px}`;
+
   const printReceipt = (size) => {
     const w = window.open('', '_blank');
-    w.document.write(`<html><head><style>body{font-family:monospace;width:${size};margin:0 auto;padding:10px;font-size:12px}.c{text-align:center}.b{font-weight:bold}.r{text-align:right}hr{border-top:1px dashed #000}</style></head><body>
-      <div class="c b" style="font-size:16px">POSBah</div><div class="c">Struk Pembayaran</div><hr>
-      <div>No: ${receipt?.receiptNumber}</div><div>Metode: ${receipt?.paymentMethod}</div><hr>
-      <table width="100%">${receipt?.items.map(item => {
+    const qLine = receipt?.queueNumber ? `<div class="b" style="font-size:14px">No. Antrian: ${receipt.queueNumber}</div>` : '';
+    const cLine = receipt?.customerName ? `<div>Pelanggan: ${receipt.customerName}</div>` : '';
+    const itemsHtml = (receipt?.items || []).map((item, idx) => {
       const prod = products.find(p => p.id === item.productId);
-      return `<tr><td colspan="3">${prod?.name || 'Item'}</td></tr><tr><td>${item.quantity}x</td><td>Rp${item.price}</td><td class="r">Rp${item.quantity * item.price}</td></tr>`;
-    }).join('')}</table><hr>
-      <table width="100%"><tr><td class="b">TOTAL</td><td class="r b">Rp${receipt?.total}</td></tr></table><hr>
+      const prodName = prod?.name || 'Item';
+      const variantName = lastCart[idx]?.variantName || findVariantName(prod, item.price);
+      const name = variantName ? `${prodName} <b>(${variantName})</b>` : prodName;
+      const disc = item.discount > 0 ? ` <small>-Rp${Number(item.discount).toLocaleString('id-ID')}</small>` : '';
+      const subtotal = item.quantity * item.price - (item.discount || 0);
+      return `<tr><td colspan="3">${name}</td></tr><tr><td>${item.quantity}x</td><td>Rp${Number(item.price).toLocaleString('id-ID')}${disc}</td><td class="r">Rp${subtotal.toLocaleString('id-ID')}</td></tr>`;
+    }).join('');
+    const discRow = receipt?.discount > 0 ? `<tr><td colspan="2">Diskon Global</td><td class="r">-Rp${Number(receipt.discount).toLocaleString('id-ID')}</td></tr>` : '';
+    w.document.write(`<html><head><style>${RECEIPT_STYLE(size)}</style></head><body>
+      <div class="c b" style="font-size:16px">POSBah</div><div class="c">Struk Pembayaran</div><hr>
+      <div>No: ${receipt?.receiptNumber}</div><div>Metode: ${receipt?.paymentMethod}</div>${qLine}${cLine}<hr>
+      <table width="100%">${itemsHtml}</table><hr>
+      <table width="100%">${discRow}<tr><td class="b">TOTAL</td><td class="r b" colspan="2">Rp${Number(receipt?.total).toLocaleString('id-ID')}</td></tr></table><hr>
+      <div class="c">Terima Kasih!</div>
+      <script>window.print();window.onafterprint=()=>window.close()</script></body></html>`);
+    w.document.close();
+  };
+
+  const printQueueReceipt = (t, size) => {
+    const w = window.open('', '_blank');
+    const qLine = t.queueNumber ? `<div class="b" style="font-size:14px">No. Antrian: ${t.queueNumber}</div>` : '';
+    const cLine = t.customerName ? `<div>Pelanggan: ${t.customerName}</div>` : '';
+    const notesLine = t.notes ? `<div>Catatan: ${t.notes}</div>` : '';
+    const itemsHtml = (t.items || []).map(item => {
+      const prod = item.product;
+      const prodName = prod?.name || 'Item';
+      const variantName = findVariantName(prod, item.price);
+      const name = variantName ? `${prodName} <b>(${variantName})</b>` : prodName;
+      const disc = item.discount > 0 ? ` <small>-Rp${Number(item.discount).toLocaleString('id-ID')}</small>` : '';
+      const subtotal = item.quantity * item.price - (item.discount || 0);
+      return `<tr><td colspan="3">${name}</td></tr><tr><td>${item.quantity}x</td><td>Rp${Number(item.price).toLocaleString('id-ID')}${disc}</td><td class="r">Rp${subtotal.toLocaleString('id-ID')}</td></tr>`;
+    }).join('');
+    w.document.write(`<html><head><style>${RECEIPT_STYLE(size)}</style></head><body>
+      <div class="c b" style="font-size:16px">POSBah</div><div class="c">Struk Pembayaran</div><hr>
+      <div>No: ${t.receiptNumber}</div><div>Metode: ${t.paymentMethod}</div>${qLine}${cLine}${notesLine}<hr>
+      <table width="100%">${itemsHtml}</table><hr>
+      <table width="100%"><tr><td class="b">TOTAL</td><td class="r b" colspan="2">Rp${Number(t.total).toLocaleString('id-ID')}</td></tr></table><hr>
       <div class="c">Terima Kasih!</div>
       <script>window.print();window.onafterprint=()=>window.close()</script></body></html>`);
     w.document.close();
@@ -462,7 +513,7 @@ export default function Kasir() {
         </div>
       )}
 
-      {/* Receipt Modal */}
+      {/* Receipt Modal — Direct Checkout */}
       {receipt && (
         <div className="modal-overlay">
           <div className="modal-content glass-panel text-center">
@@ -473,6 +524,25 @@ export default function Kasir() {
               <button style={S.btnPrimary} onClick={() => printReceipt('58mm')}><Printer size={16} style={{ marginRight: 8 }} />Cetak Struk 58mm</button>
               <button style={S.btnPrimary} onClick={() => printReceipt('80mm')}><Printer size={16} style={{ marginRight: 8 }} />Cetak Struk 80mm</button>
               <button style={S.btnSecondary} onClick={() => setReceipt(null)}>Tutup</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Receipt Modal — Queue Payment */}
+      {queueToPrint && (
+        <div className="modal-overlay">
+          <div className="modal-content glass-panel text-center">
+            <div style={{ fontSize: '3rem', marginBottom: '8px' }}>✅</div>
+            <h2 style={{ color: '#16A34A', margin: '0 0 4px' }}>Pembayaran Berhasil!</h2>
+            <p style={{ color: '#6B7280', fontSize: '0.85rem', marginBottom: '4px' }}>
+              {queueToPrint.queueNumber && <><b>Antrian #{queueToPrint.queueNumber}</b> &middot; </>}{queueToPrint.receiptNumber}
+            </p>
+            <p style={{ color: '#6B7280', fontSize: '0.82rem', marginBottom: '20px' }}>Metode: {queueToPrint.paymentMethod}</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button style={S.btnPrimary} onClick={() => printQueueReceipt(queueToPrint, '58mm')}><Printer size={16} style={{ marginRight: 8 }} />Cetak Struk 58mm</button>
+              <button style={S.btnPrimary} onClick={() => printQueueReceipt(queueToPrint, '80mm')}><Printer size={16} style={{ marginRight: 8 }} />Cetak Struk 80mm</button>
+              <button style={S.btnSecondary} onClick={() => setQueueToPrint(null)}>Tutup</button>
             </div>
           </div>
         </div>
