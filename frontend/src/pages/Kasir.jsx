@@ -113,6 +113,20 @@ export default function Kasir() {
     setVariantModal(null);
   };
 
+  const addOriginalToCart = (product) => {
+    if (product.stock < 1) { alert('Stok produk habis!'); return; }
+    const key = String(product.id);
+    setCart(prev => {
+      const ex = prev.find(i => i.cartKey === key);
+      if (ex) {
+        if (ex.quantity >= product.stock) { alert('Stok tidak cukup!'); return prev; }
+        return prev.map(i => i.cartKey === key ? { ...i, quantity: i.quantity + 1 } : i);
+      }
+      return [...prev, { cartKey: key, product, variantId: null, variantName: null, variantPrice: null, quantity: 1, discount: 0 }];
+    });
+    setVariantModal(null);
+  };
+
   const updateQty = (cartKey, delta) => setCart(prev => prev.map(i => {
     if (i.cartKey !== cartKey) return i;
     const nq = i.quantity + delta;
@@ -612,6 +626,19 @@ export default function Kasir() {
             </div>
             <div style={{ fontSize: '0.82rem', color: '#6B7280', marginBottom: 14 }}>{variantModal.name}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {/* Opsi Original (Tanpa Varian) */}
+              <button
+                onClick={() => addOriginalToCart(variantModal)}
+                disabled={variantModal.stock < 1}
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 16px', borderRadius: 14, border: `2px dashed ${variantModal.stock < 1 ? '#F3F4F6' : '#C7D2FE'}`, background: variantModal.stock < 1 ? '#F9FAFB' : '#F5F3FF', cursor: variantModal.stock < 1 ? 'not-allowed' : 'pointer', opacity: variantModal.stock < 1 ? 0.5 : 1, width: '100%', textAlign: 'left' }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.95rem', color: variantModal.stock < 1 ? '#9CA3AF' : '#4F46E5' }}>Original (Tanpa Varian)</div>
+                  <div style={{ fontSize: '0.75rem', color: variantModal.stock < 1 ? '#EF4444' : '#6B7280', fontWeight: 600, marginTop: 2 }}>{variantModal.stock < 1 ? 'Stok Habis' : `Stok: ${variantModal.stock}`}</div>
+                </div>
+                <div style={{ fontWeight: 800, fontSize: '1rem', color: '#4F46E5' }}>Rp {variantModal.price.toLocaleString('id-ID')}</div>
+              </button>
+
+              {/* Daftar Varian */}
               {(variantModal._variants || []).map(v => {
                 const stock = v.stock !== null && v.stock !== undefined ? v.stock : variantModal.stock;
                 const price = v.price || variantModal.price;
