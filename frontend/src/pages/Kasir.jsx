@@ -12,6 +12,15 @@ const getEffectivePrice = (product, quantity) => {
   } catch { return product.price; }
 };
 
+// Parse variants JSON string from DB → array (add id fallback using index)
+const parseVariants = (p) => {
+  if (!p.variants) return [];
+  try {
+    const arr = typeof p.variants === 'string' ? JSON.parse(p.variants) : p.variants;
+    return Array.isArray(arr) ? arr.map((v, i) => ({ id: v.id ?? i, ...v })) : [];
+  } catch { return []; }
+};
+
 export default function Kasir() {
   const { showDemoBlock, isDemo } = useDemoBlock();
   const [products, setProducts] = useState([]);
@@ -71,8 +80,9 @@ export default function Kasir() {
   };
 
   const addToCart = (p) => {
-    if (p.variantEnabled && p.variants && p.variants.length > 0) {
-      setVariantModal(p); return;
+    const variants = parseVariants(p);
+    if (variants.length > 0) {
+      setVariantModal({ ...p, _variants: variants }); return;
     }
     if (p.stock < 1) { alert('Stok habis!'); return; }
     const key = String(p.id);
@@ -106,7 +116,7 @@ export default function Kasir() {
     const nq = i.quantity + delta;
     if (nq < 1) return i;
     const maxStock = i.variantId
-      ? (i.product.variants?.find(v => v.id === i.variantId)?.stock ?? i.product.stock)
+      ? (parseVariants(i.product).find(v => v.id === i.variantId)?.stock ?? i.product.stock)
       : i.product.stock;
     if (nq > maxStock) return i;
     return { ...i, quantity: nq };
@@ -261,13 +271,13 @@ export default function Kasir() {
           <div key={p.id} className="card" onClick={() => addToCart(p)}>
 
             {/* Badge varian */}
-            {p.variantEnabled && p.variants?.length > 0 && (
-              <div style={{ position: 'absolute', top: 8, left: 8, background: '#4F46E5', color: 'white', padding: '2px 8px', borderRadius: 6, fontSize: '10px', fontWeight: 700, zIndex: 10 }}>{p.variants.length} Varian</div>
+            {parseVariants(p).length > 0 && (
+              <div style={{ position: 'absolute', top: 8, left: 8, background: '#4F46E5', color: 'white', padding: '2px 8px', borderRadius: 6, fontSize: '10px', fontWeight: 700, zIndex: 10 }}>{parseVariants(p).length} Varian</div>
             )}
-            {!p.variantEnabled && p.stock > 0 && p.stock <= 5 && (
+            {parseVariants(p).length === 0 && p.stock > 0 && p.stock <= 5 && (
               <div style={{ position: 'absolute', top: 8, right: 8, background: '#F59E0B', color: 'white', padding: '2px 8px', borderRadius: 6, fontSize: '10px', fontWeight: 700, zIndex: 10 }}>Sisa {p.stock}</div>
             )}
-            {!p.variantEnabled && p.stock === 0 && (
+            {parseVariants(p).length === 0 && p.stock === 0 && (
               <div style={{ position: 'absolute', top: 8, right: 8, background: '#EF4444', color: 'white', padding: '2px 8px', borderRadius: 6, fontSize: '10px', fontWeight: 700, zIndex: 10 }}>HABIS</div>
             )}
 
@@ -282,7 +292,7 @@ export default function Kasir() {
               <div className="card__footer">
                 <div className="card__price">Rp{p.price.toLocaleString('id-ID')}</div>
                 <div className="card__variant">
-                  {p.variantEnabled && p.variants?.length > 0 ? 'Pilih varian ›' : `${p.stock} ${p.unit || 'pcs'}`}
+                  {parseVariants(p).length > 0 ? 'Pilih varian ›' : `${p.stock} ${p.unit || 'pcs'}`}
                 </div>
               </div>
             </div>
@@ -532,7 +542,7 @@ export default function Kasir() {
             </div>
             <div style={{ fontSize: '0.82rem', color: '#6B7280', marginBottom: 14 }}>{variantModal.name}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {variantModal.variants.map(v => {
+              {(variantModal._variants || []).map(v => {
                 const stock = v.stock !== null && v.stock !== undefined ? v.stock : variantModal.stock;
                 const price = v.price || variantModal.price;
                 const outOfStock = stock < 1;
