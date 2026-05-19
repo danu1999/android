@@ -419,7 +419,20 @@ export default function Kasir() {
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0', border: '1.5px solid #E5E7EB', borderRadius: '10px', overflow: 'hidden' }}>
                         <button onClick={() => updateQty(item.cartKey, -1)} style={{ padding: '6px 12px', border: 'none', background: '#F9FAFB', cursor: 'pointer', fontWeight: 800, color: '#374151', fontSize: '1rem' }}>−</button>
-                        <span style={{ padding: '6px 12px', fontWeight: 700, fontSize: '0.95rem', color: '#1F2937', minWidth: '36px', textAlign: 'center' }}>{item.quantity}</span>
+                        <input
+                          type="number" min={1} value={item.quantity}
+                          onClick={e => e.target.select()}
+                          onChange={e => {
+                            const val = parseInt(e.target.value, 10);
+                            if (isNaN(val) || val < 1) { setCart(prev => prev.map(i => i.cartKey === item.cartKey ? { ...i, quantity: 1 } : i)); return; }
+                            const maxStock = item.variantId
+                              ? (parseVariants(item.product).find(v => v.id === item.variantId)?.stock ?? item.product.stock)
+                              : item.product.stock;
+                            const qty = Math.min(val, maxStock);
+                            setCart(prev => prev.map(i => i.cartKey === item.cartKey ? { ...i, quantity: qty } : i));
+                          }}
+                          style={{ width: '44px', padding: '4px 2px', fontWeight: 700, fontSize: '0.95rem', color: '#1F2937', textAlign: 'center', border: 'none', background: 'transparent', outline: 'none', MozAppearance: 'textfield' }}
+                        />
                         <button onClick={() => updateQty(item.cartKey, 1)} style={{ padding: '6px 12px', border: 'none', background: '#F9FAFB', cursor: 'pointer', fontWeight: 800, color: '#4F46E5', fontSize: '1rem' }}>+</button>
                       </div>
                     </div>
