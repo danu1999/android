@@ -659,6 +659,27 @@ app.post('/api/seed', requireOwner, async (req, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────
+// Reset Keuangan & Laporan  (OWNER only)
+// ─────────────────────────────────────────────────────────────
+app.post('/api/reset-finance', requireOwner, async (req, res) => {
+  try {
+    const delItems = await prisma.transactionItem.deleteMany();
+    const delTx    = await prisma.transaction.deleteMany();
+    const delFin   = await prisma.finance.deleteMany();
+    res.json({
+      message: 'Keuangan & Laporan berhasil direset.',
+      deleted: {
+        transactionItems: delItems.count,
+        transactions: delTx.count,
+        finances: delFin.count,
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || 'Gagal mereset data' });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });

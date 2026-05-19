@@ -638,6 +638,27 @@ app.post('/api/seed', requireOwner, (req, res) => __awaiter(void 0, void 0, void
         res.status(500).json({ error: 'Already seeded or error occurred' });
     }
 }));
+// ─────────────────────────────────────────────────────────────
+// Reset Keuangan & Laporan  (OWNER only)
+// ─────────────────────────────────────────────────────────────
+app.post('/api/reset-finance', requireOwner, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const delItems = yield prisma.transactionItem.deleteMany();
+        const delTx = yield prisma.transaction.deleteMany();
+        const delFin = yield prisma.finance.deleteMany();
+        res.json({
+            message: 'Keuangan & Laporan berhasil direset.',
+            deleted: {
+                transactionItems: delItems.count,
+                transactions: delTx.count,
+                finances: delFin.count,
+            }
+        });
+    }
+    catch (error) {
+        res.status(500).json({ error: error.message || 'Gagal mereset data' });
+    }
+}));
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 });
