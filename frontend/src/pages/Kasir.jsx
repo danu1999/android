@@ -616,6 +616,8 @@ export default function Kasir() {
           .product-card-badge {
             font-size: 9.5px !important;
             padding: 2px 6px !important;
+            display: inline-block !important;
+            line-height: 1.25 !important;
           }
           .product-card-btn {
             font-size: 11px !important;
@@ -653,7 +655,9 @@ export default function Kasir() {
               flexDirection: 'column',
               transition: 'transform 0.15s, box-shadow 0.15s',
               WebkitTapHighlightColor: 'transparent',
+              cursor: isOut ? 'not-allowed' : 'pointer',
             }}
+              onClick={() => !isOut && addToCart(p)}
               onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(0,0,0,0.12)'; }}
               onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.07)'; }}
             >
@@ -711,15 +715,14 @@ export default function Kasir() {
                 {/* Variant / Stock badge */}
                 <div style={{ marginBottom: 8 }}>
                   {(() => {
-                    if (variants.length > 0) return <span className="product-card-badge" style={{ fontSize: 11, fontWeight: 700, background: '#EEF2FF', color: '#4F46E5', padding: '2px 8px', borderRadius: 99 }}>🎨 {variants.length} Varian</span>;
-                    if (p.stock === 0) return <span className="product-card-badge" style={{ fontSize: 11, fontWeight: 700, background: '#FEE2E2', color: '#DC2626', padding: '2px 8px', borderRadius: 99 }}>🚫 Stok Habis</span>;
-                    if (p.stock <= 5) return <span className="product-card-badge" style={{ fontSize: 11, fontWeight: 700, background: '#FEF3C7', color: '#D97706', padding: '2px 8px', borderRadius: 99 }}>⚠️ Sisa {p.stock} {p.unit || 'pcs'}</span>;
-                    return <span className="product-card-badge" style={{ fontSize: 11, fontWeight: 700, background: '#DCFCE7', color: '#16A34A', padding: '2px 8px', borderRadius: 99 }}>✓ Tersedia {p.stock} {p.unit || 'pcs'}</span>;
+                    if (variants.length > 0) return <span className="product-card-badge" style={{ fontSize: 11, fontWeight: 700, background: '#EEF2FF', color: '#4F46E5', padding: '2px 8px', borderRadius: 99, display: 'inline-block', lineHeight: '1.25' }}>🎨 {variants.length} Varian</span>;
+                    if (p.stock === 0) return <span className="product-card-badge" style={{ fontSize: 11, fontWeight: 700, background: '#FEE2E2', color: '#DC2626', padding: '2px 8px', borderRadius: 99, display: 'inline-block', lineHeight: '1.25' }}>🚫 Stok Habis</span>;
+                    if (p.stock <= 5) return <span className="product-card-badge" style={{ fontSize: 11, fontWeight: 700, background: '#FEF3C7', color: '#D97706', padding: '2px 8px', borderRadius: 99, display: 'inline-block', lineHeight: '1.25' }}>⚠️ Sisa {p.stock} {p.unit || 'pcs'}</span>;
+                    return <span className="product-card-badge" style={{ fontSize: 11, fontWeight: 700, background: '#DCFCE7', color: '#16A34A', padding: '2px 8px', borderRadius: 99, display: 'inline-block', lineHeight: '1.25' }}>✓ Tersedia {p.stock} {p.unit || 'pcs'}</span>;
                   })()}
                 </div>
                 <button
                   className="product-card-btn"
-                  onClick={() => addToCart(p)}
                   disabled={p.stock < 1 && variants.length === 0}
                   style={{
                     width: '100%', padding: '7px 0', borderRadius: 10, border: 'none',
@@ -728,6 +731,7 @@ export default function Kasir() {
                     background: (p.stock < 1 && variants.length === 0) ? '#F1F5F9' : '#EEF2FF',
                     color: (p.stock < 1 && variants.length === 0) ? '#94A3B8' : '#4F46E5',
                     transition: 'background 0.15s', marginTop: 'auto',
+                    pointerEvents: 'none',
                   }}
                 >
                   {variants.length > 0 ? 'Pilih Varian ›' : '+ Keranjang'}
