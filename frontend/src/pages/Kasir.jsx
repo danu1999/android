@@ -107,7 +107,7 @@ export default function Kasir() {
           stopCamera();
           setBarcodeInputOpen(false);
         },
-        () => {} // error per-frame diabaikan
+        () => { } // error per-frame diabaikan
       );
       setCameraLoading(false);
     } catch (err) {
@@ -524,17 +524,17 @@ export default function Kasir() {
             {!cameraLoading && !cameraError && (
               <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 220, height: 220, pointerEvents: 'none' }}>
                 {[['top:0,left:0', 'borderTop,borderLeft'], ['top:0,right:0', 'borderTop,borderRight'], ['bottom:0,left:0', 'borderBottom,borderLeft'], ['bottom:0,right:0', 'borderBottom,borderRight']].map((_, i) => {
-                  const positions = [{top:0,left:0},{top:0,right:0},{bottom:0,left:0},{bottom:0,right:0}];
+                  const positions = [{ top: 0, left: 0 }, { top: 0, right: 0 }, { bottom: 0, left: 0 }, { bottom: 0, right: 0 }];
                   const borders = [
-                    {borderTop:'3px solid #6366F1',borderLeft:'3px solid #6366F1',borderRadius:'6px 0 0 0'},
-                    {borderTop:'3px solid #6366F1',borderRight:'3px solid #6366F1',borderRadius:'0 6px 0 0'},
-                    {borderBottom:'3px solid #6366F1',borderLeft:'3px solid #6366F1',borderRadius:'0 0 0 6px'},
-                    {borderBottom:'3px solid #6366F1',borderRight:'3px solid #6366F1',borderRadius:'0 0 6px 0'},
+                    { borderTop: '3px solid #6366F1', borderLeft: '3px solid #6366F1', borderRadius: '6px 0 0 0' },
+                    { borderTop: '3px solid #6366F1', borderRight: '3px solid #6366F1', borderRadius: '0 6px 0 0' },
+                    { borderBottom: '3px solid #6366F1', borderLeft: '3px solid #6366F1', borderRadius: '0 0 0 6px' },
+                    { borderBottom: '3px solid #6366F1', borderRight: '3px solid #6366F1', borderRadius: '0 0 6px 0' },
                   ];
-                  return <div key={i} style={{ position:'absolute', width:32, height:32, ...positions[i], ...borders[i] }} />;
+                  return <div key={i} style={{ position: 'absolute', width: 32, height: 32, ...positions[i], ...borders[i] }} />;
                 })}
                 {/* Scan line */}
-                <div style={{ position:'absolute', top:'50%', left: 4, right: 4, height: 2, background: 'linear-gradient(90deg,transparent,#6366F1,transparent)', animation: 'camScanLine 2s ease-in-out infinite' }} />
+                <div style={{ position: 'absolute', top: '50%', left: 4, right: 4, height: 2, background: 'linear-gradient(90deg,transparent,#6366F1,transparent)', animation: 'camScanLine 2s ease-in-out infinite' }} />
               </div>
             )}
           </div>
