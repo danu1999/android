@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, ShoppingCart, Trash2, CreditCard, QrCode, Printer, X, ChevronUp, ClipboardList, Plus, Minus, Barcode, Camera, ShoppingBag } from 'lucide-react';
 import api from '../api';
 import { useAuth, useDemoBlock, DEMO_LIMITS } from '../AuthContext';
+import ProductCard from '../components/ProductCard';
 
 const getEffectivePrice = (product, quantity) => {
   if (!product.wholesaleEnabled || !product.wholesalePrices) return product.price;
@@ -630,62 +631,12 @@ export default function Kasir() {
           const hasImage = p.image && typeof p.image === 'string' && p.image.trim() !== '' && p.image !== 'null' && p.image !== 'undefined';
 
           return (
-            <div key={p.id} style={{
-              background: isOut ? '#F8FAFC' : 'white',
-              borderRadius: 14,
-              boxShadow: isOut ? 'none' : '0 2px 10px rgba(79,70,229,0.08)',
-              overflow: 'hidden',
-              border: isOut ? '1px solid #E2E8F0' : '1px solid rgba(79,70,229,0.1)',
-              display: 'block',
-              transition: 'box-shadow 0.15s, transform 0.15s',
-              WebkitTapHighlightColor: 'transparent',
-              cursor: isOut ? 'not-allowed' : 'pointer',
-              opacity: isOut ? 0.6 : 1,
-            }}
-              onClick={() => !isOut && addToCart(p)}
-              onMouseEnter={e => { if (!isOut) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(79,70,229,0.15)'; } }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(79,70,229,0.08)'; }}
-            >
-              {/* Gambar — padding-top trick untuk semua browser */}
-              <div style={{ width: '100%', paddingTop: '85%', background: '#F0F4FF', position: 'relative', overflow: 'hidden' }}>
-                {hasImage ? (
-                  <img src={p.image} alt={p.name}
-                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'contain', padding: 8 }}
-                  />
-                ) : (
-                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 4 }}>
-                    <ShoppingBag size={28} color="#A5B4FC" />
-                  </div>
-                )}
-                {variants.length > 0 && (
-                  <div style={{ position: 'absolute', top: 6, left: 6, background: '#4F46E5', color: '#fff', fontSize: 8, fontWeight: 800, padding: '2px 6px', borderRadius: 6 }}>VARIAN</div>
-                )}
-                {p.stock < 1 && variants.length === 0 && (
-                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(255,255,255,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ background: '#EF4444', color: '#fff', fontSize: 10, fontWeight: 800, padding: '4px 10px', borderRadius: 8 }}>Habis</span>
-                  </div>
-                )}
-              </div>
-              {/* Info Produk */}
-              <div style={{ padding: '8px 10px 10px' }}>
-                <div style={{ fontWeight: 700, fontSize: 12, color: '#1E293B', marginBottom: 2, lineHeight: 1.3, maxHeight: 32, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                  {p.name}
-                </div>
-                <div style={{ color: '#4F46E5', fontWeight: 800, fontSize: 13, marginBottom: 5 }}>
-                  Rp {p.price.toLocaleString('id-ID')}
-                </div>
-                <div>
-                  {variants.length > 0
-                    ? <span style={{ fontSize: 10, color: '#6366F1', fontWeight: 600 }}>🎨 {variants.length} varian</span>
-                    : p.stock <= 5 && p.stock > 0
-                      ? <span style={{ fontSize: 10, color: '#D97706', fontWeight: 600 }}>⚠️ Sisa {p.stock} {p.unit || 'pcs'}</span>
-                      : p.stock > 5
-                        ? <span style={{ fontSize: 10, color: '#10B981', fontWeight: 600 }}>✓ {p.stock} {p.unit || 'pcs'}</span>
-                        : null
-                  }
-                </div>
-              </div>
-            </div>
+            <ProductCard
+              key={p.id}
+              product={p}
+              onAdd={addToCart}
+              onVariant={p => setVariantModal({ ...p, _variants: variants })}
+            />
           );
         }) : (
           <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '40px 0', color: '#94A3B8' }}>
