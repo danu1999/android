@@ -48,12 +48,12 @@ export default function Kasir() {
   const [lastCart, setLastCart] = useState([]);       // snapshot cart saat checkout untuk print
   const [queueToPrint, setQueueToPrint] = useState(null); // antrian yang baru dibayar → print
 
-  useEffect(() => { 
-    fetchProducts(); 
+  useEffect(() => {
+    fetchProducts();
     fetchCustomers();
     fetchActiveQueues();
     if (isDemo) {
-      api.get('/transactions').then(r => setDemoTxCount(r.data?.length || 0)).catch(() => {});
+      api.get('/transactions').then(r => setDemoTxCount(r.data?.length || 0)).catch(() => { });
     }
   }, []);
 
@@ -156,7 +156,7 @@ export default function Kasir() {
         total, discount: globalDiscount,
         paymentMethod: isQueue ? 'PENDING' : payMethod,
         status: isQueue ? 'PENDING' : 'COMPLETED',
-        notes, 
+        notes,
         customerName: customers.find(c => c.id === Number(customerId))?.name || '',
         customerId: customerId ? Number(customerId) : null,
         queueNumber: queueNumber ? Number(queueNumber) : null,
@@ -199,7 +199,7 @@ export default function Kasir() {
       if (method === 'HUTANG') {
         if (!debtDueDate) { alert('Silakan pilih tanggal jatuh tempo!'); return; }
         const t = queues.find(q => q.id === id);
-        
+
         await api.put(`/transactions/${id}`, { status: 'COMPLETED', paymentMethod: 'HUTANG' });
         await api.post('/finances', {
           type: 'RECEIVABLE',
@@ -218,7 +218,7 @@ export default function Kasir() {
         setQueueModal(false);
         setQueueToPrint({ ...t, paymentMethod: method }); // buka struk
       }
-      if (queues.find(q => q.id === id) && !['CASH','QRIS'].includes(method)) setQueueModal(false);
+      if (queues.find(q => q.id === id) && !['CASH', 'QRIS'].includes(method)) setQueueModal(false);
     } catch { alert('Gagal memproses pembayaran'); }
   };
 
@@ -407,7 +407,7 @@ export default function Kasir() {
                         <div style={{ fontSize: '0.8rem', color: '#4F46E5', fontWeight: 700 }}>Rp {ep.toLocaleString('id-ID')}{item.discount > 0 && <span style={{ color: '#EF4444' }}> -Rp {item.discount.toLocaleString('id-ID')}</span>}</div>
                       </div>
                       <button onClick={() => removeItem(item.cartKey)} style={{ background: '#FEE2E2', border: 'none', borderRadius: '8px', padding: '6px', cursor: 'pointer', color: '#EF4444', display: 'flex', alignItems: 'center' }}>
-                        <Trash2 size={17} />
+                        <Trash2 size={23 />
                       </button>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -451,7 +451,7 @@ export default function Kasir() {
                     {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
-                
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4b5563' }}>No. Antrian</label>
