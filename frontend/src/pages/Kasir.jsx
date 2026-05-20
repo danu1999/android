@@ -630,12 +630,17 @@ export default function Kasir() {
           // Safe check to verify if the product really has a valid image string
           const hasImage = p.image && typeof p.image === 'string' && p.image.trim() !== '' && p.image !== 'null' && p.image !== 'undefined';
 
+          const qty = cart
+            .filter(i => i.product?.id === p.id || i.product?.id === String(p.id))
+            .reduce((s, i) => s + i.quantity, 0);
+
           return (
             <ProductCard
               key={p.id}
               product={p}
+              quantity={qty}
               onAdd={addToCart}
-              onVariant={p => setVariantModal({ ...p, _variants: variants })}
+              onVariant={(prod, vars) => setVariantModal({ ...prod, _variants: vars })}
             />
           );
         }) : (

@@ -1,160 +1,188 @@
 import React, { useState } from 'react';
-import { Plus, ShoppingBag } from 'lucide-react';
+import { ShoppingBag } from 'lucide-react';
 
 /**
- * ProductCard — "Sushiban Style" POS Mobile Card
- * Requires Tailwind CSS v4
+ * ProductCard — Desain identik TokoOnline, diadaptasi untuk Kasir POS
  *
  * Props:
- *   product   {id, name, price, stock, image, costPrice, unit, variants}
- *   onAdd     (product) => void   — simple product: adds to cart directly
- *   onVariant (product) => void   — variant product: opens customization modal
+ *   product    {id, name, price, costPrice, stock, unit, image, variants, wholesaleEnabled, wholesalePrices}
+ *   onAdd      (product) => void   — produk biasa: langsung ke keranjang
+ *   onVariant  (product, variants[]) => void — produk varian: buka modal pilih varian
+ *   quantity   number | undefined  — jumlah item di keranjang saat ini (untuk tampilkan qty)
  */
-export default function ProductCard({ product, onAdd, onVariant }) {
-  const [pressed, setPressed] = useState(false);
 
-  // Parse variants
-  const hasVariants = product.variants && (() => {
-    try {
-      const v = typeof product.variants === 'string'
-        ? JSON.parse(product.variants)
-        : product.variants;
-      return Array.isArray(v) && v.length > 0;
-    } catch { return false; }
-  })();
+const parseVariants = (p) => {
+  if (!p?.variants) return [];
+  try {
+    const arr = typeof p.variants === 'string' ? JSON.parse(p.variants) : p.variants;
+    return Array.isArray(arr) ? arr.map((v, i) => ({ id: v.id ?? i, ...v })) : [];
+  } catch { return []; }
+};
 
-  const isOut  = !hasVariants && product.stock === 0;
-  const isLow  = !hasVariants && product.stock > 0 && product.stock <= 5;
-  const isGood = !hasVariants && product.stock > 10;
+export default function ProductCard({ product, onAdd, onVariant, quantity = 0 }) {
+  const [hovered, setHovered] = useState(false);
+
+  const variants = parseVariants(product);
+  const hasVariants = variants.length > 0;
+  const isOut = !hasVariants && product.stock < 1;
 
   const hasImage =
     product.image &&
     typeof product.image === 'string' &&
     product.image.trim() !== '' &&
-    product.image !== 'null';
+    product.image !== 'null' &&
+    product.image !== 'undefined';
 
-  const handleAdd = (e) => {
-    e.stopPropagation();
+  const handleClick = () => {
     if (isOut) return;
-    if (hasVariants) onVariant?.(product);
-    else onAdd?.(product);
+    if (hasVariants) {
+      onVariant?.(product, variants);
+    } else {
+      onAdd?.(product);
+    }
   };
 
-  // Stock badge color classes
-  const badgeColor = hasVariants
-    ? 'text-indigo-600'
-    : isLow
-      ? 'text-amber-600'
-      : isGood
-        ? 'text-green-600'
-        : 'text-slate-500';
+  // ── Label stok / varian ────────────────────────────────────────
+  const stockBadge = (() => {
+    if (hasVariants) return { label: `🎨 ${variants.length} Varian`, bg: '#EEF2FF', color: '#4F46E5' };
+    if (product.stock === 0) return { label: '🚫 Stok Habis', bg: '#FEE2E2', color: '#DC2626' };
+    if (product.stock <= 5) return { label: `⚠️ Sisa ${product.stock} ${product.unit || 'pcs'}`, bg: '#FEF3C7', color: '#D97706' };
+    return { label: `✓ Tersedia ${product.stock} ${product.unit || 'pcs'}`, bg: '#DCFCE7', color: '#16A34A' };
+  })();
+
+  const btnDisabled = isOut;
+  const btnLabel = hasVariants ? 'Pilih Varian ›' : quantity > 0 ? `+ Tambah (${quantity})` : '+ Keranjang';
 
   return (
     <div
-      onClick={() => !isOut && (hasVariants ? onVariant?.(product) : onAdd?.(product))}
-      className={[
-        'group relative bg-white rounded-2xl overflow-hidden border border-indigo-50',
-        'shadow-sm hover:shadow-md transition-all duration-200',
-        isOut ? 'cursor-not-allowed opacity-75' : 'cursor-pointer hover:-translate-y-0.5',
-      ].join(' ')}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: '#fff',
+        borderRadius: 16,
+        boxShadow: hovered ? '0 8px 20px rgba(0,0,0,0.12)' : '0 2px 8px rgba(0,0,0,0.07)',
+        overflow: 'hidden',
+        border: '1px solid #E2E8F0',
+        display: 'flex',
+        flexDirection: 'column',
+        transition: 'transform 0.15s, box-shadow 0.15s',
+        transform: hovered && !isOut ? 'translateY(-3px)' : 'translateY(0)',
+        cursor: isOut ? 'not-allowed' : 'pointer',
+        WebkitTapHighlightColor: 'transparent',
+      }}
+      onClick={handleClick}
     >
-      {/* ── Image Area ─────────────────────────────────────── */}
-      <div className="relative w-full" style={{ paddingTop: '100%' /* 1:1 square */ }}>
-
-        {/* Image or placeholder */}
+      {/* ── Image Box ─────────────────────────────────────────── */}
+      <div style={{
+        width: '100%',
+        aspectRatio: '1 / 1',
+        background: '#F8FAFC',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
         {hasImage ? (
           <img
             src={product.image}
             alt={product.name}
-            className="absolute inset-0 w-full h-full object-contain p-2 transition-transform duration-300 group-hover:scale-105"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              padding: 8,
+              transition: 'transform 0.3s',
+              transform: hovered ? 'scale(1.05)' : 'scale(1)',
+            }}
           />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-indigo-50">
-            <ShoppingBag size={32} className="text-indigo-200" />
+          <ShoppingBag size={40} color="#CBD5E1" />
+        )}
+
+        {/* Badge Habis — pojok kanan atas */}
+        {product.stock < 1 && !hasVariants && (
+          <div style={{
+            position: 'absolute', top: 8, right: 8,
+            background: '#EF4444', color: '#fff',
+            fontSize: 10, fontWeight: 700,
+            padding: '2px 8px', borderRadius: 99,
+          }}>
+            Habis
           </div>
         )}
 
-        {/* Glassmorphism Stock Badge — Top Left */}
-        {!isOut && (
-          <div className={[
-            'absolute top-2 left-2 px-2.5 py-0.5 rounded-full',
-            'bg-white/90 backdrop-blur-sm text-[10px] font-extrabold tracking-wide shadow-sm',
-            badgeColor,
-          ].join(' ')}>
-            {hasVariants
-              ? '🎨 Multi Varian'
-              : isLow
-                ? `⚠️ Sisa ${product.stock}`
-                : `✓ ${product.stock} ${product.unit || 'pcs'}`}
+        {/* Jumlah di keranjang — pojok kiri atas */}
+        {quantity > 0 && (
+          <div style={{
+            position: 'absolute', top: 8, left: 8,
+            background: '#4F46E5', color: '#fff',
+            fontSize: 11, fontWeight: 800,
+            width: 24, height: 24, borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 2px 6px rgba(79,70,229,0.5)',
+          }}>
+            {quantity}
           </div>
         )}
-
-        {/* Out-of-stock overlay */}
-        {isOut && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm">
-            <span className="bg-slate-500 text-white text-[11px] font-black tracking-widest px-4 py-1.5 rounded-lg">
-              HABIS
-            </span>
-          </div>
-        )}
-
-        {/* Floating Action Button — seam between image and content */}
-        <button
-          disabled={isOut}
-          onMouseDown={() => setPressed(true)}
-          onMouseUp={() => setPressed(false)}
-          onTouchStart={e => { e.stopPropagation(); setPressed(true); }}
-          onTouchEnd={e => { e.stopPropagation(); setPressed(false); handleAdd(e); }}
-          onClick={handleAdd}
-          aria-label={hasVariants ? 'Pilih varian' : 'Tambah ke keranjang'}
-          className={[
-            'absolute bottom-0 right-2.5 z-10 translate-y-1/2',
-            'w-9 h-9 rounded-full flex items-center justify-center',
-            'shadow-lg transition-all duration-150',
-            isOut
-              ? 'bg-slate-300 cursor-not-allowed'
-              : pressed
-                ? 'bg-indigo-700 scale-90'
-                : 'bg-indigo-600 hover:bg-indigo-700 active:scale-90',
-          ].join(' ')}
-        >
-          <Plus size={18} strokeWidth={2.5} className="text-white" />
-        </button>
       </div>
 
-      {/* ── Content Area ───────────────────────────────────── */}
-      <div className="px-3 pt-4 pb-3 pr-12" style={{ paddingRight: 48, paddingTop: 12, paddingBottom: 10, paddingLeft: 10 }}>
+      {/* ── Product Info ─────────────────────────────────────── */}
+      <div style={{ padding: '10px 12px 12px', flex: 1, display: 'flex', flexDirection: 'column' }}>
 
-        {/* Product Name — guaranteed visible via inline style */}
-        <p
+        {/* Nama Produk — wajib tampil */}
+        <div style={{
+          fontWeight: 700,
+          fontSize: 13,
+          color: '#1E293B',
+          marginBottom: 4,
+          lineHeight: 1.3,
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+        }}>
+          {product.name}
+        </div>
+
+        {/* Harga */}
+        <div style={{ color: '#4F46E5', fontWeight: 800, fontSize: 14, marginBottom: 6 }}>
+          Rp {Number(product.price).toLocaleString('id-ID')}
+        </div>
+
+        {/* Badge stok / varian */}
+        <div style={{ marginBottom: 8 }}>
+          <span style={{
+            fontSize: 11, fontWeight: 700,
+            background: stockBadge.bg,
+            color: stockBadge.color,
+            padding: '2px 8px', borderRadius: 99,
+            display: 'inline-block',
+          }}>
+            {stockBadge.label}
+          </span>
+        </div>
+
+        {/* Tombol aksi */}
+        <button
+          disabled={btnDisabled}
+          onClick={(e) => { e.stopPropagation(); handleClick(); }}
           style={{
+            width: '100%',
+            padding: '7px 0',
+            borderRadius: 10,
+            border: 'none',
             fontWeight: 700,
-            fontSize: 14,
-            color: '#1E293B',
-            lineHeight: 1.35,
-            marginBottom: 5,
-            marginTop: 0,
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-            maxHeight: '2.7em',
+            fontSize: 13,
+            cursor: btnDisabled ? 'not-allowed' : 'pointer',
+            background: btnDisabled ? '#F1F5F9' : quantity > 0 ? '#4F46E5' : '#EEF2FF',
+            color: btnDisabled ? '#94A3B8' : quantity > 0 ? '#fff' : '#4F46E5',
+            transition: 'background 0.15s, color 0.15s',
+            marginTop: 'auto',
           }}
         >
-          {product.name}
-        </p>
-
-        {/* Price Row */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <span style={{ fontWeight: 700, fontSize: 13, color: '#D97706' }}>
-            Rp {Number(product.price).toLocaleString('id-ID')}
-          </span>
-          {hasVariants && (
-            <span style={{ fontSize: 10, fontWeight: 600, color: '#94A3B8', background: '#F1F5F9', padding: '2px 6px', borderRadius: 6 }}>
-              • Opsi
-            </span>
-          )}
-        </div>
+          {btnLabel}
+        </button>
       </div>
     </div>
   );
