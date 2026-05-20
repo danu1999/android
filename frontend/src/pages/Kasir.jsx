@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, ShoppingCart, Trash2, CreditCard, QrCode, Printer, X, ChevronUp, ClipboardList, Plus, Minus, Barcode } from 'lucide-react';
+import { Search, ShoppingCart, Trash2, CreditCard, QrCode, Printer, X, ChevronUp, ClipboardList, Plus, Minus, Barcode, Camera } from 'lucide-react';
 import api from '../api';
 import { useDemoBlock, DEMO_LIMITS } from '../AuthContext';
 
@@ -56,6 +56,14 @@ export default function Kasir() {
   const [barcodeInputOpen, setBarcodeInputOpen] = useState(false);
   const [barcodeInputVal, setBarcodeInputVal] = useState('');
 
+  // ── Camera Scanner (HP Android / iPhone) ──────────────────────
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraError, setCameraError] = useState('');
+  const [cameraLoading, setCameraLoading] = useState(false);
+  const html5QrcodeRef = useRef(null);
+  const cameraDivId = 'kasir-barcode-camera';
+
+
   const handleBarcodeScan = useCallback((code) => {
     // Cari produk berdasarkan field barcode (lokal, tanpa API call)
     const found = products.find(p => p.barcode && p.barcode === code);
@@ -67,6 +75,56 @@ export default function Kasir() {
     }
     setTimeout(() => setBarcodeFlash(null), 1200);
   }, [products]);
+
+  const stopCamera = useCallback(async () => {
+    try {
+      if (html5QrcodeRef.current) {
+        await html5QrcodeRef.current.stop();
+        html5QrcodeRef.current.clear();
+        html5QrcodeRef.current = null;
+      }
+    } catch { }
+    setCameraOpen(false);
+    setCameraError('');
+    setCameraLoading(false);
+  }, []);
+
+  const startCamera = useCallback(async () => {
+    setCameraError('');
+    setCameraLoading(true);
+    setCameraOpen(true);
+    // Tunggu div camera ter-mount di DOM
+    await new Promise(r => setTimeout(r, 250));
+    try {
+      const { Html5Qrcode } = await import('html5-qrcode');
+      const qr = new Html5Qrcode(cameraDivId);
+      html5QrcodeRef.current = qr;
+      await qr.start(
+        { facingMode: 'environment' }, // kamera belakang HP
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText) => {
+          handleBarcodeScan(decodedText);
+          stopCamera();
+          setBarcodeInputOpen(false);
+        },
+        () => {} // error per-frame diabaikan
+      );
+      setCameraLoading(false);
+    } catch (err) {
+      setCameraLoading(false);
+      const msg = String(err?.message || err);
+      if (msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('notallowed')) {
+        setCameraError('Izin kamera ditolak. Buka Pengaturan browser → izinkan akses kamera untuk situs ini.');
+      } else if (msg.toLowerCase().includes('notfound') || msg.toLowerCase().includes('device')) {
+        setCameraError('Kamera tidak ditemukan di perangkat ini.');
+      } else {
+        setCameraError('Gagal membuka kamera. Pastikan browser mendukung dan HTTPS aktif.');
+      }
+    }
+  }, [handleBarcodeScan, stopCamera]);
+
+  // Cleanup kamera saat komponen unmount
+  useEffect(() => { return () => { stopCamera(); }; }, [stopCamera]);
 
   // Global keyboard listener: deteksi input cepat (scanner) vs ketik manual
   useEffect(() => {
@@ -420,6 +478,14 @@ export default function Kasir() {
           >
             Cari
           </button>
+          {/* Tombol Kamera — Android & iPhone */}
+          <button
+            onClick={startCamera}
+            title="Scan barcode menggunakan kamera HP"
+            style={{ padding: '9px 12px', borderRadius: 10, border: 'none', background: '#10B981', color: 'white', fontWeight: 700, fontSize: 13, cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5 }}
+          >
+            <Camera size={16} /> Kamera
+          </button>
           <button
             onClick={() => { setBarcodeInputOpen(false); setBarcodeInputVal(''); }}
             style={{ padding: '9px', borderRadius: 10, border: 'none', background: 'white', color: '#9CA3AF', cursor: 'pointer', flexShrink: 0 }}
@@ -428,6 +494,77 @@ export default function Kasir() {
           </button>
         </div>
       )}
+
+      {/* ── Modal Kamera Scanner (Android & iPhone) ─────────────── */}
+      {cameraOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,0.93)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          {/* Header */}
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ color: 'white', fontWeight: 800, fontSize: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Camera size={20} /> Scan Barcode
+            </div>
+            <button onClick={stopCamera} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 99, padding: '8px 16px', color: 'white', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <X size={15} /> Tutup
+            </button>
+          </div>
+
+          {/* Viewfinder */}
+          <div style={{ position: 'relative', width: '100%', maxWidth: 380, padding: '0 24px' }}>
+            <div id={cameraDivId} style={{ width: '100%', borderRadius: 20, overflow: 'hidden', background: '#111', minHeight: 280 }} />
+
+            {/* Loading spinner */}
+            {cameraLoading && (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, padding: '0 24px' }}>
+                <div style={{ width: 44, height: 44, border: '4px solid rgba(255,255,255,0.15)', borderTop: '4px solid #6366F1', borderRadius: '50%', animation: 'camSpin 0.8s linear infinite' }} />
+                <div style={{ color: 'rgba(255,255,255,0.85)', fontSize: 14, fontWeight: 600 }}>Membuka kamera...</div>
+              </div>
+            )}
+
+            {/* Sudut viewfinder */}
+            {!cameraLoading && !cameraError && (
+              <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', width: 220, height: 220, pointerEvents: 'none' }}>
+                {[['top:0,left:0', 'borderTop,borderLeft'], ['top:0,right:0', 'borderTop,borderRight'], ['bottom:0,left:0', 'borderBottom,borderLeft'], ['bottom:0,right:0', 'borderBottom,borderRight']].map((_, i) => {
+                  const positions = [{top:0,left:0},{top:0,right:0},{bottom:0,left:0},{bottom:0,right:0}];
+                  const borders = [
+                    {borderTop:'3px solid #6366F1',borderLeft:'3px solid #6366F1',borderRadius:'6px 0 0 0'},
+                    {borderTop:'3px solid #6366F1',borderRight:'3px solid #6366F1',borderRadius:'0 6px 0 0'},
+                    {borderBottom:'3px solid #6366F1',borderLeft:'3px solid #6366F1',borderRadius:'0 0 0 6px'},
+                    {borderBottom:'3px solid #6366F1',borderRight:'3px solid #6366F1',borderRadius:'0 0 6px 0'},
+                  ];
+                  return <div key={i} style={{ position:'absolute', width:32, height:32, ...positions[i], ...borders[i] }} />;
+                })}
+                {/* Scan line */}
+                <div style={{ position:'absolute', top:'50%', left: 4, right: 4, height: 2, background: 'linear-gradient(90deg,transparent,#6366F1,transparent)', animation: 'camScanLine 2s ease-in-out infinite' }} />
+              </div>
+            )}
+          </div>
+
+          {/* Error */}
+          {cameraError && (
+            <div style={{ background: 'rgba(254,242,242,0.95)', borderRadius: 16, padding: '18px 20px', margin: '20px 24px', maxWidth: 340, textAlign: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
+              <div style={{ fontSize: 28, marginBottom: 8 }}>📵</div>
+              <div style={{ fontWeight: 800, color: '#DC2626', fontSize: 14, marginBottom: 8 }}>Kamera Tidak Dapat Dibuka</div>
+              <div style={{ color: '#7F1D1D', fontSize: 13, lineHeight: 1.7 }}>{cameraError}</div>
+              <button onClick={startCamera} style={{ marginTop: 14, padding: '10px 22px', borderRadius: 10, border: 'none', background: '#EF4444', color: 'white', fontWeight: 800, cursor: 'pointer', fontSize: 13 }}>🔄 Coba Lagi</button>
+            </div>
+          )}
+
+          {!cameraError && !cameraLoading && (
+            <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, marginTop: 20, textAlign: 'center' }}>
+              Arahkan kamera ke barcode produk
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Keyframes kamera */}
+      <style>{`
+        @keyframes camSpin { to { transform: rotate(360deg); } }
+        @keyframes camScanLine {
+          0%,100% { opacity:0; transform:translateY(-80px); }
+          50% { opacity:1; transform:translateY(80px); }
+        }
+      `}</style>
 
       {/* Low stock warning */}
       {products.some(p => p.stock > 0 && p.stock <= 5) && (
