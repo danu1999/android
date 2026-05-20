@@ -123,28 +123,34 @@ export default function ProductCard({ product, onAdd, onVariant }) {
       </div>
 
       {/* ── Content Area ───────────────────────────────────── */}
-      <div className="px-3 pt-4 pb-3 pr-12" /* pr-12 = space for FAB */>
+      <div className="px-3 pt-4 pb-3 pr-12" style={{ paddingRight: 48, paddingTop: 12, paddingBottom: 10, paddingLeft: 10 }}>
 
-        {/* Product Name — 2-line clamp, Priority 1 */}
+        {/* Product Name — guaranteed visible via inline style */}
         <p
-          className="font-bold text-[15px] text-slate-800 leading-snug mb-1.5"
           style={{
+            fontWeight: 700,
+            fontSize: 14,
+            color: '#1E293B',
+            lineHeight: 1.35,
+            marginBottom: 5,
+            marginTop: 0,
             display: '-webkit-box',
             WebkitLineClamp: 2,
             WebkitBoxOrient: 'vertical',
             overflow: 'hidden',
+            maxHeight: '2.7em',
           }}
         >
           {product.name}
         </p>
 
         {/* Price Row */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="font-bold text-[13px] text-amber-600">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 700, fontSize: 13, color: '#D97706' }}>
             Rp {Number(product.price).toLocaleString('id-ID')}
           </span>
           {hasVariants && (
-            <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-md">
+            <span style={{ fontSize: 10, fontWeight: 600, color: '#94A3B8', background: '#F1F5F9', padding: '2px 6px', borderRadius: 6 }}>
               • Opsi
             </span>
           )}
