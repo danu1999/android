@@ -132,7 +132,7 @@ app.get('/api/products', async (req, res) => {
 // Lookup produk by barcode (untuk scanner kasir)
 app.get('/api/products/barcode/:code', async (req, res) => {
   try {
-    const product = await prisma.product.findFirst({
+    const product = await (prisma.product as any).findFirst({
       where: { barcode: req.params.code }
     });
     if (!product) return res.status(404).json({ error: 'Produk tidak ditemukan' });
@@ -152,12 +152,12 @@ app.post('/api/products', requireAdmin, async (req, res) => {
         costPrice: Number(costPrice || 0),
         stock: Number(stock),
         unit: unit || 'pcs',
-        barcode: barcode || null,
         wholesaleEnabled: Boolean(wholesaleEnabled),
         wholesalePrices: wholesalePrices ? JSON.stringify(wholesalePrices) : null,
         variants: variants && variants.length > 0 ? JSON.stringify(variants) : null,
-        image
-      }
+        image,
+        ...(barcode ? { barcode } : {})
+      } as any
     });
     res.json(product);
   } catch (error) {
@@ -178,12 +178,12 @@ app.put('/api/products/:id', requireAdmin, async (req, res) => {
         costPrice: Number(costPrice || 0),
         stock: Number(stock),
         unit: unit || 'pcs',
-        barcode: barcode || null,
         wholesaleEnabled: Boolean(wholesaleEnabled),
         wholesalePrices: wholesalePrices ? JSON.stringify(wholesalePrices) : null,
         variants: variants && variants.length > 0 ? JSON.stringify(variants) : null,
-        image
-      }
+        image,
+        ...(barcode !== undefined ? { barcode: barcode || null } : {})
+      } as any
     });
     res.json(product);
   } catch (error) {
