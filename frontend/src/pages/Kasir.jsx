@@ -659,28 +659,25 @@ export default function Kasir() {
               onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(0,0,0,0.12)'; }}
               onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.07)'; }}
             >
-              {/* Image Box (using padding bottom to prevent collapse on mobile) */}
+              {/* Image Box (using aspect-ratio to prevent flex collapse on iOS Safari) */}
               <div
                 style={{
                   width: '100%',
-                  height: 0,
-                  paddingBottom: '100%',
+                  aspectRatio: '1 / 1',
                   background: '#F8FAFC',
                   position: 'relative',
                   overflow: 'hidden',
+                  flexShrink: 0,
                 }}
               >
                 {hasImage ? (
                   <img
                     src={p.image}
                     alt={p.name}
-                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'contain', padding: 8 }}
+                    style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 8 }}
                   />
                 ) : (
                   <div style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
                     width: '100%',
                     height: '100%',
                     display: 'flex',
@@ -703,7 +700,7 @@ export default function Kasir() {
               </div>
 
               {/* Product Info */}
-              <div className="product-card-info" style={{ padding: '8px 10px 10px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <div className="product-card-info" style={{ padding: '8px 10px 10px', flex: 1, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
                 <div className="product-card-title" style={{ fontWeight: 700, fontSize: 11.5, color: '#1E293B', marginBottom: 2, lineHeight: 1.25, height: 30, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                   {p.name}
                 </div>
