@@ -56,9 +56,12 @@ export default function Keuangan() {
         ]);
       } else if (activeTab === 'MARGIN') {
         setProducts([
-          { id: 'p301', name: 'Pisang Keju Cokelat (Demo)', price: 15000, costPrice: 9000, stock: 120, variantEnabled: false, variants: null },
-          { id: 'p302', name: 'Pisang Keju Stroberi (Demo)', price: 15000, costPrice: 9500, stock: 85, variantEnabled: false, variants: null },
-          { id: 'p303', name: 'Pisang Keju Premium (Demo)', price: 20000, costPrice: 11000, stock: 50, variantEnabled: true, variants: JSON.stringify([{ name: 'Keju Melimpah', price: 25000, costPrice: 13000, stock: 30 }, { name: 'Milo Almond', price: 28000, costPrice: 15000, stock: 20 }]) },
+          { id: 'p301', name: 'Pisang Keju Cokelat', price: 15000, costPrice: 9000, stock: 120, variantEnabled: false, variants: null },
+          { id: 'p302', name: 'Pisang Keju Stroberi', price: 15000, costPrice: 9500, stock: 85, variantEnabled: false, variants: null },
+          { id: 'p303', name: 'Pisang Keju Premium', price: 20000, costPrice: 11000, stock: 50, variantEnabled: true, variants: JSON.stringify([{ name: 'Keju Melimpah', price: 25000, costPrice: 13000, stock: 30 }, { name: 'Milo Almond', price: 28000, costPrice: 15000, stock: 20 }]) },
+          { id: 'p304', name: 'Jus Alpukat', price: 18000, costPrice: 10000, stock: 60, variantEnabled: false, variants: null },
+          { id: 'p305', name: 'Jus Mangga', price: 15000, costPrice: 8000, stock: 75, variantEnabled: false, variants: null },
+          { id: 'p306', name: 'Es Teh Manis', price: 8000, costPrice: 3000, stock: 200, variantEnabled: false, variants: null },
         ]);
       } else if (activeTab === 'EXPENSE') {
         setFinances([
