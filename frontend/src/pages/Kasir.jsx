@@ -435,7 +435,7 @@ export default function Kasir() {
     searchBox: { flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: '#F1F3FF', borderRadius: '12px', padding: '10px 14px' },
     searchInput: { border: 'none', background: 'transparent', outline: 'none', fontSize: '0.9rem', width: '100%', color: '#1F2937' },
     queueBtn: { padding: '10px 14px', borderRadius: '12px', border: 'none', background: '#EEF2FF', color: '#4F46E5', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' },
-    grid: { display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: '10px', padding: '10px 10px 170px', overflowY: 'auto', flex: 1 },
+    grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 16, padding: '16px 12px 180px', overflowY: 'auto', flex: 1 },
     card: { background: 'white', borderRadius: '16px', boxShadow: '0 2px 12px rgba(0,0,0,0.07)', cursor: 'pointer', userSelect: 'none', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', WebkitTapHighlightColor: 'transparent' },
     cardThumb: { width: '100%', aspectRatio: '1/1', background: '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, position: 'relative' },
     cardBody: { padding: '8px 10px 10px', display: 'flex', flexDirection: 'column', flex: 1 },
@@ -598,87 +598,96 @@ export default function Kasir() {
 
       {/* Product Grid */}
       <div style={S.grid}>
-        {filtered.map(p => {
+        {filtered.length > 0 ? filtered.map(p => {
           const variants = parseVariants(p);
           const isOut = variants.length === 0 && p.stock === 0;
           const isLow = variants.length === 0 && p.stock > 0 && p.stock <= 5;
           return (
             <div
               key={p.id}
-              onClick={() => addToCart(p)}
               style={{
-                ...S.card,
-                opacity: isOut ? 0.6 : 1,
-                position: 'relative',
+                background: '#fff',
+                borderRadius: 16,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
+                overflow: 'hidden',
+                border: '1px solid #E2E8F0',
+                display: 'flex',
+                flexDirection: 'column',
+                transition: 'transform 0.15s, box-shadow 0.15s',
+                WebkitTapHighlightColor: 'transparent',
               }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(0,0,0,0.12)'; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.07)'; }}
             >
               {/* Gambar produk */}
               <div style={{
-                width: '100%',
-                aspectRatio: '1 / 1',
-                background: p.image ? 'transparent' : 'linear-gradient(135deg,#EEF2FF,#E0E7FF)',
-                backgroundImage: p.image ? `url(${p.image})` : undefined,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-                position: 'relative',
+                width: '100%', aspectRatio: '1 / 1',
+                background: '#F8FAFC',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                position: 'relative', overflow: 'hidden',
               }}>
-                {!p.image && (
-                  <span style={{ fontSize: '2.2rem', opacity: 0.7 }}>
+                {p.image ? (
+                  <img src={p.image} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 8 }} />
+                ) : (
+                  <span style={{ fontSize: '2.4rem', opacity: 0.4 }}>
                     {variants.length > 0 ? '🎨' : '🛒'}
                   </span>
                 )}
-
-                {/* Overlay stok habis */}
                 {isOut && (
-                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ color: 'white', fontWeight: 800, fontSize: '0.75rem', background: '#EF4444', padding: '3px 10px', borderRadius: 99 }}>HABIS</span>
+                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.38)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ color: 'white', fontWeight: 800, fontSize: 11, background: '#EF4444', padding: '2px 10px', borderRadius: 99 }}>HABIS</span>
                   </div>
                 )}
-
-                {/* Badge varian */}
-                {variants.length > 0 && (
-                  <div style={{ position: 'absolute', top: 6, left: 6, background: '#4F46E5', color: 'white', padding: '2px 7px', borderRadius: 6, fontSize: '10px', fontWeight: 700 }}>
-                    {variants.length} Varian
-                  </div>
-                )}
-
-                {/* Badge stok menipis */}
                 {isLow && (
-                  <div style={{ position: 'absolute', top: 6, right: 6, background: '#F59E0B', color: 'white', padding: '2px 7px', borderRadius: 6, fontSize: '10px', fontWeight: 700 }}>
+                  <div style={{ position: 'absolute', top: 6, right: 6, background: '#F59E0B', color: 'white', padding: '2px 7px', borderRadius: 99, fontSize: 10, fontWeight: 700 }}>
                     Sisa {p.stock}
+                  </div>
+                )}
+                {variants.length > 0 && (
+                  <div style={{ position: 'absolute', top: 6, left: 6, background: '#4F46E5', color: 'white', padding: '2px 7px', borderRadius: 6, fontSize: 10, fontWeight: 700 }}>
+                    {variants.length} Varian
                   </div>
                 )}
               </div>
 
               {/* Info produk */}
-              <div style={{ padding: '8px 10px 10px', display: 'flex', flexDirection: 'column', flex: 1, position: 'relative' }}>
-                <p style={S.cardName}>{p.name}</p>
-                <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 'auto', gap: 4 }}>
-                  <div>
-                    <div style={S.cardPrice}>Rp{p.price.toLocaleString('id-ID')}</div>
-                    <div style={S.cardStock}>
-                      {variants.length > 0 ? 'Pilih varian ›' : isOut ? 'Stok habis' : `${p.stock} ${p.unit || 'pcs'}`}
-                    </div>
-                  </div>
-                  {/* Tombol tambah */}
-                  {!isOut && (
-                    <div style={{
-                      width: 30, height: 30, borderRadius: 10,
-                      background: 'linear-gradient(135deg,#4F46E5,#7C3AED)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: 'white', fontSize: '1.3rem', fontWeight: 300,
-                      flexShrink: 0, boxShadow: '0 2px 8px rgba(79,70,229,0.4)',
-                    }}>+</div>
-                  )}
+              <div style={{ padding: '10px 12px 12px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: '#1E293B', marginBottom: 4, lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                  {p.name}
                 </div>
+                <div style={{ color: '#4F46E5', fontWeight: 800, fontSize: 14, marginBottom: 6 }}>
+                  Rp {p.price.toLocaleString('id-ID')}
+                </div>
+                <div style={{ marginBottom: 8 }}>
+                  {(() => {
+                    if (variants.length > 0) return <span style={{ fontSize: 11, fontWeight: 700, background: '#EEF2FF', color: '#4F46E5', padding: '2px 8px', borderRadius: 99 }}>🎨 {variants.length} Varian</span>;
+                    if (isOut)  return <span style={{ fontSize: 11, fontWeight: 700, background: '#FEE2E2', color: '#DC2626', padding: '2px 8px', borderRadius: 99 }}>🚫 Stok Habis</span>;
+                    if (isLow)  return <span style={{ fontSize: 11, fontWeight: 700, background: '#FEF3C7', color: '#D97706', padding: '2px 8px', borderRadius: 99 }}>⚠️ Sisa {p.stock} {p.unit || 'pcs'}</span>;
+                    return       <span style={{ fontSize: 11, fontWeight: 700, background: '#DCFCE7', color: '#16A34A', padding: '2px 8px', borderRadius: 99 }}>✓ Tersedia {p.stock} {p.unit || 'pcs'}</span>;
+                  })()}
+                </div>
+                <button
+                  onClick={() => addToCart(p)}
+                  disabled={isOut}
+                  style={{
+                    width: '100%', padding: '8px 0', borderRadius: 10, border: 'none',
+                    fontWeight: 700, fontSize: 13, marginTop: 'auto',
+                    cursor: isOut ? 'not-allowed' : 'pointer',
+                    background: isOut ? '#F1F5F9' : '#EEF2FF',
+                    color: isOut ? '#94A3B8' : '#4F46E5',
+                    transition: 'background 0.15s',
+                  }}
+                >
+                  {variants.length > 0 ? 'Pilih Varian ›' : isOut ? 'Habis' : '+ Tambah'}
+                </button>
               </div>
             </div>
           );
-        })}
+        }) : (
+          <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '40px 0', color: '#94A3B8' }}>
+            Produk tidak ditemukan.
+          </div>
+        )}
       </div>
 
       {/* Bottom Sheet Cart */}
