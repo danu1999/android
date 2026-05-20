@@ -649,8 +649,7 @@ export default function Kasir() {
               boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
               overflow: 'hidden',
               border: '1px solid #E2E8F0',
-              display: 'flex',
-              flexDirection: 'column',
+              display: 'block',
               transition: 'transform 0.15s, box-shadow 0.15s',
               WebkitTapHighlightColor: 'transparent',
               cursor: isOut ? 'not-allowed' : 'pointer',
@@ -659,73 +658,65 @@ export default function Kasir() {
               onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(0,0,0,0.12)'; }}
               onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.07)'; }}
             >
-              {/* Image Box (using aspect-ratio to prevent flex collapse on iOS Safari) */}
-              <div
-                style={{
-                  width: '100%',
-                  aspectRatio: '1 / 1',
-                  background: '#F8FAFC',
-                  position: 'relative',
-                  overflow: 'hidden',
-                  flexShrink: 0,
-                }}
-              >
+              {/* Image Box — padding-top trick, paling kompatibel semua browser mobile */}
+              <div style={{
+                width: '100%',
+                paddingTop: '100%',
+                background: '#F8FAFC',
+                position: 'relative',
+                overflow: 'hidden',
+              }}>
                 {hasImage ? (
                   <img
                     src={p.image}
                     alt={p.name}
-                    style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 8 }}
+                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'contain', padding: 8 }}
                   />
                 ) : (
                   <div style={{
-                    width: '100%',
-                    height: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
+                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
                   }}>
-                    <ShoppingBag size={40} color="#CBD5E1" />
+                    <ShoppingBag size={32} color="#CBD5E1" />
                   </div>
                 )}
                 {p.stock < 1 && variants.length === 0 && (
                   <div style={{
-                    position: 'absolute', top: 8, right: 8,
+                    position: 'absolute', top: 6, right: 6,
                     background: '#EF4444', color: '#fff',
-                    fontSize: 10, fontWeight: 700,
-                    padding: '2px 8px', borderRadius: 99,
+                    fontSize: 9, fontWeight: 700,
+                    padding: '2px 7px', borderRadius: 99,
                   }}>
                     Habis
                   </div>
                 )}
               </div>
 
-              {/* Product Info */}
-              <div className="product-card-info" style={{ padding: '8px 10px 10px', flex: 1, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-                <div className="product-card-title" style={{ fontWeight: 700, fontSize: 11.5, color: '#1E293B', marginBottom: 2, lineHeight: 1.25, height: 30, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+              {/* Product Info — block biasa, otomatis di bawah gambar */}
+              <div className="product-card-info" style={{ padding: '8px 10px 10px' }}>
+                <div className="product-card-title" style={{ fontWeight: 700, fontSize: 11.5, color: '#1E293B', marginBottom: 2, lineHeight: 1.25, maxHeight: 30, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                   {p.name}
                 </div>
                 <div className="product-card-price" style={{ color: '#4F46E5', fontWeight: 800, fontSize: 12.5, marginBottom: 4 }}>
                   Rp {p.price.toLocaleString('id-ID')}
                 </div>
                 {/* Variant / Stock badge */}
-                <div style={{ marginBottom: 8 }}>
+                <div style={{ marginBottom: 6 }}>
                   {(() => {
-                    if (variants.length > 0) return <span className="product-card-badge" style={{ fontSize: 9.5, fontWeight: 700, background: '#EEF2FF', color: '#4F46E5', padding: '2px 6px', borderRadius: 99, display: 'inline-block', lineHeight: '1.25' }}>🎨 {variants.length} Varian</span>;
-                    if (p.stock === 0) return <span className="product-card-badge" style={{ fontSize: 9.5, fontWeight: 700, background: '#FEE2E2', color: '#DC2626', padding: '2px 6px', borderRadius: 99, display: 'inline-block', lineHeight: '1.25' }}>🚫 Stok Habis</span>;
-                    if (p.stock <= 5) return <span className="product-card-badge" style={{ fontSize: 9.5, fontWeight: 700, background: '#FEF3C7', color: '#D97706', padding: '2px 6px', borderRadius: 99, display: 'inline-block', lineHeight: '1.25' }}>⚠️ Sisa {p.stock} {p.unit || 'pcs'}</span>;
-                    return <span className="product-card-badge" style={{ fontSize: 9.5, fontWeight: 700, background: '#DCFCE7', color: '#16A34A', padding: '2px 6px', borderRadius: 99, display: 'inline-block', lineHeight: '1.25' }}>✓ Tersedia {p.stock} {p.unit || 'pcs'}</span>;
+                    if (variants.length > 0) return <span style={{ fontSize: 9.5, fontWeight: 700, background: '#EEF2FF', color: '#4F46E5', padding: '2px 6px', borderRadius: 99, display: 'inline-block' }}>🎨 {variants.length} Varian</span>;
+                    if (p.stock === 0) return <span style={{ fontSize: 9.5, fontWeight: 700, background: '#FEE2E2', color: '#DC2626', padding: '2px 6px', borderRadius: 99, display: 'inline-block' }}>🚫 Habis</span>;
+                    if (p.stock <= 5) return <span style={{ fontSize: 9.5, fontWeight: 700, background: '#FEF3C7', color: '#D97706', padding: '2px 6px', borderRadius: 99, display: 'inline-block' }}>⚠️ Sisa {p.stock}</span>;
+                    return <span style={{ fontSize: 9.5, fontWeight: 700, background: '#DCFCE7', color: '#16A34A', padding: '2px 6px', borderRadius: 99, display: 'inline-block' }}>✓ {p.stock} {p.unit || 'pcs'}</span>;
                   })()}
                 </div>
                 <button
-                  className="product-card-btn"
                   disabled={p.stock < 1 && variants.length === 0}
                   style={{
-                    width: '100%', padding: '5px 0', borderRadius: 8, border: 'none',
+                    display: 'block', width: '100%', padding: '5px 0', borderRadius: 8, border: 'none',
                     fontWeight: 700, fontSize: 11,
                     cursor: (p.stock < 1 && variants.length === 0) ? 'not-allowed' : 'pointer',
                     background: (p.stock < 1 && variants.length === 0) ? '#F1F5F9' : '#EEF2FF',
                     color: (p.stock < 1 && variants.length === 0) ? '#94A3B8' : '#4F46E5',
-                    transition: 'background 0.15s', marginTop: 'auto',
                     pointerEvents: 'none',
                   }}
                 >
