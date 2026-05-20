@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, ShoppingCart, Trash2, CreditCard, QrCode, Printer, X, ChevronUp, ClipboardList, Plus, Minus, Barcode, Camera } from 'lucide-react';
 import api from '../api';
-import { useDemoBlock, DEMO_LIMITS } from '../AuthContext';
+import { useAuth, useDemoBlock, DEMO_LIMITS } from '../AuthContext';
 
 const getEffectivePrice = (product, quantity) => {
   if (!product.wholesaleEnabled || !product.wholesalePrices) return product.price;
@@ -23,6 +23,12 @@ const parseVariants = (p) => {
 
 export default function Kasir() {
   const { showDemoBlock, isDemo } = useDemoBlock();
+  const { user } = useAuth();
+
+  // Akun yang tidak diizinkan menggunakan fitur barcode scanner
+  const SCAN_BLOCKED = ['hanafi', 'fahri', 'fed'];
+  const canScan = !SCAN_BLOCKED.includes((user?.name || '').toLowerCase().trim());
+
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -442,20 +448,22 @@ export default function Kasir() {
           <input style={S.searchInput} placeholder="Cari produk..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
           {searchQuery && <button onClick={() => setSearchQuery('')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#9CA3AF' }}><X size={16} /></button>}
         </div>
-        {/* Barcode scanner button — klik untuk buka panel input */}
-        <button
-          onClick={() => { setBarcodeInputOpen(o => !o); setBarcodeInputVal(''); setTimeout(() => barcodeInputRef.current?.focus(), 80); }}
-          title="Klik untuk scan / ketik barcode produk"
-          style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '8px 10px', borderRadius: 12, border: 'none', cursor: 'pointer', background: barcodeInputOpen ? '#4F46E5' : barcodeFlash === 'found' ? '#DCFCE7' : barcodeFlash === 'notfound' ? '#FEE2E2' : '#EEF2FF', color: barcodeInputOpen ? 'white' : barcodeFlash === 'found' ? '#16A34A' : barcodeFlash === 'notfound' ? '#DC2626' : '#6366F1', fontSize: 12, fontWeight: 700, transition: 'all 0.2s', flexShrink: 0 }}
-        >
-          <Barcode size={16} />
-          {barcodeFlash === 'found' ? '✓ Scan!' : barcodeFlash === 'notfound' ? '✗ Tdk Ada' : barcodeInputOpen ? 'Tutup' : 'Scan'}
-        </button>
+        {/* Barcode scanner button — hanya untuk akun yang diizinkan */}
+        {canScan && (
+          <button
+            onClick={() => { setBarcodeInputOpen(o => !o); setBarcodeInputVal(''); setTimeout(() => barcodeInputRef.current?.focus(), 80); }}
+            title="Klik untuk scan / ketik barcode produk"
+            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '8px 10px', borderRadius: 12, border: 'none', cursor: 'pointer', background: barcodeInputOpen ? '#4F46E5' : barcodeFlash === 'found' ? '#DCFCE7' : barcodeFlash === 'notfound' ? '#FEE2E2' : '#EEF2FF', color: barcodeInputOpen ? 'white' : barcodeFlash === 'found' ? '#16A34A' : barcodeFlash === 'notfound' ? '#DC2626' : '#6366F1', fontSize: 12, fontWeight: 700, transition: 'all 0.2s', flexShrink: 0 }}
+          >
+            <Barcode size={16} />
+            {barcodeFlash === 'found' ? '✓ Scan!' : barcodeFlash === 'notfound' ? '✗ Tdk Ada' : barcodeInputOpen ? 'Tutup' : 'Scan'}
+          </button>
+        )}
         <button style={S.queueBtn} onClick={fetchQueue}><ClipboardList size={16} /> Antrian</button>
       </div>
 
-      {/* Barcode Input Panel */}
-      {barcodeInputOpen && (
+      {/* Barcode Input Panel — hanya tampil jika canScan */}
+      {canScan && barcodeInputOpen && (
         <div style={{ background: '#EEF2FF', padding: '10px 16px', display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, borderBottom: '2px solid #C7D2FE', animation: 'slideDown 0.15s ease' }}>
           <Barcode size={18} color="#4F46E5" style={{ flexShrink: 0 }} />
           <input

@@ -527,29 +527,14 @@ export default function TokoOnline() {
           <div style={{ background: 'white', borderRadius: '24px 24px 0 0', padding: '24px 20px 32px', width: '100%', maxWidth: 480, boxShadow: '0 -8px 40px rgba(0,0,0,0.15)' }}>
             <div style={{ width: 40, height: 4, background: '#E5E7EB', borderRadius: 99, margin: '0 auto 20px' }} />
             <h3 style={{ margin: '0 0 4px', color: '#1E293B', fontWeight: 900, fontSize: '1.1rem' }}>🛒 Konfirmasi Pesanan</h3>
-            <p style={{ margin: '0 0 18px', fontSize: 13, color: '#64748B' }}>Isi data di bawah, pesanan dikirim via WhatsApp</p>
-
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-              <button onClick={() => setDeliveryType('pickup')} style={{ flex: 1, padding: '10px 0', borderRadius: 12, border: `2px solid ${deliveryType === 'pickup' ? '#4F46E5' : '#E5E7EB'}`, background: deliveryType === 'pickup' ? '#EEF2FF' : 'white', color: deliveryType === 'pickup' ? '#4F46E5' : '#64748B', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>🏪 Ambil Sendiri</button>
-              <button onClick={() => setDeliveryType('delivery')} style={{ flex: 1, padding: '10px 0', borderRadius: 12, border: `2px solid ${deliveryType === 'delivery' ? '#4F46E5' : '#E5E7EB'}`, background: deliveryType === 'delivery' ? '#EEF2FF' : 'white', color: deliveryType === 'delivery' ? '#4F46E5' : '#64748B', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>🚚 Dikirim</button>
-            </div>
+            <p style={{ margin: '0 0 18px', fontSize: 13, color: '#64748B' }}>Isi nama Anda, pesanan dikirim via WhatsApp</p>
 
             <input
               type="text" placeholder="Nama Anda (opsional)"
               value={buyerName}
               onChange={e => setBuyerName(e.target.value)}
-              style={{ width: '100%', padding: '11px 14px', borderRadius: 12, border: '1.5px solid #E2E8F0', fontSize: 14, outline: 'none', boxSizing: 'border-box', marginBottom: 10 }}
+              style={{ width: '100%', padding: '11px 14px', borderRadius: 12, border: '1.5px solid #E2E8F0', fontSize: 14, outline: 'none', boxSizing: 'border-box', marginBottom: 14 }}
             />
-
-            {deliveryType === 'delivery' && (
-              <textarea
-                placeholder="Alamat pengiriman lengkap..."
-                value={buyerAddress}
-                onChange={e => setBuyerAddress(e.target.value)}
-                rows={2}
-                style={{ width: '100%', padding: '11px 14px', borderRadius: 12, border: '1.5px solid #E2E8F0', fontSize: 14, outline: 'none', boxSizing: 'border-box', resize: 'vertical', marginBottom: 10 }}
-              />
-            )}
 
             <div style={{ background: '#F8FAFC', borderRadius: 12, padding: '12px 14px', marginBottom: 14 }}>
               <div style={{ fontWeight: 700, fontSize: 13, color: '#1E293B', marginBottom: 4 }}>Ringkasan ({cart.length} item)</div>
