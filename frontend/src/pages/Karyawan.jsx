@@ -128,14 +128,7 @@ export default function Karyawan() {
   const availableRoles = isOwner ? ['KASIR', 'ADMIN', 'OWNER'] : ['KASIR'];
 
   return (
-    <div className="page-container" style={{ userSelect: 'text', WebkitUserSelect: 'text', msUserSelect: 'text' }}>
-      <style>{`
-        .page-container, .modal-overlay, .modal-content, .page-container * {
-          user-select: text !important;
-          -webkit-user-select: text !important;
-          -ms-user-select: text !important;
-        }
-      `}</style>
+    <div className="page-container">
       {/* ── Header ── */}
       <div style={{ background: 'linear-gradient(135deg,#4F46E5,#7C3AED)', borderRadius: 20, padding: '16px 20px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -419,7 +412,7 @@ export default function Karyawan() {
                   <div style={{ fontSize: 12, color: '#6B7280', marginBottom: 6, fontWeight: 600 }}>Masukkan PIN Master Admin:</div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <input
-                      type="password" value={masterPin}
+                      type="text" value={masterPin}
                       onChange={e => { setMasterPin(e.target.value); setPinError(false); }}
                       placeholder="PIN Master"
                       style={{ flex: 1, border: `1.5px solid ${pinError ? '#EF4444' : '#E5E7EB'}`, borderRadius: 10, padding: '9px 12px', fontSize: 15, fontWeight: 700, letterSpacing: 4, outline: 'none' }}
