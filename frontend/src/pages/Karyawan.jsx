@@ -137,7 +137,7 @@ export default function Karyawan() {
           </div>
           <div>
             <h1 style={{ margin: 0, color: 'white', fontSize: '1.2rem', fontWeight: 900 }}>Manajemen Karyawan</h1>
-            <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12 }}>{employees.length}/10 karyawan · Total gaji Rp {fmt(totalGaji)}/bln</div>
+            <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12 }}>{employees.length}/10 karyawan {isOwner && `· Total gaji Rp ${fmt(totalGaji)}/bln`}</div>
           </div>
         </div>
         {isOwner && <button onClick={() => handleOpenModal()} disabled={employees.length >= 10} style={{ display: 'flex', alignItems: 'center', gap: 8, background: employees.length >= 10 ? 'rgba(255,255,255,0.1)' : 'white', color: employees.length >= 10 ? 'rgba(255,255,255,0.4)' : '#4F46E5', border: 'none', borderRadius: 12, padding: '9px 16px', fontWeight: 800, fontSize: 13, cursor: employees.length >= 10 ? 'not-allowed' : 'pointer' }}><Plus size={15} /> Tambah</button>}
