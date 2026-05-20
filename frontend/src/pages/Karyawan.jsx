@@ -303,7 +303,7 @@ export default function Karyawan() {
                   ))}
                 </select>
               </div>
-              {formData.role !== 'OWNER' && (
+              {isOwner && formData.role !== 'OWNER' && (
                 <div className="form-group">
                   <label style={{ fontWeight: 700 }}>💰 Gaji Pokok (Rp/bulan)</label>
                   <input type="number" value={formData.salary} onChange={e => setForm({ ...formData, salary: e.target.value })} placeholder="0" disabled={isViewOnly} style={{ border: `1.5px solid ${cfg(formData.role).border}` }} />
