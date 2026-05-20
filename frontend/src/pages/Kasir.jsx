@@ -250,7 +250,7 @@ export default function Kasir() {
     }).join('');
     const discRow = receipt?.discount > 0 ? `<tr><td colspan="2">Diskon Global</td><td class="r">-Rp${Number(receipt.discount).toLocaleString('id-ID')}</td></tr>` : '';
     w.document.write(`<html><head><style>${RECEIPT_STYLE(size)}</style></head><body>
-      <div class="c b" style="font-size:16px">POSBah</div><div class="c">Struk Pembayaran</div><hr>
+      <div class="c b" style="font-size:16px">PISANG KEJU RAMAYANA</div><div class="c">Struk Pembayaran</div><hr>
       <div>No: ${receipt?.receiptNumber}</div><div>Metode: ${receipt?.paymentMethod}</div>${qLine}${cLine}<hr>
       <table width="100%">${itemsHtml}</table><hr>
       <table width="100%">${discRow}<tr><td class="b">TOTAL</td><td class="r b" colspan="2">Rp${Number(receipt?.total).toLocaleString('id-ID')}</td></tr></table><hr>
@@ -274,7 +274,7 @@ export default function Kasir() {
       return `<tr><td colspan="3">${name}</td></tr><tr><td>${item.quantity}x</td><td>Rp${Number(item.price).toLocaleString('id-ID')}${disc}</td><td class="r">Rp${subtotal.toLocaleString('id-ID')}</td></tr>`;
     }).join('');
     w.document.write(`<html><head><style>${RECEIPT_STYLE(size)}</style></head><body>
-      <div class="c b" style="font-size:16px">POSBah</div><div class="c">Struk Pembayaran</div><hr>
+      <div class="c b" style="font-size:16px">PISANG KEJU RAMAYANA</div><div class="c">Struk Pembayaran</div><hr>
       <div>No: ${t.receiptNumber}</div><div>Metode: ${t.paymentMethod}</div>${qLine}${cLine}${notesLine}<hr>
       <table width="100%">${itemsHtml}</table><hr>
       <table width="100%"><tr><td class="b">TOTAL</td><td class="r b" colspan="2">Rp${Number(t.total).toLocaleString('id-ID')}</td></tr></table><hr>
