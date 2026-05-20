@@ -38,6 +38,49 @@ export default function Keuangan() {
   }, [activeTab, isPremium]);
 
   const fetchData = async () => {
+    if (isDemo) {
+      if (activeTab === 'REKAP') {
+        setReports({
+          totalSales: 45280000,
+          totalExpenses: 12400000,
+          netIncome: 32880000,
+          pendingReceivables: 1850000
+        });
+      } else if (activeTab === 'SALES') {
+        setFinances([
+          { id: 'f101', date: '2026-05-20T10:15:00.000Z', customerName: 'Budi Santoso (Demo)', total: 155000, paymentMethod: 'QRIS', status: 'COMPLETED' },
+          { id: 'f102', date: '2026-05-20T09:40:00.000Z', customerName: 'Siti Rahma (Demo)', total: 75000, paymentMethod: 'CASH', status: 'COMPLETED' },
+          { id: 'f103', date: '2026-05-19T17:20:00.000Z', customerName: 'Andi Wijaya (Demo)', total: 320000, paymentMethod: 'CASH', status: 'COMPLETED' },
+          { id: 'f104', date: '2026-05-19T14:10:00.000Z', customerName: 'Dewi Lestari (Demo)', total: 110000, paymentMethod: 'QRIS', status: 'COMPLETED' },
+          { id: 'f105', date: '2026-05-18T11:05:00.000Z', customerName: 'Rian Hidayat (Demo)', total: 45000, paymentMethod: 'CASH', status: 'COMPLETED' },
+        ]);
+      } else if (activeTab === 'MARGIN') {
+        setProducts([
+          { id: 'p301', name: 'Pisang Keju Cokelat (Demo)', price: 15000, costPrice: 9000, stock: 120, variantEnabled: false, variants: null },
+          { id: 'p302', name: 'Pisang Keju Stroberi (Demo)', price: 15000, costPrice: 9500, stock: 85, variantEnabled: false, variants: null },
+          { id: 'p303', name: 'Pisang Keju Premium (Demo)', price: 20000, costPrice: 11000, stock: 50, variantEnabled: true, variants: JSON.stringify([{ name: 'Keju Melimpah', price: 25000, costPrice: 13000, stock: 30 }, { name: 'Milo Almond', price: 28000, costPrice: 15000, stock: 20 }]) },
+        ]);
+      } else if (activeTab === 'EXPENSE') {
+        setFinances([
+          { id: 'f201', date: '2026-05-18T08:00:00.000Z', description: 'Belanja Pisang & Bahan Baku Keju (Demo)', amount: 850000, type: 'EXPENSE', status: 'PAID' },
+          { id: 'f202', date: '2026-05-15T09:30:00.000Z', description: 'Beli Cup & Plastik Kemasan (Demo)', amount: 350000, type: 'EXPENSE', status: 'PAID' },
+          { id: 'f203', date: '2026-05-02T10:00:00.000Z', description: 'Bayar Token Listrik Outlet (Demo)', amount: 200000, type: 'EXPENSE', status: 'PAID' },
+          { id: 'f204', date: '2026-05-01T17:00:00.000Z', description: 'Uang Keamanan & Kebersihan (Demo)', amount: 50000, type: 'EXPENSE', status: 'PAID' },
+        ]);
+      } else if (activeTab === 'PAYABLE') {
+        setFinances([
+          { id: 'f401', date: '2026-05-10T12:00:00.000Z', description: 'Hutang Agen Pisang Pak Slamet (Demo)', amount: 1500000, type: 'PAYABLE', status: 'PENDING' },
+          { id: 'f402', date: '2026-05-05T14:30:00.000Z', description: 'Sewa Ruko Sisa Bulan Depan (Demo)', amount: 3000000, type: 'PAYABLE', status: 'PENDING' },
+        ]);
+      } else if (activeTab === 'RECEIVABLE') {
+        setFinances([
+          { id: 'f501', date: '2026-05-18T16:00:00.000Z', description: 'Piutang Catering Ibu Ratna (Demo)', amount: 1200000, type: 'RECEIVABLE', status: 'PENDING' },
+          { id: 'f502', date: '2026-05-17T11:00:00.000Z', description: 'Titipan Modal Koperasi (Demo)', amount: 650000, type: 'RECEIVABLE', status: 'PENDING' },
+        ]);
+      }
+      return;
+    }
+
     try {
       if (activeTab === 'REKAP') {
         const res = await api.get('/reports');
@@ -148,7 +191,7 @@ export default function Keuangan() {
       let variants = [];
       try {
         if (p.variants) variants = JSON.parse(p.variants);
-      } catch (e) {}
+      } catch (e) { }
 
       if (!p.variantEnabled || variants.length === 0) {
         flattenedProducts.push({
@@ -187,14 +230,14 @@ export default function Keuangan() {
     const totalStockWithCost = withCost.reduce((s, p) => s + p.stock, 0);
     const avgMargin = totalStockWithCost > 0
       ? Math.round(
-          withCost.reduce((s, p) => s + ((p.price - p.costPrice) / p.price) * 100 * p.stock, 0)
-          / totalStockWithCost
-        )
+        withCost.reduce((s, p) => s + ((p.price - p.costPrice) / p.price) * 100 * p.stock, 0)
+        / totalStockWithCost
+      )
       : 0;
 
     const totalRevenuePotential = withCost.reduce((s, p) => s + p.price * p.stock, 0);
-    const totalCostValue        = withCost.reduce((s, p) => s + p.costPrice * p.stock, 0);
-    const totalPotentialProfit  = totalRevenuePotential - totalCostValue;
+    const totalCostValue = withCost.reduce((s, p) => s + p.costPrice * p.stock, 0);
+    const totalPotentialProfit = totalRevenuePotential - totalCostValue;
 
     const maxMargin = Math.max(...withCost.map(p => Math.round(((p.price - p.costPrice) / p.price) * 100)), 1);
     const lowMarginProducts = withCost.filter(p => ((p.price - p.costPrice) / p.price) * 100 < 10 && p.stock > 0);
@@ -203,8 +246,8 @@ export default function Keuangan() {
     const marginColor = avgMargin >= 25
       ? { border: '#10B981', text: '#065F46', bg: 'linear-gradient(135deg,#D1FAE5,#A7F3D0)' }
       : avgMargin >= 15
-      ? { border: '#F59E0B', text: '#78350F', bg: 'linear-gradient(135deg,#FEF3C7,#FDE68A)' }
-      : { border: '#EF4444', text: '#7F1D1D', bg: 'linear-gradient(135deg,#FEE2E2,#FECACA)' };
+        ? { border: '#F59E0B', text: '#78350F', bg: 'linear-gradient(135deg,#FEF3C7,#FDE68A)' }
+        : { border: '#EF4444', text: '#7F1D1D', bg: 'linear-gradient(135deg,#FEE2E2,#FECACA)' };
 
     const sortedProducts = [...withCost].sort((a, b) => {
       const mA = (a.price - a.costPrice) / a.price;
@@ -288,11 +331,11 @@ export default function Keuangan() {
           </div>
         </div>
 
-      {/* Card list per produk */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {allProducts.length === 0
-          ? <div style={{ textAlign: 'center', padding: '32px', color: '#94A3B8' }}>Belum ada data produk.</div>
-          : allProducts.map(p => {
+        {/* Card list per produk */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {allProducts.length === 0
+            ? <div style={{ textAlign: 'center', padding: '32px', color: '#94A3B8' }}>Belum ada data produk.</div>
+            : allProducts.map(p => {
               const hasCost = p.costPrice > 0;
               const margin = hasCost ? Math.round(((p.price - p.costPrice) / p.price) * 100) : null;
               const profitPerItem = hasCost ? p.price - p.costPrice : null;
@@ -331,11 +374,11 @@ export default function Keuangan() {
                 </div>
               );
             })
-        }
+          }
+        </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
 
   const renderRekap = () => {
     if (!reports) return <p>Loading...</p>;
@@ -348,29 +391,29 @@ export default function Keuangan() {
     return (
       <div>
         {/* Filter Tanggal */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', background: '#F8FAFC', padding: '12px', borderRadius: 14, border: '1px solid #E2E8F0' }}>
-        <span style={{ fontWeight: 700, fontSize: 13, color: '#475569', width: '100%' }}>📅 Filter Periode</span>
-        <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ flex: 1, minWidth: 130, padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 10, fontSize: 13 }} />
-        <span style={{ alignSelf: 'center', color: '#94A3B8' }}>–</span>
-        <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ flex: 1, minWidth: 130, padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 10, fontSize: 13 }} />
-        {(dateFrom || dateTo) && <button onClick={() => { setDateFrom(''); setDateTo(''); }} style={{ padding: '8px 12px', background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 12 }}>✕ Reset</button>}
-      </div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', background: '#F8FAFC', padding: '12px', borderRadius: 14, border: '1px solid #E2E8F0' }}>
+          <span style={{ fontWeight: 700, fontSize: 13, color: '#475569', width: '100%' }}>📅 Filter Periode</span>
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ flex: 1, minWidth: 130, padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 10, fontSize: 13 }} />
+          <span style={{ alignSelf: 'center', color: '#94A3B8' }}>–</span>
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ flex: 1, minWidth: 130, padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 10, fontSize: 13 }} />
+          {(dateFrom || dateTo) && <button onClick={() => { setDateFrom(''); setDateTo(''); }} style={{ padding: '8px 12px', background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 12 }}>✕ Reset</button>}
+        </div>
 
-      {/* Stat cards 2×2 */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
-        {[
-          { icon: '📈', label: 'Total Penjualan', value: reports.totalSales, color: '#3B82F6', bg: '#EFF6FF', border: '#BFDBFE' },
-          { icon: '💸', label: 'Pengeluaran', value: reports.totalExpenses, color: '#EF4444', bg: '#FEF2F2', border: '#FECACA' },
-          { icon: '💰', label: 'Pendapatan Bersih', value: reports.netIncome, color: reports.netIncome >= 0 ? '#10B981' : '#EF4444', bg: reports.netIncome >= 0 ? '#F0FDF4' : '#FEF2F2', border: reports.netIncome >= 0 ? '#A7F3D0' : '#FECACA' },
-          { icon: '⏳', label: 'Piutang Pending', value: reports.pendingReceivables, color: '#F59E0B', bg: '#FFFBEB', border: '#FDE68A' },
-        ].map(s => (
-          <div key={s.label} style={{ background: s.bg, border: `1.5px solid ${s.border}`, borderRadius: 16, padding: '14px 14px' }}>
-            <div style={{ fontSize: 20, marginBottom: 4 }}>{s.icon}</div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: s.color, opacity: 0.8, marginBottom: 4 }}>{s.label}</div>
-            <div style={{ fontSize: 16, fontWeight: 900, color: s.color, lineHeight: 1.2 }}>Rp {s.value.toLocaleString('id-ID')}</div>
-          </div>
-        ))}
-      </div>
+        {/* Stat cards 2×2 */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
+          {[
+            { icon: '📈', label: 'Total Penjualan', value: reports.totalSales, color: '#3B82F6', bg: '#EFF6FF', border: '#BFDBFE' },
+            { icon: '💸', label: 'Pengeluaran', value: reports.totalExpenses, color: '#EF4444', bg: '#FEF2F2', border: '#FECACA' },
+            { icon: '💰', label: 'Pendapatan Bersih', value: reports.netIncome, color: reports.netIncome >= 0 ? '#10B981' : '#EF4444', bg: reports.netIncome >= 0 ? '#F0FDF4' : '#FEF2F2', border: reports.netIncome >= 0 ? '#A7F3D0' : '#FECACA' },
+            { icon: '⏳', label: 'Piutang Pending', value: reports.pendingReceivables, color: '#F59E0B', bg: '#FFFBEB', border: '#FDE68A' },
+          ].map(s => (
+            <div key={s.label} style={{ background: s.bg, border: `1.5px solid ${s.border}`, borderRadius: 16, padding: '14px 14px' }}>
+              <div style={{ fontSize: 20, marginBottom: 4 }}>{s.icon}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: s.color, opacity: 0.8, marginBottom: 4 }}>{s.label}</div>
+              <div style={{ fontSize: 16, fontWeight: 900, color: s.color, lineHeight: 1.2 }}>Rp {s.value.toLocaleString('id-ID')}</div>
+            </div>
+          ))}
+        </div>
       </div>
     );
   };
@@ -631,6 +674,15 @@ export default function Keuangan() {
           )}
         </div>
       </div>
+
+      {isDemo && (
+        <div style={{ background: '#EFF6FF', border: '1.5px solid #BFDBFE', borderRadius: 12, padding: '10px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 16 }}>💡</span>
+          <span style={{ fontWeight: 600, color: '#1E40AF', fontSize: 13 }}>
+            <b>Mode Demo:</b> Menampilkan data fiktif (simulasi) untuk uji coba menu Keuangan &amp; Laporan.
+          </span>
+        </div>
+      )}
 
       {renderTabs()}
 
