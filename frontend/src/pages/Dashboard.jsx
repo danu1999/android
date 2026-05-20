@@ -15,17 +15,17 @@ export default function Dashboard() {
   const isOwner = useIsOwner();
   const { isDemo } = useDemoBlock();
 
-  const [report, setReport]     = useState(null);
+  const [report, setReport] = useState(null);
   const [products, setProducts] = useState([]);
-  const [loading, setLoading]   = useState(true);
+  const [loading, setLoading] = useState(true);
 
   const DEMO_PRODUCTS = [
     { id: 'p301', name: 'Pisang Keju Cokelat', stock: 120, price: 15000 },
-    { id: 'p302', name: 'Pisang Keju Stroberi', stock: 85,  price: 15000 },
-    { id: 'p303', name: 'Pisang Keju Premium',  stock: 50,  price: 20000 },
-    { id: 'p304', name: 'Jus Alpukat',           stock: 60,  price: 18000 },
-    { id: 'p305', name: 'Jus Mangga',            stock: 75,  price: 15000 },
-    { id: 'p306', name: 'Es Teh Manis',          stock: 4,   price: 8000  }, // stok menipis
+    { id: 'p302', name: 'Pisang Keju Stroberi', stock: 85, price: 15000 },
+    { id: 'p303', name: 'Pisang Keju Premium', stock: 50, price: 20000 },
+    { id: 'p304', name: 'Jus Alpukat', stock: 60, price: 18000 },
+    { id: 'p305', name: 'Jus Mangga', stock: 75, price: 15000 },
+    { id: 'p306', name: 'Es Teh Manis', stock: 4, price: 8000 }, // stok menipis
   ];
 
   const DEMO_REPORT = {
@@ -52,26 +52,26 @@ export default function Dashboard() {
         ]);
         setReport(rRes.data);
         setProducts(pRes.data);
-      } catch (_) {}
+      } catch (_) { }
       finally { setLoading(false); }
     };
     load();
   }, []);
 
-  const now       = new Date();
-  const greeting  = now.getHours() < 12 ? 'Selamat Pagi' : now.getHours() < 17 ? 'Selamat Siang' : 'Selamat Malam';
-  const dateStr   = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const now = new Date();
+  const greeting = now.getHours() < 12 ? 'Selamat Pagi' : now.getHours() < 17 ? 'Selamat Siang' : 'Selamat Malam';
+  const dateStr = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-  const lowStock  = products.filter(p => p.stock > 0 && p.stock <= 5);
-  const outStock  = products.filter(p => p.stock === 0);
+  const lowStock = products.filter(p => p.stock > 0 && p.stock <= 5);
+  const outStock = products.filter(p => p.stock === 0);
 
   const fmt = (n) => Number(n || 0).toLocaleString('id-ID');
 
   // Menu cards
   const menus = [
-    { path: '/keuangan',  label: 'Keuangan',   icon: <Wallet size={22} />,  grad: 'linear-gradient(135deg,#10B981,#059669)', show: isAdmin },
-    { path: '/pelanggan', label: 'Pelanggan',  icon: <Contact size={22} />, grad: 'linear-gradient(135deg,#3B82F6,#2563EB)', show: isAdmin },
-    { path: '/karyawan',  label: 'Karyawan',   icon: <Users size={22} />,   grad: 'linear-gradient(135deg,#F59E0B,#D97706)', show: isAdmin },
+    { path: '/keuangan', label: 'Keuangan', icon: <Wallet size={22} />, grad: 'linear-gradient(135deg,#10B981,#059669)', show: isAdmin },
+    { path: '/pelanggan', label: 'Pelanggan', icon: <Contact size={22} />, grad: 'linear-gradient(135deg,#3B82F6,#2563EB)', show: isAdmin },
+    { path: '/karyawan', label: 'Karyawan', icon: <Users size={22} />, grad: 'linear-gradient(135deg,#F59E0B,#D97706)', show: isAdmin },
     { path: '/toko-online', label: 'Toko Online', icon: <Globe size={22} />, grad: 'linear-gradient(135deg,#8B5CF6,#6D28D9)', show: true },
   ].filter(m => m.show);
 
