@@ -128,7 +128,14 @@ export default function Karyawan() {
   const availableRoles = isOwner ? ['KASIR', 'ADMIN', 'OWNER'] : ['KASIR'];
 
   return (
-    <div className="page-container">
+    <div className="page-container" style={{ userSelect: 'text', WebkitUserSelect: 'text', msUserSelect: 'text' }}>
+      <style>{`
+        .page-container, .modal-overlay, .modal-content, .page-container * {
+          user-select: text !important;
+          -webkit-user-select: text !important;
+          -ms-user-select: text !important;
+        }
+      `}</style>
       {/* ── Header ── */}
       <div style={{ background: 'linear-gradient(135deg,#4F46E5,#7C3AED)', borderRadius: 20, padding: '16px 20px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
