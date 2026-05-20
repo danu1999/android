@@ -430,23 +430,22 @@ export default function Kasir() {
 
   // ---- STYLES ----
   const S = {
-    wrap: { display: 'flex', flexDirection: 'column', height: '100%', background: '#F8F9FF', position: 'relative' },
-    topbar: { padding: '12px 16px', background: 'white', display: 'flex', gap: '10px', alignItems: 'center', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', flexShrink: 0 },
-    searchBox: { flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: '#F1F3FF', borderRadius: '12px', padding: '10px 14px' },
-    searchInput: { border: 'none', background: 'transparent', outline: 'none', fontSize: '0.9rem', width: '100%', color: '#1F2937' },
-    queueBtn: { padding: '10px 14px', borderRadius: '12px', border: 'none', background: '#EEF2FF', color: '#4F46E5', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' },
-    grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10, padding: '12px 8px 180px', overflowY: 'auto', flex: 1 },
-    card: { background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.07)', cursor: 'pointer', userSelect: 'none', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', WebkitTapHighlightColor: 'transparent' },
-    cardThumb: { width: '100%', aspectRatio: '1/1', background: '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, position: 'relative' },
-    cardBody: { padding: '8px 10px 10px', display: 'flex', flexDirection: 'column', flex: 1 },
-    cardName: { fontWeight: 700, fontSize: '0.82rem', color: '#111827', lineHeight: 1.3, marginBottom: 4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' },
-    cardPrice: { fontWeight: 800, fontSize: '0.88rem', color: '#4F46E5' },
-    cardStock: { fontWeight: 600, fontSize: '0.72rem', color: '#9CA3AF', marginTop: 2 },
-    // bottom bar — sits above the mobile-bottom-nav (~65px)
+    wrap: { display: 'flex', flexDirection: 'column', height: '100%', background: '#F0F4FF', position: 'relative' },
+    topbar: { padding: '10px 12px', background: 'linear-gradient(135deg,#4F46E5,#6366F1)', display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 },
+    searchBox: { flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.18)', borderRadius: '12px', padding: '9px 12px', border: '1px solid rgba(255,255,255,0.25)' },
+    searchInput: { border: 'none', background: 'transparent', outline: 'none', fontSize: '0.88rem', width: '100%', color: 'white' },
+    queueBtn: { padding: '9px 12px', borderRadius: '10px', border: 'none', background: 'rgba(255,255,255,0.18)', color: 'white', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '5px', border: '1px solid rgba(255,255,255,0.25)' },
+    grid: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, padding: '10px 10px 190px', overflowY: 'auto', flex: 1 },
+    card: { background: 'white', borderRadius: '14px', boxShadow: '0 1px 6px rgba(79,70,229,0.08)', cursor: 'pointer', userSelect: 'none', overflow: 'hidden', WebkitTapHighlightColor: 'transparent' },
+    cardThumb: { width: '100%', background: '#F0F4FF', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, position: 'relative' },
+    cardBody: { padding: '8px 10px 10px' },
+    cardName: { fontWeight: 700, fontSize: '0.8rem', color: '#1E293B', lineHeight: 1.3, marginBottom: 3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' },
+    cardPrice: { fontWeight: 800, fontSize: '0.85rem', color: '#4F46E5' },
+    cardStock: { fontWeight: 600, fontSize: '0.7rem', color: '#9CA3AF', marginTop: 2 },
     bottomBar: { position: 'fixed', bottom: '65px', left: 0, right: 0, zIndex: 55 },
-    backdrop: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(3px)', zIndex: -1 },
-    sheet: (open) => ({ background: 'white', borderRadius: open ? '20px 20px 0 0' : '16px 16px 0 0', boxShadow: '0 -6px 30px rgba(0,0,0,0.12)', transition: 'max-height 0.4s cubic-bezier(0.4,0,0.2,1)', maxHeight: open ? '65dvh' : '56px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }),
-    sheetHandle: { padding: '0 16px', borderBottom: cartOpen ? '1px solid #F3F4F6' : 'none', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: '56px', background: 'white' },
+    backdrop: { position: 'fixed', inset: 0, background: 'rgba(15,10,60,0.45)', backdropFilter: 'blur(4px)', zIndex: -1 },
+    sheet: (open) => ({ background: 'white', borderRadius: open ? '22px 22px 0 0' : '18px 18px 0 0', boxShadow: '0 -8px 40px rgba(79,70,229,0.15)', transition: 'max-height 0.4s cubic-bezier(0.4,0,0.2,1)', maxHeight: open ? '65dvh' : '58px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }),
+    sheetHandle: { padding: '0 16px', borderBottom: cartOpen ? '1px solid #F0F4FF' : 'none', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: '58px', background: 'white' },
     sheetBody: { overflowY: 'auto', flex: 1, padding: '0 16px 8px' },
     input: { width: '100%', padding: '11px 14px', borderRadius: '10px', border: '1.5px solid #E5E7EB', outline: 'none', fontSize: '0.9rem', boxSizing: 'border-box', background: '#FAFAFA' },
     pill: (active) => ({ padding: '12px 24px', borderRadius: '12px', border: 'none', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', background: active ? '#4F46E5' : '#EEF2FF', color: active ? 'white' : '#4F46E5', transition: 'all 0.2s' }),
@@ -459,22 +458,20 @@ export default function Kasir() {
       {/* Top Bar */}
       <div style={S.topbar}>
         <div style={S.searchBox}>
-          <Search size={18} color="#9CA3AF" />
-          <input style={S.searchInput} placeholder="Cari produk..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-          {searchQuery && <button onClick={() => setSearchQuery('')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#9CA3AF' }}><X size={16} /></button>}
+          <Search size={16} color="rgba(255,255,255,0.7)" />
+          <input style={{ ...S.searchInput, '::placeholder': { color: 'rgba(255,255,255,0.6)' } }} placeholder="Cari produk..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+          {searchQuery && <button onClick={() => setSearchQuery('')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'rgba(255,255,255,0.7)' }}><X size={15} /></button>}
         </div>
-        {/* Barcode scanner button — hanya untuk akun yang diizinkan */}
         {canScan && (
           <button
             onClick={() => { setBarcodeInputOpen(o => !o); setBarcodeInputVal(''); setTimeout(() => barcodeInputRef.current?.focus(), 80); }}
-            title="Klik untuk scan / ketik barcode produk"
-            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '8px 10px', borderRadius: 12, border: 'none', cursor: 'pointer', background: barcodeInputOpen ? '#4F46E5' : barcodeFlash === 'found' ? '#DCFCE7' : barcodeFlash === 'notfound' ? '#FEE2E2' : '#EEF2FF', color: barcodeInputOpen ? 'white' : barcodeFlash === 'found' ? '#16A34A' : barcodeFlash === 'notfound' ? '#DC2626' : '#6366F1', fontSize: 12, fontWeight: 700, transition: 'all 0.2s', flexShrink: 0 }}
+            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '9px 10px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.25)', cursor: 'pointer', background: barcodeFlash === 'found' ? '#10B981' : barcodeFlash === 'notfound' ? '#EF4444' : 'rgba(255,255,255,0.18)', color: 'white', fontSize: 11, fontWeight: 700, transition: 'all 0.2s', flexShrink: 0 }}
           >
-            <Barcode size={16} />
-            {barcodeFlash === 'found' ? '✓ Scan!' : barcodeFlash === 'notfound' ? '✗ Tdk Ada' : barcodeInputOpen ? 'Tutup' : 'Scan'}
+            <Barcode size={15} />
+            {barcodeFlash === 'found' ? '✓' : barcodeFlash === 'notfound' ? '✗' : 'Scan'}
           </button>
         )}
-        <button style={S.queueBtn} onClick={fetchQueue}><ClipboardList size={16} /> Antrian</button>
+        <button style={S.queueBtn} onClick={fetchQueue}><ClipboardList size={15} /></button>
       </div>
 
       {/* Barcode Input Panel — hanya tampil jika canScan */}
@@ -580,49 +577,15 @@ export default function Kasir() {
         </div>
       )}
 
-      {/* Keyframes kamera & CSS Responsif Mobile */}
       <style>{`
         @keyframes camSpin { to { transform: rotate(360deg); } }
         @keyframes camScanLine {
           0%,100% { opacity:0; transform:translateY(-80px); }
           50% { opacity:1; transform:translateY(80px); }
         }
-        .product-grid {
-          grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)) !important;
-          gap: 10px !important;
-          padding: 12px 8px 180px !important;
-        }
-        .product-card {
-          border-radius: 12px !important;
-        }
-        .product-card-info {
-          padding: 8px 10px 10px !important;
-        }
-        .product-card-title {
-          font-size: 11.5px !important;
-          margin-bottom: 2px !important;
-          line-height: 1.25 !important;
-          height: 30px !important;
-          display: -webkit-box !important;
-          -webkit-line-clamp: 2 !important;
-          -webkit-box-orient: vertical !important;
-          overflow: hidden !important;
-        }
-        .product-card-price {
-          font-size: 12.5px !important;
-          margin-bottom: 4px !important;
-        }
-        .product-card-badge {
-          font-size: 9.5px !important;
-          padding: 2px 6px !important;
-          display: inline-block !important;
-          line-height: 1.25 !important;
-        }
-        .product-card-btn {
-          font-size: 11px !important;
-          padding: 5px 0 !important;
-          border-radius: 8px !important;
-        }
+        input[placeholder] { color: rgba(255,255,255,0.6) !important; }
+        ::placeholder { color: rgba(255,255,255,0.6) !important; }
+        .kasir-search::placeholder { color: rgba(255,255,255,0.7) !important; }
       `}</style>
 
       {/* Low stock warning */}
@@ -643,85 +606,60 @@ export default function Kasir() {
           const hasImage = p.image && typeof p.image === 'string' && p.image.trim() !== '' && p.image !== 'null' && p.image !== 'undefined';
 
           return (
-            <div key={p.id} className="product-card" style={{
-              background: '#fff',
-              borderRadius: 12,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
+            <div key={p.id} style={{
+              background: isOut ? '#F8FAFC' : 'white',
+              borderRadius: 14,
+              boxShadow: isOut ? 'none' : '0 2px 10px rgba(79,70,229,0.08)',
               overflow: 'hidden',
-              border: '1px solid #E2E8F0',
+              border: isOut ? '1px solid #E2E8F0' : '1px solid rgba(79,70,229,0.1)',
               display: 'block',
-              transition: 'transform 0.15s, box-shadow 0.15s',
+              transition: 'box-shadow 0.15s, transform 0.15s',
               WebkitTapHighlightColor: 'transparent',
               cursor: isOut ? 'not-allowed' : 'pointer',
+              opacity: isOut ? 0.6 : 1,
             }}
               onClick={() => !isOut && addToCart(p)}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(0,0,0,0.12)'; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.07)'; }}
+              onMouseEnter={e => { if (!isOut) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(79,70,229,0.15)'; } }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(79,70,229,0.08)'; }}
             >
-              {/* Image Box — padding-top trick, paling kompatibel semua browser mobile */}
-              <div style={{
-                width: '100%',
-                paddingTop: '100%',
-                background: '#F8FAFC',
-                position: 'relative',
-                overflow: 'hidden',
-              }}>
+              {/* Gambar — padding-top trick untuk semua browser */}
+              <div style={{ width: '100%', paddingTop: '85%', background: '#F0F4FF', position: 'relative', overflow: 'hidden' }}>
                 {hasImage ? (
-                  <img
-                    src={p.image}
-                    alt={p.name}
+                  <img src={p.image} alt={p.name}
                     style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'contain', padding: 8 }}
                   />
                 ) : (
-                  <div style={{
-                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center'
-                  }}>
-                    <ShoppingBag size={32} color="#CBD5E1" />
+                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 4 }}>
+                    <ShoppingBag size={28} color="#A5B4FC" />
                   </div>
                 )}
+                {variants.length > 0 && (
+                  <div style={{ position: 'absolute', top: 6, left: 6, background: '#4F46E5', color: '#fff', fontSize: 8, fontWeight: 800, padding: '2px 6px', borderRadius: 6 }}>VARIAN</div>
+                )}
                 {p.stock < 1 && variants.length === 0 && (
-                  <div style={{
-                    position: 'absolute', top: 6, right: 6,
-                    background: '#EF4444', color: '#fff',
-                    fontSize: 9, fontWeight: 700,
-                    padding: '2px 7px', borderRadius: 99,
-                  }}>
-                    Habis
+                  <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(255,255,255,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ background: '#EF4444', color: '#fff', fontSize: 10, fontWeight: 800, padding: '4px 10px', borderRadius: 8 }}>Habis</span>
                   </div>
                 )}
               </div>
-
-              {/* Product Info — block biasa, otomatis di bawah gambar */}
-              <div className="product-card-info" style={{ padding: '8px 10px 10px' }}>
-                <div className="product-card-title" style={{ fontWeight: 700, fontSize: 11.5, color: '#1E293B', marginBottom: 2, lineHeight: 1.25, maxHeight: 30, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+              {/* Info Produk */}
+              <div style={{ padding: '8px 10px 10px' }}>
+                <div style={{ fontWeight: 700, fontSize: 12, color: '#1E293B', marginBottom: 2, lineHeight: 1.3, maxHeight: 32, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                   {p.name}
                 </div>
-                <div className="product-card-price" style={{ color: '#4F46E5', fontWeight: 800, fontSize: 12.5, marginBottom: 4 }}>
+                <div style={{ color: '#4F46E5', fontWeight: 800, fontSize: 13, marginBottom: 5 }}>
                   Rp {p.price.toLocaleString('id-ID')}
                 </div>
-                {/* Variant / Stock badge */}
-                <div style={{ marginBottom: 6 }}>
-                  {(() => {
-                    if (variants.length > 0) return <span style={{ fontSize: 9.5, fontWeight: 700, background: '#EEF2FF', color: '#4F46E5', padding: '2px 6px', borderRadius: 99, display: 'inline-block' }}>🎨 {variants.length} Varian</span>;
-                    if (p.stock === 0) return <span style={{ fontSize: 9.5, fontWeight: 700, background: '#FEE2E2', color: '#DC2626', padding: '2px 6px', borderRadius: 99, display: 'inline-block' }}>🚫 Habis</span>;
-                    if (p.stock <= 5) return <span style={{ fontSize: 9.5, fontWeight: 700, background: '#FEF3C7', color: '#D97706', padding: '2px 6px', borderRadius: 99, display: 'inline-block' }}>⚠️ Sisa {p.stock}</span>;
-                    return <span style={{ fontSize: 9.5, fontWeight: 700, background: '#DCFCE7', color: '#16A34A', padding: '2px 6px', borderRadius: 99, display: 'inline-block' }}>✓ {p.stock} {p.unit || 'pcs'}</span>;
-                  })()}
+                <div>
+                  {variants.length > 0
+                    ? <span style={{ fontSize: 10, color: '#6366F1', fontWeight: 600 }}>🎨 {variants.length} varian</span>
+                    : p.stock <= 5 && p.stock > 0
+                      ? <span style={{ fontSize: 10, color: '#D97706', fontWeight: 600 }}>⚠️ Sisa {p.stock} {p.unit || 'pcs'}</span>
+                      : p.stock > 5
+                        ? <span style={{ fontSize: 10, color: '#10B981', fontWeight: 600 }}>✓ {p.stock} {p.unit || 'pcs'}</span>
+                        : null
+                  }
                 </div>
-                <button
-                  disabled={p.stock < 1 && variants.length === 0}
-                  style={{
-                    display: 'block', width: '100%', padding: '5px 0', borderRadius: 8, border: 'none',
-                    fontWeight: 700, fontSize: 11,
-                    cursor: (p.stock < 1 && variants.length === 0) ? 'not-allowed' : 'pointer',
-                    background: (p.stock < 1 && variants.length === 0) ? '#F1F5F9' : '#EEF2FF',
-                    color: (p.stock < 1 && variants.length === 0) ? '#94A3B8' : '#4F46E5',
-                    pointerEvents: 'none',
-                  }}
-                >
-                  {variants.length > 0 ? 'Pilih Varian ›' : '+ Keranjang'}
-                </button>
               </div>
             </div>
           );
