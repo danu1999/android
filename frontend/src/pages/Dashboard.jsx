@@ -7,18 +7,44 @@ import {
 } from 'lucide-react';
 import api from '../api';
 import { useAuth, useIsAdmin, useIsOwner } from '../AuthContext';
+import { useDemoBlock } from '../AuthContext';
 
 export default function Dashboard() {
   const { user } = useAuth();
   const isAdmin = useIsAdmin();
   const isOwner = useIsOwner();
+  const { isDemo } = useDemoBlock();
 
   const [report, setReport]     = useState(null);
   const [products, setProducts] = useState([]);
   const [loading, setLoading]   = useState(true);
 
+  const DEMO_PRODUCTS = [
+    { id: 'p301', name: 'Pisang Keju Cokelat', stock: 120, price: 15000 },
+    { id: 'p302', name: 'Pisang Keju Stroberi', stock: 85,  price: 15000 },
+    { id: 'p303', name: 'Pisang Keju Premium',  stock: 50,  price: 20000 },
+    { id: 'p304', name: 'Jus Alpukat',           stock: 60,  price: 18000 },
+    { id: 'p305', name: 'Jus Mangga',            stock: 75,  price: 15000 },
+    { id: 'p306', name: 'Es Teh Manis',          stock: 4,   price: 8000  }, // stok menipis
+  ];
+
+  const DEMO_REPORT = {
+    totalSales: 45280000,
+    totalExpenses: 12400000,
+    netIncome: 32880000,
+    pendingReceivables: 1850000,
+    todaySales: 705000,
+    transactionCount: 5,
+  };
+
   useEffect(() => {
     const load = async () => {
+      if (isDemo) {
+        setReport(DEMO_REPORT);
+        setProducts(DEMO_PRODUCTS);
+        setLoading(false);
+        return;
+      }
       try {
         const [rRes, pRes] = await Promise.all([
           api.get('/reports'),
