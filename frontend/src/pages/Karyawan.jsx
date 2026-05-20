@@ -14,6 +14,10 @@ const ROLE_CFG = {
 const cfg = (role) => ROLE_CFG[role] || ROLE_CFG.KASIR;
 const fmt = (n) => Number(n || 0).toLocaleString('id-ID');
 
+// Akun yang dikunci — tidak bisa diedit atau dihapus
+const PROTECTED_NAMES = ['hanafi', 'fahri', 'fed'];
+const isProtected = (emp) => PROTECTED_NAMES.includes((emp?.name || '').toLowerCase().trim());
+
 export default function Karyawan() {
   const { user } = useAuth();
   const isOwner = useIsOwner();
@@ -79,6 +83,11 @@ export default function Karyawan() {
   const handleSave = async (e) => {
     e.preventDefault();
     if (!isOwner) return;
+    // Cegah edit akun yang dilindungi
+    if (formData.id) {
+      const target = employees.find(em => em.id === formData.id);
+      if (isProtected(target)) { alert('Akun ini dikunci dan tidak dapat diubah.'); return; }
+    }
     try {
       const payload = { ...formData, salary: Number(formData.salary || 0) };
       if (formData.id) {
@@ -97,6 +106,9 @@ export default function Karyawan() {
   const handleDelete = async (id) => {
     if (isDemo) { showDemoBlock('Menghapus karyawan hanya tersedia di akun berbayar.'); return; }
     if (!isOwner || id === user?.id) return;
+    // Cegah hapus akun yang dilindungi
+    const target = employees.find(em => em.id === id);
+    if (isProtected(target)) { alert('Akun ini dikunci dan tidak dapat dihapus.'); return; }
     if (window.confirm('Yakin hapus karyawan ini?')) {
       try { await api.delete(`/employees/${id}`); setModal(false); fetchEmp(); }
       catch (err) { alert(err.response?.data?.error || 'Gagal menghapus.'); }
@@ -170,18 +182,20 @@ export default function Karyawan() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(230px,1fr))', gap: 14 }}>
             {employees.length > 0 ? employees.map(emp => {
               const c = cfg(emp.role); const isSelf = emp.id === user?.id;
+              const locked = isProtected(emp);
               return (
-                <div key={emp.id} style={{ background: 'white', border: `1.5px solid ${c.border}`, borderRadius: 18, overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.06)', transition: 'transform 0.18s,box-shadow 0.18s' }}
+                <div key={emp.id} style={{ background: 'white', border: `1.5px solid ${locked ? '#D1D5DB' : c.border}`, borderRadius: 18, overflow: 'hidden', boxShadow: '0 2px 10px rgba(0,0,0,0.06)', transition: 'transform 0.18s,box-shadow 0.18s' }}
                   onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 22px rgba(0,0,0,0.12)' }}
                   onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.06)' }}>
-                  <div style={{ height: 5, background: c.grad }} />
+                  <div style={{ height: 5, background: locked ? 'linear-gradient(135deg,#9CA3AF,#6B7280)' : c.grad }} />
                   <div style={{ padding: '14px 16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-                      <div style={{ width: 48, height: 48, borderRadius: 13, background: c.grad, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexShrink: 0, boxShadow: `0 4px 10px ${c.border}` }}>{c.icon}</div>
+                      <div style={{ width: 48, height: 48, borderRadius: 13, background: locked ? 'linear-gradient(135deg,#9CA3AF,#6B7280)' : c.grad, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', flexShrink: 0, boxShadow: `0 4px 10px ${c.border}` }}>{locked ? '🔒' : c.icon}</div>
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <span style={{ fontWeight: 800, fontSize: 14, color: '#111827' }}>{emp.name}</span>
                           {isSelf && <span style={{ fontSize: 10, background: '#EEF2FF', color: '#4F46E5', padding: '1px 7px', borderRadius: 99, fontWeight: 700 }}>Saya</span>}
+                          {locked && <span style={{ fontSize: 10, background: '#F3F4F6', color: '#6B7280', padding: '1px 7px', borderRadius: 99, fontWeight: 700 }}>🔒 Terkunci</span>}
                         </div>
                         <span style={{ display: 'inline-block', marginTop: 3, fontSize: 11, fontWeight: 800, background: c.badge.bg, color: c.badge.color, padding: '2px 10px', borderRadius: 99 }}>{c.label}</span>
                       </div>
@@ -193,7 +207,10 @@ export default function Karyawan() {
                       </div>
                     )}
                     <div style={{ display: 'flex', gap: 8 }}>
-                      {isOwner ? (
+                      {locked ? (
+                        // Akun terkunci — hanya bisa dilihat
+                        <button onClick={() => handleOpenModal(emp, true)} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, background: '#F3F4F6', border: '1px solid #D1D5DB', color: '#6B7280', borderRadius: 10, padding: '7px', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}><Eye size={12} /> Lihat</button>
+                      ) : isOwner ? (
                         <>
                           <button onClick={() => handleOpenModal(emp, false)} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, background: c.soft, border: `1px solid ${c.border}`, color: c.text, borderRadius: 10, padding: '7px', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}><Edit2 size={12} />Edit</button>
                           {!isSelf && <button onClick={() => handleDelete(emp.id)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626', borderRadius: 10, padding: '7px 11px', cursor: 'pointer' }}><Trash2 size={12} /></button>}
