@@ -168,85 +168,214 @@ export default function Katalog() {
   };
 
   return (
-    <div className="page-container">
+    <div className="page-container" style={{ background: '#F8FAFC', minHeight: '100vh', padding: '16px 16px 32px' }}>
+      <style>{`
+        .katalog-card {
+          background: #ffffff;
+          border-radius: 20px;
+          border: 1.5px solid rgba(241, 245, 249, 0.9);
+          box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.03), 0 8px 10px -6px rgba(15, 23, 42, 0.03);
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          cursor: pointer;
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }
+        .katalog-card:hover {
+          transform: translateY(-6px);
+          box-shadow: 0 20px 30px -10px rgba(99, 102, 241, 0.12), 0 10px 15px -3px rgba(99, 102, 241, 0.05);
+          border-color: rgba(99, 102, 241, 0.35);
+        }
+        .katalog-card-img-container {
+          width: 100%;
+          aspect-ratio: 1/1;
+          background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          position: relative;
+          overflow: hidden;
+        }
+        .katalog-card-img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          padding: 12px;
+          transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .katalog-card:hover .katalog-card-img {
+          transform: scale(1.08);
+        }
+        .katalog-search-container {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          background: #ffffff;
+          border: 1.5px solid #E2E8F0;
+          border-radius: 16px;
+          padding: 12px 16px;
+          margin-bottom: 20px;
+          box-shadow: 0 4px 15px rgba(0, 0, 0, 0.015);
+          transition: all 0.2s ease;
+        }
+        .katalog-search-container:focus-within {
+          border-color: #6366F1;
+          box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
+        }
+        .katalog-stat-pill {
+          padding: 8px 16px;
+          border-radius: 14px;
+          white-space: nowrap;
+          flex-shrink: 0;
+          font-weight: 700;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          box-shadow: 0 4px 15px rgba(0, 0, 0, 0.02);
+          transition: all 0.2s ease;
+        }
+        .katalog-stat-pill:hover {
+          transform: translateY(-2px);
+        }
+        .katalog-input {
+          width: 100%;
+          padding: 12px 14px;
+          border: 1.5px solid #E2E8F0;
+          border-radius: 12px;
+          font-size: 14px;
+          outline: none;
+          background: #F8FAFC;
+          transition: all 0.2s ease;
+          box-sizing: border-box;
+        }
+        .katalog-input:focus {
+          border-color: #6366F1;
+          background: #ffffff;
+          box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+        }
+        .katalog-modal-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 1000;
+          background: rgba(15, 23, 42, 0.45);
+          backdrop-filter: blur(8px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 16px;
+          animation: fadeIn 0.25s ease-out;
+        }
+        .katalog-modal-content {
+          background: #ffffff;
+          border-radius: 24px;
+          border: 1px solid rgba(255, 255, 255, 0.7);
+          box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.15);
+          max-height: 90vh;
+          overflow-y: auto;
+          max-width: 520px;
+          width: 100%;
+          padding: 24px;
+          box-sizing: border-box;
+          animation: slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes slideUp {
+          from { transform: translateY(20px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+      `}</style>
 
       {/* ── Header ── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, gap: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 12 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 900, color: '#1E293B' }}>Katalog Produk</h1>
-          {!isAdmin && (
-            <p style={{ margin: '3px 0 0', fontSize: '0.78rem', color: '#6B7280' }}>
-              👁️ Mode lihat saja — Hubungi Admin untuk mengubah produk
+          <h1 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 900, color: '#0F172A', letterSpacing: '-0.025em' }}>Katalog Produk</h1>
+          {!isAdmin ? (
+            <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: '#64748B', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span>👁️ Mode lihat saja — Hubungi Admin untuk ubah produk</span>
+            </p>
+          ) : (
+            <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: '#64748B' }}>
+              Kelola stok barang, grosir, dan varian produk usaha Anda
             </p>
           )}
         </div>
         {isAdmin && (
           <button
             onClick={() => handleOpenModal()}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', background: 'linear-gradient(135deg,#6366F1,#4F46E5)', color: 'white', border: 'none', borderRadius: 14, fontWeight: 800, fontSize: 14, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 4px 12px rgba(99,102,241,0.35)', flexShrink: 0 }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 18px', background: 'linear-gradient(135deg, #4F46E5 0%, #3730A3 100%)', color: 'white', border: 'none', borderRadius: 14, fontWeight: 800, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 8px 20px -6px rgba(79, 70, 229, 0.45)', flexShrink: 0, transition: 'all 0.2s' }}
           >
-            <Plus size={17} /> Tambah
+            <Plus size={16} /> Tambah Baru
           </button>
         )}
       </div>
 
       {/* ── Alert Banners ── */}
       {products.filter(p => p.stock <= LOW_STOCK_THRESHOLD && p.stock > 0).length > 0 && (
-        <div style={{ background: '#FEF9C3', border: '1px solid #FDE047', borderRadius: 12, padding: '10px 14px', marginBottom: 10, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-          <AlertTriangle size={17} color="#CA8A04" style={{ flexShrink: 0, marginTop: 2 }} />
-          <span style={{ fontWeight: 600, color: '#854D0E', fontSize: 13, lineHeight: 1.5 }}>
-            ⚠️ Stok menipis: {products.filter(p => p.stock <= LOW_STOCK_THRESHOLD && p.stock > 0).map(p => `${p.name} (${p.stock})`).join(', ')}
-          </span>
+        <div style={{ background: '#FEF3C7', border: '1.5px solid #FDE68A', borderRadius: 16, padding: '12px 16px', marginBottom: 12, display: 'flex', alignItems: 'flex-start', gap: 10, boxShadow: '0 4px 15px rgba(217, 119, 6, 0.04)' }}>
+          <AlertTriangle size={18} color="#D97706" style={{ flexShrink: 0, marginTop: 1 }} />
+          <div>
+            <span style={{ fontWeight: 800, color: '#92400E', fontSize: 13 }}>⚠️ Stok Menipis: </span>
+            <span style={{ color: '#B45309', fontSize: 13, fontWeight: 600 }}>
+              {products.filter(p => p.stock <= LOW_STOCK_THRESHOLD && p.stock > 0).map(p => `${p.name} (${p.stock})`).join(', ')}
+            </span>
+          </div>
         </div>
       )}
       {products.filter(p => p.stock === 0).length > 0 && (
-        <div style={{ background: '#FEE2E2', border: '1px solid #FCA5A5', borderRadius: 12, padding: '10px 14px', marginBottom: 10, display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-          <AlertTriangle size={17} color="#DC2626" style={{ flexShrink: 0, marginTop: 2 }} />
-          <span style={{ fontWeight: 600, color: '#991B1B', fontSize: 13, lineHeight: 1.5 }}>
-            🚫 Stok habis: {products.filter(p => p.stock === 0).map(p => p.name).join(', ')}
-          </span>
+        <div style={{ background: '#FEE2E2', border: '1.5px solid #FCA5A5', borderRadius: 16, padding: '12px 16px', marginBottom: 12, display: 'flex', alignItems: 'flex-start', gap: 10, boxShadow: '0 4px 15px rgba(220, 38, 38, 0.04)' }}>
+          <AlertTriangle size={18} color="#DC2626" style={{ flexShrink: 0, marginTop: 1 }} />
+          <div>
+            <span style={{ fontWeight: 800, color: '#991B1B', fontSize: 13 }}>🚫 Stok Habis: </span>
+            <span style={{ color: '#B91C1C', fontSize: 13, fontWeight: 600 }}>
+              {products.filter(p => p.stock === 0).map(p => p.name).join(', ')}
+            </span>
+          </div>
         </div>
       )}
 
       {/* ── Search ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'white', border: '1.5px solid #E5E7EB', borderRadius: 14, padding: '10px 14px', marginBottom: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-        <Search size={18} color="#94A3B8" />
+      <div className="katalog-search-container">
+        <Search size={18} color="#64748B" />
         <input
           type="text"
-          placeholder="Cari produk..."
+          placeholder="Cari produk berdasarkan nama..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          style={{ border: 'none', outline: 'none', width: '100%', fontSize: 14, color: '#1E293B', background: 'transparent' }}
+          style={{ border: 'none', outline: 'none', width: '100%', fontSize: 14, color: '#0F172A', background: 'transparent' }}
         />
         {searchQuery && (
-          <button onClick={() => setSearchQuery('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 0 }}>✕</button>
+          <button onClick={() => setSearchQuery('')} style={{ background: '#F1F5F9', border: 'none', cursor: 'pointer', color: '#64748B', padding: '4px 8px', borderRadius: 99, fontSize: 11, fontWeight: 700 }}>Batal</button>
         )}
       </div>
 
       {/* ── Stats Bar ── */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, overflowX: 'auto', paddingBottom: 2 }}>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 20, overflowX: 'auto', paddingBottom: 6, WebkitOverflowScrolling: 'touch' }}>
         {[
-          { label: 'Total', value: products.length, color: '#4F46E5', bg: '#EEF2FF' },
-          { label: 'Stok Habis', value: products.filter(p => p.stock === 0).length, color: '#DC2626', bg: '#FEE2E2' },
-          { label: 'Menipis', value: products.filter(p => p.stock > 0 && p.stock <= LOW_STOCK_THRESHOLD).length, color: '#D97706', bg: '#FEF3C7' },
-          { label: 'Varian', value: products.filter(p => p.variants).length, color: '#7C3AED', bg: '#EDE9FE' },
+          { label: 'Semua Produk', value: products.length, color: '#4F46E5', bg: '#EEF2FF', border: '#C7D2FE' },
+          { label: 'Stok Habis', value: products.filter(p => p.stock === 0).length, color: '#DC2626', bg: '#FEE2E2', border: '#FCA5A5' },
+          { label: 'Menipis', value: products.filter(p => p.stock > 0 && p.stock <= LOW_STOCK_THRESHOLD).length, color: '#D97706', bg: '#FEF3C7', border: '#FDE68A' },
+          { label: 'Varian', value: products.filter(p => p.variants).length, color: '#7C3AED', bg: '#EDE9FE', border: '#DDD6FE' },
         ].map(s => (
-          <div key={s.label} style={{ background: s.bg, borderRadius: 12, padding: '7px 14px', whiteSpace: 'nowrap', flexShrink: 0 }}>
-            <span style={{ fontWeight: 900, fontSize: 16, color: s.color }}>{s.value}</span>
-            <span style={{ fontSize: 11, color: s.color, marginLeft: 5, fontWeight: 600 }}>{s.label}</span>
+          <div key={s.label} className="katalog-stat-pill" style={{ background: s.bg, color: s.color, border: `1.5px solid ${s.border}` }}>
+            <span style={{ fontSize: 16, fontWeight: 900 }}>{s.value}</span>
+            <span style={{ fontSize: 11, opacity: 0.85, fontWeight: 700 }}>{s.label}</span>
           </div>
         ))}
       </div>
 
       {/* ── Product Cards ── */}
       {filteredProducts.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '48px 0', color: '#94A3B8' }}>
-          <div style={{ fontSize: 40, marginBottom: 8 }}>📦</div>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>Tidak ada produk</div>
-          <div style={{ fontSize: 13, marginTop: 4 }}>Coba ubah kata kunci pencarian</div>
+        <div style={{ textAlign: 'center', padding: '64px 16px', background: '#ffffff', borderRadius: 24, border: '1.5px dashed #E2E8F0' }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>📦</div>
+          <div style={{ fontWeight: 800, fontSize: 15, color: '#0F172A' }}>Tidak Ada Produk</div>
+          <div style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>Silakan tambah produk baru atau ubah kata kunci pencarian.</div>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
           {filteredProducts.map((product) => {
             const margin = getMargin(product.price, product.costPrice);
             const isLowStock = product.stock > 0 && product.stock <= LOW_STOCK_THRESHOLD;
@@ -257,61 +386,64 @@ export default function Katalog() {
               <div
                 key={product.id}
                 onClick={() => handleOpenModal(product, !isAdmin)}
+                className="katalog-card"
                 style={{
-                  background: 'white', borderRadius: 18, overflow: 'hidden',
-                  boxShadow: '0 2px 10px rgba(0,0,0,0.07)',
-                  border: `1.5px solid ${isOutStock ? '#FCA5A5' : isLowStock ? '#FDE68A' : '#F1F5F9'}`,
-                  cursor: 'pointer', transition: 'transform 0.15s, box-shadow 0.15s',
-                  position: 'relative', display: 'flex', flexDirection: 'column',
+                  border: isOutStock ? '1.5px solid #FCA5A5' : isLowStock ? '1.5px solid #FDE68A' : '1.5px solid rgba(241, 245, 249, 0.9)'
                 }}
-                onTouchStart={e => e.currentTarget.style.transform = 'scale(0.98)'}
-                onTouchEnd={e => e.currentTarget.style.transform = 'scale(1)'}
               >
                 {/* Image */}
-                <div style={{ width: '100%', aspectRatio: '1/1', background: '#F8FAFC', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
-                  {product.image
-                    ? <img src={product.image} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 8 }} />
-                    : <div style={{ fontSize: 36, opacity: 0.25 }}>📦</div>
-                  }
-                  {/* Top badges */}
+                <div className="katalog-card-img-container">
+                  {product.image ? (
+                    <img src={product.image} alt={product.name} className="katalog-card-img" />
+                  ) : (
+                    <div style={{ fontSize: 36, opacity: 0.25 }}>📦</div>
+                  )}
+
+                  {/* Top Badges */}
                   {hasVariant && (
-                    <div style={{ position: 'absolute', top: 7, left: 7, background: '#7C3AED', color: 'white', fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 99 }}>
-                      🎨 {(() => { try { return JSON.parse(product.variants).length; } catch { return '?'; } })()} Varian
+                    <div style={{ position: 'absolute', top: 8, left: 8, background: 'rgba(124, 58, 237, 0.9)', backdropFilter: 'blur(4px)', color: 'white', fontSize: 9, fontWeight: 900, padding: '3px 8px', borderRadius: 99, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+                      🎨 {(() => { try { return JSON.parse(product.variants).length; } catch { return '?'; } })()} VARIAN
                     </div>
                   )}
                   {hasWholesale && !hasVariant && (
-                    <div style={{ position: 'absolute', top: 7, left: 7, background: '#C2410C', color: 'white', fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 99 }}>
-                      🏷️ Grosir
+                    <div style={{ position: 'absolute', top: 8, left: 8, background: 'rgba(194, 65, 12, 0.9)', backdropFilter: 'blur(4px)', color: 'white', fontSize: 9, fontWeight: 900, padding: '3px 8px', borderRadius: 99, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+                      🏷️ GROSIR
                     </div>
                   )}
                   {isOutStock && (
-                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <span style={{ background: '#EF4444', color: 'white', fontWeight: 900, fontSize: 12, padding: '4px 12px', borderRadius: 99 }}>HABIS</span>
+                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(15, 23, 42, 0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(2px)' }}>
+                      <span style={{ background: '#EF4444', color: 'white', fontWeight: 900, fontSize: 10, padding: '5px 12px', borderRadius: 99, letterSpacing: '0.05em', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)' }}>HABIS</span>
                     </div>
                   )}
                 </div>
 
                 {/* Body */}
-                <div style={{ padding: '10px 12px 12px', flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <div style={{ fontWeight: 800, fontSize: 13, color: '#1E293B', lineHeight: 1.3, marginBottom: 2 }}>{product.name}</div>
-                  <div style={{ fontWeight: 900, fontSize: 15, color: '#4F46E5' }}>
-                    Rp {product.price.toLocaleString('id-ID')}
+                <div style={{ padding: '12px 14px 14px', flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ fontWeight: 800, fontSize: 13, color: '#1E293B', lineHeight: 1.3, minHeight: 34, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    {product.name}
                   </div>
-                  {margin !== null && (
-                    <div style={{ fontSize: 11, color: '#10B981', fontWeight: 700 }}>Margin {margin}%</div>
-                  )}
+                  
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 4, flexWrap: 'wrap', gap: 4 }}>
+                    <div style={{ fontWeight: 900, fontSize: 15, color: '#4F46E5', letterSpacing: '-0.02em' }}>
+                      Rp {product.price.toLocaleString('id-ID')}
+                    </div>
+                    {margin !== null && (
+                      <span style={{ fontSize: 10, color: '#10B981', fontWeight: 800, background: '#ECFDF5', padding: '1px 6px', borderRadius: 6 }}>+{margin}%</span>
+                    )}
+                  </div>
 
                   {/* Stock + Unit row */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
                     <span style={{
-                      fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
+                      fontSize: 10, fontWeight: 800, padding: '3px 8px', borderRadius: 8,
                       background: isOutStock ? '#FEE2E2' : isLowStock ? '#FEF3C7' : '#DCFCE7',
                       color: isOutStock ? '#DC2626' : isLowStock ? '#D97706' : '#16A34A',
+                      letterSpacing: '0.01em'
                     }}>
-                      {isOutStock ? '✕ Habis' : `${product.stock} ${product.unit || 'pcs'}`}
+                      {isOutStock ? 'Habis' : `${product.stock} ${product.unit || 'pcs'}`}
                     </span>
                     {!isOutStock && isLowStock && (
-                      <span style={{ fontSize: 10, color: '#D97706', fontWeight: 700 }}>⚠️ Menipis</span>
+                      <span style={{ fontSize: 10, color: '#D97706', fontWeight: 800, animation: 'pulse 2s infinite' }}>⚠️ Tipis</span>
                     )}
                   </div>
                 </div>
@@ -321,65 +453,82 @@ export default function Katalog() {
         </div>
       )}
 
+      {/* ── Modal Add / Edit ── */}
       {isModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal-content glass-panel" style={{ maxHeight: '92vh', overflowY: 'auto', maxWidth: 480, width: '100%' }}>
-            <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              {isViewOnly ? <Eye size={20} color="#6B7280" /> : null}
-              {isViewOnly ? 'Detail Produk' : formData.id ? 'Edit Produk' : 'Tambah Produk'}
-              {isViewOnly && <span style={{ fontSize: '0.7rem', background: '#F3F4F6', color: '#6B7280', padding: '2px 8px', borderRadius: 99, fontWeight: 600 }}>Hanya Lihat</span>}
-            </h2>
-            <form onSubmit={isViewOnly ? (e) => { e.preventDefault(); setIsModalOpen(false); } : handleSave}>
+        <div className="katalog-modal-overlay">
+          <div className="katalog-modal-content">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 900, color: '#0F172A', display: 'flex', alignItems: 'center', gap: 8 }}>
+                {isViewOnly ? <Eye size={20} color="#64748B" /> : null}
+                {isViewOnly ? 'Detail Produk' : formData.id ? 'Edit Produk' : 'Tambah Produk'}
+              </h2>
+              {isViewOnly && (
+                <span style={{ fontSize: '0.75rem', background: '#F1F5F9', color: '#64748B', padding: '4px 10px', borderRadius: 99, fontWeight: 700 }}>Hanya Lihat</span>
+              )}
+            </div>
 
-              {/* Gambar */}
-              <div className="form-group" style={{ textAlign: 'center' }}>
+            <form onSubmit={isViewOnly ? (e) => { e.preventDefault(); setIsModalOpen(false); } : handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              
+              {/* Gambar / Camera */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, background: '#F8FAFC', borderRadius: 16, padding: '16px 12px', border: '1px solid #E2E8F0' }}>
                 {formData.image ? (
-                  <img src={formData.image} alt="Preview" style={{ width: '100px', height: '100px', objectFit: 'contain', borderRadius: '8px', marginBottom: '10px', border: '1px solid #e5e7eb' }} />
+                  <div style={{ position: 'relative', width: 110, height: 110, background: '#ffffff', borderRadius: 14, overflow: 'hidden', border: '1.5px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <img src={formData.image} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 4 }} />
+                    {!isViewOnly && (
+                      <button type="button" onClick={() => setFormData({ ...formData, image: '' })} style={{ position: 'absolute', top: 4, right: 4, background: '#EF4444', color: 'white', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 900 }}>✕</button>
+                    )}
+                  </div>
                 ) : (
-                  <div style={{ width: '100px', height: '100px', backgroundColor: '#e5e7eb', borderRadius: '8px', margin: '0 auto 10px auto', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af' }}>No Image</div>
+                  <div style={{ width: 110, height: 110, backgroundColor: '#E2E8F0', borderRadius: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#64748B', gap: 4, border: '1.5px dashed #CBD5E1' }}>
+                    <span style={{ fontSize: 24 }}>📦</span>
+                    <span style={{ fontSize: 10, fontWeight: 700 }}>No Image</span>
+                  </div>
                 )}
-                <label className="btn btn-secondary" style={{ cursor: 'pointer', display: 'inline-block' }}>
-                  Pilih Gambar / Kamera
-                  <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} capture="environment" />
-                </label>
+                {!isViewOnly && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: '#ffffff', border: '1.5px solid #CBD5E1', borderRadius: 10, fontSize: 12, fontWeight: 800, color: '#334155', cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', transition: 'all 0.2s' }}>
+                    📸 Ambil / Pilih Foto
+                    <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} capture="environment" />
+                  </label>
+                )}
               </div>
 
               {/* Nama */}
-              <div className="form-group">
-                <label>Nama Produk</label>
-                <input type="text" name="name" value={formData.name} onChange={handleInputChange} required />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 12, fontWeight: 800, color: '#334155' }}>Nama Produk</label>
+                <input type="text" name="name" value={formData.name} onChange={handleInputChange} required disabled={isViewOnly} className="katalog-input" placeholder="Masukkan nama produk..." />
               </div>
 
               {/* Harga Jual & Harga Modal */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div className="form-group">
-                  <label>💰 Harga Jual (Rp)</label>
-                  <input type="number" name="price" value={formData.price} onChange={handleInputChange} required placeholder="0" />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 800, color: '#334155' }}>💰 Harga Jual Rp</label>
+                  <input type="number" name="price" value={formData.price} onChange={handleInputChange} required placeholder="0" disabled={isViewOnly} className="katalog-input" />
                 </div>
-                <div className="form-group">
-                  <label>📦 Harga Modal (Rp)</label>
-                  <input type="number" name="costPrice" value={formData.costPrice} onChange={handleInputChange} placeholder="0" />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 800, color: '#334155' }}>📦 Harga Modal Rp</label>
+                  <input type="number" name="costPrice" value={formData.costPrice} onChange={handleInputChange} placeholder="0" disabled={isViewOnly} className="katalog-input" />
                 </div>
               </div>
 
-              {/* Margin preview */}
+              {/* Margin Info Badge */}
               {formData.price && formData.costPrice && Number(formData.costPrice) > 0 && (
-                <div style={{ background: '#F0FDF4', border: '1px solid #86EFAC', borderRadius: 8, padding: '8px 14px', marginBottom: 12, fontSize: 13 }}>
-                  <strong>Margin:</strong> Rp {(Number(formData.price) - Number(formData.costPrice)).toLocaleString('id-ID')}
-                  {' '}
-                  <strong>({Math.round(((Number(formData.price) - Number(formData.costPrice)) / Number(formData.price)) * 100)}%)</strong>
+                <div style={{ background: '#ECFDF5', border: '1.5px solid #A7F3D0', borderRadius: 14, padding: '10px 14px', fontSize: 12, color: '#065F46', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Keuntungan bersih per item:</span>
+                  <strong style={{ fontSize: 13 }}>
+                    Rp {(Number(formData.price) - Number(formData.costPrice)).toLocaleString('id-ID')} ({Math.round(((Number(formData.price) - Number(formData.costPrice)) / Number(formData.price)) * 100)}%)
+                  </strong>
                 </div>
               )}
 
               {/* Stok & Satuan */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div className="form-group">
-                  <label>Stok</label>
-                  <input type="number" name="stock" value={formData.stock} onChange={handleInputChange} required />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 800, color: '#334155' }}>Stok</label>
+                  <input type="number" name="stock" value={formData.stock} onChange={handleInputChange} required disabled={isViewOnly} className="katalog-input" />
                 </div>
-                <div className="form-group">
-                  <label>Satuan</label>
-                  <select name="unit" value={formData.unit || 'pcs'} onChange={handleInputChange} style={{ width: '100%', padding: '10px 12px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 14, outline: 'none', background: '#fff' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <label style={{ fontSize: 12, fontWeight: 800, color: '#334155' }}>Satuan</label>
+                  <select name="unit" value={formData.unit || 'pcs'} onChange={handleInputChange} disabled={isViewOnly} className="katalog-input" style={{ width: '100%' }}>
                     <option value="pcs">Pcs</option>
                     <option value="Kg">Kg</option>
                     <option value="Gram">Gram</option>
@@ -392,160 +541,164 @@ export default function Katalog() {
                 </div>
               </div>
 
-              {/* Harga Grosir Toggle */}
-              <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 10, padding: '12px 14px', marginBottom: 14 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 700, color: '#C2410C' }}>
+              {/* Harga Grosir */}
+              <div style={{ background: '#FFF7ED', border: '1.5px solid #FDE68A', borderRadius: 16, padding: '14px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 800, color: '#C2410C', fontSize: 13 }}>
                   <input
                     type="checkbox"
                     checked={formData.wholesaleEnabled}
-                    onChange={(e) => setFormData({ ...formData, wholesaleEnabled: e.target.checked })}
+                    onChange={(e) => !isViewOnly && setFormData({ ...formData, wholesaleEnabled: e.target.checked })}
+                    disabled={isViewOnly}
                     style={{ width: 18, height: 18, accentColor: '#C2410C' }}
                   />
                   🏷️ Aktifkan Harga Grosir
                 </label>
                 {formData.wholesaleEnabled && (
-                  <div style={{ marginTop: 12 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 6 }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: '#78350F' }}>Min. Qty (beli)</span>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: '#78350F' }}>Harga per item (Rp)</span>
+                  <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: '#92400E' }}>Min. Qty (Beli)</span>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: '#92400E' }}>Harga Grosir Rp / pcs</span>
                     </div>
                     {formData.wholesalePrices.map((tier, i) => (
-                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 6 }}>
-                        <input type="number" placeholder={`Min qty tier ${i + 1}`} value={tier.minQty} onChange={(e) => handleWholesaleChange(i, 'minQty', e.target.value)} style={{ padding: '8px 10px', border: '1px solid #FED7AA', borderRadius: 8, fontSize: 13, outline: 'none' }} />
-                        <input type="number" placeholder="Harga grosir" value={tier.price} onChange={(e) => handleWholesaleChange(i, 'price', e.target.value)} style={{ padding: '8px 10px', border: '1px solid #FED7AA', borderRadius: 8, fontSize: 13, outline: 'none' }} />
+                      <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        <input type="number" placeholder={`Min qty ${i + 1}`} value={tier.minQty} onChange={(e) => !isViewOnly && handleWholesaleChange(i, 'minQty', e.target.value)} disabled={isViewOnly} style={{ padding: '8px 10px', border: '1.5px solid #FDE68A', borderRadius: 10, fontSize: 12, outline: 'none', background: '#ffffff' }} />
+                        <input type="number" placeholder="Harga grosir" value={tier.price} onChange={(e) => !isViewOnly && handleWholesaleChange(i, 'price', e.target.value)} disabled={isViewOnly} style={{ padding: '8px 10px', border: '1.5px solid #FDE68A', borderRadius: 10, fontSize: 12, outline: 'none', background: '#ffffff' }} />
                       </div>
                     ))}
-                    <p style={{ fontSize: 11, color: '#92400E', marginTop: 4 }}>* Maksimal 5 tingkatan harga. Kosongkan baris yang tidak dipakai.</p>
+                    <p style={{ fontSize: 10, color: '#B45309', margin: '4px 0 0', opacity: 0.85 }}>* Kosongkan baris tingkatan yang tidak digunakan.</p>
                   </div>
                 )}
               </div>
 
               {/* Varian Produk */}
-              <div style={{ background: '#F5F3FF', border: '1px solid #C4B5FD', borderRadius: 10, padding: '12px 14px', marginBottom: 14 }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontWeight: 700, color: '#6D28D9' }}>
+              <div style={{ background: '#F5F3FF', border: '1.5px solid #DDD6FE', borderRadius: 16, padding: '14px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 800, color: '#6D28D9', fontSize: 13 }}>
                   <input
                     type="checkbox"
                     checked={formData.variantEnabled}
-                    onChange={(e) => setFormData({
+                    onChange={(e) => !isViewOnly && setFormData({
                       ...formData,
                       variantEnabled: e.target.checked,
                       variants: e.target.checked ? (formData.variants?.length ? formData.variants : [{ ...EMPTY_VARIANT }]) : [{ ...EMPTY_VARIANT }]
                     })}
+                    disabled={isViewOnly}
                     style={{ width: 18, height: 18, accentColor: '#6D28D9' }}
                   />
                   🎨 Aktifkan Varian Produk
                 </label>
                 {formData.variantEnabled && (
-                  <div style={{ marginTop: 12 }}>
+                  <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {formData.variants.map((v, i) => (
-                        <div key={i} style={{
-                          background: 'white', border: '1px solid #C4B5FD',
-                          borderRadius: 10, padding: '10px 12px', position: 'relative'
-                        }}>
-                          {/* Nomor + Hapus */}
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, color: '#7C3AED', background: '#EDE9FE', padding: '2px 8px', borderRadius: 99 }}>
-                              Varian {i + 1}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const upd = formData.variants.filter((_, idx) => idx !== i);
-                                setFormData({ ...formData, variants: upd.length ? upd : [{ ...EMPTY_VARIANT }] });
-                              }}
-                              style={{ background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: 7, padding: '4px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, fontWeight: 600 }}
-                            >
-                              <Trash2 size={12} /> Hapus
-                            </button>
+                        <div key={i} style={{ background: '#ffffff', border: '1.5px solid #DDD6FE', borderRadius: 12, padding: '12px', position: 'relative', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: 11, fontWeight: 900, color: '#7C3AED', background: '#F3E8FF', padding: '3px 8px', borderRadius: 99 }}>VARIAN {i + 1}</span>
+                            {!isViewOnly && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const upd = formData.variants.filter((_, idx) => idx !== i);
+                                  setFormData({ ...formData, variants: upd.length ? upd : [{ ...EMPTY_VARIANT }] });
+                                }}
+                                style={{ background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: 8, padding: '4px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 800 }}
+                              >
+                                <Trash2 size={12} /> Hapus
+                              </button>
+                            )}
                           </div>
 
-                          {/* Nama Varian — full width */}
                           <input
                             type="text"
                             placeholder="Nama varian (mis. Merah-L, 500ml, Size 40...)"
                             value={v.name}
+                            disabled={isViewOnly}
                             onChange={e => {
                               const upd = [...formData.variants];
                               upd[i] = { ...upd[i], name: e.target.value };
                               setFormData({ ...formData, variants: upd });
                             }}
-                            style={{ width: '100%', padding: '8px 10px', border: '1px solid #DDD6FE', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box', marginBottom: 8 }}
+                            style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #DDD6FE', borderRadius: 10, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
                           />
 
-                          {/* Stok + Harga Jual + Harga Modal */}
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                             <div>
-                              <div style={{ fontSize: 11, fontWeight: 600, color: '#7C3AED', marginBottom: 4 }}>Stok (opsional)</div>
+                              <div style={{ fontSize: 10, fontWeight: 800, color: '#6D28D9', marginBottom: 4 }}>Stok (opsional)</div>
                               <input
                                 type="number"
                                 placeholder="mis. 10"
-                                value={v.stock}
+                                value={v.stock ?? ''}
+                                disabled={isViewOnly}
                                 onChange={e => {
                                   const upd = [...formData.variants];
                                   upd[i] = { ...upd[i], stock: e.target.value };
                                   setFormData({ ...formData, variants: upd });
                                 }}
-                                style={{ width: '100%', padding: '8px 10px', border: '1px solid #DDD6FE', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                                style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #DDD6FE', borderRadius: 10, fontSize: 12, outline: 'none', boxSizing: 'border-box' }}
                               />
                             </div>
                             <div>
-                              <div style={{ fontSize: 11, fontWeight: 600, color: '#7C3AED', marginBottom: 4 }}>Harga Jual Rp (opsional)</div>
+                              <div style={{ fontSize: 10, fontWeight: 800, color: '#6D28D9', marginBottom: 4 }}>Harga Jual Rp (opsional)</div>
                               <input
                                 type="number"
-                                placeholder="Default = harga produk"
-                                value={v.price}
+                                placeholder="Induk produk"
+                                value={v.price ?? ''}
+                                disabled={isViewOnly}
                                 onChange={e => {
                                   const upd = [...formData.variants];
                                   upd[i] = { ...upd[i], price: e.target.value };
                                   setFormData({ ...formData, variants: upd });
                                 }}
-                                style={{ width: '100%', padding: '8px 10px', border: '1px solid #DDD6FE', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                                style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #DDD6FE', borderRadius: 10, fontSize: 12, outline: 'none', boxSizing: 'border-box' }}
                               />
                             </div>
                             <div style={{ gridColumn: '1 / -1' }}>
-                              <div style={{ fontSize: 11, fontWeight: 600, color: '#7C3AED', marginBottom: 4 }}>📦 Harga Modal Rp (opsional, untuk analisis margin)</div>
+                              <div style={{ fontSize: 10, fontWeight: 800, color: '#6D28D9', marginBottom: 4 }}>📦 Harga Modal Rp (opsional)</div>
                               <input
                                 type="number"
-                                placeholder="Default = harga modal produk"
+                                placeholder="Induk produk"
                                 value={v.costPrice ?? ''}
+                                disabled={isViewOnly}
                                 onChange={e => {
                                   const upd = [...formData.variants];
                                   upd[i] = { ...upd[i], costPrice: e.target.value };
                                   setFormData({ ...formData, variants: upd });
                                 }}
-                                style={{ width: '100%', padding: '8px 10px', border: '1px solid #DDD6FE', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                                style={{ width: '100%', padding: '8px 10px', border: '1.5px solid #DDD6FE', borderRadius: 10, fontSize: 12, outline: 'none', boxSizing: 'border-box' }}
                               />
                             </div>
                           </div>
                         </div>
                       ))}
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setFormData({ ...formData, variants: [...formData.variants, { ...EMPTY_VARIANT }] })}
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, width: '100%', justifyContent: 'center', background: '#EDE9FE', color: '#6D28D9', border: '1.5px dashed #A78BFA', borderRadius: 10, padding: '9px 14px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
-                    >
-                      <Plus size={14} /> Tambah Varian
-                    </button>
-                    <p style={{ fontSize: 11, color: '#7C3AED', marginTop: 6, opacity: 0.7, textAlign: 'center' }}>
-                      * Stok &amp; Harga Jual kosong → pakai nilai produk utama · Harga Modal kosong → pakai modal produk
+                    {!isViewOnly && (
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, variants: [...formData.variants, { ...EMPTY_VARIANT }] })}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, width: '100%', justifyContent: 'center', background: '#EDE9FE', color: '#6D28D9', border: '1.5px dashed #A78BFA', borderRadius: 12, padding: '10px 14px', fontWeight: 800, fontSize: 12, cursor: 'pointer' }}
+                      >
+                        <Plus size={14} /> Tambah Varian Baru
+                      </button>
+                    )}
+                    <p style={{ fontSize: 10, color: '#7C3AED', margin: '4px 0 0', opacity: 0.85, textAlign: 'center' }}>
+                      * Kosongkan harga/modal varian untuk menyamakan dengan data produk utama.
                     </p>
                   </div>
                 )}
               </div>
 
-
-              <div className="modal-actions" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginTop: '20px' }}>
-                {isAdmin && formData.id ? (
-                  <button type="button" className="btn btn-danger" style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#FEE2E2', color: '#DC2626', border: 'none' }} onClick={() => handleDelete(formData.id)}>
-                    <Trash2 size={16} /> Hapus
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, gap: 10 }}>
+                {isAdmin && formData.id && !isViewOnly ? (
+                  <button type="button" onClick={() => handleDelete(formData.id)} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: 12, padding: '10px 16px', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
+                    <Trash2 size={15} /> Hapus Produk
                   </button>
-                ) : <div></div>}
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button type="button" className="btn btn-secondary" onClick={() => setIsModalOpen(false)}>Tutup</button>
-                  {isAdmin && <button type="submit" className="btn btn-primary">Simpan</button>}
+                ) : <div />}
+                
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button type="button" onClick={() => setIsModalOpen(false)} style={{ background: '#F1F5F9', color: '#475569', border: 'none', borderRadius: 12, padding: '10px 18px', fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>Batal</button>
+                  {!isViewOnly && (
+                    <button type="submit" style={{ background: 'linear-gradient(135deg, #4F46E5 0%, #3730A3 100%)', color: 'white', border: 'none', borderRadius: 12, padding: '10px 22px', fontWeight: 800, fontSize: 13, cursor: 'pointer', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.25)' }}>Simpan</button>
+                  )}
                 </div>
               </div>
             </form>
