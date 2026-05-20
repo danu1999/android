@@ -34,6 +34,9 @@ export default function Karyawan() {
   const [selMonth, setSelMonth] = useState(new Date().getMonth() + 1);
   const [selYear, setSelYear] = useState(new Date().getFullYear());
   const [formData, setForm] = useState({ id: null, name: '', role: 'KASIR', pin: '', salary: '' });
+  // Quick salary editor langsung dari kartu karyawan
+  const [salaryEditId, setSalaryEditId] = useState(null);
+  const [salaryEditVal, setSalaryEditVal] = useState('');
 
   // ── Mode Ultra ──────────────────────────────────────────────
   const ultraKey = `posbah_ultra_${user?.id}`;
@@ -113,6 +116,15 @@ export default function Karyawan() {
       try { await api.delete(`/employees/${id}`); setModal(false); fetchEmp(); }
       catch (err) { alert(err.response?.data?.error || 'Gagal menghapus.'); }
     }
+  };
+
+  const handleQuickSalary = async (emp) => {
+    const val = Number(salaryEditVal || 0);
+    try {
+      await api.put(`/employees/${emp.id}`, { ...emp, salary: val });
+      setSalaryEditId(null); setSalaryEditVal('');
+      fetchEmp();
+    } catch (err) { alert(err.response?.data?.error || 'Gagal menyimpan gaji.'); }
   };
 
   const handlePaySalary = async (emp) => {
@@ -201,9 +213,31 @@ export default function Karyawan() {
                       </div>
                     </div>
                     {isOwner && emp.role !== 'OWNER' && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', background: '#F8FAFC', borderRadius: 10, padding: '6px 12px', marginBottom: 10, border: '1px solid #F1F5F9' }}>
-                        <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>Gaji Pokok</span>
-                        <span style={{ fontSize: 12, fontWeight: 800, color: emp.salary ? '#059669' : '#9CA3AF' }}>{emp.salary ? `Rp ${fmt(emp.salary)}` : 'Belum diset'}</span>
+                      <div style={{ marginBottom: 10 }}>
+                        {salaryEditId === emp.id ? (
+                          // Mode edit gaji inline
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center', background: '#F0FDF4', border: '1.5px solid #6EE7B7', borderRadius: 10, padding: '6px 10px' }}>
+                            <span style={{ fontSize: 11, color: '#065F46', fontWeight: 700, flexShrink: 0 }}>Rp</span>
+                            <input
+                              type="number"
+                              value={salaryEditVal}
+                              onChange={e => setSalaryEditVal(e.target.value)}
+                              placeholder="Nominal gaji"
+                              autoFocus
+                              style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 13, fontWeight: 700, outline: 'none', minWidth: 0 }}
+                            />
+                            <button onClick={() => handleQuickSalary(emp)} style={{ background: '#059669', color: 'white', border: 'none', borderRadius: 7, padding: '4px 10px', fontWeight: 800, fontSize: 12, cursor: 'pointer', flexShrink: 0 }}>✓</button>
+                            <button onClick={() => { setSalaryEditId(null); setSalaryEditVal(''); }} style={{ background: '#F3F4F6', color: '#6B7280', border: 'none', borderRadius: 7, padding: '4px 8px', fontWeight: 700, fontSize: 12, cursor: 'pointer', flexShrink: 0 }}>✕</button>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#F8FAFC', borderRadius: 10, padding: '6px 12px', border: '1px solid #F1F5F9' }}>
+                            <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>Gaji Pokok</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: 12, fontWeight: 800, color: emp.salary ? '#059669' : '#9CA3AF' }}>{emp.salary ? `Rp ${fmt(emp.salary)}` : 'Belum diset'}</span>
+                              {!locked && <button onClick={() => { setSalaryEditId(emp.id); setSalaryEditVal(emp.salary || ''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6366F1', fontSize: 13, padding: 0, lineHeight: 1 }} title="Edit gaji">✏️</button>}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                     <div style={{ display: 'flex', gap: 8 }}>
