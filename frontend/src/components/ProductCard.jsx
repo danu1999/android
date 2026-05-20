@@ -72,22 +72,22 @@ export default function ProductCard({ product, onAdd, onVariant, quantity = 0 })
       }}
       onClick={handleClick}
     >
-      {/* ── Image Box ─────────────────────────────────────────── */}
+      {/* ── Image Box — paddingTop trick, kompatibel iOS Safari & Android ─── */}
       <div style={{
         width: '100%',
-        aspectRatio: '1 / 1',
+        paddingTop: '100%',           /* 1:1 — tidak pakai aspectRatio agar aman di semua browser */
         background: '#F8FAFC',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
         position: 'relative',
         overflow: 'hidden',
+        flexShrink: 0,
       }}>
         {hasImage ? (
           <img
             src={product.image}
             alt={product.name}
             style={{
+              position: 'absolute',
+              top: 0, left: 0,
               width: '100%',
               height: '100%',
               objectFit: 'contain',
@@ -97,7 +97,16 @@ export default function ProductCard({ product, onAdd, onVariant, quantity = 0 })
             }}
           />
         ) : (
-          <ShoppingBag size={40} color="#CBD5E1" />
+          <div style={{
+            position: 'absolute',
+            top: 0, left: 0, right: 0, bottom: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: '#F1F5F9',
+          }}>
+            <ShoppingBag size={36} color="#CBD5E1" />
+          </div>
         )}
 
         {/* Badge Habis — pojok kanan atas */}
@@ -107,12 +116,13 @@ export default function ProductCard({ product, onAdd, onVariant, quantity = 0 })
             background: '#EF4444', color: '#fff',
             fontSize: 10, fontWeight: 700,
             padding: '2px 8px', borderRadius: 99,
+            zIndex: 2,
           }}>
             Habis
           </div>
         )}
 
-        {/* Jumlah di keranjang — pojok kiri atas */}
+        {/* Badge jumlah di keranjang — pojok kiri atas */}
         {quantity > 0 && (
           <div style={{
             position: 'absolute', top: 8, left: 8,
@@ -121,6 +131,7 @@ export default function ProductCard({ product, onAdd, onVariant, quantity = 0 })
             width: 24, height: 24, borderRadius: '50%',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             boxShadow: '0 2px 6px rgba(79,70,229,0.5)',
+            zIndex: 2,
           }}>
             {quantity}
           </div>
