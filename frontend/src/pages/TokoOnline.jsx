@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ShoppingBag, Search, X, ZoomIn } from 'lucide-react';
 import api from '../api';
+import { useDemoBlock } from '../AuthContext';
 
 const parseVariants = (p) => {
   if (!p.variants) return [];
@@ -29,7 +30,24 @@ export default function TokoOnline() {
   const [buyerAddress, setBuyerAddress] = useState('');
   const [deliveryType, setDeliveryType] = useState('pickup'); // pickup | delivery
 
+  const { isDemo } = useDemoBlock();
+
+  // Produk demo — identik dengan Kasir, Katalog, Keuangan
+  const DEMO_PRODUCTS = [
+    { id: 'p301', name: 'Pisang Keju Cokelat', price: 15000, costPrice: 9000, stock: 120, unit: 'pcs', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: null },
+    { id: 'p302', name: 'Pisang Keju Stroberi', price: 15000, costPrice: 9500, stock: 85,  unit: 'pcs', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: null },
+    { id: 'p303', name: 'Pisang Keju Premium',  price: 20000, costPrice: 11000, stock: 50, unit: 'pcs', wholesaleEnabled: false, wholesalePrices: null,
+      variants: JSON.stringify([
+        { id: 1, name: 'Keju Melimpah', price: 25000, costPrice: 13000, stock: 30 },
+        { id: 2, name: 'Milo Almond',   price: 28000, costPrice: 15000, stock: 20 },
+      ]), barcode: null, image: null },
+    { id: 'p304', name: 'Jus Alpukat',  price: 18000, costPrice: 10000, stock: 60,  unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: null },
+    { id: 'p305', name: 'Jus Mangga',   price: 15000, costPrice: 8000,  stock: 75,  unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: null },
+    { id: 'p306', name: 'Es Teh Manis', price: 8000,  costPrice: 3000,  stock: 200, unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: null },
+  ];
+
   const fetchProducts = async () => {
+    if (isDemo) { setProducts(DEMO_PRODUCTS); setLastUpdated(new Date()); return; }
     try {
       const res = await api.get('/products');
       setProducts(res.data);
@@ -41,6 +59,8 @@ export default function TokoOnline() {
 
   useEffect(() => {
     fetchProducts();
+
+    if (isDemo) return; // demo tidak perlu listener re-fetch
 
     // Refresh hanya saat tab kembali aktif/difokus (hemat server)
     const onVisibilityChange = () => {
