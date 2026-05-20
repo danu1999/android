@@ -602,81 +602,151 @@ export default function Kasir() {
           const variants = parseVariants(p);
           const isOut = variants.length === 0 && p.stock === 0;
           const isLow = variants.length === 0 && p.stock > 0 && p.stock <= 5;
+          
+          // Safe check to verify if the product really has a valid image string
+          const hasImage = p.image && typeof p.image === 'string' && p.image.trim() !== '' && p.image !== 'null' && p.image !== 'undefined';
+
           return (
             <div
               key={p.id}
               style={{
-                background: '#fff',
-                borderRadius: 16,
-                boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
+                background: '#ffffff',
+                borderRadius: 18,
+                boxShadow: '0 4px 16px rgba(17, 24, 39, 0.04)',
                 overflow: 'hidden',
-                border: '1px solid #E2E8F0',
+                border: '1px solid #ECEFF5',
                 display: 'flex',
                 flexDirection: 'column',
                 transition: 'transform 0.15s, box-shadow 0.15s',
                 WebkitTapHighlightColor: 'transparent',
               }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(0,0,0,0.12)'; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.07)'; }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)'; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(17, 24, 39, 0.04)'; }}
             >
-              {/* Gambar produk */}
+              {/* Gambar produk (Fail-proof padding-bottom 1:1 hack) */}
               <div style={{
-                width: '100%', aspectRatio: '1 / 1',
+                width: '100%',
+                height: 0,
+                paddingBottom: '100%',
                 background: '#F8FAFC',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                position: 'relative', overflow: 'hidden',
+                position: 'relative',
+                overflow: 'hidden',
               }}>
-                {p.image ? (
-                  <img src={p.image} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 8 }} />
+                {hasImage ? (
+                  <img 
+                    src={p.image} 
+                    alt={p.name} 
+                    style={{ 
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%', 
+                      height: '100%', 
+                      objectFit: 'cover', // Cover mode makes the image big, filling the container beautifully
+                    }} 
+                  />
                 ) : (
-                  <span style={{ fontSize: '2.4rem', opacity: 0.4 }}>
-                    {variants.length > 0 ? '🎨' : '🛒'}
-                  </span>
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    background: 'linear-gradient(135deg, #EEF2FF, #E0E7FF)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <span style={{ fontSize: '2.4rem', opacity: 0.7 }}>
+                      {variants.length > 0 ? '🎨' : '🛒'}
+                    </span>
+                  </div>
                 )}
+                
+                {/* Overlay stok habis */}
                 {isOut && (
-                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.38)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ color: 'white', fontWeight: 800, fontSize: 11, background: '#EF4444', padding: '2px 10px', borderRadius: 99 }}>HABIS</span>
+                  <div style={{ 
+                    position: 'absolute', 
+                    inset: 0, 
+                    background: 'rgba(15, 23, 42, 0.45)', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    backdropFilter: 'blur(1px)'
+                  }}>
+                    <span style={{ color: 'white', fontWeight: 800, fontSize: 11, background: '#EF4444', padding: '3px 12px', borderRadius: 99, boxShadow: '0 2px 8px rgba(239,68,68,0.4)' }}>HABIS</span>
                   </div>
                 )}
-                {isLow && (
-                  <div style={{ position: 'absolute', top: 6, right: 6, background: '#F59E0B', color: 'white', padding: '2px 7px', borderRadius: 99, fontSize: 10, fontWeight: 700 }}>
-                    Sisa {p.stock}
-                  </div>
-                )}
+
+                {/* Badge varian */}
                 {variants.length > 0 && (
-                  <div style={{ position: 'absolute', top: 6, left: 6, background: '#4F46E5', color: 'white', padding: '2px 7px', borderRadius: 6, fontSize: 10, fontWeight: 700 }}>
+                  <div style={{ 
+                    position: 'absolute', 
+                    top: 8, 
+                    left: 8, 
+                    background: 'linear-gradient(135deg, #4F46E5, #6366F1)', 
+                    color: 'white', 
+                    padding: '3px 8px', 
+                    borderRadius: 8, 
+                    fontSize: 10, 
+                    fontWeight: 700,
+                    boxShadow: '0 2px 6px rgba(79,70,229,0.3)'
+                  }}>
                     {variants.length} Varian
                   </div>
                 )}
               </div>
 
               {/* Info produk */}
-              <div style={{ padding: '10px 12px 12px', flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <div style={{ fontWeight: 700, fontSize: 13, color: '#1E293B', marginBottom: 4, lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+              <div style={{ padding: '12px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ 
+                  fontWeight: 700, 
+                  fontSize: 13.5, 
+                  color: '#1E293B', 
+                  marginBottom: 6, 
+                  lineHeight: 1.4, 
+                  display: '-webkit-box', 
+                  WebkitLineClamp: 2, 
+                  WebkitBoxOrient: 'vertical', 
+                  overflow: 'hidden',
+                  height: '38px' // Consistent height for grid alignment
+                }}>
                   {p.name}
                 </div>
-                <div style={{ color: '#4F46E5', fontWeight: 800, fontSize: 14, marginBottom: 6 }}>
+                
+                <div style={{ color: '#4F46E5', fontWeight: 800, fontSize: 15, marginBottom: 8 }}>
                   Rp {p.price.toLocaleString('id-ID')}
                 </div>
-                <div style={{ marginBottom: 8 }}>
+
+                {/* Badge stok / varian berwarna */}
+                <div style={{ marginBottom: 12 }}>
                   {(() => {
-                    if (variants.length > 0) return <span style={{ fontSize: 11, fontWeight: 700, background: '#EEF2FF', color: '#4F46E5', padding: '2px 8px', borderRadius: 99 }}>🎨 {variants.length} Varian</span>;
-                    if (isOut)  return <span style={{ fontSize: 11, fontWeight: 700, background: '#FEE2E2', color: '#DC2626', padding: '2px 8px', borderRadius: 99 }}>🚫 Stok Habis</span>;
-                    if (isLow)  return <span style={{ fontSize: 11, fontWeight: 700, background: '#FEF3C7', color: '#D97706', padding: '2px 8px', borderRadius: 99 }}>⚠️ Sisa {p.stock} {p.unit || 'pcs'}</span>;
-                    return       <span style={{ fontSize: 11, fontWeight: 700, background: '#DCFCE7', color: '#16A34A', padding: '2px 8px', borderRadius: 99 }}>✓ Tersedia {p.stock} {p.unit || 'pcs'}</span>;
+                    if (variants.length > 0) return <span style={{ fontSize: 10.5, fontWeight: 700, background: '#EEF2FF', color: '#4F46E5', padding: '3px 8px', borderRadius: 99 }}>🎨 {variants.length} Varian</span>;
+                    if (isOut)  return <span style={{ fontSize: 10.5, fontWeight: 700, background: '#FEE2E2', color: '#DC2626', padding: '3px 8px', borderRadius: 99 }}>🚫 Stok Habis</span>;
+                    if (isLow)  return <span style={{ fontSize: 10.5, fontWeight: 700, background: '#FEF3C7', color: '#D97706', padding: '3px 8px', borderRadius: 99 }}>⚠️ Sisa {p.stock} {p.unit || 'pcs'}</span>;
+                    return       <span style={{ fontSize: 10.5, fontWeight: 700, background: '#DCFCE7', color: '#16A34A', padding: '3px 8px', borderRadius: 99 }}>✓ Tersedia {p.stock} {p.unit || 'pcs'}</span>;
                   })()}
                 </div>
+
+                {/* Tombol tambah */}
                 <button
                   onClick={() => addToCart(p)}
                   disabled={isOut}
                   style={{
-                    width: '100%', padding: '8px 0', borderRadius: 10, border: 'none',
-                    fontWeight: 700, fontSize: 13, marginTop: 'auto',
+                    width: '100%', 
+                    padding: '9px 0', 
+                    borderRadius: 12, 
+                    border: 'none',
+                    fontWeight: 700, 
+                    fontSize: 13, 
+                    marginTop: 'auto',
                     cursor: isOut ? 'not-allowed' : 'pointer',
                     background: isOut ? '#F1F5F9' : '#EEF2FF',
                     color: isOut ? '#94A3B8' : '#4F46E5',
-                    transition: 'background 0.15s',
+                    transition: 'all 0.2s',
                   }}
+                  onMouseEnter={e => { if (!isOut) { e.currentTarget.style.background = '#4F46E5'; e.currentTarget.style.color = '#ffffff'; } }}
+                  onMouseLeave={e => { if (!isOut) { e.currentTarget.style.background = '#EEF2FF'; e.currentTarget.style.color = '#4F46E5'; } }}
                 >
                   {variants.length > 0 ? 'Pilih Varian ›' : isOut ? 'Habis' : '+ Tambah'}
                 </button>
