@@ -5,10 +5,31 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>POSBah</title>
-    <script type="module" crossorigin src="/assets/index-XuMNwENl.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-ejzyt6gv.css">
+    <script type="module" crossorigin src="/assets/index-C2eSR4GR.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-yO773eFb.css">
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Block Right Click
+      document.addEventListener('contextmenu', event => event.preventDefault());
+      // Block DevTools & Copying shortcuts
+      document.addEventListener('keydown', function(event) {
+        if (
+          event.key === "F12" || 
+          (event.ctrlKey && event.shiftKey && event.key === "I") || 
+          (event.ctrlKey && event.shiftKey && event.key === "J") || 
+          (event.ctrlKey && event.shiftKey && event.key === "C") || 
+          (event.ctrlKey && event.key === "U") ||
+          (event.ctrlKey && event.key === "S") ||
+          (event.ctrlKey && event.key === "c") ||
+          (event.ctrlKey && event.key === "C")
+        ) {
+          event.preventDefault();
+        }
+      });
+      // Block Dragging of elements (like images)
+      document.addEventListener('dragstart', event => event.preventDefault());
+    </script>
   </body>
 </html>
