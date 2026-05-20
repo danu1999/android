@@ -129,10 +129,22 @@ app.get('/api/products', async (req, res) => {
   res.json(products);
 });
 
+// Lookup produk by barcode (untuk scanner kasir)
+app.get('/api/products/barcode/:code', async (req, res) => {
+  try {
+    const product = await prisma.product.findFirst({
+      where: { barcode: req.params.code }
+    });
+    if (!product) return res.status(404).json({ error: 'Produk tidak ditemukan' });
+    res.json(product);
+  } catch (error) {
+    res.status(400).json({ error: 'Gagal mencari produk' });
+  }
+});
 
 app.post('/api/products', requireAdmin, async (req, res) => {
   try {
-    const { name, price, costPrice, stock, unit, wholesaleEnabled, wholesalePrices, variants, image } = req.body;
+    const { name, price, costPrice, stock, unit, barcode, wholesaleEnabled, wholesalePrices, variants, image } = req.body;
     const product = await prisma.product.create({
       data: {
         name,
@@ -140,6 +152,7 @@ app.post('/api/products', requireAdmin, async (req, res) => {
         costPrice: Number(costPrice || 0),
         stock: Number(stock),
         unit: unit || 'pcs',
+        barcode: barcode || null,
         wholesaleEnabled: Boolean(wholesaleEnabled),
         wholesalePrices: wholesalePrices ? JSON.stringify(wholesalePrices) : null,
         variants: variants && variants.length > 0 ? JSON.stringify(variants) : null,
@@ -156,7 +169,7 @@ app.post('/api/products', requireAdmin, async (req, res) => {
 app.put('/api/products/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, price, costPrice, stock, unit, wholesaleEnabled, wholesalePrices, variants, image } = req.body;
+    const { name, price, costPrice, stock, unit, barcode, wholesaleEnabled, wholesalePrices, variants, image } = req.body;
     const product = await prisma.product.update({
       where: { id: Number(id) },
       data: {
@@ -165,6 +178,7 @@ app.put('/api/products/:id', requireAdmin, async (req, res) => {
         costPrice: Number(costPrice || 0),
         stock: Number(stock),
         unit: unit || 'pcs',
+        barcode: barcode || null,
         wholesaleEnabled: Boolean(wholesaleEnabled),
         wholesalePrices: wholesalePrices ? JSON.stringify(wholesalePrices) : null,
         variants: variants && variants.length > 0 ? JSON.stringify(variants) : null,
@@ -678,6 +692,173 @@ app.post('/api/reset-finance', requireOwner, async (req, res) => {
   } catch (error: any) {
     res.status(500).json({ error: error.message || 'Gagal mereset data' });
   }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Supplier  (CRUD — ADMIN+)
+// ─────────────────────────────────────────────────────────────
+app.get('/api/suppliers', requireAdmin, async (req, res) => {
+  try {
+    const suppliers = await (prisma as any).supplier.findMany({ orderBy: { name: 'asc' } });
+    res.json(suppliers);
+  } catch (error) { res.status(400).json({ error: 'Gagal ambil data supplier' }); }
+});
+
+app.post('/api/suppliers', requireAdmin, async (req, res) => {
+  try {
+    const { name, phone, address, notes } = req.body;
+    if (!name) return res.status(400).json({ error: 'Nama supplier wajib diisi' });
+    const supplier = await (prisma as any).supplier.create({ data: { name, phone, address, notes } });
+    res.json(supplier);
+  } catch (error) { res.status(400).json({ error: 'Gagal tambah supplier' }); }
+});
+
+app.put('/api/suppliers/:id', requireAdmin, async (req, res) => {
+  try {
+    const { name, phone, address, notes } = req.body;
+    const supplier = await (prisma as any).supplier.update({
+      where: { id: Number(req.params.id) }, data: { name, phone, address, notes }
+    });
+    res.json(supplier);
+  } catch (error) { res.status(400).json({ error: 'Gagal update supplier' }); }
+});
+
+app.delete('/api/suppliers/:id', requireOwner, async (req, res) => {
+  try {
+    await (prisma as any).supplier.delete({ where: { id: Number(req.params.id) } });
+    res.json({ success: true });
+  } catch (error) { res.status(400).json({ error: 'Gagal hapus supplier' }); }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Purchase Orders  (ADMIN+)
+// ─────────────────────────────────────────────────────────────
+app.get('/api/purchase-orders', requireAdmin, async (req, res) => {
+  try {
+    const pos = await (prisma as any).purchaseOrder.findMany({
+      include: { supplier: true, items: { include: { product: true } } },
+      orderBy: { date: 'desc' }
+    });
+    res.json(pos);
+  } catch (error) { res.status(400).json({ error: 'Gagal ambil data PO' }); }
+});
+
+app.post('/api/purchase-orders', requireAdmin, async (req, res) => {
+  try {
+    const { supplierId, notes, items } = req.body;
+    // items: [{productId, quantity, costPrice}]
+    if (!supplierId || !items?.length) return res.status(400).json({ error: 'Supplier dan item PO wajib diisi' });
+    const total = items.reduce((s: number, i: any) => s + Number(i.costPrice) * Number(i.quantity), 0);
+    const po = await (prisma as any).purchaseOrder.create({
+      data: {
+        supplierId: Number(supplierId),
+        notes,
+        total,
+        items: {
+          create: items.map((i: any) => ({
+            productId: Number(i.productId),
+            quantity: Number(i.quantity),
+            costPrice: Number(i.costPrice),
+          }))
+        }
+      },
+      include: { supplier: true, items: { include: { product: true } } }
+    });
+    res.json(po);
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({ error: 'Gagal buat PO' });
+  }
+});
+
+app.put('/api/purchase-orders/:id', requireAdmin, async (req, res) => {
+  try {
+    const { status, notes } = req.body;
+    const po = await (prisma as any).purchaseOrder.update({
+      where: { id: Number(req.params.id) }, data: { status, notes }
+    });
+    res.json(po);
+  } catch (error) { res.status(400).json({ error: 'Gagal update PO' }); }
+});
+
+// Konfirmasi terima barang: update stok produk + catat hutang ke supplier
+app.post('/api/purchase-orders/:id/receive', requireAdmin, async (req, res) => {
+  try {
+    const poId = Number(req.params.id);
+    const po = await (prisma as any).purchaseOrder.findUnique({
+      where: { id: poId },
+      include: { supplier: true, items: { include: { product: true } } }
+    });
+    if (!po) return res.status(404).json({ error: 'PO tidak ditemukan' });
+    if (po.status === 'RECEIVED') return res.status(400).json({ error: 'PO sudah pernah diterima' });
+
+    // Update stok setiap produk di PO
+    await Promise.all(po.items.map((item: any) =>
+      prisma.product.update({
+        where: { id: item.productId },
+        data: { stock: { increment: item.quantity }, costPrice: item.costPrice }
+      })
+    ));
+
+    // Catat hutang ke supplier di modul Keuangan
+    await prisma.finance.create({
+      data: {
+        type: 'PAYABLE',
+        amount: po.total,
+        description: `Hutang PO #${poId} ke ${po.supplier.name}`,
+        status: 'PENDING',
+      }
+    });
+
+    // Update status PO jadi RECEIVED
+    const updated = await (prisma as any).purchaseOrder.update({
+      where: { id: poId }, data: { status: 'RECEIVED' }
+    });
+
+    res.json({ success: true, po: updated });
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({ error: 'Gagal konfirmasi terima PO' });
+  }
+});
+
+app.delete('/api/purchase-orders/:id', requireOwner, async (req, res) => {
+  try {
+    const po = await (prisma as any).purchaseOrder.findUnique({ where: { id: Number(req.params.id) } });
+    if (po?.status === 'RECEIVED') return res.status(400).json({ error: 'PO yang sudah diterima tidak bisa dihapus' });
+    await (prisma as any).purchaseOrder.delete({ where: { id: Number(req.params.id) } });
+    res.json({ success: true });
+  } catch (error) { res.status(400).json({ error: 'Gagal hapus PO' }); }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Pre-Orders  (filter transaksi bertipe PRE_ORDER)
+// ─────────────────────────────────────────────────────────────
+app.get('/api/pre-orders', requireAdmin, async (req, res) => {
+  try {
+    const orders = await prisma.transaction.findMany({
+      where: { type: 'PRE_ORDER' },
+      include: { items: { include: { product: true } }, customer: true },
+      orderBy: { deliveryDate: 'asc' }
+    } as any);
+    res.json(orders);
+  } catch (error) { res.status(400).json({ error: 'Gagal ambil pre-order' }); }
+});
+
+// Update status pre-order (BOOKED → DP_PAID → COMPLETED) dan dp amount
+app.patch('/api/pre-orders/:id/status', requireAdmin, async (req, res) => {
+  try {
+    const { orderStatus, dpAmount } = req.body;
+    const updated = await (prisma.transaction as any).update({
+      where: { id: Number(req.params.id) },
+      data: {
+        ...(orderStatus && { orderStatus }),
+        ...(dpAmount !== undefined && { dpAmount: Number(dpAmount) }),
+        ...(orderStatus === 'COMPLETED' && { status: 'COMPLETED' })
+      }
+    });
+    res.json(updated);
+  } catch (error) { res.status(400).json({ error: 'Gagal update status pre-order' }); }
 });
 
 app.listen(port, () => {

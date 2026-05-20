@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Search, ShoppingCart, Trash2, CreditCard, QrCode, Printer, X, ChevronUp, ClipboardList, Plus, Minus } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Search, ShoppingCart, Trash2, CreditCard, QrCode, Printer, X, ChevronUp, ClipboardList, Plus, Minus, Barcode } from 'lucide-react';
 import api from '../api';
 import { useDemoBlock, DEMO_LIMITS } from '../AuthContext';
 
@@ -47,6 +47,67 @@ export default function Kasir() {
   const [variantModal, setVariantModal] = useState(null);
   const [lastCart, setLastCart] = useState([]);       // snapshot cart saat checkout untuk print
   const [queueToPrint, setQueueToPrint] = useState(null); // antrian yang baru dibayar → print
+
+  // ── Barcode Scanner ──────────────────────────────────────────
+  const barcodeBuffer = useRef('');
+  const barcodeTimer = useRef(null);
+  const [barcodeFlash, setBarcodeFlash] = useState(null); // null | 'found' | 'notfound'
+
+  const handleBarcodeScan = useCallback((code) => {
+    // Cari produk berdasarkan field barcode (lokal, tanpa API call)
+    const found = products.find(p => p.barcode && p.barcode === code);
+    if (found) {
+      addToCart(found);
+      setBarcodeFlash('found');
+    } else {
+      setBarcodeFlash('notfound');
+    }
+    setTimeout(() => setBarcodeFlash(null), 1200);
+  }, [products]);
+
+  // Global keyboard listener: deteksi input cepat (scanner) vs ketik manual
+  useEffect(() => {
+    let buffer = '';
+    let lastKeyTime = 0;
+
+    const onKeyDown = (e) => {
+      const now = Date.now();
+      const isModalOpen = !!variantModal || !!payModal || !!queueModal;
+      // Abaikan jika user sedang mengetik di input/textarea/modal
+      if (isModalOpen) return;
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      if (e.key === 'Enter') {
+        if (buffer.length >= 4) handleBarcodeScan(buffer);
+        buffer = '';
+        return;
+      }
+
+      // Hanya karakter printable
+      if (e.key.length !== 1) return;
+
+      const interval = now - lastKeyTime;
+      lastKeyTime = now;
+
+      // Karakter masuk sangat cepat (< 80ms) = scan, bukan ketik manual
+      if (interval < 80 || buffer.length === 0) {
+        buffer += e.key;
+      } else {
+        buffer = e.key; // reset jika jeda terlalu lama
+      }
+
+      // Auto-submit setelah 300ms tanpa karakter baru
+      clearTimeout(barcodeTimer.current);
+      barcodeTimer.current = setTimeout(() => {
+        if (buffer.length >= 4) handleBarcodeScan(buffer);
+        buffer = '';
+      }, 300);
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [handleBarcodeScan, variantModal, payModal, queueModal]);
 
   useEffect(() => {
     fetchProducts();
@@ -319,6 +380,11 @@ export default function Kasir() {
           <Search size={18} color="#9CA3AF" />
           <input style={S.searchInput} placeholder="Cari produk..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
           {searchQuery && <button onClick={() => setSearchQuery('')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#9CA3AF' }}><X size={16} /></button>}
+        </div>
+        {/* Barcode scanner mode indicator */}
+        <div title="Scanner Barcode aktif — arahkan scanner ke produk" style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '8px 10px', borderRadius: 12, background: barcodeFlash === 'found' ? '#DCFCE7' : barcodeFlash === 'notfound' ? '#FEE2E2' : '#EEF2FF', color: barcodeFlash === 'found' ? '#16A34A' : barcodeFlash === 'notfound' ? '#DC2626' : '#6366F1', fontSize: 12, fontWeight: 700, transition: 'all 0.2s', flexShrink: 0 }}>
+          <Barcode size={16} />
+          {barcodeFlash === 'found' ? '✓ Scan!' : barcodeFlash === 'notfound' ? '✗ Tdk Ada' : 'Scan'}
         </div>
         <button style={S.queueBtn} onClick={fetchQueue}><ClipboardList size={16} /> Antrian</button>
       </div>

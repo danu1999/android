@@ -11,6 +11,8 @@ import Pelanggan from './pages/Pelanggan';
 import Karyawan from './pages/Karyawan';
 import TokoOnline from './pages/TokoOnline';
 import Dashboard from './pages/Dashboard';
+import Pesanan from './pages/Pesanan';
+import Supplier from './pages/Supplier';
 import Login from './pages/Login';
 import { AuthContext, DemoContext, hasRole, DEMO_LIMITS } from './AuthContext';
 import './index.css';
@@ -19,8 +21,8 @@ import './index.css';
 const ROLE_ACCESS = {
   KASIR:    ['/', '/katalog'],
   CASHIER:  ['/', '/katalog'],
-  ADMIN:    ['/', '/katalog', '/dashboard', '/keuangan', '/pelanggan', '/karyawan'],
-  OWNER:    ['/', '/katalog', '/dashboard', '/keuangan', '/pelanggan', '/karyawan'],
+  ADMIN:    ['/', '/katalog', '/dashboard', '/keuangan', '/pelanggan', '/karyawan', '/pesanan', '/supplier'],
+  OWNER:    ['/', '/katalog', '/dashboard', '/keuangan', '/pelanggan', '/karyawan', '/pesanan', '/supplier'],
 };
 
 const canAccess = (role, path) => {
@@ -114,6 +116,8 @@ const Navigation = ({ user, onLogout }) => {
     { path: '/keuangan',  label: 'Keuangan',  icon: <DollarSign size={20} />,      minRole: 'ADMIN', showInNav: false },
     { path: '/pelanggan', label: 'Pelanggan', icon: <Users size={20} />,           minRole: 'ADMIN', showInNav: false },
     { path: '/karyawan',  label: 'Karyawan',  icon: <UserCog size={20} />,         minRole: 'ADMIN', showInNav: false },
+    { path: '/pesanan',   label: 'Pesanan',   icon: <Clock size={20} />,           minRole: 'ADMIN', showInNav: false },
+    { path: '/supplier',  label: 'Supplier',  icon: <UserCog size={20} />,         minRole: 'ADMIN', showInNav: false },
   ];
 
   // Demo user diperlakukan sebagai OWNER untuk navigasi (akses semua halaman)
@@ -205,6 +209,8 @@ function AppContent({ user, onLogout }) {
           {canAccess(effectiveRole, '/keuangan')   && <Route path="/keuangan"   element={<Keuangan />} />}
           {canAccess(effectiveRole, '/pelanggan')  && <Route path="/pelanggan"  element={<Pelanggan />} />}
           {canAccess(effectiveRole, '/karyawan')   && <Route path="/karyawan"   element={<Karyawan />} />}
+          {canAccess(effectiveRole, '/pesanan')    && <Route path="/pesanan"    element={<Pesanan />} />}
+          {canAccess(effectiveRole, '/supplier')   && <Route path="/supplier"   element={<Supplier />} />}
         </Routes>
       </main>
     </div>

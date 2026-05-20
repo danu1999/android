@@ -8,7 +8,7 @@ const EMPTY_VARIANT = { name: '', stock: '', price: '', costPrice: '' };
 
 const EMPTY_FORM = {
   id: null, name: '', price: '', costPrice: '',
-  stock: '', unit: 'pcs', image: '',
+  stock: '', unit: 'pcs', image: '', barcode: '',
   wholesaleEnabled: false,
   wholesalePrices: [
     { minQty: '', price: '' },
@@ -539,6 +539,20 @@ export default function Katalog() {
                     <option value="Meter">Meter</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Barcode */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 12, fontWeight: 800, color: '#334155' }}>🔍 Barcode (opsional — untuk Scanner)</label>
+                <input
+                  type="text"
+                  name="barcode"
+                  value={formData.barcode || ''}
+                  onChange={handleInputChange}
+                  placeholder="Scan atau ketik kode barcode produk..."
+                  disabled={isViewOnly}
+                  className="katalog-input"
+                />
               </div>
 
               {/* Harga Grosir */}

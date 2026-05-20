@@ -40,13 +40,15 @@ model Product {
   costPrice        Float    @default(0)           // Harga Modal
   stock            Int      @default(0)
   unit             String   @default("pcs")
+  barcode          String?  @unique               // Barcode EAN-13 / QR
   wholesaleEnabled Boolean  @default(false)
   wholesalePrices  String?                        // JSON: [{minQty, price}, ...]
-  variants         String?                        // JSON: [{name, stock?, price?}, ...]
+  variants         String?                        // JSON: [{name, stock?, price?, attrs?}, ...]
   image            String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   transactionItems TransactionItem[]
+  purchaseItems    PurchaseOrderItem[]
 }
 
 model Transaction {
@@ -57,17 +59,22 @@ model Transaction {
   discount        Float    @default(0)
   paymentMethod   String   // QRIS, CASH
   status          String   @default("COMPLETED") // COMPLETED, CANCELLED
-  type            String   @default("SALES") // SALES, BACKDATE
-  
+  type            String   @default("SALES") // SALES, BACKDATE, PRE_ORDER
+
+  // Pre-Order fields
+  orderStatus     String?                        // BOOKED, DP_PAID, COMPLETED (null = bukan pre-order)
+  dpAmount        Float    @default(0)           // Nominal DP
+  deliveryDate    DateTime?                      // Tanggal pengiriman/pengambilan
+
   employeeId      Int
   employee        Employee @relation(fields: [employeeId], references: [id])
-  
+
   customerId      Int?
   customer        Customer? @relation(fields: [customerId], references: [id])
   customerName    String?
   queueNumber     Int?
   notes           String?
-  
+
   items           TransactionItem[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -109,4 +116,39 @@ model Promo {
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// ── Supplier & Purchase Order ─────────────────────────────────
+model Supplier {
+  id             Int             @id @default(autoincrement())
+  name           String
+  phone          String?
+  address        String?
+  notes          String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  purchaseOrders PurchaseOrder[]
+}
+
+model PurchaseOrder {
+  id          Int                @id @default(autoincrement())
+  supplierId  Int
+  supplier    Supplier           @relation(fields: [supplierId], references: [id])
+  date        DateTime           @default(now())
+  status      String             @default("DRAFT") // DRAFT, ORDERED, RECEIVED
+  notes       String?
+  total       Float              @default(0)
+  items       PurchaseOrderItem[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+}
+
+model PurchaseOrderItem {
+  id               Int           @id @default(autoincrement())
+  purchaseOrderId  Int
+  purchaseOrder    PurchaseOrder  @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  productId        Int
+  product          Product        @relation(fields: [productId], references: [id])
+  quantity         Int
+  costPrice        Float          // Harga beli per unit saat PO
 }

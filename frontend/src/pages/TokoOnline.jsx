@@ -21,6 +21,13 @@ export default function TokoOnline() {
   const [waQueueNum, setWaQueueNum] = useState('');
 
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [storeWANumber, setStoreWANumber] = useState('6282245077959');
+  const [storeName, setStoreName] = useState('Toko');
+
+  // Form checkout WA
+  const [buyerName, setBuyerName] = useState('');
+  const [buyerAddress, setBuyerAddress] = useState('');
+  const [deliveryType, setDeliveryType] = useState('pickup'); // pickup | delivery
 
   const fetchProducts = async () => {
     try {
@@ -103,19 +110,23 @@ export default function TokoOnline() {
   const cartTotal = cart.reduce((sum, item) => sum + getItemPrice(item) * item.quantity, 0);
   const cartItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  const sendWhatsApp = (queueNum) => {
-    let message = `Halo, saya ingin memesan dari katalog online:\n`;
-    if (queueNum) message += `*No. Antrian: ${queueNum}*\n`;
-    message += `\n`;
+  const sendWhatsApp = () => {
+    const nama = buyerName.trim() || 'Pelanggan';
+    let message = `Halo *${storeName}*, saya *${nama}* ingin memesan:\n\n`;
     cart.forEach((item, index) => {
       const price = getItemPrice(item);
       const variantStr = item.variantName ? ` (${item.variantName})` : '';
-      message += `${index + 1}. ${item.product.name}${variantStr}\n   ${item.quantity} x Rp ${price.toLocaleString('id-ID')} = Rp ${(item.quantity * price).toLocaleString('id-ID')}\n`;
+      message += `${index + 1}. *${item.product.name}${variantStr}*\n   ${item.quantity} x Rp ${price.toLocaleString('id-ID')} = *Rp ${(item.quantity * price).toLocaleString('id-ID')}*\n`;
     });
-    message += `\n*Total: Rp ${cartTotal.toLocaleString('id-ID')}*\n\nTerima kasih.`;
-    const waNumber = "6281234567890";
-    window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`, '_blank');
-    setWaQueueModal(false); setWaQueueNum('');
+    message += `\n💰 *Total: Rp ${cartTotal.toLocaleString('id-ID')}*\n`;
+    if (deliveryType === 'delivery') {
+      message += `\n🚚 *Pengiriman ke:* ${buyerAddress || '-'}`;
+    } else {
+      message += `\n🏪 *Ambil di tempat*`;
+    }
+    message += `\n\nMohon konfirmasi ketersediaan. Terima kasih 🙏`;
+    window.open(`https://wa.me/${storeWANumber.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
+    setWaQueueModal(false); setWaQueueNum(''); setBuyerName(''); setBuyerAddress('');
   };
 
   const checkoutWhatsApp = () => {
@@ -510,21 +521,44 @@ export default function TokoOnline() {
         </div>
       )}
 
-      {/* WA Queue Number Modal */}
+      {/* WA Checkout Modal */}
       {waQueueModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(3px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div style={{ background: 'white', borderRadius: 20, padding: '24px 20px', width: '100%', maxWidth: 360, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-            <div style={{ fontSize: '2rem', textAlign: 'center', marginBottom: 8 }}>🎫</div>
-            <h3 style={{ textAlign: 'center', margin: '0 0 6px', color: '#1E293B', fontWeight: 900 }}>No. Antrian</h3>
-            <p style={{ textAlign: 'center', fontSize: 13, color: '#64748B', marginBottom: 18 }}>Masukkan nomor antrian Anda (opsional)</p>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: 0 }}>
+          <div style={{ background: 'white', borderRadius: '24px 24px 0 0', padding: '24px 20px 32px', width: '100%', maxWidth: 480, boxShadow: '0 -8px 40px rgba(0,0,0,0.15)' }}>
+            <div style={{ width: 40, height: 4, background: '#E5E7EB', borderRadius: 99, margin: '0 auto 20px' }} />
+            <h3 style={{ margin: '0 0 4px', color: '#1E293B', fontWeight: 900, fontSize: '1.1rem' }}>🛒 Konfirmasi Pesanan</h3>
+            <p style={{ margin: '0 0 18px', fontSize: 13, color: '#64748B' }}>Isi data di bawah, pesanan dikirim via WhatsApp</p>
+
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <button onClick={() => setDeliveryType('pickup')} style={{ flex: 1, padding: '10px 0', borderRadius: 12, border: `2px solid ${deliveryType === 'pickup' ? '#4F46E5' : '#E5E7EB'}`, background: deliveryType === 'pickup' ? '#EEF2FF' : 'white', color: deliveryType === 'pickup' ? '#4F46E5' : '#64748B', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>🏪 Ambil Sendiri</button>
+              <button onClick={() => setDeliveryType('delivery')} style={{ flex: 1, padding: '10px 0', borderRadius: 12, border: `2px solid ${deliveryType === 'delivery' ? '#4F46E5' : '#E5E7EB'}`, background: deliveryType === 'delivery' ? '#EEF2FF' : 'white', color: deliveryType === 'delivery' ? '#4F46E5' : '#64748B', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>🚚 Dikirim</button>
+            </div>
+
             <input
-              type="number" min="1" placeholder="Contoh: 5"
-              value={waQueueNum}
-              onChange={e => setWaQueueNum(e.target.value)}
-              style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: '1.5px solid #E2E8F0', fontSize: 16, outline: 'none', boxSizing: 'border-box', textAlign: 'center', fontWeight: 700, marginBottom: 14 }}
+              type="text" placeholder="Nama Anda (opsional)"
+              value={buyerName}
+              onChange={e => setBuyerName(e.target.value)}
+              style={{ width: '100%', padding: '11px 14px', borderRadius: 12, border: '1.5px solid #E2E8F0', fontSize: 14, outline: 'none', boxSizing: 'border-box', marginBottom: 10 }}
             />
-            <button onClick={() => sendWhatsApp(waQueueNum)} style={{ width: '100%', padding: '13px 0', borderRadius: 12, border: 'none', background: '#22C55E', color: 'white', fontWeight: 800, fontSize: 15, cursor: 'pointer', marginBottom: 8 }}>🛒 Kirim ke WhatsApp</button>
-            <button onClick={() => { setWaQueueModal(false); setWaQueueNum(''); }} style={{ width: '100%', padding: '11px 0', borderRadius: 12, border: '1.5px solid #E2E8F0', background: 'white', color: '#64748B', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Batal</button>
+
+            {deliveryType === 'delivery' && (
+              <textarea
+                placeholder="Alamat pengiriman lengkap..."
+                value={buyerAddress}
+                onChange={e => setBuyerAddress(e.target.value)}
+                rows={2}
+                style={{ width: '100%', padding: '11px 14px', borderRadius: 12, border: '1.5px solid #E2E8F0', fontSize: 14, outline: 'none', boxSizing: 'border-box', resize: 'vertical', marginBottom: 10 }}
+              />
+            )}
+
+            <div style={{ background: '#F8FAFC', borderRadius: 12, padding: '12px 14px', marginBottom: 14 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: '#1E293B', marginBottom: 4 }}>Ringkasan ({cart.length} item)</div>
+              {cart.map(item => <div key={item.cartKey} style={{ fontSize: 12, color: '#64748B', display: 'flex', justifyContent: 'space-between' }}><span>{item.product.name}{item.variantName ? ` (${item.variantName})` : ''} ×{item.quantity}</span><span>Rp {(getItemPrice(item) * item.quantity).toLocaleString('id-ID')}</span></div>)}
+              <div style={{ fontWeight: 900, color: '#4F46E5', fontSize: 14, borderTop: '1px solid #E5E7EB', marginTop: 6, paddingTop: 6, display: 'flex', justifyContent: 'space-between' }}><span>Total</span><span>Rp {cartTotal.toLocaleString('id-ID')}</span></div>
+            </div>
+
+            <button onClick={sendWhatsApp} style={{ width: '100%', padding: '14px 0', borderRadius: 14, border: 'none', background: 'linear-gradient(135deg,#22C55E,#16A34A)', color: 'white', fontWeight: 800, fontSize: 15, cursor: 'pointer', marginBottom: 8, boxShadow: '0 4px 14px rgba(34,197,94,0.35)' }}>💬 Kirim Pesanan via WhatsApp</button>
+            <button onClick={() => { setWaQueueModal(false); setWaQueueNum(''); setBuyerName(''); setBuyerAddress(''); }} style={{ width: '100%', padding: '12px 0', borderRadius: 14, border: '1.5px solid #E2E8F0', background: 'white', color: '#64748B', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>Batal</button>
           </div>
         </div>
       )}
