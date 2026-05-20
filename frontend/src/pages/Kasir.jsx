@@ -46,13 +46,17 @@ export default function Kasir() {
   const [queues, setQueues] = useState([]);
   const [customerName, setCustomerName] = useState('');
   const [notes, setNotes] = useState('');
-  const [globalDiscount, setGlobalDiscount] = useState(0);
   const [isBackdate, setIsBackdate] = useState(false);
   const [txDate, setTxDate] = useState('');
   const [demoTxCount, setDemoTxCount] = useState(0);
   const [variantModal, setVariantModal] = useState(null);
-  const [lastCart, setLastCart] = useState([]);       // snapshot cart saat checkout untuk print
-  const [queueToPrint, setQueueToPrint] = useState(null); // antrian yang baru dibayar → print
+  const [lastCart, setLastCart] = useState([]);
+  const [queueToPrint, setQueueToPrint] = useState(null);
+
+  // ── Smart Discount ────────────────────────────────────────────
+  const [discountType, setDiscountType] = useState('percent');   // 'percent' | 'nominal'
+  const [discountInput, setDiscountInput] = useState('');         // string input user
+  const [amountPaid, setAmountPaid] = useState('');              // uang yang dibayar (untuk kembalian)
 
   // ── Barcode Scanner ──────────────────────────────────────────
   const barcodeBuffer = useRef('');
@@ -284,19 +288,46 @@ export default function Kasir() {
   const removeItem = (cartKey) => setCart(prev => prev.filter(i => i.cartKey !== cartKey));
 
   const getItemPrice = (item) => item.variantPrice || getEffectivePrice(item.product, item.quantity);
-  const total = cart.reduce((s, i) => s + (getItemPrice(i) - i.discount) * i.quantity, 0) - globalDiscount;
+  const subtotal = cart.reduce((s, i) => s + (getItemPrice(i) - i.discount) * i.quantity, 0);
+
+  // Smart Discount
+  const discountInputNum = parseFloat(discountInput) || 0;
+  const discountAmt = (() => {
+    if (!discountInputNum) return 0;
+    if (discountType === 'percent') return Math.round(subtotal * Math.min(discountInputNum, 100) / 100);
+    return Math.min(discountInputNum, subtotal); // nominal tidak boleh melebihi subtotal
+  })();
+  const discountLabel = discountType === 'percent' ? `Diskon ${discountInputNum}%` : 'Diskon';
+  const total = subtotal - discountAmt;
   const totalItems = cart.reduce((s, i) => s + i.quantity, 0);
+  const change = amountPaid ? Math.max(0, parseFloat(amountPaid) - total) : 0;
 
   const checkout = async (isQueue = false) => {
     if (!cart.length) return;
     if (isDemo) {
-      showDemoBlock('Memproses transaksi hanya tersedia di akun berbayar. Data demo tidak akan tersimpan ke database. Upgrade untuk mulai berjualan!');
+      showDemoBlock('Memproses transaksi hanya tersedia di akun berbayar.');
       return;
     }
     try {
       const r = await api.post('/transactions', {
-        items: cart.map(i => ({ productId: i.product.id, variantId: i.variantId || null, quantity: i.quantity, price: i.variantPrice || i.product.price, discount: i.discount })),
-        total, discount: globalDiscount,
+        items: cart.map(i => ({
+          productId: i.product.id,
+          variantId: i.variantId || null,
+          variantName: i.variantName || null,
+          quantity: i.quantity,
+          price: i.variantPrice || i.product.price,
+          costPrice: i.product.costPrice || 0,
+          discount: i.discount,
+          note: i.note || null,
+        })),
+        subtotal,
+        total,
+        discountType: discountInputNum > 0 ? discountType : null,
+        discountInput: discountInputNum,
+        discountAmt,
+        discount: discountAmt,       // legacy compat
+        amountPaid: amountPaid ? parseFloat(amountPaid) : null,
+        change: amountPaid ? change : null,
         paymentMethod: isQueue ? 'PENDING' : payMethod,
         status: isQueue ? 'PENDING' : 'COMPLETED',
         notes,
@@ -308,10 +339,9 @@ export default function Kasir() {
       });
       if (!isQueue) setReceipt(r.data);
       else alert('Ditambahkan ke antrian!');
-      if (isDemo) setDemoTxCount(c => c + 1);
-
-      setLastCart([...cart]); // simpan snapshot cart untuk print varian
-      setCart([]); setGlobalDiscount(0); setCustomerId(''); setCustomerName(''); setQueueNumber(''); setNotes('');
+      setLastCart([...cart]);
+      setCart([]); setDiscountInput(''); setAmountPaid('');
+      setCustomerId(''); setCustomerName(''); setQueueNumber(''); setNotes('');
       setPayModal(false); setCartOpen(false); fetchProducts(); fetchActiveQueues();
     } catch { alert('Transaksi gagal'); }
   };
@@ -376,53 +406,47 @@ export default function Kasir() {
   const RECEIPT_STYLE = (size) =>
     `body{font-family:monospace;width:${size};margin:0 auto;padding:10px;font-size:12px}` +
     `.c{text-align:center}.b{font-weight:bold}.r{text-align:right}hr{border-top:1px dashed #000}` +
-    `td{vertical-align:top;padding:1px 2px}`;
+    `td{vertical-align:top;padding:1px 2px}.indent{padding-left:8px;color:#555;font-size:11px}`;
+
+  const buildReceiptHTML = (t, cartSnapshot, size) => {
+    const qLine = t.queueNumber ? `<div class="b c" style="font-size:16px;border:2px solid #000;padding:4px;margin:4px 0">No. Antrian: #${t.queueNumber}</div>` : '';
+    const cLine = t.customerName ? `<div>Pelanggan: ${t.customerName}</div>` : '';
+    const notesLine = t.notes ? `<div>Catatan: ${t.notes}</div>` : '';
+    const itemsHtml = (t.items || cartSnapshot || []).map((item, idx) => {
+      const prod = products.find(p => p.id === (item.productId || item.product?.id)) || item.product;
+      const prodName = item.productName || prod?.name || 'Item';
+      const varName = item.variantName || (cartSnapshot?.[idx]?.variantName) || findVariantName(prod, item.price);
+      const nameRow = varName ? `${prodName} <b>(${varName})</b>` : prodName;
+      const noteRow = item.note ? `<tr><td colspan="3" class="indent">&#8627; ${item.note}</td></tr>` : '';
+      const lineTotal = item.quantity * item.price - (item.discount || 0);
+      return `<tr><td colspan="3">${nameRow}</td></tr>${noteRow}<tr><td>${item.quantity}x</td><td>Rp${Number(item.price).toLocaleString('id-ID')}</td><td class="r">Rp${lineTotal.toLocaleString('id-ID')}</td></tr>`;
+    }).join('');
+    const sub = t.subtotal || t.total;
+    const dAmt = t.discountAmt || t.discount || 0;
+    const dLabel = t.discountType === 'percent' ? `Diskon (${t.discountInput}%)` : dAmt > 0 ? 'Diskon' : '';
+    const discRow = dAmt > 0 ? `<tr><td colspan="2">${dLabel}</td><td class="r">-Rp${Number(dAmt).toLocaleString('id-ID')}</td></tr>` : '';
+    const subRow = dAmt > 0 ? `<tr><td colspan="2">Subtotal</td><td class="r">Rp${Number(sub).toLocaleString('id-ID')}</td></tr>` : '';
+    const paidRow = t.amountPaid > 0 ? `<tr><td colspan="2">Tunai</td><td class="r">Rp${Number(t.amountPaid).toLocaleString('id-ID')}</td></tr><tr><td colspan="2">Kembali</td><td class="r">Rp${Number(t.change || 0).toLocaleString('id-ID')}</td></tr>` : '';
+    return `<html><head><style>${RECEIPT_STYLE(size)}</style></head><body>
+      <div class="c b" style="font-size:16px">PISANG KEJU RAMAYANA</div>
+      <div class="c">Struk Pembayaran</div><hr>
+      <div>No: ${t.receiptNumber}</div><div>Metode: ${t.paymentMethod}</div>${cLine}${notesLine}<hr>
+      ${qLine}
+      <table width="100%">${itemsHtml}</table><hr>
+      <table width="100%">${subRow}${discRow}<tr><td colspan="2" class="b">TOTAL</td><td class="r b">Rp${Number(t.total).toLocaleString('id-ID')}</td></tr>${paidRow}</table><hr>
+      <div class="c">Terima Kasih! 🙏</div>
+      <script>window.print();window.onafterprint=()=>window.close()</script></body></html>`;
+  };
 
   const printReceipt = (size) => {
     const w = window.open('', '_blank');
-    const qLine = receipt?.queueNumber ? `<div class="b" style="font-size:14px">No. Antrian: ${receipt.queueNumber}</div>` : '';
-    const cLine = receipt?.customerName ? `<div>Pelanggan: ${receipt.customerName}</div>` : '';
-    const itemsHtml = (receipt?.items || []).map((item, idx) => {
-      const prod = products.find(p => p.id === item.productId);
-      const prodName = prod?.name || 'Item';
-      const variantName = lastCart[idx]?.variantName || findVariantName(prod, item.price);
-      const name = variantName ? `${prodName} <b>(${variantName})</b>` : prodName;
-      const disc = item.discount > 0 ? ` <small>-Rp${Number(item.discount).toLocaleString('id-ID')}</small>` : '';
-      const subtotal = item.quantity * item.price - (item.discount || 0);
-      return `<tr><td colspan="3">${name}</td></tr><tr><td>${item.quantity}x</td><td>Rp${Number(item.price).toLocaleString('id-ID')}${disc}</td><td class="r">Rp${subtotal.toLocaleString('id-ID')}</td></tr>`;
-    }).join('');
-    const discRow = receipt?.discount > 0 ? `<tr><td colspan="2">Diskon Global</td><td class="r">-Rp${Number(receipt.discount).toLocaleString('id-ID')}</td></tr>` : '';
-    w.document.write(`<html><head><style>${RECEIPT_STYLE(size)}</style></head><body>
-      <div class="c b" style="font-size:16px">PISANG KEJU RAMAYANA</div><div class="c">Struk Pembayaran</div><hr>
-      <div>No: ${receipt?.receiptNumber}</div><div>Metode: ${receipt?.paymentMethod}</div>${qLine}${cLine}<hr>
-      <table width="100%">${itemsHtml}</table><hr>
-      <table width="100%">${discRow}<tr><td class="b">TOTAL</td><td class="r b" colspan="2">Rp${Number(receipt?.total).toLocaleString('id-ID')}</td></tr></table><hr>
-      <div class="c">Terima Kasih!</div>
-      <script>window.print();window.onafterprint=()=>window.close()</script></body></html>`);
+    w.document.write(buildReceiptHTML(receipt, lastCart, size));
     w.document.close();
   };
 
   const printQueueReceipt = (t, size) => {
     const w = window.open('', '_blank');
-    const qLine = t.queueNumber ? `<div class="b" style="font-size:14px">No. Antrian: ${t.queueNumber}</div>` : '';
-    const cLine = t.customerName ? `<div>Pelanggan: ${t.customerName}</div>` : '';
-    const notesLine = t.notes ? `<div>Catatan: ${t.notes}</div>` : '';
-    const itemsHtml = (t.items || []).map(item => {
-      const prod = item.product;
-      const prodName = prod?.name || 'Item';
-      const variantName = findVariantName(prod, item.price);
-      const name = variantName ? `${prodName} <b>(${variantName})</b>` : prodName;
-      const disc = item.discount > 0 ? ` <small>-Rp${Number(item.discount).toLocaleString('id-ID')}</small>` : '';
-      const subtotal = item.quantity * item.price - (item.discount || 0);
-      return `<tr><td colspan="3">${name}</td></tr><tr><td>${item.quantity}x</td><td>Rp${Number(item.price).toLocaleString('id-ID')}${disc}</td><td class="r">Rp${subtotal.toLocaleString('id-ID')}</td></tr>`;
-    }).join('');
-    w.document.write(`<html><head><style>${RECEIPT_STYLE(size)}</style></head><body>
-      <div class="c b" style="font-size:16px">PISANG KEJU RAMAYANA</div><div class="c">Struk Pembayaran</div><hr>
-      <div>No: ${t.receiptNumber}</div><div>Metode: ${t.paymentMethod}</div>${qLine}${cLine}${notesLine}<hr>
-      <table width="100%">${itemsHtml}</table><hr>
-      <table width="100%"><tr><td class="b">TOTAL</td><td class="r b" colspan="2">Rp${Number(t.total).toLocaleString('id-ID')}</td></tr></table><hr>
-      <div class="c">Terima Kasih!</div>
-      <script>window.print();window.onafterprint=()=>window.close()</script></body></html>`);
+    w.document.write(buildReceiptHTML(t, null, size));
     w.document.close();
   };
 
@@ -795,16 +819,47 @@ export default function Kasir() {
                   <textarea style={{ ...S.input, resize: 'none', fontFamily: 'inherit' }} rows={2} placeholder="Masukkan catatan (opsional)" value={notes} onChange={e => setNotes(e.target.value)} />
                 </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontSize: '0.85rem', color: '#6B7280' }}>Diskon Transaksi</span>
-                <input type="number" value={globalDiscount} min={0}
-                  onChange={e => setGlobalDiscount(Number(e.target.value) || 0)}
-                  style={{ width: '100px', padding: '6px 10px', border: '1.5px solid #E5E7EB', borderRadius: '8px', fontSize: '0.9rem', textAlign: 'right', outline: 'none' }} />
+
+              {/* Smart Discount */}
+              <div style={{ background: '#F8F9FF', borderRadius: 12, padding: '12px 14px', marginBottom: 10, border: '1px solid #E8ECFF' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 8 }}>🏷️ Diskon</div>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                  <button onClick={() => { setDiscountType('percent'); setDiscountInput(''); }}
+                    style={{ flex: 1, padding: '7px 0', borderRadius: 8, border: 'none', fontWeight: 700, fontSize: 12, cursor: 'pointer', background: discountType === 'percent' ? '#4F46E5' : '#EEF2FF', color: discountType === 'percent' ? 'white' : '#4F46E5' }}>
+                    % Persen
+                  </button>
+                  <button onClick={() => { setDiscountType('nominal'); setDiscountInput(''); }}
+                    style={{ flex: 1, padding: '7px 0', borderRadius: 8, border: 'none', fontWeight: 700, fontSize: 12, cursor: 'pointer', background: discountType === 'nominal' ? '#4F46E5' : '#EEF2FF', color: discountType === 'nominal' ? 'white' : '#4F46E5' }}>
+                    Rp Nominal
+                  </button>
+                </div>
+                <input type="number" value={discountInput} min={0} max={discountType === 'percent' ? 100 : subtotal}
+                  onChange={e => setDiscountInput(e.target.value)}
+                  placeholder={discountType === 'percent' ? 'Contoh: 10 (untuk 10%)' : 'Contoh: 5000'}
+                  style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #C7D2FE', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box', background: 'white' }} />
+                {discountAmt > 0 && (
+                  <div style={{ marginTop: 6, fontSize: 12, color: '#10B981', fontWeight: 600 }}>✓ Hemat Rp {discountAmt.toLocaleString('id-ID')}</div>
+                )}
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderTop: '2px solid #EEF2FF', marginBottom: '14px' }}>
-                <span style={{ fontWeight: 700, color: '#1F2937', fontSize: '1rem' }}>Total</span>
-                <span style={{ fontWeight: 800, color: '#4F46E5', fontSize: '1.2rem' }}>Rp {Math.max(0, total).toLocaleString('id-ID')}</span>
+
+              {/* Ringkasan Harga */}
+              <div style={{ background: '#F8F9FF', borderRadius: 12, padding: '10px 14px', marginBottom: 14 }}>
+                {discountAmt > 0 && (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#6B7280', marginBottom: 4 }}>
+                      <span>Subtotal</span><span>Rp {subtotal.toLocaleString('id-ID')}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#EF4444', marginBottom: 4 }}>
+                      <span>{discountLabel}</span><span>-Rp {discountAmt.toLocaleString('id-ID')}</span>
+                    </div>
+                  </>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: discountAmt > 0 ? 8 : 0, borderTop: discountAmt > 0 ? '1px dashed #C7D2FE' : 'none' }}>
+                  <span style={{ fontWeight: 800, color: '#1F2937', fontSize: '1rem' }}>Total</span>
+                  <span style={{ fontWeight: 800, color: '#4F46E5', fontSize: '1.2rem' }}>Rp {Math.max(0, total).toLocaleString('id-ID')}</span>
+                </div>
               </div>
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', paddingBottom: '16px' }}>
                 <button style={{ ...S.btnSecondary, opacity: cart.length ? 1 : 0.5 }} disabled={!cart.length} onClick={() => checkout(true)}>
                   🕐 Simpan sebagai Antrian
@@ -823,22 +878,51 @@ export default function Kasir() {
         <div className="modal-overlay">
           <div className="modal-content glass-panel" style={{ maxWidth: 380 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 style={{ margin: 0, fontSize: '1.2rem' }}>Pembayaran</h2>
+              <h2 style={{ margin: 0, fontSize: '1.2rem' }}>💳 Pembayaran</h2>
               <button onClick={() => setPayModal(false)} style={{ background: '#F3F4F6', border: 'none', borderRadius: '8px', padding: '6px', cursor: 'pointer' }}><X size={18} /></button>
             </div>
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
               <button style={S.pill(payMethod === 'CASH')} onClick={() => setPayMethod('CASH')}><CreditCard size={16} style={{ marginRight: 6 }} />Cash</button>
               <button style={S.pill(payMethod === 'QRIS')} onClick={() => setPayMethod('QRIS')}><QrCode size={16} style={{ marginRight: 6 }} />QRIS</button>
+              <button style={S.pill(payMethod === 'TRANSFER')} onClick={() => setPayMethod('TRANSFER')}>🏦 TF</button>
             </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', fontSize: '0.85rem', color: '#6B7280', cursor: 'pointer' }}>
               <input type="checkbox" checked={isBackdate} onChange={e => setIsBackdate(e.target.checked)} />
               Backdate (transaksi lampau)
             </label>
             {isBackdate && <input type="datetime-local" value={txDate} onChange={e => setTxDate(e.target.value)} style={{ ...S.input, marginBottom: '12px' }} />}
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '14px 0', borderTop: '2px solid #EEF2FF', marginBottom: '16px' }}>
-              <span style={{ fontWeight: 700 }}>Total Tagihan</span>
-              <span style={{ fontWeight: 800, color: '#4F46E5', fontSize: '1.1rem' }}>Rp {Math.max(0, total).toLocaleString('id-ID')}</span>
+            {/* Summary */}
+            <div style={{ background: '#F8F9FF', borderRadius: 12, padding: '12px 14px', marginBottom: 12 }}>
+              {discountAmt > 0 && (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#6B7280', marginBottom: 3 }}>
+                    <span>Subtotal</span><span>Rp {subtotal.toLocaleString('id-ID')}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#EF4444', marginBottom: 3 }}>
+                    <span>{discountLabel}</span><span>-Rp {discountAmt.toLocaleString('id-ID')}</span>
+                  </div>
+                </>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: discountAmt > 0 ? 6 : 0, borderTop: discountAmt > 0 ? '1px dashed #C7D2FE' : 'none' }}>
+                <span style={{ fontWeight: 700 }}>Total Tagihan</span>
+                <span style={{ fontWeight: 800, color: '#4F46E5', fontSize: '1.1rem' }}>Rp {Math.max(0, total).toLocaleString('id-ID')}</span>
+              </div>
             </div>
+            {/* Uang Dibayar (untuk Cash) */}
+            {payMethod === 'CASH' && (
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4 }}>Uang Dibayar</label>
+                <input type="number" value={amountPaid} onChange={e => setAmountPaid(e.target.value)}
+                  placeholder={`Min. Rp ${total.toLocaleString('id-ID')}`}
+                  style={{ ...S.input, textAlign: 'right' }} />
+                {parseFloat(amountPaid) >= total && amountPaid && (
+                  <div style={{ marginTop: 6, fontSize: 13, fontWeight: 700, color: '#10B981' }}>Kembalian: Rp {change.toLocaleString('id-ID')}</div>
+                )}
+                {parseFloat(amountPaid) < total && amountPaid && (
+                  <div style={{ marginTop: 6, fontSize: 12, color: '#EF4444' }}>⚠️ Uang kurang Rp {(total - parseFloat(amountPaid)).toLocaleString('id-ID')}</div>
+                )}
+              </div>
+            )}
             <button style={S.btnPrimary} onClick={() => checkout(false)}>Proses Pembayaran</button>
           </div>
         </div>

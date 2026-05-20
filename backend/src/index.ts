@@ -236,16 +236,20 @@ app.get('/api/transactions', requireAdmin, async (req, res) => {
 
 app.post('/api/transactions', requireNotDemo, async (req, res) => {
   try {
-    const { items, total, discount, paymentMethod, type, customerId, date, status, notes, customerName, queueNumber } = req.body;
+    const {
+      items, total, subtotal, discount,
+      discountType, discountInput, discountAmt,
+      paymentMethod, amountPaid, change,
+      type, customerId, date, status,
+      notes, customerName, queueNumber
+    } = req.body;
 
     const employeeIdHeader = req.headers['x-employee-id'] as string;
-
     let employeeId: number;
 
     if (employeeIdHeader && employeeIdHeader !== '0') {
       employeeId = Number(employeeIdHeader);
     } else {
-      // Fallback: cari/buat employee default
       let employee = await prisma.employee.findFirst();
       if (!employee) {
         employee = await prisma.employee.create({
@@ -255,11 +259,22 @@ app.post('/api/transactions', requireNotDemo, async (req, res) => {
       employeeId = employee.id;
     }
 
+    // Hitung subtotal dari items jika tidak dikirim
+    const computedSubtotal = subtotal ?? items.reduce((sum: number, i: any) => sum + (i.price * i.quantity), 0);
+    const computedDiscountAmt = discountAmt ?? Number(discount || 0);
+    const computedTotal = total ?? (computedSubtotal - computedDiscountAmt);
+
     const transaction = await prisma.transaction.create({
       data: {
         receiptNumber: `INV-${Date.now()}`,
-        total: Number(total),
-        discount: Number(discount || 0),
+        total: Number(computedTotal),
+        subtotal: Number(computedSubtotal),
+        discount: Number(computedDiscountAmt),          // legacy compat
+        discountType: discountType || null,
+        discountInput: Number(discountInput || 0),
+        discountAmt: Number(computedDiscountAmt),
+        amountPaid: amountPaid ? Number(amountPaid) : null,
+        change: change ? Number(change) : null,
         paymentMethod: paymentMethod || 'PENDING',
         status: status || 'COMPLETED',
         notes: notes || null,
@@ -274,13 +289,18 @@ app.post('/api/transactions', requireNotDemo, async (req, res) => {
             productId: item.productId,
             quantity: item.quantity,
             price: item.price,
+            costPrice: item.costPrice || 0,
             discount: item.discount || 0,
+            variantId: item.variantId || null,
+            variantName: item.variantName || null,
+            note: item.note || null,
           }))
         }
       },
-      include: { items: true }
+      include: { items: { include: { product: true } } }
     });
 
+    // Kurangi stok produk
     for (const item of items) {
       await prisma.product.update({
         where: { id: item.productId },

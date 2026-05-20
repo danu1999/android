@@ -55,16 +55,25 @@ model Transaction {
   id              Int      @id @default(autoincrement())
   receiptNumber   String   @unique
   date            DateTime @default(now())
-  total           Float
-  discount        Float    @default(0)
-  paymentMethod   String   // QRIS, CASH
+
+  // Keuangan — dipisah untuk laporan omzet vs diskon
+  subtotal        Float    @default(0)           // Harga kotor sebelum diskon
+  discountType    String?                        // "percent" | "nominal" | null
+  discountInput   Float    @default(0)           // Nilai input user (10 = 10%, atau 5000 = Rp5000)
+  discountAmt     Float    @default(0)           // Rupiah yang benar-benar dipotong
+  total           Float                          // Grand total = subtotal - discountAmt
+  discount        Float    @default(0)           // Legacy — tetap ada agar data lama aman
+
+  paymentMethod   String   // QRIS, CASH, TRANSFER
+  amountPaid      Float?                         // Uang yang dibayar pelanggan
+  change          Float?                         // Kembalian
   status          String   @default("COMPLETED") // COMPLETED, CANCELLED
-  type            String   @default("SALES") // SALES, BACKDATE, PRE_ORDER
+  type            String   @default("SALES")     // SALES, BACKDATE, PRE_ORDER
 
   // Pre-Order fields
-  orderStatus     String?                        // BOOKED, DP_PAID, COMPLETED (null = bukan pre-order)
-  dpAmount        Float    @default(0)           // Nominal DP
-  deliveryDate    DateTime?                      // Tanggal pengiriman/pengambilan
+  orderStatus     String?                        // BOOKED, DP_PAID, COMPLETED
+  dpAmount        Float    @default(0)
+  deliveryDate    DateTime?
 
   employeeId      Int
   employee        Employee @relation(fields: [employeeId], references: [id])
@@ -84,13 +93,17 @@ model TransactionItem {
   id            Int      @id @default(autoincrement())
   transactionId Int
   transaction   Transaction @relation(fields: [transactionId], references: [id])
-  
+
   productId     Int
   product       Product @relation(fields: [productId], references: [id])
-  
+  variantId     Int?                             // ID varian jika ada
+  variantName   String?                          // Nama varian (misal: "Milo Almond")
+
   quantity      Int
-  price         Float
-  discount      Float    @default(0)
+  price         Float                            // Harga jual per unit saat transaksi
+  costPrice     Float    @default(0)             // Harga modal per unit (untuk laporan HPP)
+  discount      Float    @default(0)             // Diskon per item (legacy)
+  note          String?                          // Catatan item (misal: "Less ice")
 }
 
 model Finance {
