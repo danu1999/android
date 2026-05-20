@@ -51,7 +51,10 @@ export default function Kasir() {
   // ── Barcode Scanner ──────────────────────────────────────────
   const barcodeBuffer = useRef('');
   const barcodeTimer = useRef(null);
+  const barcodeInputRef = useRef(null);
   const [barcodeFlash, setBarcodeFlash] = useState(null); // null | 'found' | 'notfound'
+  const [barcodeInputOpen, setBarcodeInputOpen] = useState(false);
+  const [barcodeInputVal, setBarcodeInputVal] = useState('');
 
   const handleBarcodeScan = useCallback((code) => {
     // Cari produk berdasarkan field barcode (lokal, tanpa API call)
@@ -381,13 +384,50 @@ export default function Kasir() {
           <input style={S.searchInput} placeholder="Cari produk..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
           {searchQuery && <button onClick={() => setSearchQuery('')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#9CA3AF' }}><X size={16} /></button>}
         </div>
-        {/* Barcode scanner mode indicator */}
-        <div title="Scanner Barcode aktif — arahkan scanner ke produk" style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '8px 10px', borderRadius: 12, background: barcodeFlash === 'found' ? '#DCFCE7' : barcodeFlash === 'notfound' ? '#FEE2E2' : '#EEF2FF', color: barcodeFlash === 'found' ? '#16A34A' : barcodeFlash === 'notfound' ? '#DC2626' : '#6366F1', fontSize: 12, fontWeight: 700, transition: 'all 0.2s', flexShrink: 0 }}>
+        {/* Barcode scanner button — klik untuk buka panel input */}
+        <button
+          onClick={() => { setBarcodeInputOpen(o => !o); setBarcodeInputVal(''); setTimeout(() => barcodeInputRef.current?.focus(), 80); }}
+          title="Klik untuk scan / ketik barcode produk"
+          style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '8px 10px', borderRadius: 12, border: 'none', cursor: 'pointer', background: barcodeInputOpen ? '#4F46E5' : barcodeFlash === 'found' ? '#DCFCE7' : barcodeFlash === 'notfound' ? '#FEE2E2' : '#EEF2FF', color: barcodeInputOpen ? 'white' : barcodeFlash === 'found' ? '#16A34A' : barcodeFlash === 'notfound' ? '#DC2626' : '#6366F1', fontSize: 12, fontWeight: 700, transition: 'all 0.2s', flexShrink: 0 }}
+        >
           <Barcode size={16} />
-          {barcodeFlash === 'found' ? '✓ Scan!' : barcodeFlash === 'notfound' ? '✗ Tdk Ada' : 'Scan'}
-        </div>
+          {barcodeFlash === 'found' ? '✓ Scan!' : barcodeFlash === 'notfound' ? '✗ Tdk Ada' : barcodeInputOpen ? 'Tutup' : 'Scan'}
+        </button>
         <button style={S.queueBtn} onClick={fetchQueue}><ClipboardList size={16} /> Antrian</button>
       </div>
+
+      {/* Barcode Input Panel */}
+      {barcodeInputOpen && (
+        <div style={{ background: '#EEF2FF', padding: '10px 16px', display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, borderBottom: '2px solid #C7D2FE', animation: 'slideDown 0.15s ease' }}>
+          <Barcode size={18} color="#4F46E5" style={{ flexShrink: 0 }} />
+          <input
+            ref={barcodeInputRef}
+            value={barcodeInputVal}
+            onChange={e => setBarcodeInputVal(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && barcodeInputVal.trim()) {
+                handleBarcodeScan(barcodeInputVal.trim());
+                setBarcodeInputVal('');
+              }
+            }}
+            placeholder="Scan atau ketik barcode, tekan Enter..."
+            style={{ flex: 1, border: '1.5px solid #C7D2FE', borderRadius: 10, padding: '9px 12px', fontSize: 14, outline: 'none', background: 'white', fontFamily: 'monospace', letterSpacing: 1 }}
+            autoComplete="off"
+          />
+          <button
+            onClick={() => { if (barcodeInputVal.trim()) { handleBarcodeScan(barcodeInputVal.trim()); setBarcodeInputVal(''); } }}
+            style={{ padding: '9px 14px', borderRadius: 10, border: 'none', background: '#4F46E5', color: 'white', fontWeight: 700, fontSize: 13, cursor: 'pointer', flexShrink: 0 }}
+          >
+            Cari
+          </button>
+          <button
+            onClick={() => { setBarcodeInputOpen(false); setBarcodeInputVal(''); }}
+            style={{ padding: '9px', borderRadius: 10, border: 'none', background: 'white', color: '#9CA3AF', cursor: 'pointer', flexShrink: 0 }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       {/* Low stock warning */}
       {products.some(p => p.stock > 0 && p.stock <= 5) && (
