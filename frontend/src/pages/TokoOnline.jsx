@@ -22,8 +22,14 @@ export default function TokoOnline() {
   const [waQueueNum, setWaQueueNum] = useState('');
 
   const [lastUpdated, setLastUpdated] = useState(null);
-  const [storeWANumber, setStoreWANumber] = useState('6285746135996');
+  const [storeWANumber, setStoreWANumber] = useState('');
   const [storeName, setStoreName] = useState('Toko');
+
+  // Hanafi/fed/fahri = toko asli pemilik → nomor 085746135996
+  // Toko lain (template pelanggan) → nomor 082245077959
+  const PROTECTED_NAMES = ['hanafi', 'fahri', 'fed'];
+  const OWNER_WA    = '6285746135996';
+  const TEMPLATE_WA = '6282245077959';
 
   // Form checkout WA
   const [buyerName, setBuyerName] = useState('');
@@ -35,15 +41,17 @@ export default function TokoOnline() {
   // Produk demo — identik dengan Kasir, Katalog, Keuangan
   const DEMO_PRODUCTS = [
     { id: 'p301', name: 'Pisang Keju Cokelat', price: 15000, costPrice: 9000, stock: 120, unit: 'pcs', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: '/demo/pisang-keju-coklat.png' },
-    { id: 'p302', name: 'Pisang Keju Stroberi', price: 15000, costPrice: 9500, stock: 85,  unit: 'pcs', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: '/demo/pisang-keju-stroberi.png' },
-    { id: 'p303', name: 'Pisang Keju Premium',  price: 20000, costPrice: 11000, stock: 50, unit: 'pcs', wholesaleEnabled: false, wholesalePrices: null,
+    { id: 'p302', name: 'Pisang Keju Stroberi', price: 15000, costPrice: 9500, stock: 85, unit: 'pcs', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: '/demo/pisang-keju-stroberi.png' },
+    {
+      id: 'p303', name: 'Pisang Keju Premium', price: 20000, costPrice: 11000, stock: 50, unit: 'pcs', wholesaleEnabled: false, wholesalePrices: null,
       variants: JSON.stringify([
         { id: 1, name: 'Keju Melimpah', price: 25000, costPrice: 13000, stock: 30 },
-        { id: 2, name: 'Milo Almond',   price: 28000, costPrice: 15000, stock: 20 },
-      ]), barcode: null, image: '/demo/pisang-keju-premium.png' },
-    { id: 'p304', name: 'Jus Alpukat',  price: 18000, costPrice: 10000, stock: 60,  unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: '/demo/jus-alpukat.png' },
-    { id: 'p305', name: 'Jus Mangga',   price: 15000, costPrice: 8000,  stock: 75,  unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: '/demo/jus-mangga.png' },
-    { id: 'p306', name: 'Es Teh Manis', price: 8000,  costPrice: 3000,  stock: 200, unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: null },
+        { id: 2, name: 'Milo Almond', price: 28000, costPrice: 15000, stock: 20 },
+      ]), barcode: null, image: '/demo/pisang-keju-premium.png'
+    },
+    { id: 'p304', name: 'Jus Alpukat', price: 18000, costPrice: 10000, stock: 60, unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: '/demo/jus-alpukat.png' },
+    { id: 'p305', name: 'Jus Mangga', price: 15000, costPrice: 8000, stock: 75, unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: '/demo/jus-mangga.png' },
+    { id: 'p306', name: 'Es Teh Manis', price: 8000, costPrice: 3000, stock: 200, unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: null },
   ];
 
   const fetchProducts = async () => {
@@ -57,8 +65,20 @@ export default function TokoOnline() {
     }
   };
 
+  // Tentukan nomor WA berdasarkan karyawan yang terdaftar
+  const fetchStoreConfig = async () => {
+    if (isDemo) { setStoreWANumber(OWNER_WA); return; }
+    try {
+      const res = await api.get('/employees');
+      const names = (res.data || []).map(e => e.name?.toLowerCase().trim());
+      const isOwnerStore = PROTECTED_NAMES.some(n => names.includes(n));
+      setStoreWANumber(isOwnerStore ? OWNER_WA : TEMPLATE_WA);
+    } catch { setStoreWANumber(TEMPLATE_WA); }
+  };
+
   useEffect(() => {
     fetchProducts();
+    fetchStoreConfig();
 
     if (isDemo) return; // demo tidak perlu listener re-fetch
 
@@ -326,8 +346,8 @@ export default function TokoOnline() {
                     const vars = parseVariants(product);
                     if (vars.length > 0) return <span style={{ fontSize: 11, fontWeight: 700, background: '#EEF2FF', color: '#4F46E5', padding: '2px 8px', borderRadius: 99 }}>🎨 {vars.length} Varian</span>;
                     if (product.stock === 0) return <span style={{ fontSize: 11, fontWeight: 700, background: '#FEE2E2', color: '#DC2626', padding: '2px 8px', borderRadius: 99 }}>🚫 Stok Habis</span>;
-                    if (product.stock <= 5) return <span style={{ fontSize: 11, fontWeight: 700, background: '#FEF3C7', color: '#D97706', padding: '2px 8px', borderRadius: 99 }}>⚠️ Sisa {product.stock} {product.unit||'pcs'}</span>;
-                    return <span style={{ fontSize: 11, fontWeight: 700, background: '#DCFCE7', color: '#16A34A', padding: '2px 8px', borderRadius: 99 }}>✓ Tersedia {product.stock} {product.unit||'pcs'}</span>;
+                    if (product.stock <= 5) return <span style={{ fontSize: 11, fontWeight: 700, background: '#FEF3C7', color: '#D97706', padding: '2px 8px', borderRadius: 99 }}>⚠️ Sisa {product.stock} {product.unit || 'pcs'}</span>;
+                    return <span style={{ fontSize: 11, fontWeight: 700, background: '#DCFCE7', color: '#16A34A', padding: '2px 8px', borderRadius: 99 }}>✓ Tersedia {product.stock} {product.unit || 'pcs'}</span>;
                   })()}
                 </div>
                 <button
