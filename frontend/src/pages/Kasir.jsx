@@ -435,8 +435,8 @@ export default function Kasir() {
     searchBox: { flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: '#F1F3FF', borderRadius: '12px', padding: '10px 14px' },
     searchInput: { border: 'none', background: 'transparent', outline: 'none', fontSize: '0.9rem', width: '100%', color: '#1F2937' },
     queueBtn: { padding: '10px 14px', borderRadius: '12px', border: 'none', background: '#EEF2FF', color: '#4F46E5', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' },
-    grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 16, padding: '16px 12px 180px', overflowY: 'auto', flex: 1 },
-    card: { background: 'white', borderRadius: '16px', boxShadow: '0 2px 12px rgba(0,0,0,0.07)', cursor: 'pointer', userSelect: 'none', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', WebkitTapHighlightColor: 'transparent' },
+    grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10, padding: '12px 8px 180px', overflowY: 'auto', flex: 1 },
+    card: { background: 'white', borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.07)', cursor: 'pointer', userSelect: 'none', display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', WebkitTapHighlightColor: 'transparent' },
     cardThumb: { width: '100%', aspectRatio: '1/1', background: '#EEF2FF', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, position: 'relative' },
     cardBody: { padding: '8px 10px 10px', display: 'flex', flexDirection: 'column', flex: 1 },
     cardName: { fontWeight: 700, fontSize: '0.82rem', color: '#111827', lineHeight: 1.3, marginBottom: 4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' },
@@ -587,43 +587,41 @@ export default function Kasir() {
           0%,100% { opacity:0; transform:translateY(-80px); }
           50% { opacity:1; transform:translateY(80px); }
         }
-        @media (max-width: 600px) {
-          .product-grid {
-            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)) !important;
-            gap: 10px !important;
-            padding: 12px 8px 180px !important;
-          }
-          .product-card {
-            border-radius: 12px !important;
-          }
-          .product-card-info {
-            padding: 8px 10px 10px !important;
-          }
-          .product-card-title {
-            font-size: 11.5px !important;
-            margin-bottom: 2px !important;
-            line-height: 1.25 !important;
-            height: 30px !important;
-            display: -webkit-box !important;
-            -webkit-line-clamp: 2 !important;
-            -webkit-box-orient: vertical !important;
-            overflow: hidden !important;
-          }
-          .product-card-price {
-            font-size: 12.5px !important;
-            margin-bottom: 4px !important;
-          }
-          .product-card-badge {
-            font-size: 9.5px !important;
-            padding: 2px 6px !important;
-            display: inline-block !important;
-            line-height: 1.25 !important;
-          }
-          .product-card-btn {
-            font-size: 11px !important;
-            padding: 5px 0 !important;
-            border-radius: 8px !important;
-          }
+        .product-grid {
+          grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)) !important;
+          gap: 10px !important;
+          padding: 12px 8px 180px !important;
+        }
+        .product-card {
+          border-radius: 12px !important;
+        }
+        .product-card-info {
+          padding: 8px 10px 10px !important;
+        }
+        .product-card-title {
+          font-size: 11.5px !important;
+          margin-bottom: 2px !important;
+          line-height: 1.25 !important;
+          height: 30px !important;
+          display: -webkit-box !important;
+          -webkit-line-clamp: 2 !important;
+          -webkit-box-orient: vertical !important;
+          overflow: hidden !important;
+        }
+        .product-card-price {
+          font-size: 12.5px !important;
+          margin-bottom: 4px !important;
+        }
+        .product-card-badge {
+          font-size: 9.5px !important;
+          padding: 2px 6px !important;
+          display: inline-block !important;
+          line-height: 1.25 !important;
+        }
+        .product-card-btn {
+          font-size: 11px !important;
+          padding: 5px 0 !important;
+          border-radius: 8px !important;
         }
       `}</style>
 
@@ -647,7 +645,7 @@ export default function Kasir() {
           return (
             <div key={p.id} className="product-card" style={{
               background: '#fff',
-              borderRadius: 16,
+              borderRadius: 12,
               boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
               overflow: 'hidden',
               border: '1px solid #E2E8F0',
@@ -705,28 +703,28 @@ export default function Kasir() {
               </div>
 
               {/* Product Info */}
-              <div className="product-card-info" style={{ padding: '10px 12px 12px', flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <div className="product-card-title" style={{ fontWeight: 700, fontSize: 13, color: '#1E293B', marginBottom: 4, lineHeight: 1.3 }}>
+              <div className="product-card-info" style={{ padding: '8px 10px 10px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div className="product-card-title" style={{ fontWeight: 700, fontSize: 11.5, color: '#1E293B', marginBottom: 2, lineHeight: 1.25, height: 30, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                   {p.name}
                 </div>
-                <div className="product-card-price" style={{ color: '#4F46E5', fontWeight: 800, fontSize: 14, marginBottom: 6 }}>
+                <div className="product-card-price" style={{ color: '#4F46E5', fontWeight: 800, fontSize: 12.5, marginBottom: 4 }}>
                   Rp {p.price.toLocaleString('id-ID')}
                 </div>
                 {/* Variant / Stock badge */}
                 <div style={{ marginBottom: 8 }}>
                   {(() => {
-                    if (variants.length > 0) return <span className="product-card-badge" style={{ fontSize: 11, fontWeight: 700, background: '#EEF2FF', color: '#4F46E5', padding: '2px 8px', borderRadius: 99, display: 'inline-block', lineHeight: '1.25' }}>🎨 {variants.length} Varian</span>;
-                    if (p.stock === 0) return <span className="product-card-badge" style={{ fontSize: 11, fontWeight: 700, background: '#FEE2E2', color: '#DC2626', padding: '2px 8px', borderRadius: 99, display: 'inline-block', lineHeight: '1.25' }}>🚫 Stok Habis</span>;
-                    if (p.stock <= 5) return <span className="product-card-badge" style={{ fontSize: 11, fontWeight: 700, background: '#FEF3C7', color: '#D97706', padding: '2px 8px', borderRadius: 99, display: 'inline-block', lineHeight: '1.25' }}>⚠️ Sisa {p.stock} {p.unit || 'pcs'}</span>;
-                    return <span className="product-card-badge" style={{ fontSize: 11, fontWeight: 700, background: '#DCFCE7', color: '#16A34A', padding: '2px 8px', borderRadius: 99, display: 'inline-block', lineHeight: '1.25' }}>✓ Tersedia {p.stock} {p.unit || 'pcs'}</span>;
+                    if (variants.length > 0) return <span className="product-card-badge" style={{ fontSize: 9.5, fontWeight: 700, background: '#EEF2FF', color: '#4F46E5', padding: '2px 6px', borderRadius: 99, display: 'inline-block', lineHeight: '1.25' }}>🎨 {variants.length} Varian</span>;
+                    if (p.stock === 0) return <span className="product-card-badge" style={{ fontSize: 9.5, fontWeight: 700, background: '#FEE2E2', color: '#DC2626', padding: '2px 6px', borderRadius: 99, display: 'inline-block', lineHeight: '1.25' }}>🚫 Stok Habis</span>;
+                    if (p.stock <= 5) return <span className="product-card-badge" style={{ fontSize: 9.5, fontWeight: 700, background: '#FEF3C7', color: '#D97706', padding: '2px 6px', borderRadius: 99, display: 'inline-block', lineHeight: '1.25' }}>⚠️ Sisa {p.stock} {p.unit || 'pcs'}</span>;
+                    return <span className="product-card-badge" style={{ fontSize: 9.5, fontWeight: 700, background: '#DCFCE7', color: '#16A34A', padding: '2px 6px', borderRadius: 99, display: 'inline-block', lineHeight: '1.25' }}>✓ Tersedia {p.stock} {p.unit || 'pcs'}</span>;
                   })()}
                 </div>
                 <button
                   className="product-card-btn"
                   disabled={p.stock < 1 && variants.length === 0}
                   style={{
-                    width: '100%', padding: '7px 0', borderRadius: 10, border: 'none',
-                    fontWeight: 700, fontSize: 13,
+                    width: '100%', padding: '5px 0', borderRadius: 8, border: 'none',
+                    fontWeight: 700, fontSize: 11,
                     cursor: (p.stock < 1 && variants.length === 0) ? 'not-allowed' : 'pointer',
                     background: (p.stock < 1 && variants.length === 0) ? '#F1F5F9' : '#EEF2FF',
                     color: (p.stock < 1 && variants.length === 0) ? '#94A3B8' : '#4F46E5',
