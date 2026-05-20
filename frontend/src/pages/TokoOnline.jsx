@@ -22,7 +22,7 @@ export default function TokoOnline() {
   const [waQueueNum, setWaQueueNum] = useState('');
 
   const [lastUpdated, setLastUpdated] = useState(null);
-  const [storeWANumber, setStoreWANumber] = useState('6282245077959');
+  const [storeWANumber, setStoreWANumber] = useState('6285746135996');
   const [storeName, setStoreName] = useState('Toko');
 
   // Form checkout WA
