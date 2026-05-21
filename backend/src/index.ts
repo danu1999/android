@@ -543,13 +543,19 @@ app.put('/api/finances/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { type, amount, description, date, status, customerId } = req.body;
+
+    if (Number(amount) <= 0) {
+      return res.status(400).json({ error: 'Nominal harus lebih dari 0' });
+    }
+
     const finance = await prisma.finance.update({
       where: { id: Number(id) },
       data: {
         type, amount: Number(amount), description,
         date: date ? new Date(date) : undefined,
         status, customerId: customerId ? Number(customerId) : null,
-      }
+      },
+      include: { customer: true },
     });
     res.json(finance);
   } catch (error) {
@@ -560,7 +566,25 @@ app.put('/api/finances/:id', requireAdmin, async (req, res) => {
 app.delete('/api/finances/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    await prisma.finance.delete({ where: { id: Number(id) } });
+    const numId = Number(id);
+
+    // Ambil data sebelum dihapus untuk cek apakah hutang dari PO
+    const fin = await prisma.finance.findUnique({ where: { id: numId } });
+    if (!fin) return res.status(404).json({ error: 'Data tidak ditemukan' });
+
+    // Jika hutang dari PO — kembalikan status PO ke ORDERED agar bisa di-manage ulang
+    if (fin.type === 'PAYABLE' && fin.description?.startsWith('Hutang PO #')) {
+      const match = fin.description.match(/Hutang PO #(\d+)/);
+      if (match) {
+        const poId = Number(match[1]);
+        await (prisma as any).purchaseOrder.updateMany({
+          where: { id: poId, status: 'RECEIVED' },
+          data: { status: 'ORDERED' },
+        }).catch(() => {}); // silent: PO mungkin sudah dihapus
+      }
+    }
+
+    await prisma.finance.delete({ where: { id: numId } });
     res.json({ success: true });
   } catch (error) {
     res.status(400).json({ error: 'Failed to delete finance record' });

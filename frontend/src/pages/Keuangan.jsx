@@ -103,6 +103,17 @@ export default function Keuangan() {
     }
   };
 
+  // Selalu refresh rekap setelah mutasi — agar kartu ringkasan sinkron
+  const fetchReports = async () => {
+    if (isDemo) return;
+    try {
+      const res = await api.get('/reports');
+      setReports(res.data);
+    } catch (err) {
+      console.error('Failed to refresh reports', err);
+    }
+  };
+
   const handleOpenModal = (finance = null) => {
     if (finance) {
       setFormData({
@@ -134,23 +145,24 @@ export default function Keuangan() {
         await api.post('/finances', formData);
       }
       setIsModalOpen(false);
-      fetchData();
+      fetchData();          // refresh list tab aktif
+      fetchReports();       // refresh rekap kartu ringkasan
     } catch (err) {
       console.error('Failed to save finance', err);
-      alert('Gagal menyimpan data.');
+      alert(err?.response?.data?.error || 'Gagal menyimpan data.');
     }
   };
 
   const handleDelete = async (id) => {
     if (isDemo) { showDemoBlock('Menghapus data keuangan hanya tersedia di akun berbayar.'); return; }
-    if (window.confirm('Yakin ingin menghapus data ini?')) {
-
-      try {
-        await api.delete(`/finances/${id}`);
-        fetchData();
-      } catch (err) {
-        console.error('Failed to delete', err);
-      }
+    if (!window.confirm('Yakin ingin menghapus data ini? Rekap laporan akan ikut diperbarui.')) return;
+    try {
+      await api.delete(`/finances/${id}`);
+      fetchData();      // refresh list tab aktif
+      fetchReports();   // refresh rekap kartu ringkasan
+    } catch (err) {
+      console.error('Failed to delete', err);
+      alert(err?.response?.data?.error || 'Gagal menghapus data.');
     }
   };
 
@@ -158,7 +170,8 @@ export default function Keuangan() {
     const newStatus = currentStatus === 'PENDING' ? 'PAID' : 'PENDING';
     try {
       await api.put(`/finances/${id}`, { status: newStatus });
-      fetchData();
+      fetchData();      // refresh list
+      fetchReports();   // sinkron rekap — PAID = tidak lagi masuk pending
     } catch (err) {
       console.error('Failed to update status', err);
     }
