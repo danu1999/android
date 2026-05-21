@@ -212,7 +212,7 @@ export default function Karyawan() {
                         <span style={{ display: 'inline-block', marginTop: 3, fontSize: 11, fontWeight: 800, background: c.badge.bg, color: c.badge.color, padding: '2px 10px', borderRadius: 99 }}>{c.label}</span>
                       </div>
                     </div>
-                    {isOwner && emp.role !== 'OWNER' && (
+                    {isOwner && (
                       <div style={{ marginBottom: 10 }}>
                         {salaryEditId === emp.id ? (
                           // Mode edit gaji inline
@@ -234,7 +234,8 @@ export default function Karyawan() {
                             <span style={{ fontSize: 11, color: '#6B7280', fontWeight: 600 }}>Gaji Pokok</span>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                               <span style={{ fontSize: 12, fontWeight: 800, color: emp.salary ? '#059669' : '#9CA3AF' }}>{emp.salary ? `Rp ${fmt(emp.salary)}` : 'Belum diset'}</span>
-                              {!locked && <button onClick={() => { setSalaryEditId(emp.id); setSalaryEditVal(emp.salary || ''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6366F1', fontSize: 13, padding: 0, lineHeight: 1 }} title="Edit gaji">✏️</button>}
+                              {/* Tombol edit gaji selalu muncul untuk owner, termasuk akun protected */}
+                              <button onClick={() => { setSalaryEditId(emp.id); setSalaryEditVal(emp.salary || ''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6366F1', fontSize: 13, padding: 0, lineHeight: 1 }} title="Edit gaji pokok">✏️</button>
                             </div>
                           </div>
                         )}
