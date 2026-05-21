@@ -460,7 +460,7 @@ export default function Kasir() {
     searchBox: { flex: 1, display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.18)', borderRadius: '12px', padding: '9px 12px', border: '1px solid rgba(255,255,255,0.25)' },
     searchInput: { border: 'none', background: 'transparent', outline: 'none', fontSize: '0.88rem', width: '100%', color: 'white' },
     queueBtn: { padding: '9px 12px', borderRadius: '10px', border: 'none', background: 'rgba(255,255,255,0.18)', color: 'white', fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '5px', border: '1px solid rgba(255,255,255,0.25)' },
-    grid: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, padding: '10px 10px 190px', overflowY: 'auto', flex: 1 },
+    grid: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, padding: '10px 10px 230px', overflowY: 'auto', flex: 1 },
     card: { background: 'white', borderRadius: '14px', boxShadow: '0 1px 6px rgba(79,70,229,0.08)', cursor: 'pointer', userSelect: 'none', overflow: 'hidden', WebkitTapHighlightColor: 'transparent' },
     cardThumb: { width: '100%', background: '#F0F4FF', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, position: 'relative' },
     cardBody: { padding: '8px 10px 10px' },
@@ -479,7 +479,7 @@ export default function Kasir() {
   };
 
   return (
-    <div style={S.wrap}>
+    <div style={S.wrap} className="kasir-page">
       {/* Top Bar */}
       <div style={S.topbar}>
         <div style={S.searchBox}>

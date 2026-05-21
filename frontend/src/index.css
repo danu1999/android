@@ -169,10 +169,22 @@ nav a.active {
   /* space for bottom nav on mobile */
 }
 
+/* Kasir: full-screen layout, no padding, no scroll on main-content */
+.kasir-page ~ * { display: none; } /* unused but safe */ 
+.main-content:has(.kasir-page) {
+  padding: 0 !important;
+  overflow: hidden !important;
+  padding-bottom: 0 !important;
+}
+
 @media (min-width: 768px) {
   .main-content {
     padding: 1rem 1rem 1rem 0;
     padding-bottom: 1rem;
+  }
+  /* Kasir di desktop: tetap zero-padding, full height */
+  .main-content:has(.kasir-page) {
+    padding: 0 !important;
   }
 }
 
