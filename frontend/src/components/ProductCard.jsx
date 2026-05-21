@@ -163,26 +163,6 @@ export default function ProductCard({ product, onAdd, onVariant, quantity = 0 })
           </span>
         </div>
 
-        {/* Tombol aksi */}
-        <button
-          disabled={btnDisabled}
-          onClick={(e) => { e.stopPropagation(); handleClick(); }}
-          style={{
-            width: '100%',
-            padding: '7px 0',
-            borderRadius: 10,
-            border: 'none',
-            fontWeight: 700,
-            fontSize: 13,
-            cursor: btnDisabled ? 'not-allowed' : 'pointer',
-            background: btnDisabled ? '#F1F5F9' : quantity > 0 ? '#4F46E5' : '#EEF2FF',
-            color: btnDisabled ? '#94A3B8' : quantity > 0 ? '#fff' : '#4F46E5',
-            transition: 'background 0.15s, color 0.15s',
-            marginTop: 'auto',
-          }}
-        >
-          {btnLabel}
-        </button>
       </div>
     </div>
   );
