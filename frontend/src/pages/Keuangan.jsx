@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CreditCard, ArrowDownCircle, ArrowUpCircle, TrendingUp, Plus, Edit2, Trash2, Lock } from 'lucide-react';
 import api from '../api';
-import { useDemoBlock } from '../AuthContext';
+import { useDemoBlock, useAuth } from '../AuthContext';
 
 /** Konversi Date ke string datetime-local sesuai timezone lokal browser */
 const toLocalDatetime = (date = new Date()) => {
@@ -12,6 +12,13 @@ const toLocalDatetime = (date = new Date()) => {
 
 export default function Keuangan() {
   const { showDemoBlock, isDemo } = useDemoBlock();
+  const { user } = useAuth();
+
+  // Owner hanya boleh edit data Gaji (deskripsi diawali '[Gaji]')
+  const isOwner = user?.role === 'OWNER';
+  const isGajiRecord = (item) => item?.description?.startsWith('[Gaji]');
+  const canEdit = (item) => !isOwner || isGajiRecord(item);
+
   const [isPremium, setIsPremium] = useState(localStorage.getItem('posbah_premium') === 'true');
 
   const [activeTab, setActiveTab] = useState('REKAP');
@@ -137,7 +144,10 @@ export default function Keuangan() {
   const handleSave = async (e) => {
     e.preventDefault();
     if (isDemo) { showDemoBlock('Menambah catatan keuangan hanya tersedia di akun berbayar.'); return; }
-
+    if (isOwner && !isGajiRecord(formData)) {
+      alert('Role Owner hanya dapat mengedit data Gaji Karyawan.');
+      return;
+    }
     try {
       if (formData.id) {
         await api.put(`/finances/${formData.id}`, formData);
@@ -145,33 +155,41 @@ export default function Keuangan() {
         await api.post('/finances', formData);
       }
       setIsModalOpen(false);
-      fetchData();          // refresh list tab aktif
-      fetchReports();       // refresh rekap kartu ringkasan
+      fetchData();
+      fetchReports();
     } catch (err) {
       console.error('Failed to save finance', err);
       alert(err?.response?.data?.error || 'Gagal menyimpan data.');
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (id, item) => {
     if (isDemo) { showDemoBlock('Menghapus data keuangan hanya tersedia di akun berbayar.'); return; }
+    if (isOwner && !isGajiRecord(item)) {
+      alert('Role Owner hanya dapat menghapus data Gaji Karyawan.');
+      return;
+    }
     if (!window.confirm('Yakin ingin menghapus data ini? Rekap laporan akan ikut diperbarui.')) return;
     try {
       await api.delete(`/finances/${id}`);
-      fetchData();      // refresh list tab aktif
-      fetchReports();   // refresh rekap kartu ringkasan
+      fetchData();
+      fetchReports();
     } catch (err) {
       console.error('Failed to delete', err);
       alert(err?.response?.data?.error || 'Gagal menghapus data.');
     }
   };
 
-  const handleUpdateStatus = async (id, currentStatus) => {
+  const handleUpdateStatus = async (id, currentStatus, item) => {
+    if (isOwner && !isGajiRecord(item)) {
+      alert('Role Owner hanya dapat mengubah status data Gaji Karyawan.');
+      return;
+    }
     const newStatus = currentStatus === 'PENDING' ? 'PAID' : 'PENDING';
     try {
       await api.put(`/finances/${id}`, { status: newStatus });
-      fetchData();      // refresh list
-      fetchReports();   // sinkron rekap — PAID = tidak lagi masuk pending
+      fetchData();
+      fetchReports();
     } catch (err) {
       console.error('Failed to update status', err);
     }
@@ -450,12 +468,13 @@ export default function Keuangan() {
             finances.map((item) => (
               <tr
                 key={item.id}
-                onClick={() => activeTab !== 'SALES' && handleOpenModal(item)}
+                onClick={() => activeTab !== 'SALES' && canEdit(item) && handleOpenModal(item)}
                 style={{
-                  cursor: activeTab !== 'SALES' ? 'pointer' : 'default',
-                  transition: 'background 0.15s'
+                  cursor: activeTab !== 'SALES' && canEdit(item) ? 'pointer' : 'default',
+                  transition: 'background 0.15s',
+                  opacity: activeTab !== 'SALES' && isOwner && !isGajiRecord(item) ? 0.7 : 1,
                 }}
-                className={activeTab !== 'SALES' ? 'hover-row' : ''}
+                className={activeTab !== 'SALES' && canEdit(item) ? 'hover-row' : ''}
               >
                 <td>{new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
 
@@ -483,7 +502,9 @@ export default function Keuangan() {
                       <td onClick={e => e.stopPropagation()}>
                         <button
                           className={`px-3 py-1 text-xs rounded-full font-bold ${item.status === 'PAID' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}
-                          onClick={() => handleUpdateStatus(item.id, item.status)}
+                          onClick={() => handleUpdateStatus(item.id, item.status, item)}
+                          disabled={isOwner && !isGajiRecord(item)}
+                          title={isOwner && !isGajiRecord(item) ? 'Owner hanya dapat mengubah status Gaji Karyawan' : ''}
                         >
                           {item.status}
                         </button>
@@ -502,7 +523,11 @@ export default function Keuangan() {
       </table>
       {activeTab !== 'SALES' && (
         <div style={{ padding: '8px 16px', borderTop: '1px solid #F3F4F6', background: '#FAFAFA', fontSize: 12, color: '#9CA3AF', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span>💡</span> Klik baris untuk edit
+          <span>💡</span>
+          {isOwner
+            ? 'Klik baris data Gaji untuk edit (Owner hanya dapat mengelola data Gaji Karyawan)'
+            : 'Klik baris untuk edit'
+          }
         </div>
       )}
     </div>
