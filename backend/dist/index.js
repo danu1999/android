@@ -928,14 +928,25 @@ app.patch('/api/pre-orders/:id/status', requireAdmin, (req, res) => __awaiter(vo
     }
 }));
 // ─────────────────────────────────────────────────────────────
-// Midtrans QRIS Integration
+// Midtrans QRIS & Snap Integration
 // ─────────────────────────────────────────────────────────────
 const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY || 'SB-Mid-server-TozVlaZRxPq2P_b2XN_B2c4y';
 const MIDTRANS_IS_PRODUCTION = process.env.MIDTRANS_IS_PRODUCTION === 'true';
 const MIDTRANS_API_URL = MIDTRANS_IS_PRODUCTION
     ? 'https://api.midtrans.com/v2'
     : 'https://api.sandbox.midtrans.com/v2';
+const MIDTRANS_SNAP_URL = MIDTRANS_IS_PRODUCTION
+    ? 'https://app.midtrans.com/snap/v1'
+    : 'https://app.sandbox.midtrans.com/snap/v1';
 const authHeader = `Basic ${Buffer.from(MIDTRANS_SERVER_KEY + ':').toString('base64')}`;
+// Get Midtrans config for frontend (safe to expose client key)
+app.get('/api/midtrans/config', (req, res) => {
+    const clientKey = process.env.MIDTRANS_CLIENT_KEY || 'SB-Mid-client-vSlm-rpXaOjCljdf';
+    res.json({
+        clientKey,
+        isProduction: MIDTRANS_IS_PRODUCTION
+    });
+});
 // Generate Midtrans QRIS
 app.post('/api/midtrans/charge', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
@@ -986,6 +997,53 @@ app.post('/api/midtrans/charge', (req, res) => __awaiter(void 0, void 0, void 0,
         res.status(500).json({ error: 'Gagal memproses pembayaran Midtrans' });
     }
 }));
+// Generate Midtrans Snap Token
+app.post('/api/midtrans/snap-token', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { transactionId } = req.body;
+        const tx = yield prisma.transaction.findUnique({
+            where: { id: Number(transactionId) },
+            include: { items: true }
+        });
+        if (!tx) {
+            return res.status(404).json({ error: 'Transaksi tidak ditemukan' });
+        }
+        const orderId = `${tx.receiptNumber}-SNAP-${Date.now()}`;
+        const amount = tx.total;
+        const response = yield fetch(`${MIDTRANS_SNAP_URL}/transactions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Authorization': authHeader
+            },
+            body: JSON.stringify({
+                transaction_details: {
+                    order_id: orderId,
+                    gross_amount: Math.round(amount)
+                },
+                credit_card: {
+                    secure: true
+                }
+            })
+        });
+        const data = yield response.json();
+        if (!response.ok || !data.token) {
+            console.error('Midtrans Snap error:', data);
+            return res.status(400).json({ error: data.error_messages ? data.error_messages.join(', ') : 'Gagal membuat transaksi Snap' });
+        }
+        res.json({
+            token: data.token,
+            redirectUrl: data.redirect_url,
+            orderId: orderId,
+            receiptNumber: tx.receiptNumber
+        });
+    }
+    catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Gagal memproses pembayaran Snap Midtrans' });
+    }
+}));
 // Check status pembayaran Midtrans
 app.get('/api/midtrans/status/:orderId', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -1016,11 +1074,14 @@ app.get('/api/midtrans/status/:orderId', (req, res) => __awaiter(void 0, void 0,
                 include: { items: true }
             });
             if (tx && tx.status !== 'COMPLETED') {
+                const computedMethod = data.payment_type
+                    ? (data.payment_type.toLowerCase() === 'qris' ? 'QRIS' : `MIDTRANS_${data.payment_type.toUpperCase()}`)
+                    : 'QRIS';
                 yield prisma.transaction.update({
                     where: { receiptNumber },
                     data: {
                         status: 'COMPLETED',
-                        paymentMethod: 'QRIS'
+                        paymentMethod: computedMethod
                     }
                 });
             }
@@ -1061,7 +1122,7 @@ app.get('/api/midtrans/status/:orderId', (req, res) => __awaiter(void 0, void 0,
 // Webhook / Callback Midtrans
 app.post('/api/midtrans/webhook', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { order_id, transaction_status } = req.body;
+        const { order_id, transaction_status, payment_type } = req.body;
         if (!order_id) {
             return res.status(400).send('Invalid webhook data');
         }
@@ -1073,11 +1134,14 @@ app.post('/api/midtrans/webhook', (req, res) => __awaiter(void 0, void 0, void 0
                 where: { receiptNumber }
             });
             if (tx && tx.status !== 'COMPLETED') {
+                const computedMethod = payment_type
+                    ? (payment_type.toLowerCase() === 'qris' ? 'QRIS' : `MIDTRANS_${payment_type.toUpperCase()}`)
+                    : 'QRIS';
                 yield prisma.transaction.update({
                     where: { receiptNumber },
                     data: {
                         status: 'COMPLETED',
-                        paymentMethod: 'QRIS'
+                        paymentMethod: computedMethod
                     }
                 });
             }

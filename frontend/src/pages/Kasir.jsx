@@ -197,6 +197,31 @@ export default function Kasir() {
     }
   }, []);
 
+  // Load Midtrans Snap dynamically based on backend config
+  useEffect(() => {
+    const initMidtransSnap = async () => {
+      try {
+        const response = await api.get('/midtrans/config');
+        const { clientKey, isProduction } = response.data;
+        const snapScriptUrl = isProduction
+          ? 'https://app.midtrans.com/snap/snap.js'
+          : 'https://app.sandbox.midtrans.com/snap/snap.js';
+
+        const existingScript = document.querySelector(`script[src="${snapScriptUrl}"]`);
+        if (!existingScript) {
+          const script = document.createElement('script');
+          script.src = snapScriptUrl;
+          script.setAttribute('data-client-key', clientKey);
+          script.async = true;
+          document.body.appendChild(script);
+        }
+      } catch (err) {
+        console.error('Gagal memuat konfigurasi Midtrans Snap:', err);
+      }
+    };
+    initMidtransSnap();
+  }, []);
+
   // Midtrans Payment Status Polling
   useEffect(() => {
     let intervalId;
@@ -206,10 +231,11 @@ export default function Kasir() {
           const response = await api.get(`/midtrans/status/${midtransOrderId}`);
           if (response.data.status === 'SUCCESS') {
             setMidtransStatus('SUCCESS');
+            const targetMethod = midtransActiveTx.paymentMethod === 'MIDTRANS_SNAP' ? 'MIDTRANS_SNAP' : 'QRIS';
             if (midtransActiveTx.queueNumber) {
-              setQueueToPrint({ ...midtransActiveTx, paymentMethod: 'QRIS', status: 'COMPLETED' });
+              setQueueToPrint({ ...midtransActiveTx, paymentMethod: targetMethod, status: 'COMPLETED' });
             } else {
-              setReceipt({ ...midtransActiveTx, paymentMethod: 'QRIS', status: 'COMPLETED' });
+              setReceipt({ ...midtransActiveTx, paymentMethod: targetMethod, status: 'COMPLETED' });
             }
             setTimeout(() => {
               setMidtransActiveTx(null);
@@ -260,6 +286,80 @@ export default function Kasir() {
     } catch (error) {
       console.error(error);
       alert('Gagal mendapatkan QRIS Midtrans: ' + (error.response?.data?.error || error.message));
+      setIsChargingMidtrans(false);
+      setMidtransActiveTx(null);
+    }
+  };
+
+  const startMidtransSnapPayment = async (tx) => {
+    try {
+      setIsChargingMidtrans(true);
+      setMidtransActiveTx(tx);
+      setMidtransStatus('PENDING');
+      setPayModal(false);
+      setQueueModal(false);
+
+      const response = await api.post('/midtrans/snap-token', {
+        transactionId: tx.id
+      });
+
+      const { token, orderId } = response.data;
+      setMidtransOrderId(orderId);
+      setIsChargingMidtrans(false);
+
+      if (window.snap) {
+        window.snap.pay(token, {
+          onSuccess: async function (result) {
+            console.log('Snap Success:', result);
+            setMidtransStatus('SUCCESS');
+            if (tx.queueNumber) {
+              setQueueToPrint({ ...tx, paymentMethod: 'MIDTRANS_SNAP', status: 'COMPLETED' });
+            } else {
+              setReceipt({ ...tx, paymentMethod: 'MIDTRANS_SNAP', status: 'COMPLETED' });
+            }
+            setTimeout(() => {
+              setMidtransActiveTx(null);
+              setMidtransOrderId(null);
+            }, 1000);
+            fetchProducts();
+            fetchActiveQueues();
+          },
+          onPending: function (result) {
+            console.log('Snap Pending:', result);
+            alert('Pembayaran tertunda. Silakan selesaikan pembayaran Anda.');
+          },
+          onError: function (result) {
+            console.error('Snap Error:', result);
+            alert('Pembayaran gagal: ' + result.status_message);
+            api.put(`/transactions/${tx.id}`, { status: 'CANCELLED' }).catch(() => {});
+            setMidtransActiveTx(null);
+            setMidtransOrderId(null);
+            fetchProducts();
+            fetchActiveQueues();
+          },
+          onClose: function () {
+            console.log('Customer closed the popup without finishing the payment');
+            if (window.confirm('Tutup pembayaran? Transaksi akan tetap tersimpan sebagai PENDING. Pilih OK untuk membatalkan transaksi ini sepenuhnya.')) {
+              api.put(`/transactions/${tx.id}`, { status: 'CANCELLED' }).then(() => {
+                alert('Transaksi dibatalkan.');
+                setMidtransActiveTx(null);
+                setMidtransOrderId(null);
+                fetchProducts();
+                fetchActiveQueues();
+              }).catch((err) => {
+                console.error(err);
+              });
+            }
+          }
+        });
+      } else {
+        alert('SDK Midtrans Snap tidak termuat dengan benar.');
+        setMidtransActiveTx(null);
+        setMidtransOrderId(null);
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Gagal memproses Snap Midtrans: ' + (error.response?.data?.error || error.message));
       setIsChargingMidtrans(false);
       setMidtransActiveTx(null);
     }
@@ -424,7 +524,7 @@ export default function Kasir() {
         amountPaid: amountPaid ? parseFloat(amountPaid) : null,
         change: amountPaid ? change : null,
         paymentMethod: isQueue ? 'PENDING' : payMethod,
-        status: (isQueue || (payMethod === 'QRIS_MIDTRANS' && !isQueue)) ? 'PENDING' : 'COMPLETED',
+        status: (isQueue || (['QRIS_MIDTRANS', 'MIDTRANS_SNAP'].includes(payMethod) && !isQueue)) ? 'PENDING' : 'COMPLETED',
         notes,
         customerName: customers.find(c => c.id === Number(customerId))?.name || '',
         customerId: customerId ? Number(customerId) : null,
@@ -434,6 +534,8 @@ export default function Kasir() {
       });
       if (payMethod === 'QRIS_MIDTRANS' && !isQueue) {
         startMidtransPayment(r.data);
+      } else if (payMethod === 'MIDTRANS_SNAP' && !isQueue) {
+        startMidtransSnapPayment(r.data);
       } else if (!isQueue) {
         setReceipt(r.data);
       } else {
@@ -489,13 +591,17 @@ export default function Kasir() {
         const t = queues.find(q => q.id === id);
         await api.put(`/transactions/${id}`, { paymentMethod: 'QRIS_MIDTRANS' });
         startMidtransPayment(t);
+      } else if (method === 'MIDTRANS_SNAP') {
+        const t = queues.find(q => q.id === id);
+        await api.put(`/transactions/${id}`, { paymentMethod: 'MIDTRANS_SNAP' });
+        startMidtransSnapPayment(t);
       } else {
         const t = queues.find(q => q.id === id);
         await api.put(`/transactions/${id}`, { status: 'COMPLETED', paymentMethod: method });
         setQueueModal(false);
         setQueueToPrint({ ...t, paymentMethod: method }); // buka struk
       }
-      if (queues.find(q => q.id === id) && !['CASH', 'QRIS', 'QRIS_MIDTRANS'].includes(method)) setQueueModal(false);
+      if (queues.find(q => q.id === id) && !['CASH', 'QRIS', 'QRIS_MIDTRANS', 'MIDTRANS_SNAP'].includes(method)) setQueueModal(false);
     } catch { alert('Gagal memproses pembayaran'); }
   };
 
@@ -944,6 +1050,7 @@ export default function Kasir() {
               <button style={{ ...S.pill(payMethod === 'CASH'), padding: '10px 14px', fontSize: '0.85rem' }} onClick={() => setPayMethod('CASH')}><CreditCard size={14} style={{ marginRight: 4 }} />Cash</button>
               <button style={{ ...S.pill(payMethod === 'QRIS'), padding: '10px 14px', fontSize: '0.85rem' }} onClick={() => setPayMethod('QRIS')}><QrCode size={14} style={{ marginRight: 4 }} />QRIS Manual</button>
               <button style={{ ...S.pill(payMethod === 'QRIS_MIDTRANS'), padding: '10px 14px', fontSize: '0.85rem' }} onClick={() => setPayMethod('QRIS_MIDTRANS')}><QrCode size={14} style={{ marginRight: 4 }} />QRIS Midtrans</button>
+              <button style={{ ...S.pill(payMethod === 'MIDTRANS_SNAP'), padding: '10px 14px', fontSize: '0.85rem' }} onClick={() => setPayMethod('MIDTRANS_SNAP')}><CreditCard size={14} style={{ marginRight: 4 }} />Midtrans Snap</button>
               <button style={{ ...S.pill(payMethod === 'TRANSFER'), padding: '10px 14px', fontSize: '0.85rem' }} onClick={() => setPayMethod('TRANSFER')}>🏦 TF</button>
             </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', fontSize: '0.85rem', color: '#6B7280', cursor: 'pointer' }}>
@@ -989,7 +1096,7 @@ export default function Kasir() {
       )}
 
       {/* Midtrans QRIS Modal */}
-      {(midtransActiveTx || isChargingMidtrans) && (
+      {((midtransActiveTx && midtransActiveTx.paymentMethod === 'QRIS_MIDTRANS') || isChargingMidtrans) && (
         <div className="modal-overlay" style={{ zIndex: 110 }}>
           <div className="modal-content glass-panel text-center" style={{ maxWidth: 400, padding: '24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
@@ -1157,6 +1264,7 @@ export default function Kasir() {
                         <button style={{ ...S.pill(true), padding: '8px 12px', fontSize: '0.8rem', flex: 1 }} onClick={() => payQueue(t.id, 'CASH')}>Cash</button>
                         <button style={{ ...S.pill(true), padding: '8px 12px', fontSize: '0.8rem', flex: 1 }} onClick={() => payQueue(t.id, 'QRIS')}>QRIS</button>
                         <button style={{ ...S.pill(true), padding: '8px 12px', fontSize: '0.8rem', flex: 1, background: '#4F46E5', color: 'white' }} onClick={() => payQueue(t.id, 'QRIS_MIDTRANS')}>QRIS Midtrans</button>
+                        <button style={{ ...S.pill(true), padding: '8px 12px', fontSize: '0.8rem', flex: 1, background: '#10B981', color: 'white' }} onClick={() => payQueue(t.id, 'MIDTRANS_SNAP')}>Midtrans Snap</button>
                         <button style={{ ...S.pill(false), padding: '8px 12px', fontSize: '0.8rem', flex: 1, color: '#EA580C', background: '#FFEDD5' }} onClick={() => setDebtTransactionId(t.id)}>Hutang</button>
                         {/* Tombol Batalkan — semua role bisa, kasir yang langsung handle pelanggan */}
                         <button
