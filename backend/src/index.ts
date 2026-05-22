@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
@@ -966,6 +967,204 @@ app.patch('/api/pre-orders/:id/status', requireAdmin, async (req, res) => {
     });
     res.json(updated);
   } catch (error) { res.status(400).json({ error: 'Gagal update status pre-order' }); }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Midtrans QRIS Integration
+// ─────────────────────────────────────────────────────────────
+const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY || 'SB-Mid-server-TozVlaZRxPq2P_b2XN_B2c4y';
+const MIDTRANS_IS_PRODUCTION = process.env.MIDTRANS_IS_PRODUCTION === 'true';
+const MIDTRANS_API_URL = MIDTRANS_IS_PRODUCTION
+  ? 'https://api.midtrans.com/v2'
+  : 'https://api.sandbox.midtrans.com/v2';
+
+const authHeader = `Basic ${Buffer.from(MIDTRANS_SERVER_KEY + ':').toString('base64')}`;
+
+// Generate Midtrans QRIS
+app.post('/api/midtrans/charge', async (req: Request, res: Response) => {
+  try {
+    const { transactionId } = req.body;
+    const tx = await prisma.transaction.findUnique({
+      where: { id: Number(transactionId) },
+      include: { items: true }
+    });
+
+    if (!tx) {
+      return res.status(404).json({ error: 'Transaksi tidak ditemukan' });
+    }
+
+    const orderId = `${tx.receiptNumber}-${Date.now()}`;
+    const amount = tx.total;
+
+    const response = await fetch(`${MIDTRANS_API_URL}/charge`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': authHeader
+      },
+      body: JSON.stringify({
+        payment_type: 'qris',
+        transaction_details: {
+          order_id: orderId,
+          gross_amount: Math.round(amount)
+        }
+      })
+    });
+
+    const data: any = await response.json();
+
+    if (!response.ok || data.status_code >= '400') {
+      console.error('Midtrans charge error:', data);
+      return res.status(400).json({ error: data.status_message || 'Gagal generate QRIS dari Midtrans' });
+    }
+
+    // Cari QR code URL dari actions
+    const qrAction = data.actions?.find((a: any) => a.name === 'generate-qr-code');
+    if (!qrAction) {
+      return res.status(400).json({ error: 'Link QR Code tidak ditemukan dari respons Midtrans' });
+    }
+
+    res.json({
+      qrUrl: qrAction.url,
+      orderId: orderId,
+      receiptNumber: tx.receiptNumber
+    });
+  } catch (error: any) {
+    console.error(error);
+    res.status(500).json({ error: 'Gagal memproses pembayaran Midtrans' });
+  }
+});
+
+// Check status pembayaran Midtrans
+app.get('/api/midtrans/status/:orderId', async (req: Request, res: Response) => {
+  try {
+    const { orderId } = req.params;
+    const oId = orderId as string;
+    const parts = oId.split('-');
+    const receiptNumber = parts.slice(0, 2).join('-');
+
+    const response = await fetch(`${MIDTRANS_API_URL}/${orderId}/status`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': authHeader
+      }
+    });
+
+    const data: any = await response.json();
+
+    if (!response.ok || data.status_code >= '400') {
+      if (data.status_code === '404') {
+        return res.json({ status: 'PENDING' });
+      }
+      console.error('Midtrans status error:', data);
+      return res.status(400).json({ error: data.status_message || 'Gagal mengecek status Midtrans' });
+    }
+
+    const midtransStatus = data.transaction_status;
+
+    if (midtransStatus === 'settlement' || midtransStatus === 'capture') {
+      // Update status ke COMPLETED
+      const tx = await prisma.transaction.findUnique({
+        where: { receiptNumber },
+        include: { items: true }
+      });
+
+      if (tx && tx.status !== 'COMPLETED') {
+        await prisma.transaction.update({
+          where: { receiptNumber },
+          data: {
+            status: 'COMPLETED',
+            paymentMethod: 'QRIS'
+          }
+        });
+      }
+      return res.json({ status: 'SUCCESS' });
+    } else if (midtransStatus === 'pending') {
+      return res.json({ status: 'PENDING' });
+    } else if (['expire', 'cancel', 'deny'].includes(midtransStatus)) {
+      // Kembalikan stok
+      const tx = await prisma.transaction.findUnique({
+        where: { receiptNumber },
+        include: { items: true }
+      });
+
+      if (tx && tx.status !== 'CANCELLED') {
+        await prisma.$transaction(async (prismaTx) => {
+          for (const item of tx.items) {
+            await prismaTx.product.update({
+              where: { id: item.productId },
+              data: { stock: { increment: item.quantity } }
+            }).catch(() => {});
+          }
+          await prismaTx.transaction.update({
+            where: { receiptNumber },
+            data: { status: 'CANCELLED' }
+          });
+        });
+      }
+      return res.json({ status: 'CANCELLED' });
+    }
+
+    res.json({ status: 'PENDING' });
+  } catch (error: any) {
+    console.error(error);
+    res.status(500).json({ error: 'Gagal mengecek status pembayaran' });
+  }
+});
+
+// Webhook / Callback Midtrans
+app.post('/api/midtrans/webhook', async (req: Request, res: Response) => {
+  try {
+    const { order_id, transaction_status } = req.body;
+    if (!order_id) {
+      return res.status(400).send('Invalid webhook data');
+    }
+
+    const oId = order_id as string;
+    const parts = oId.split('-');
+    const receiptNumber = parts.slice(0, 2).join('-');
+
+    if (transaction_status === 'settlement' || transaction_status === 'capture') {
+      const tx = await prisma.transaction.findUnique({
+        where: { receiptNumber }
+      });
+      if (tx && tx.status !== 'COMPLETED') {
+        await prisma.transaction.update({
+          where: { receiptNumber },
+          data: {
+            status: 'COMPLETED',
+            paymentMethod: 'QRIS'
+          }
+        });
+      }
+    } else if (['expire', 'cancel', 'deny'].includes(transaction_status)) {
+      const tx = await prisma.transaction.findUnique({
+        where: { receiptNumber },
+        include: { items: true }
+      });
+      if (tx && tx.status !== 'CANCELLED') {
+        await prisma.$transaction(async (prismaTx) => {
+          for (const item of tx.items) {
+            await prismaTx.product.update({
+              where: { id: item.productId },
+              data: { stock: { increment: item.quantity } }
+            }).catch(() => {});
+          }
+          await prismaTx.transaction.update({
+            where: { receiptNumber },
+            data: { status: 'CANCELLED' }
+          });
+        });
+      }
+    }
+
+    res.status(200).send('OK');
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.status(500).send('Internal Server Error');
+  }
 });
 
 app.listen(port, () => {

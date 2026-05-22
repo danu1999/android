@@ -12,6 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+require("dotenv/config");
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const client_1 = require("@prisma/client");
@@ -924,6 +925,188 @@ app.patch('/api/pre-orders/:id/status', requireAdmin, (req, res) => __awaiter(vo
     }
     catch (error) {
         res.status(400).json({ error: 'Gagal update status pre-order' });
+    }
+}));
+// ─────────────────────────────────────────────────────────────
+// Midtrans QRIS Integration
+// ─────────────────────────────────────────────────────────────
+const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY || 'SB-Mid-server-TozVlaZRxPq2P_b2XN_B2c4y';
+const MIDTRANS_IS_PRODUCTION = process.env.MIDTRANS_IS_PRODUCTION === 'true';
+const MIDTRANS_API_URL = MIDTRANS_IS_PRODUCTION
+    ? 'https://api.midtrans.com/v2'
+    : 'https://api.sandbox.midtrans.com/v2';
+const authHeader = `Basic ${Buffer.from(MIDTRANS_SERVER_KEY + ':').toString('base64')}`;
+// Generate Midtrans QRIS
+app.post('/api/midtrans/charge', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const { transactionId } = req.body;
+        const tx = yield prisma.transaction.findUnique({
+            where: { id: Number(transactionId) },
+            include: { items: true }
+        });
+        if (!tx) {
+            return res.status(404).json({ error: 'Transaksi tidak ditemukan' });
+        }
+        const orderId = `${tx.receiptNumber}-${Date.now()}`;
+        const amount = tx.total;
+        const response = yield fetch(`${MIDTRANS_API_URL}/charge`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Authorization': authHeader
+            },
+            body: JSON.stringify({
+                payment_type: 'qris',
+                transaction_details: {
+                    order_id: orderId,
+                    gross_amount: Math.round(amount)
+                }
+            })
+        });
+        const data = yield response.json();
+        if (!response.ok || data.status_code >= '400') {
+            console.error('Midtrans charge error:', data);
+            return res.status(400).json({ error: data.status_message || 'Gagal generate QRIS dari Midtrans' });
+        }
+        // Cari QR code URL dari actions
+        const qrAction = (_a = data.actions) === null || _a === void 0 ? void 0 : _a.find((a) => a.name === 'generate-qr-code');
+        if (!qrAction) {
+            return res.status(400).json({ error: 'Link QR Code tidak ditemukan dari respons Midtrans' });
+        }
+        res.json({
+            qrUrl: qrAction.url,
+            orderId: orderId,
+            receiptNumber: tx.receiptNumber
+        });
+    }
+    catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Gagal memproses pembayaran Midtrans' });
+    }
+}));
+// Check status pembayaran Midtrans
+app.get('/api/midtrans/status/:orderId', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { orderId } = req.params;
+        const oId = orderId;
+        const parts = oId.split('-');
+        const receiptNumber = parts.slice(0, 2).join('-');
+        const response = yield fetch(`${MIDTRANS_API_URL}/${orderId}/status`, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json',
+                'Authorization': authHeader
+            }
+        });
+        const data = yield response.json();
+        if (!response.ok || data.status_code >= '400') {
+            if (data.status_code === '404') {
+                return res.json({ status: 'PENDING' });
+            }
+            console.error('Midtrans status error:', data);
+            return res.status(400).json({ error: data.status_message || 'Gagal mengecek status Midtrans' });
+        }
+        const midtransStatus = data.transaction_status;
+        if (midtransStatus === 'settlement' || midtransStatus === 'capture') {
+            // Update status ke COMPLETED
+            const tx = yield prisma.transaction.findUnique({
+                where: { receiptNumber },
+                include: { items: true }
+            });
+            if (tx && tx.status !== 'COMPLETED') {
+                yield prisma.transaction.update({
+                    where: { receiptNumber },
+                    data: {
+                        status: 'COMPLETED',
+                        paymentMethod: 'QRIS'
+                    }
+                });
+            }
+            return res.json({ status: 'SUCCESS' });
+        }
+        else if (midtransStatus === 'pending') {
+            return res.json({ status: 'PENDING' });
+        }
+        else if (['expire', 'cancel', 'deny'].includes(midtransStatus)) {
+            // Kembalikan stok
+            const tx = yield prisma.transaction.findUnique({
+                where: { receiptNumber },
+                include: { items: true }
+            });
+            if (tx && tx.status !== 'CANCELLED') {
+                yield prisma.$transaction((prismaTx) => __awaiter(void 0, void 0, void 0, function* () {
+                    for (const item of tx.items) {
+                        yield prismaTx.product.update({
+                            where: { id: item.productId },
+                            data: { stock: { increment: item.quantity } }
+                        }).catch(() => { });
+                    }
+                    yield prismaTx.transaction.update({
+                        where: { receiptNumber },
+                        data: { status: 'CANCELLED' }
+                    });
+                }));
+            }
+            return res.json({ status: 'CANCELLED' });
+        }
+        res.json({ status: 'PENDING' });
+    }
+    catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Gagal mengecek status pembayaran' });
+    }
+}));
+// Webhook / Callback Midtrans
+app.post('/api/midtrans/webhook', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { order_id, transaction_status } = req.body;
+        if (!order_id) {
+            return res.status(400).send('Invalid webhook data');
+        }
+        const oId = order_id;
+        const parts = oId.split('-');
+        const receiptNumber = parts.slice(0, 2).join('-');
+        if (transaction_status === 'settlement' || transaction_status === 'capture') {
+            const tx = yield prisma.transaction.findUnique({
+                where: { receiptNumber }
+            });
+            if (tx && tx.status !== 'COMPLETED') {
+                yield prisma.transaction.update({
+                    where: { receiptNumber },
+                    data: {
+                        status: 'COMPLETED',
+                        paymentMethod: 'QRIS'
+                    }
+                });
+            }
+        }
+        else if (['expire', 'cancel', 'deny'].includes(transaction_status)) {
+            const tx = yield prisma.transaction.findUnique({
+                where: { receiptNumber },
+                include: { items: true }
+            });
+            if (tx && tx.status !== 'CANCELLED') {
+                yield prisma.$transaction((prismaTx) => __awaiter(void 0, void 0, void 0, function* () {
+                    for (const item of tx.items) {
+                        yield prismaTx.product.update({
+                            where: { id: item.productId },
+                            data: { stock: { increment: item.quantity } }
+                        }).catch(() => { });
+                    }
+                    yield prismaTx.transaction.update({
+                        where: { receiptNumber },
+                        data: { status: 'CANCELLED' }
+                    });
+                }));
+            }
+        }
+        res.status(200).send('OK');
+    }
+    catch (error) {
+        console.error('Webhook error:', error);
+        res.status(500).send('Internal Server Error');
     }
 }));
 app.listen(port, () => {
