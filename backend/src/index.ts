@@ -315,7 +315,7 @@ app.post('/api/transactions', requireNotDemo, async (req, res) => {
   }
 });
 
-app.put('/api/transactions/:id', requireAdmin, async (req, res) => {
+app.put('/api/transactions/:id', requireNotDemo, async (req, res) => {
   try {
     const { id } = req.params;
     const { paymentMethod, status, queueNumber } = req.body;

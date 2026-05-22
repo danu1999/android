@@ -214,14 +214,13 @@ app.get('/api/transactions', requireAdmin, (req, res) => __awaiter(void 0, void 
 }));
 app.post('/api/transactions', requireNotDemo, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { items, total, discount, paymentMethod, type, customerId, date, status, notes, customerName, queueNumber } = req.body;
+        const { items, total, subtotal, discount, discountType, discountInput, discountAmt, paymentMethod, amountPaid, change, type, customerId, date, status, notes, customerName, queueNumber } = req.body;
         const employeeIdHeader = req.headers['x-employee-id'];
         let employeeId;
         if (employeeIdHeader && employeeIdHeader !== '0') {
             employeeId = Number(employeeIdHeader);
         }
         else {
-            // Fallback: cari/buat employee default
             let employee = yield prisma.employee.findFirst();
             if (!employee) {
                 employee = yield prisma.employee.create({
@@ -230,11 +229,21 @@ app.post('/api/transactions', requireNotDemo, (req, res) => __awaiter(void 0, vo
             }
             employeeId = employee.id;
         }
+        // Hitung subtotal dari items jika tidak dikirim
+        const computedSubtotal = subtotal !== null && subtotal !== void 0 ? subtotal : items.reduce((sum, i) => sum + (i.price * i.quantity), 0);
+        const computedDiscountAmt = discountAmt !== null && discountAmt !== void 0 ? discountAmt : Number(discount || 0);
+        const computedTotal = total !== null && total !== void 0 ? total : (computedSubtotal - computedDiscountAmt);
         const transaction = yield prisma.transaction.create({
             data: {
                 receiptNumber: `INV-${Date.now()}`,
-                total: Number(total),
-                discount: Number(discount || 0),
+                total: Number(computedTotal),
+                subtotal: Number(computedSubtotal),
+                discount: Number(computedDiscountAmt), // legacy compat
+                discountType: discountType || null,
+                discountInput: Number(discountInput || 0),
+                discountAmt: Number(computedDiscountAmt),
+                amountPaid: amountPaid ? Number(amountPaid) : null,
+                change: change ? Number(change) : null,
                 paymentMethod: paymentMethod || 'PENDING',
                 status: status || 'COMPLETED',
                 notes: notes || null,
@@ -249,12 +258,17 @@ app.post('/api/transactions', requireNotDemo, (req, res) => __awaiter(void 0, vo
                         productId: item.productId,
                         quantity: item.quantity,
                         price: item.price,
+                        costPrice: item.costPrice || 0,
                         discount: item.discount || 0,
+                        variantId: item.variantId || null,
+                        variantName: item.variantName || null,
+                        note: item.note || null,
                     }))
                 }
             },
-            include: { items: true }
+            include: { items: { include: { product: true } } }
         });
+        // Kurangi stok produk
         for (const item of items) {
             yield prisma.product.update({
                 where: { id: item.productId },
@@ -268,7 +282,7 @@ app.post('/api/transactions', requireNotDemo, (req, res) => __awaiter(void 0, vo
         res.status(400).json({ error: 'Failed to process transaction' });
     }
 }));
-app.put('/api/transactions/:id', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+app.put('/api/transactions/:id', requireNotDemo, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { id } = req.params;
         const { paymentMethod, status, queueNumber } = req.body;
@@ -487,13 +501,17 @@ app.put('/api/finances/:id', requireAdmin, (req, res) => __awaiter(void 0, void 
     try {
         const { id } = req.params;
         const { type, amount, description, date, status, customerId } = req.body;
+        if (Number(amount) <= 0) {
+            return res.status(400).json({ error: 'Nominal harus lebih dari 0' });
+        }
         const finance = yield prisma.finance.update({
             where: { id: Number(id) },
             data: {
                 type, amount: Number(amount), description,
                 date: date ? new Date(date) : undefined,
                 status, customerId: customerId ? Number(customerId) : null,
-            }
+            },
+            include: { customer: true },
         });
         res.json(finance);
     }
@@ -502,9 +520,26 @@ app.put('/api/finances/:id', requireAdmin, (req, res) => __awaiter(void 0, void 
     }
 }));
 app.delete('/api/finances/:id', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
     try {
         const { id } = req.params;
-        yield prisma.finance.delete({ where: { id: Number(id) } });
+        const numId = Number(id);
+        // Ambil data sebelum dihapus untuk cek apakah hutang dari PO
+        const fin = yield prisma.finance.findUnique({ where: { id: numId } });
+        if (!fin)
+            return res.status(404).json({ error: 'Data tidak ditemukan' });
+        // Jika hutang dari PO — kembalikan status PO ke ORDERED agar bisa di-manage ulang
+        if (fin.type === 'PAYABLE' && ((_a = fin.description) === null || _a === void 0 ? void 0 : _a.startsWith('Hutang PO #'))) {
+            const match = fin.description.match(/Hutang PO #(\d+)/);
+            if (match) {
+                const poId = Number(match[1]);
+                yield prisma.purchaseOrder.updateMany({
+                    where: { id: poId, status: 'RECEIVED' },
+                    data: { status: 'ORDERED' },
+                }).catch(() => { }); // silent: PO mungkin sudah dihapus
+            }
+        }
+        yield prisma.finance.delete({ where: { id: numId } });
         res.json({ success: true });
     }
     catch (error) {
