@@ -584,6 +584,37 @@ app.delete('/api/finances/:id', requireAdmin, async (req, res) => {
       }
     }
 
+    // Jika piutang/hutang memiliki deskripsi yang mengandung nomor transaksi INV-xxx
+    if (fin.description) {
+      const match = fin.description.match(/INV-\d+/);
+      if (match) {
+        const receiptNumber = match[0];
+        const tx = await prisma.transaction.findUnique({
+          where: { receiptNumber }
+        });
+        if (tx) {
+          // Kembalikan stok produk
+          const txItems = await prisma.transactionItem.findMany({
+            where: { transactionId: tx.id }
+          });
+          for (const item of txItems) {
+            await prisma.product.update({
+              where: { id: item.productId },
+              data: { stock: { increment: item.quantity } }
+            }).catch(() => {});
+          }
+          // Hapus item transaksi
+          await prisma.transactionItem.deleteMany({
+            where: { transactionId: tx.id }
+          });
+          // Hapus transaksi
+          await prisma.transaction.delete({
+            where: { id: tx.id }
+          });
+        }
+      }
+    }
+
     await prisma.finance.delete({ where: { id: numId } });
     res.json({ success: true });
   } catch (error) {
