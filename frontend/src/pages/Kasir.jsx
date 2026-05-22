@@ -1049,8 +1049,7 @@ export default function Kasir() {
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
               <button style={{ ...S.pill(payMethod === 'CASH'), padding: '10px 14px', fontSize: '0.85rem' }} onClick={() => setPayMethod('CASH')}><CreditCard size={14} style={{ marginRight: 4 }} />Cash</button>
               <button style={{ ...S.pill(payMethod === 'QRIS'), padding: '10px 14px', fontSize: '0.85rem' }} onClick={() => setPayMethod('QRIS')}><QrCode size={14} style={{ marginRight: 4 }} />QRIS Manual</button>
-              <button style={{ ...S.pill(payMethod === 'QRIS_MIDTRANS'), padding: '10px 14px', fontSize: '0.85rem' }} onClick={() => setPayMethod('QRIS_MIDTRANS')}><QrCode size={14} style={{ marginRight: 4 }} />QRIS Midtrans</button>
-              <button style={{ ...S.pill(payMethod === 'MIDTRANS_SNAP'), padding: '10px 14px', fontSize: '0.85rem' }} onClick={() => setPayMethod('MIDTRANS_SNAP')}><CreditCard size={14} style={{ marginRight: 4 }} />Midtrans Snap</button>
+              <button style={{ ...S.pill(payMethod === 'MIDTRANS_SNAP'), padding: '10px 14px', fontSize: '0.85rem' }} onClick={() => setPayMethod('MIDTRANS_SNAP')}><QrCode size={14} style={{ marginRight: 4 }} />QRIS Midtrans</button>
               <button style={{ ...S.pill(payMethod === 'TRANSFER'), padding: '10px 14px', fontSize: '0.85rem' }} onClick={() => setPayMethod('TRANSFER')}>🏦 TF</button>
             </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', fontSize: '0.85rem', color: '#6B7280', cursor: 'pointer' }}>
@@ -1262,9 +1261,8 @@ export default function Kasir() {
                     ) : (
                       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                         <button style={{ ...S.pill(true), padding: '8px 12px', fontSize: '0.8rem', flex: 1 }} onClick={() => payQueue(t.id, 'CASH')}>Cash</button>
-                        <button style={{ ...S.pill(true), padding: '8px 12px', fontSize: '0.8rem', flex: 1 }} onClick={() => payQueue(t.id, 'QRIS')}>QRIS</button>
-                        <button style={{ ...S.pill(true), padding: '8px 12px', fontSize: '0.8rem', flex: 1, background: '#4F46E5', color: 'white' }} onClick={() => payQueue(t.id, 'QRIS_MIDTRANS')}>QRIS Midtrans</button>
-                        <button style={{ ...S.pill(true), padding: '8px 12px', fontSize: '0.8rem', flex: 1, background: '#10B981', color: 'white' }} onClick={() => payQueue(t.id, 'MIDTRANS_SNAP')}>Midtrans Snap</button>
+                        <button style={{ ...S.pill(true), padding: '8px 12px', fontSize: '0.8rem', flex: 1 }} onClick={() => payQueue(t.id, 'QRIS')}>QRIS Manual</button>
+                        <button style={{ ...S.pill(true), padding: '8px 12px', fontSize: '0.8rem', flex: 1, background: '#4F46E5', color: 'white' }} onClick={() => payQueue(t.id, 'MIDTRANS_SNAP')}>QRIS Midtrans</button>
                         <button style={{ ...S.pill(false), padding: '8px 12px', fontSize: '0.8rem', flex: 1, color: '#EA580C', background: '#FFEDD5' }} onClick={() => setDebtTransactionId(t.id)}>Hutang</button>
                         {/* Tombol Batalkan — semua role bisa, kasir yang langsung handle pelanggan */}
                         <button
