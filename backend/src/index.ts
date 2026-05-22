@@ -264,49 +264,54 @@ app.post('/api/transactions', requireNotDemo, async (req, res) => {
     const computedDiscountAmt = discountAmt ?? Number(discount || 0);
     const computedTotal = total ?? (computedSubtotal - computedDiscountAmt);
 
-    const transaction = await prisma.transaction.create({
-      data: {
-        receiptNumber: `INV-${Date.now()}`,
-        total: Number(computedTotal),
-        subtotal: Number(computedSubtotal),
-        discount: Number(computedDiscountAmt),          // legacy compat
-        discountType: discountType || null,
-        discountInput: Number(discountInput || 0),
-        discountAmt: Number(computedDiscountAmt),
-        amountPaid: amountPaid ? Number(amountPaid) : null,
-        change: change ? Number(change) : null,
-        paymentMethod: paymentMethod || 'PENDING',
-        status: status || 'COMPLETED',
-        notes: notes || null,
-        customerName: customerName || null,
-        queueNumber: queueNumber ? Number(queueNumber) : null,
-        type: type || 'SALES',
-        date: date ? new Date(date) : new Date(),
-        employeeId,
-        customerId: customerId || null,
-        items: {
-          create: items.map((item: any) => ({
-            productId: item.productId,
-            quantity: item.quantity,
-            price: item.price,
-            costPrice: item.costPrice || 0,
-            discount: item.discount || 0,
-            variantId: item.variantId || null,
-            variantName: item.variantName || null,
-            note: item.note || null,
-          }))
-        }
-      },
-      include: { items: { include: { product: true } } }
-    });
-
-    // Kurangi stok produk
-    for (const item of items) {
-      await prisma.product.update({
-        where: { id: item.productId },
-        data: { stock: { decrement: item.quantity } }
+    const transaction = await prisma.$transaction(async (tx) => {
+      // 1. Buat transaksi
+      const createdTx = await tx.transaction.create({
+        data: {
+          receiptNumber: `INV-${Date.now()}`,
+          total: Number(computedTotal),
+          subtotal: Number(computedSubtotal),
+          discount: Number(computedDiscountAmt),          // legacy compat
+          discountType: discountType || null,
+          discountInput: Number(discountInput || 0),
+          discountAmt: Number(computedDiscountAmt),
+          amountPaid: amountPaid ? Number(amountPaid) : null,
+          change: change ? Number(change) : null,
+          paymentMethod: paymentMethod || 'PENDING',
+          status: status || 'COMPLETED',
+          notes: notes || null,
+          customerName: customerName || null,
+          queueNumber: queueNumber ? Number(queueNumber) : null,
+          type: type || 'SALES',
+          date: date ? new Date(date) : new Date(),
+          employeeId,
+          customerId: customerId || null,
+          items: {
+            create: items.map((item: any) => ({
+              productId: item.productId,
+              quantity: item.quantity,
+              price: item.price,
+              costPrice: item.costPrice || 0,
+              discount: item.discount || 0,
+              variantId: item.variantId || null,
+              variantName: item.variantName || null,
+              note: item.note || null,
+            }))
+          }
+        },
+        include: { items: { include: { product: true } } }
       });
-    }
+
+      // 2. Kurangi stok produk
+      for (const item of items) {
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { stock: { decrement: item.quantity } }
+        });
+      }
+
+      return createdTx;
+    });
 
     res.json(transaction);
   } catch (error) {
@@ -320,19 +325,46 @@ app.put('/api/transactions/:id', requireNotDemo, async (req, res) => {
     const { id } = req.params;
     const { paymentMethod, status, queueNumber } = req.body;
 
-    const updateData: any = {};
-    if (paymentMethod !== undefined) updateData.paymentMethod = paymentMethod;
-    if (status !== undefined) updateData.status = status;
-    if (queueNumber !== undefined) updateData.queueNumber = queueNumber;
+    const transaction = await prisma.$transaction(async (tx) => {
+      const currentTx = await tx.transaction.findUnique({
+        where: { id: Number(id) },
+        include: { items: true }
+      });
+      if (!currentTx) {
+        throw new Error('Transaction not found');
+      }
 
-    const transaction = await prisma.transaction.update({
-      where: { id: Number(id) },
-      data: updateData
+      const updateData: any = {};
+      if (paymentMethod !== undefined) updateData.paymentMethod = paymentMethod;
+      if (status !== undefined) updateData.status = status;
+      if (queueNumber !== undefined) updateData.queueNumber = queueNumber;
+
+      // Jika status berubah menjadi CANCELLED dan status sebelumnya bukan CANCELLED, kembalikan stok
+      if (status === 'CANCELLED' && currentTx.status !== 'CANCELLED') {
+        for (const item of currentTx.items) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { stock: { increment: item.quantity } }
+          }).catch(() => {});
+        }
+      }
+
+      const updatedTx = await tx.transaction.update({
+        where: { id: Number(id) },
+        data: updateData
+      });
+
+      return updatedTx;
     });
+
     res.json(transaction);
-  } catch (error) {
+  } catch (error: any) {
     console.error(error);
-    res.status(400).json({ error: 'Failed to update transaction' });
+    if (error.message === 'Transaction not found') {
+      res.status(404).json({ error: error.message });
+    } else {
+      res.status(400).json({ error: 'Failed to update transaction' });
+    }
   }
 });
 
