@@ -1124,7 +1124,8 @@ app.post('/api/midtrans/webhook', (req, res) => __awaiter(void 0, void 0, void 0
     try {
         const { order_id, transaction_status, payment_type } = req.body;
         if (!order_id) {
-            return res.status(400).send('Invalid webhook data');
+            // Kembalikan status 200 OK untuk verifikasi tes/ping dari dasbor Midtrans
+            return res.status(200).send('Webhook endpoint is active');
         }
         const oId = order_id;
         const parts = oId.split('-');
