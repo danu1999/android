@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   Wallet, Contact, Users, Globe,
   TrendingUp, ShoppingBag, Package, AlertTriangle,
-  ArrowRight, BarChart2, Clock
+  ArrowRight, BarChart2, Clock, History
 } from 'lucide-react';
 import api from '../api';
 import { useAuth, useIsAdmin, useIsOwner } from '../AuthContext';
@@ -72,6 +72,7 @@ export default function Dashboard() {
     { path: '/keuangan', label: 'Keuangan', icon: <Wallet size={22} />, grad: 'linear-gradient(135deg,#10B981,#059669)', show: isAdmin },
     { path: '/pelanggan', label: 'Pelanggan', icon: <Contact size={22} />, grad: 'linear-gradient(135deg,#3B82F6,#2563EB)', show: isAdmin },
     { path: '/karyawan', label: 'Karyawan', icon: <Users size={22} />, grad: 'linear-gradient(135deg,#F59E0B,#D97706)', show: isAdmin },
+    { path: '/activity-logs', label: 'Log Aktivitas', icon: <History size={22} />, grad: 'linear-gradient(135deg,#EC4899,#BE185D)', show: isAdmin },
     { path: '/toko-online', label: 'Toko Online', icon: <Globe size={22} />, grad: 'linear-gradient(135deg,#8B5CF6,#6D28D9)', show: true },
   ].filter(m => m.show);
 

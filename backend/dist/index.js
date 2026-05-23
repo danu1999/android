@@ -19,6 +19,24 @@ const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
 const app = (0, express_1.default)();
 const port = process.env.PORT || 3001;
+/** Helper: Catat Log Aktivitas Karyawan ke Database */
+const logActivity = (employeeId, action, description) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const empId = Number(employeeId);
+        if (!empId || isNaN(empId))
+            return;
+        yield prisma.activityLog.create({
+            data: {
+                action,
+                description,
+                employeeId: empId
+            }
+        });
+    }
+    catch (error) {
+        console.error('Failed to write activity log:', error);
+    }
+});
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
 // ─────────────────────────────────────────────────────────────
@@ -152,6 +170,7 @@ app.post('/api/products', requireAdmin, (req, res) => __awaiter(void 0, void 0, 
         const product = yield prisma.product.create({
             data: Object.assign({ name, price: Number(price), costPrice: Number(costPrice || 0), stock: Number(stock), unit: unit || 'pcs', wholesaleEnabled: Boolean(wholesaleEnabled), wholesalePrices: wholesalePrices ? JSON.stringify(wholesalePrices) : null, variants: variants && variants.length > 0 ? JSON.stringify(variants) : null, image }, (barcode ? { barcode } : {}))
         });
+        logActivity(req.headers['x-employee-id'], 'CREATE_PRODUCT', `Membuat produk baru ${product.name} (Stok: ${product.stock} ${product.unit}, Harga: Rp ${product.price.toLocaleString('id-ID')})`);
         res.json(product);
     }
     catch (error) {
@@ -167,6 +186,7 @@ app.put('/api/products/:id', requireAdmin, (req, res) => __awaiter(void 0, void 
             where: { id: Number(id) },
             data: Object.assign({ name, price: Number(price), costPrice: Number(costPrice || 0), stock: Number(stock), unit: unit || 'pcs', wholesaleEnabled: Boolean(wholesaleEnabled), wholesalePrices: wholesalePrices ? JSON.stringify(wholesalePrices) : null, variants: variants && variants.length > 0 ? JSON.stringify(variants) : null, image }, (barcode !== undefined ? { barcode: barcode || null } : {}))
         });
+        logActivity(req.headers['x-employee-id'], 'UPDATE_PRODUCT', `Mengubah data produk ${product.name} (Stok: ${product.stock} ${product.unit}, Harga: Rp ${product.price.toLocaleString('id-ID')})`);
         res.json(product);
     }
     catch (error) {
@@ -186,7 +206,9 @@ app.delete('/api/products/:id', requireAdmin, (req, res) => __awaiter(void 0, vo
                 error: 'Produk tidak dapat dihapus karena sudah pernah digunakan dalam transaksi. Anda bisa mengubah nama atau stoknya menjadi 0.'
             });
         }
+        const product = yield prisma.product.findUnique({ where: { id: productId } });
         yield prisma.product.delete({ where: { id: productId } });
+        logActivity(req.headers['x-employee-id'], 'DELETE_PRODUCT', `Menghapus produk: ${(product === null || product === void 0 ? void 0 : product.name) || productId}`);
         res.json({ success: true });
     }
     catch (error) {
@@ -280,6 +302,7 @@ app.post('/api/transactions', requireNotDemo, (req, res) => __awaiter(void 0, vo
             }
             return createdTx;
         }));
+        logActivity(employeeId, 'CREATE_TRANSACTION', `Membuat transaksi baru ${transaction.receiptNumber} senilai Rp ${Number(transaction.total).toLocaleString('id-ID')}`);
         res.json(transaction);
     }
     catch (error) {
@@ -321,6 +344,8 @@ app.put('/api/transactions/:id', requireNotDemo, (req, res) => __awaiter(void 0,
             });
             return updatedTx;
         }));
+        const employeeIdHeader = req.headers['x-employee-id'];
+        logActivity(employeeIdHeader, 'UPDATE_TRANSACTION', `Mengubah transaksi ${transaction.receiptNumber} (Status: ${status || transaction.status}, Metode: ${paymentMethod || transaction.paymentMethod})`);
         res.json(transaction);
     }
     catch (error) {
@@ -438,6 +463,7 @@ app.post('/api/employees', requireOwner, (req, res) => __awaiter(void 0, void 0,
             return res.status(403).json({ error: 'Hanya OWNER yang dapat membuat akun OWNER' });
         }
         const employee = yield prisma.employee.create({ data: { name, role: role || 'KASIR', pin, salary: Number(salary || 0) } });
+        logActivity(req.headers['x-employee-id'], 'CREATE_EMPLOYEE', `Menambahkan karyawan baru ${employee.name} (Role: ${employee.role})`);
         res.json(employee);
     }
     catch (error) {
@@ -461,6 +487,7 @@ app.put('/api/employees/:id', requireOwner, (req, res) => __awaiter(void 0, void
             where: { id: Number(id) },
             data: Object.assign({ name, role, pin }, (salary !== undefined ? { salary: Number(salary) } : {}))
         });
+        logActivity(req.headers['x-employee-id'], 'UPDATE_EMPLOYEE', `Mengubah data karyawan ${employee.name} (Role: ${employee.role})`);
         res.json(employee);
     }
     catch (error) {
@@ -485,11 +512,39 @@ app.delete('/api/employees/:id', requireOwner, (req, res) => __awaiter(void 0, v
                 error: `Tidak dapat menghapus karyawan ini karena masih memiliki ${txCount} transaksi tercatat. Pertimbangkan untuk mengubah role menjadi KASIR saja.`
             });
         }
+        const emp = yield prisma.employee.findUnique({ where: { id: Number(id) } });
         yield prisma.employee.delete({ where: { id: Number(id) } });
+        logActivity(req.headers['x-employee-id'], 'DELETE_EMPLOYEE', `Menghapus karyawan: ${(emp === null || emp === void 0 ? void 0 : emp.name) || id}`);
         res.json({ success: true });
     }
     catch (error) {
         res.status(400).json({ error: 'Gagal menghapus karyawan.' });
+    }
+}));
+// ─────────────────────────────────────────────────────────────
+// Activity Logs
+// ─────────────────────────────────────────────────────────────
+app.get('/api/activity-logs', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const logs = yield prisma.activityLog.findMany({
+            include: {
+                employee: {
+                    select: {
+                        id: true,
+                        name: true,
+                        role: true
+                    }
+                }
+            },
+            orderBy: {
+                createdAt: 'desc'
+            },
+            take: 200
+        });
+        res.json(logs);
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Gagal mengambil log aktivitas' });
     }
 }));
 // ─────────────────────────────────────────────────────────────
@@ -520,6 +575,7 @@ app.post('/api/finances', requireAdmin, (req, res) => __awaiter(void 0, void 0, 
                 customerId: customerId ? Number(customerId) : null,
             }
         });
+        logActivity(req.headers['x-employee-id'], 'CREATE_FINANCE', `Membuat catatan keuangan ${finance.type} senilai Rp ${finance.amount.toLocaleString('id-ID')} (${finance.description})`);
         res.json(finance);
     }
     catch (error) {
@@ -542,6 +598,7 @@ app.put('/api/finances/:id', requireAdmin, (req, res) => __awaiter(void 0, void 
             },
             include: { customer: true },
         });
+        logActivity(req.headers['x-employee-id'], 'UPDATE_FINANCE', `Mengubah catatan keuangan ID ${finance.id} (${finance.type}) menjadi Rp ${finance.amount.toLocaleString('id-ID')} (Status: ${finance.status})`);
         res.json(finance);
     }
     catch (error) {
@@ -595,10 +652,12 @@ app.delete('/api/finances/:id', requireAdmin, (req, res) => __awaiter(void 0, vo
                     yield prisma.transaction.delete({
                         where: { id: tx.id }
                     });
+                    logActivity(req.headers['x-employee-id'], 'DELETE_TRANSACTION', `Menghapus transaksi ${receiptNumber} secara otomatis karena catatan keuangan terkait dihapus`);
                 }
             }
         }
         yield prisma.finance.delete({ where: { id: numId } });
+        logActivity(req.headers['x-employee-id'], 'DELETE_FINANCE', `Menghapus catatan keuangan ${fin.type} senilai Rp ${fin.amount.toLocaleString('id-ID')} (${fin.description})`);
         res.json({ success: true });
     }
     catch (error) {
@@ -735,6 +794,7 @@ app.post('/api/payroll/pay', requireOwner, (req, res) => __awaiter(void 0, void 
                 status: 'PAID',
             }
         });
+        logActivity(employeeIdHeader, 'PAY_SALARY', `Membayar gaji karyawan ${emp.name} (${monthNames[m - 1]} ${y}) sebesar Rp ${payAmount.toLocaleString('id-ID')}`);
         res.json(record);
     }
     catch (error) {
@@ -767,6 +827,7 @@ app.post('/api/reset-finance', requireOwner, (req, res) => __awaiter(void 0, voi
         const delItems = yield prisma.transactionItem.deleteMany();
         const delTx = yield prisma.transaction.deleteMany();
         const delFin = yield prisma.finance.deleteMany();
+        logActivity(req.headers['x-employee-id'], 'RESET_FINANCE', 'Mereset semua data transaksi dan keuangan ke nol');
         res.json({
             message: 'Keuangan & Laporan berhasil direset.',
             deleted: {
@@ -911,6 +972,7 @@ app.post('/api/purchase-orders/:id/receive', requireAdmin, (req, res) => __await
         const updated = yield prisma.purchaseOrder.update({
             where: { id: poId }, data: { status: 'RECEIVED' }
         });
+        logActivity(req.headers['x-employee-id'], 'RECEIVE_PO', `Menerima barang untuk PO #${poId} dari supplier ${po.supplier.name} senilai Rp ${po.total.toLocaleString('id-ID')}`);
         res.json({ success: true, po: updated });
     }
     catch (error) {
@@ -924,6 +986,7 @@ app.delete('/api/purchase-orders/:id', requireOwner, (req, res) => __awaiter(voi
         if ((po === null || po === void 0 ? void 0 : po.status) === 'RECEIVED')
             return res.status(400).json({ error: 'PO yang sudah diterima tidak bisa dihapus' });
         yield prisma.purchaseOrder.delete({ where: { id: Number(req.params.id) } });
+        logActivity(req.headers['x-employee-id'], 'DELETE_PO', `Menghapus PO #${req.params.id}`);
         res.json({ success: true });
     }
     catch (error) {
@@ -1117,6 +1180,7 @@ app.get('/api/midtrans/status/:orderId', (req, res) => __awaiter(void 0, void 0,
                         paymentMethod: computedMethod
                     }
                 });
+                logActivity(tx.employeeId, 'PAYMENT_CALLBACK', `Pembayaran online untuk transaksi ${receiptNumber} berhasil diselesaikan via ${computedMethod}`);
             }
             return res.json({ status: 'SUCCESS' });
         }
@@ -1142,6 +1206,7 @@ app.get('/api/midtrans/status/:orderId', (req, res) => __awaiter(void 0, void 0,
                         data: { status: 'CANCELLED' }
                     });
                 }));
+                logActivity(tx.employeeId, 'PAYMENT_CALLBACK', `Pembayaran online untuk transaksi ${receiptNumber} kadaluarsa/dibatalkan`);
             }
             return res.json({ status: 'CANCELLED' });
         }
@@ -1178,6 +1243,7 @@ app.post('/api/midtrans/webhook', (req, res) => __awaiter(void 0, void 0, void 0
                         paymentMethod: computedMethod
                     }
                 });
+                logActivity(tx.employeeId, 'PAYMENT_CALLBACK', `Pembayaran online untuk transaksi ${receiptNumber} diselesaikan via ${computedMethod} (Callback Midtrans)`);
             }
         }
         else if (['expire', 'cancel', 'deny'].includes(transaction_status)) {
@@ -1198,6 +1264,7 @@ app.post('/api/midtrans/webhook', (req, res) => __awaiter(void 0, void 0, void 0
                         data: { status: 'CANCELLED' }
                     });
                 }));
+                logActivity(tx.employeeId, 'PAYMENT_CALLBACK', `Pembayaran online untuk transaksi ${receiptNumber} kadaluarsa/dibatalkan (Callback Midtrans)`);
             }
         }
         res.status(200).send('OK');

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import {
   Calculator, Package, LayoutDashboard, LogOut, Clock,
-  DollarSign, Users, UserCog, Crown, ShieldCheck, Lock, X, Sparkles
+  DollarSign, Users, UserCog, Crown, ShieldCheck, Lock, X, Sparkles, History
 } from 'lucide-react';
 import Kasir from './pages/Kasir';
 import Katalog from './pages/Katalog';
@@ -14,6 +14,7 @@ import Dashboard from './pages/Dashboard';
 import Pesanan from './pages/Pesanan';
 import Supplier from './pages/Supplier';
 import Login from './pages/Login';
+import LogAktivitas from './pages/LogAktivitas';
 import { AuthContext, DemoContext, hasRole, DEMO_LIMITS } from './AuthContext';
 import './index.css';
 
@@ -21,8 +22,8 @@ import './index.css';
 const ROLE_ACCESS = {
   KASIR:    ['/', '/katalog'],
   CASHIER:  ['/', '/katalog'],
-  ADMIN:    ['/', '/katalog', '/dashboard', '/keuangan', '/pelanggan', '/karyawan', '/pesanan', '/supplier'],
-  OWNER:    ['/', '/katalog', '/dashboard', '/keuangan', '/pelanggan', '/karyawan', '/pesanan', '/supplier'],
+  ADMIN:    ['/', '/katalog', '/dashboard', '/keuangan', '/pelanggan', '/karyawan', '/pesanan', '/supplier', '/activity-logs'],
+  OWNER:    ['/', '/katalog', '/dashboard', '/keuangan', '/pelanggan', '/karyawan', '/pesanan', '/supplier', '/activity-logs'],
 };
 
 const canAccess = (role, path) => {
@@ -118,6 +119,7 @@ const Navigation = ({ user, onLogout }) => {
     { path: '/karyawan',  label: 'Karyawan',  icon: <UserCog size={20} />,         minRole: 'ADMIN', showInNav: false },
     { path: '/pesanan',   label: 'Pesanan',   icon: <Clock size={20} />,           minRole: 'ADMIN', showInNav: false },
     { path: '/supplier',  label: 'Supplier',  icon: <UserCog size={20} />,         minRole: 'ADMIN', showInNav: false },
+    { path: '/activity-logs', label: 'Log Aktivitas', icon: <History size={20} />, minRole: 'ADMIN', showInNav: false },
   ];
 
   // Demo user diperlakukan sebagai OWNER untuk navigasi (akses semua halaman)
@@ -211,6 +213,7 @@ function AppContent({ user, onLogout }) {
           {canAccess(effectiveRole, '/karyawan')   && <Route path="/karyawan"   element={<Karyawan />} />}
           {canAccess(effectiveRole, '/pesanan')    && <Route path="/pesanan"    element={<Pesanan />} />}
           {canAccess(effectiveRole, '/supplier')   && <Route path="/supplier"   element={<Supplier />} />}
+          {canAccess(effectiveRole, '/activity-logs') && <Route path="/activity-logs" element={<LogAktivitas />} />}
         </Routes>
       </main>
     </div>

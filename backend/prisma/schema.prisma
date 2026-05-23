@@ -20,6 +20,7 @@ model Employee {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   transactions Transaction[]
+  activityLogs ActivityLog[]
 }
 
 model Customer {
@@ -164,4 +165,14 @@ model PurchaseOrderItem {
   product          Product        @relation(fields: [productId], references: [id])
   quantity         Int
   costPrice        Float          // Harga beli per unit saat PO
+}
+
+model ActivityLog {
+  id          Int      @id @default(autoincrement())
+  action      String   // e.g. "CREATE_TRANSACTION", "CANCEL_TRANSACTION", "DELETE_FINANCE", "PAY_SALARY", "UPDATE_STOCK"
+  description String   // e.g. "Kasir membatalkan antrean INV-1234."
+  date        DateTime @default(now())
+  employeeId  Int
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
 }

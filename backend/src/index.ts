@@ -7,6 +7,23 @@ const prisma = new PrismaClient();
 const app = express();
 const port = process.env.PORT || 3001;
 
+/** Helper: Catat Log Aktivitas Karyawan ke Database */
+const logActivity = async (employeeId: any, action: string, description: string) => {
+  try {
+    const empId = Number(employeeId);
+    if (!empId || isNaN(empId)) return;
+    await prisma.activityLog.create({
+      data: {
+        action,
+        description,
+        employeeId: empId
+      }
+    });
+  } catch (error) {
+    console.error('Failed to write activity log:', error);
+  }
+};
+
 app.use(cors());
 app.use(express.json());
 
@@ -160,6 +177,11 @@ app.post('/api/products', requireAdmin, async (req, res) => {
         ...(barcode ? { barcode } : {})
       } as any
     });
+    logActivity(
+      req.headers['x-employee-id'],
+      'CREATE_PRODUCT',
+      `Membuat produk baru ${product.name} (Stok: ${product.stock} ${product.unit}, Harga: Rp ${product.price.toLocaleString('id-ID')})`
+    );
     res.json(product);
   } catch (error) {
     console.error(error);
@@ -186,6 +208,11 @@ app.put('/api/products/:id', requireAdmin, async (req, res) => {
         ...(barcode !== undefined ? { barcode: barcode || null } : {})
       } as any
     });
+    logActivity(
+      req.headers['x-employee-id'],
+      'UPDATE_PRODUCT',
+      `Mengubah data produk ${product.name} (Stok: ${product.stock} ${product.unit}, Harga: Rp ${product.price.toLocaleString('id-ID')})`
+    );
     res.json(product);
   } catch (error) {
     res.status(400).json({ error: 'Failed to update product' });
@@ -208,7 +235,13 @@ app.delete('/api/products/:id', requireAdmin, async (req, res) => {
       });
     }
 
+    const product = await prisma.product.findUnique({ where: { id: productId } });
     await prisma.product.delete({ where: { id: productId } });
+    logActivity(
+      req.headers['x-employee-id'],
+      'DELETE_PRODUCT',
+      `Menghapus produk: ${product?.name || productId}`
+    );
     res.json({ success: true });
   } catch (error) {
     res.status(400).json({ error: 'Gagal menghapus produk.' });
@@ -314,6 +347,11 @@ app.post('/api/transactions', requireNotDemo, async (req, res) => {
       return createdTx;
     });
 
+    logActivity(
+      employeeId,
+      'CREATE_TRANSACTION',
+      `Membuat transaksi baru ${transaction.receiptNumber} senilai Rp ${Number(transaction.total).toLocaleString('id-ID')}`
+    );
     res.json(transaction);
   } catch (error) {
     console.error(error);
@@ -358,6 +396,12 @@ app.put('/api/transactions/:id', requireNotDemo, async (req, res) => {
       return updatedTx;
     });
 
+    const employeeIdHeader = req.headers['x-employee-id'] as string;
+    logActivity(
+      employeeIdHeader,
+      'UPDATE_TRANSACTION',
+      `Mengubah transaksi ${transaction.receiptNumber} (Status: ${status || transaction.status}, Metode: ${paymentMethod || transaction.paymentMethod})`
+    );
     res.json(transaction);
   } catch (error: any) {
     console.error(error);
@@ -480,6 +524,11 @@ app.post('/api/employees', requireOwner, async (req, res) => {
     }
 
     const employee = await prisma.employee.create({ data: { name, role: role || 'KASIR', pin, salary: Number(salary || 0) } });
+    logActivity(
+      req.headers['x-employee-id'],
+      'CREATE_EMPLOYEE',
+      `Menambahkan karyawan baru ${employee.name} (Role: ${employee.role})`
+    );
     res.json(employee);
   } catch (error) {
     res.status(400).json({ error: 'Failed to create employee' });
@@ -505,6 +554,11 @@ app.put('/api/employees/:id', requireOwner, async (req, res) => {
       where: { id: Number(id) },
       data: { name, role, pin, ...(salary !== undefined ? { salary: Number(salary) } : {}) }
     });
+    logActivity(
+      req.headers['x-employee-id'],
+      'UPDATE_EMPLOYEE',
+      `Mengubah data karyawan ${employee.name} (Role: ${employee.role})`
+    );
     res.json(employee);
   } catch (error) {
     res.status(400).json({ error: 'Failed to update employee' });
@@ -531,10 +585,42 @@ app.delete('/api/employees/:id', requireOwner, async (req, res) => {
       });
     }
 
+    const emp = await prisma.employee.findUnique({ where: { id: Number(id) } });
     await prisma.employee.delete({ where: { id: Number(id) } });
+    logActivity(
+      req.headers['x-employee-id'],
+      'DELETE_EMPLOYEE',
+      `Menghapus karyawan: ${emp?.name || id}`
+    );
     res.json({ success: true });
   } catch (error) {
     res.status(400).json({ error: 'Gagal menghapus karyawan.' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Activity Logs
+// ─────────────────────────────────────────────────────────────
+app.get('/api/activity-logs', requireAdmin, async (req, res) => {
+  try {
+    const logs = await prisma.activityLog.findMany({
+      include: {
+        employee: {
+          select: {
+            id: true,
+            name: true,
+            role: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      },
+      take: 200
+    });
+    res.json(logs);
+  } catch (error) {
+    res.status(500).json({ error: 'Gagal mengambil log aktivitas' });
   }
 });
 
@@ -566,6 +652,11 @@ app.post('/api/finances', requireAdmin, async (req, res) => {
         customerId: customerId ? Number(customerId) : null,
       }
     });
+    logActivity(
+      req.headers['x-employee-id'],
+      'CREATE_FINANCE',
+      `Membuat catatan keuangan ${finance.type} senilai Rp ${finance.amount.toLocaleString('id-ID')} (${finance.description})`
+    );
     res.json(finance);
   } catch (error) {
     res.status(400).json({ error: 'Failed to create finance record' });
@@ -590,6 +681,11 @@ app.put('/api/finances/:id', requireAdmin, async (req, res) => {
       },
       include: { customer: true },
     });
+    logActivity(
+      req.headers['x-employee-id'],
+      'UPDATE_FINANCE',
+      `Mengubah catatan keuangan ID ${finance.id} (${finance.type}) menjadi Rp ${finance.amount.toLocaleString('id-ID')} (Status: ${finance.status})`
+    );
     res.json(finance);
   } catch (error) {
     res.status(400).json({ error: 'Failed to update finance record' });
@@ -644,11 +740,21 @@ app.delete('/api/finances/:id', requireAdmin, async (req, res) => {
           await prisma.transaction.delete({
             where: { id: tx.id }
           });
+          logActivity(
+            req.headers['x-employee-id'],
+            'DELETE_TRANSACTION',
+            `Menghapus transaksi ${receiptNumber} secara otomatis karena catatan keuangan terkait dihapus`
+          );
         }
       }
     }
 
     await prisma.finance.delete({ where: { id: numId } });
+    logActivity(
+      req.headers['x-employee-id'],
+      'DELETE_FINANCE',
+      `Menghapus catatan keuangan ${fin.type} senilai Rp ${fin.amount.toLocaleString('id-ID')} (${fin.description})`
+    );
     res.json({ success: true });
   } catch (error) {
     res.status(400).json({ error: 'Failed to delete finance record' });
@@ -795,6 +901,11 @@ app.post('/api/payroll/pay', requireOwner, async (req, res) => {
         status: 'PAID',
       }
     });
+    logActivity(
+      employeeIdHeader,
+      'PAY_SALARY',
+      `Membayar gaji karyawan ${emp.name} (${monthNames[m - 1]} ${y}) sebesar Rp ${payAmount.toLocaleString('id-ID')}`
+    );
     res.json(record);
   } catch (error) {
     console.error(error);
@@ -827,6 +938,11 @@ app.post('/api/reset-finance', requireOwner, async (req, res) => {
     const delItems = await prisma.transactionItem.deleteMany();
     const delTx = await prisma.transaction.deleteMany();
     const delFin = await prisma.finance.deleteMany();
+    logActivity(
+      req.headers['x-employee-id'],
+      'RESET_FINANCE',
+      'Mereset semua data transaksi dan keuangan ke nol'
+    );
     res.json({
       message: 'Keuangan & Laporan berhasil direset.',
       deleted: {
@@ -961,6 +1077,12 @@ app.post('/api/purchase-orders/:id/receive', requireAdmin, async (req, res) => {
       where: { id: poId }, data: { status: 'RECEIVED' }
     });
 
+    logActivity(
+      req.headers['x-employee-id'],
+      'RECEIVE_PO',
+      `Menerima barang untuk PO #${poId} dari supplier ${po.supplier.name} senilai Rp ${po.total.toLocaleString('id-ID')}`
+    );
+
     res.json({ success: true, po: updated });
   } catch (error) {
     console.error(error);
@@ -973,6 +1095,11 @@ app.delete('/api/purchase-orders/:id', requireOwner, async (req, res) => {
     const po = await (prisma as any).purchaseOrder.findUnique({ where: { id: Number(req.params.id) } });
     if (po?.status === 'RECEIVED') return res.status(400).json({ error: 'PO yang sudah diterima tidak bisa dihapus' });
     await (prisma as any).purchaseOrder.delete({ where: { id: Number(req.params.id) } });
+    logActivity(
+      req.headers['x-employee-id'],
+      'DELETE_PO',
+      `Menghapus PO #${req.params.id}`
+    );
     res.json({ success: true });
   } catch (error) { res.status(400).json({ error: 'Gagal hapus PO' }); }
 });
@@ -1186,6 +1313,12 @@ app.get('/api/midtrans/status/:orderId', async (req: Request, res: Response) => 
             paymentMethod: computedMethod
           }
         });
+
+        logActivity(
+          tx.employeeId,
+          'PAYMENT_CALLBACK',
+          `Pembayaran online untuk transaksi ${receiptNumber} berhasil diselesaikan via ${computedMethod}`
+        );
       }
       return res.json({ status: 'SUCCESS' });
     } else if (midtransStatus === 'pending') {
@@ -1210,6 +1343,12 @@ app.get('/api/midtrans/status/:orderId', async (req: Request, res: Response) => 
             data: { status: 'CANCELLED' }
           });
         });
+
+        logActivity(
+          tx.employeeId,
+          'PAYMENT_CALLBACK',
+          `Pembayaran online untuk transaksi ${receiptNumber} kadaluarsa/dibatalkan`
+        );
       }
       return res.json({ status: 'CANCELLED' });
     }
@@ -1250,6 +1389,12 @@ app.post('/api/midtrans/webhook', async (req: Request, res: Response) => {
             paymentMethod: computedMethod
           }
         });
+
+        logActivity(
+          tx.employeeId,
+          'PAYMENT_CALLBACK',
+          `Pembayaran online untuk transaksi ${receiptNumber} diselesaikan via ${computedMethod} (Callback Midtrans)`
+        );
       }
     } else if (['expire', 'cancel', 'deny'].includes(transaction_status)) {
       const tx = await prisma.transaction.findUnique({
@@ -1269,6 +1414,12 @@ app.post('/api/midtrans/webhook', async (req: Request, res: Response) => {
             data: { status: 'CANCELLED' }
           });
         });
+
+        logActivity(
+          tx.employeeId,
+          'PAYMENT_CALLBACK',
+          `Pembayaran online untuk transaksi ${receiptNumber} kadaluarsa/dibatalkan (Callback Midtrans)`
+        );
       }
     }
 
