@@ -47,7 +47,6 @@ export default function Pesanan() {
   useEffect(() => { fetchOrders(); fetchCustomers(); fetchProducts(); }, []);
 
   const openCreate = () => {
-    if (isDemo) { showDemoBlock('Membuat Pre-Order hanya tersedia di akun berbayar.'); return; }
     setForm({ customerName: '', notes: '', deliveryDate: '', dpAmount: 0, items: [] });
     setModal('create');
   };
@@ -90,7 +89,6 @@ export default function Pesanan() {
   };
 
   const updateStatus = async (id, orderStatus) => {
-    if (isDemo) { showDemoBlock('Update status hanya tersedia di akun berbayar.'); return; }
     try {
       await api.patch(`/pre-orders/${id}/status`, { orderStatus });
       fetchOrders();
@@ -98,7 +96,6 @@ export default function Pesanan() {
   };
 
   const updateDP = async (id, dpAmount) => {
-    if (isDemo) { showDemoBlock('Update DP hanya tersedia di akun berbayar.'); return; }
     try {
       await api.patch(`/pre-orders/${id}/status`, { dpAmount: Number(dpAmount) });
       setDpModal(null);

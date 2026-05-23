@@ -498,10 +498,6 @@ export default function Kasir() {
 
   const checkout = async (isQueue = false) => {
     if (!cart.length) return;
-    if (isDemo) {
-      showDemoBlock('Memproses transaksi hanya tersedia di akun berbayar.');
-      return;
-    }
     try {
       const r = await api.post('/transactions', {
         items: cart.map(i => ({
@@ -556,10 +552,6 @@ export default function Kasir() {
   };
 
   const cancelQueue = async (id) => {
-    if (isDemo) {
-      showDemoBlock('Membatalkan antrian hanya tersedia di akun berbayar.');
-      return;
-    }
     if (!window.confirm('Batalkan pesanan antrian ini?')) return;
     try {
       await api.put(`/transactions/${id}`, { status: 'CANCELLED' });
@@ -569,10 +561,6 @@ export default function Kasir() {
   };
 
   const payQueue = async (id, method) => {
-    if (isDemo) {
-      showDemoBlock('Memproses pembayaran antrian hanya tersedia di akun berbayar.');
-      return;
-    }
     try {
       if (method === 'HUTANG') {
         if (!debtDueDate) { alert('Silakan pilih tanggal jatuh tempo!'); return; }

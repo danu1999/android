@@ -107,7 +107,6 @@ export default function Karyawan() {
   };
 
   const handleDelete = async (id) => {
-    if (isDemo) { showDemoBlock('Menghapus karyawan hanya tersedia di akun berbayar.'); return; }
     if (!isOwner || id === user?.id) return;
     // Cegah hapus akun yang dilindungi
     const target = employees.find(em => em.id === id);
@@ -128,7 +127,6 @@ export default function Karyawan() {
   };
 
   const handlePaySalary = async (emp) => {
-    if (isDemo) { showDemoBlock('Fitur penggajian hanya tersedia di akun berbayar.'); return; }
     setPayModal(emp); setPayNote(''); setPayAmt(emp.salary || '');
   };
 

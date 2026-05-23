@@ -50,13 +50,11 @@ export default function Supplier() {
 
   // ── Supplier CRUD ───────────────────────────────────────────
   const openCreateSupplier = () => {
-    if (isDemo) { showDemoBlock('Manajemen supplier hanya tersedia di akun berbayar.'); return; }
     setSuppForm({ name: '', phone: '', address: '', notes: '' });
     setSuppModal('create');
   };
 
   const openEditSupplier = (s) => {
-    if (isDemo) { showDemoBlock('Edit supplier hanya tersedia di akun berbayar.'); return; }
     setSuppForm({ name: s.name, phone: s.phone || '', address: s.address || '', notes: s.notes || '' });
     setSuppModal(s);
   };
@@ -74,14 +72,12 @@ export default function Supplier() {
   };
 
   const deleteSupplier = async (id) => {
-    if (isDemo) { showDemoBlock('Hapus supplier hanya tersedia di akun berbayar.'); return; }
     if (!window.confirm('Yakin hapus supplier ini?')) return;
     try { await api.delete(`/suppliers/${id}`); fetchSuppliers(); } catch { alert('Gagal hapus'); }
   };
 
   // ── Purchase Order ──────────────────────────────────────────
   const openCreatePO = () => {
-    if (isDemo) { showDemoBlock('Membuat Purchase Order hanya tersedia di akun berbayar.'); return; }
     setPoForm({ supplierId: '', notes: '', items: [] });
     setNewPOItem({ productId: '', quantity: 1, costPrice: '' });
     setPoModal('create');
@@ -116,7 +112,6 @@ export default function Supplier() {
   };
 
   const receivePO = async (po) => {
-    if (isDemo) { showDemoBlock('Konfirmasi terima barang hanya tersedia di akun berbayar.'); return; }
     if (!window.confirm(`Konfirmasi terima barang dari ${po.supplier?.name}?\n\nStok produk akan otomatis bertambah dan hutang ke supplier akan dicatat ke Keuangan.`)) return;
     try {
       await api.post(`/purchase-orders/${po.id}/receive`);

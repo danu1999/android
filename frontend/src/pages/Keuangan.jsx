@@ -115,7 +115,6 @@ export default function Keuangan() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (isDemo) { showDemoBlock('Menambah catatan keuangan hanya tersedia di akun berbayar.'); return; }
     if (isOwner && !isGajiRecord(formData)) {
       alert('Role Owner hanya dapat mengedit data Gaji Karyawan.');
       return;
@@ -136,7 +135,6 @@ export default function Keuangan() {
   };
 
   const handleDelete = async (id, item) => {
-    if (isDemo) { showDemoBlock('Menghapus data keuangan hanya tersedia di akun berbayar.'); return; }
     if (isOwner && !isGajiRecord(item)) {
       alert('Role Owner hanya dapat menghapus data Gaji Karyawan.');
       return;
