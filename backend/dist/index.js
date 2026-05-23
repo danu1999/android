@@ -87,6 +87,22 @@ const requireNotDemo = (req, res, next) => {
     }
     next();
 };
+/** Middleware: blokir akses karyawan tertentu dari fitur rental (Hanafi, Fed, Fahri) */
+const checkExcludedEmployee = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    const employeeId = req.headers['x-employee-id'];
+    if (employeeId && employeeId !== '0') {
+        try {
+            const emp = yield prisma.employee.findUnique({ where: { id: Number(employeeId) } });
+            if (emp && ['hanafi', 'fed', 'fahri'].includes(emp.name.toLowerCase())) {
+                return res.status(403).json({ error: 'Akses ditolak. Fitur rental tidak aktif untuk akun Anda.' });
+            }
+        }
+        catch (e) {
+            console.error('Error checking excluded employee:', e);
+        }
+    }
+    next();
+});
 // ─────────────────────────────────────────────────────────────
 // Basic sanity check
 // ─────────────────────────────────────────────────────────────
@@ -1272,6 +1288,213 @@ app.post('/api/midtrans/webhook', (req, res) => __awaiter(void 0, void 0, void 0
     catch (error) {
         console.error('Webhook error:', error);
         res.status(500).send('Internal Server Error');
+    }
+}));
+// ─────────────────────────────────────────────────────────────
+// Car Rental Feature APIs
+// ─────────────────────────────────────────────────────────────
+// Get all cars
+app.get('/api/cars', requireAdmin, checkExcludedEmployee, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const cars = yield prisma.car.findMany({ orderBy: { name: 'asc' } });
+        res.json(cars);
+    }
+    catch (error) {
+        res.status(400).json({ error: 'Gagal mengambil data mobil' });
+    }
+}));
+// Create new car
+app.post('/api/cars', requireAdmin, checkExcludedEmployee, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { name, plateNumber, type, pricePerDay, status } = req.body;
+        if (!name || !plateNumber || !type || !pricePerDay) {
+            return res.status(400).json({ error: 'Semua field wajib diisi' });
+        }
+        const car = yield prisma.car.create({
+            data: {
+                name,
+                plateNumber,
+                type,
+                pricePerDay: Number(pricePerDay),
+                status: status || 'AVAILABLE'
+            }
+        });
+        logActivity(req.headers['x-employee-id'], 'CREATE_CAR', `Menambahkan mobil baru ${car.name} (${car.plateNumber}) dengan tarif Rp ${car.pricePerDay.toLocaleString('id-ID')}/hari`);
+        res.json(car);
+    }
+    catch (error) {
+        res.status(400).json({ error: 'Gagal menambah data mobil. Pastikan plat nomor belum terdaftar.' });
+    }
+}));
+// Update car details
+app.put('/api/cars/:id', requireAdmin, checkExcludedEmployee, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { id } = req.params;
+        const { name, plateNumber, type, pricePerDay, status } = req.body;
+        const car = yield prisma.car.update({
+            where: { id: Number(id) },
+            data: {
+                name,
+                plateNumber,
+                type,
+                pricePerDay: pricePerDay !== undefined ? Number(pricePerDay) : undefined,
+                status
+            }
+        });
+        logActivity(req.headers['x-employee-id'], 'UPDATE_CAR', `Mengubah data mobil ${car.name} (${car.plateNumber}), Status: ${car.status}, Tarif: Rp ${car.pricePerDay.toLocaleString('id-ID')}/hari`);
+        res.json(car);
+    }
+    catch (error) {
+        res.status(400).json({ error: 'Gagal memperbarui data mobil' });
+    }
+}));
+// Delete a car
+app.delete('/api/cars/:id', requireAdmin, checkExcludedEmployee, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { id } = req.params;
+        const carId = Number(id);
+        // Cek apakah mobil sedang disewa
+        const activeRental = yield prisma.rental.findFirst({
+            where: { carId, status: 'ACTIVE' }
+        });
+        if (activeRental) {
+            return res.status(400).json({ error: 'Mobil tidak dapat dihapus karena sedang aktif disewa.' });
+        }
+        const car = yield prisma.car.findUnique({ where: { id: carId } });
+        yield prisma.car.delete({ where: { id: carId } });
+        logActivity(req.headers['x-employee-id'], 'DELETE_CAR', `Menghapus mobil ${(car === null || car === void 0 ? void 0 : car.name) || id} (${car === null || car === void 0 ? void 0 : car.plateNumber})`);
+        res.json({ success: true });
+    }
+    catch (error) {
+        res.status(400).json({ error: 'Gagal menghapus data mobil' });
+    }
+}));
+// Get all rental logs
+app.get('/api/rentals', requireAdmin, checkExcludedEmployee, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const rentals = yield prisma.rental.findMany({
+            include: {
+                car: true,
+                customer: true,
+                employee: { select: { name: true } }
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json(rentals);
+    }
+    catch (error) {
+        res.status(400).json({ error: 'Gagal mengambil data sewa' });
+    }
+}));
+// Rent a car
+app.post('/api/rentals', requireAdmin, checkExcludedEmployee, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { carId, customerId, customerName, startDate, endDate, totalPrice, paymentMethod } = req.body;
+        const employeeIdHeader = req.headers['x-employee-id'];
+        const empId = Number(employeeIdHeader) || 1;
+        if (!carId || !customerName || !startDate || !endDate || !totalPrice || !paymentMethod) {
+            return res.status(400).json({ error: 'Semua data penyewaan wajib diisi' });
+        }
+        const rental = yield prisma.$transaction((tx) => __awaiter(void 0, void 0, void 0, function* () {
+            // 1. Cek mobil tersedia
+            const car = yield tx.car.findUnique({ where: { id: Number(carId) } });
+            if (!car || car.status !== 'AVAILABLE') {
+                throw new Error('Mobil tidak tersedia untuk disewa');
+            }
+            // 2. Tandai mobil sebagai RENTED
+            yield tx.car.update({
+                where: { id: Number(carId) },
+                data: { status: 'RENTED' }
+            });
+            // 3. Catat di tabel Rental
+            const createdRental = yield tx.rental.create({
+                data: {
+                    carId: Number(carId),
+                    customerId: customerId ? Number(customerId) : null,
+                    customerName,
+                    startDate: new Date(startDate),
+                    endDate: new Date(endDate),
+                    totalPrice: Number(totalPrice),
+                    employeeId: empId,
+                    status: 'ACTIVE'
+                },
+                include: { car: true }
+            });
+            // 4. Catat di keuangan
+            yield tx.finance.create({
+                data: {
+                    type: 'RECEIVABLE',
+                    amount: Number(totalPrice),
+                    description: `Sewa Mobil ${car.name} (${car.plateNumber}) - ${customerName} (Sewa #${createdRental.id})`,
+                    status: paymentMethod === 'CASH' || paymentMethod === 'TRANSFER' || paymentMethod === 'QRIS' ? 'PAID' : 'PENDING',
+                    customerId: customerId ? Number(customerId) : null,
+                    date: new Date()
+                }
+            });
+            return createdRental;
+        }));
+        logActivity(empId, 'CREATE_RENTAL', `Menyewakan mobil ${rental.car.name} (${rental.car.plateNumber}) ke ${customerName} senilai Rp ${rental.totalPrice.toLocaleString('id-ID')} s.d. ${new Date(endDate).toLocaleDateString('id-ID')}`);
+        res.json(rental);
+    }
+    catch (error) {
+        console.error(error);
+        res.status(400).json({ error: error.message || 'Gagal menyimpan transaksi sewa' });
+    }
+}));
+// Return a car
+app.post('/api/rentals/:id/return', requireAdmin, checkExcludedEmployee, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { id } = req.params;
+        const { actualReturnDate, lateFee, paymentMethod } = req.body;
+        const employeeIdHeader = req.headers['x-employee-id'];
+        const empId = Number(employeeIdHeader) || 1;
+        const rentalId = Number(id);
+        const rental = yield prisma.$transaction((tx) => __awaiter(void 0, void 0, void 0, function* () {
+            const current = yield tx.rental.findUnique({
+                where: { id: rentalId },
+                include: { car: true }
+            });
+            if (!current)
+                throw new Error('Data sewa tidak ditemukan');
+            if (current.status === 'RETURNED')
+                throw new Error('Mobil sudah pernah dikembalikan');
+            // 1. Set car status to AVAILABLE
+            yield tx.car.update({
+                where: { id: current.carId },
+                data: { status: 'AVAILABLE' }
+            });
+            // 2. Update rental status
+            const updatedRental = yield tx.rental.update({
+                where: { id: rentalId },
+                data: {
+                    status: 'RETURNED',
+                    actualReturnDate: actualReturnDate ? new Date(actualReturnDate) : new Date(),
+                    lateFee: Number(lateFee || 0)
+                },
+                include: { car: true }
+            });
+            // 3. Jika ada denda (lateFee > 0), catat sebagai tambahan keuangan RECEIVABLE
+            const denda = Number(lateFee || 0);
+            if (denda > 0) {
+                yield tx.finance.create({
+                    data: {
+                        type: 'RECEIVABLE',
+                        amount: denda,
+                        description: `Denda Telat Sewa Mobil ${current.car.name} (${current.car.plateNumber}) - ${current.customerName} (Sewa #${rentalId})`,
+                        status: paymentMethod === 'CASH' || paymentMethod === 'TRANSFER' || paymentMethod === 'QRIS' ? 'PAID' : 'PENDING',
+                        customerId: current.customerId,
+                        date: new Date()
+                    }
+                });
+            }
+            return updatedRental;
+        }));
+        logActivity(empId, 'RETURN_CAR', `Pengembalian mobil ${rental.car.name} (${rental.car.plateNumber}) oleh ${rental.customerName}. Denda: Rp ${rental.lateFee.toLocaleString('id-ID')}`);
+        res.json(rental);
+    }
+    catch (error) {
+        console.error(error);
+        res.status(400).json({ error: error.message || 'Gagal memproses pengembalian sewa' });
     }
 }));
 app.listen(port, () => {

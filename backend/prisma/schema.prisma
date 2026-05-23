@@ -21,6 +21,7 @@ model Employee {
   updatedAt DateTime @updatedAt
   transactions Transaction[]
   activityLogs ActivityLog[]
+  rentals      Rental[]
 }
 
 model Customer {
@@ -32,6 +33,7 @@ model Customer {
   updatedAt DateTime @updatedAt
   transactions Transaction[]
   receivables Finance[] @relation("CustomerReceivables")
+  rentals      Rental[]
 }
 
 model Product {
@@ -175,4 +177,35 @@ model ActivityLog {
   employeeId  Int
   employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())
+}
+
+model Car {
+  id          Int      @id @default(autoincrement())
+  name        String
+  plateNumber String   @unique
+  type        String
+  pricePerDay Float
+  status      String   @default("AVAILABLE") // AVAILABLE, RENTED, MAINTENANCE
+  rentals     Rental[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Rental {
+  id               Int       @id @default(autoincrement())
+  carId            Int
+  car              Car       @relation(fields: [carId], references: [id], onDelete: Cascade)
+  customerId       Int?
+  customer         Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customerName     String
+  startDate        DateTime
+  endDate          DateTime
+  totalPrice       Float
+  status           String    @default("ACTIVE") // ACTIVE, RETURNED
+  actualReturnDate DateTime?
+  lateFee          Float     @default(0)
+  employeeId       Int
+  employee         Employee  @relation(fields: [employeeId], references: [id])
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 }

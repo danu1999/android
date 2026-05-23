@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import {
   Calculator, Package, LayoutDashboard, LogOut, Clock,
-  DollarSign, Users, UserCog, Crown, ShieldCheck, Lock, X, Sparkles, History
+  DollarSign, Users, UserCog, Crown, ShieldCheck, Lock, X, Sparkles, History, Car
 } from 'lucide-react';
 import Kasir from './pages/Kasir';
 import Katalog from './pages/Katalog';
@@ -15,6 +15,7 @@ import Pesanan from './pages/Pesanan';
 import Supplier from './pages/Supplier';
 import Login from './pages/Login';
 import LogAktivitas from './pages/LogAktivitas';
+import RentalMobil from './pages/RentalMobil';
 import { AuthContext, DemoContext, hasRole, DEMO_LIMITS } from './AuthContext';
 import './index.css';
 
@@ -106,20 +107,32 @@ const ROLE_STYLE = {
 };
 
 // ─── Navigation ────────────────────────────────────────────────
-const Navigation = ({ user, onLogout }) => {
+const Navigation = ({ user, onLogout, appMode, setAppMode }) => {
   const location = useLocation();
   const roleStyle = ROLE_STYLE[user?.role] || ROLE_STYLE['KASIR'];
 
-  const allNavItems = [
-    { path: '/',          label: 'Kasir',     icon: <Calculator size={20} />,      minRole: 'KASIR', showInNav: true  },
-    { path: '/katalog',   label: 'Katalog',   icon: <Package size={20} />,         minRole: 'KASIR', showInNav: true  },
-    { path: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} />, minRole: 'ADMIN', showInNav: true  },
-    { path: '/keuangan',  label: 'Keuangan',  icon: <DollarSign size={20} />,      minRole: 'ADMIN', showInNav: false },
-    { path: '/pelanggan', label: 'Pelanggan', icon: <Users size={20} />,           minRole: 'ADMIN', showInNav: false },
-    { path: '/karyawan',  label: 'Karyawan',  icon: <UserCog size={20} />,         minRole: 'ADMIN', showInNav: false },
-    { path: '/pesanan',   label: 'Pesanan',   icon: <Clock size={20} />,           minRole: 'ADMIN', showInNav: false },
-    { path: '/supplier',  label: 'Supplier',  icon: <UserCog size={20} />,         minRole: 'ADMIN', showInNav: false },
-    { path: '/activity-logs', label: 'Log Aktivitas', icon: <History size={20} />, minRole: 'ADMIN', showInNav: false },
+  const isExcludedName = (name) => {
+    if (!name) return false;
+    return ['hanafi', 'fed', 'fahri'].includes(name.toLowerCase());
+  };
+
+  const allNavItems = appMode === 'RENTAL' ? [
+    { path: '/',          label: 'Kasir Rental', icon: <Car size={20} />,             minRole: 'KASIR', showInNav: true  },
+    { path: '/dashboard', label: 'Dashboard',    icon: <LayoutDashboard size={20} />, minRole: 'ADMIN', showInNav: true  },
+    { path: '/keuangan',  label: 'Keuangan',     icon: <DollarSign size={20} />,      minRole: 'ADMIN', showInNav: false },
+    { path: '/pelanggan', label: 'Pelanggan',    icon: <Users size={20} />,           minRole: 'ADMIN', showInNav: false },
+    { path: '/karyawan',  label: 'Karyawan',     icon: <UserCog size={20} />,         minRole: 'ADMIN', showInNav: false },
+    { path: '/activity-logs', label: 'Log Aktivitas', icon: <History size={20} />,    minRole: 'ADMIN', showInNav: false },
+  ] : [
+    { path: '/',          label: 'Kasir',        icon: <Calculator size={20} />,      minRole: 'KASIR', showInNav: true  },
+    { path: '/katalog',   label: 'Katalog',      icon: <Package size={20} />,         minRole: 'KASIR', showInNav: true  },
+    { path: '/dashboard', label: 'Dashboard',    icon: <LayoutDashboard size={20} />, minRole: 'ADMIN', showInNav: true  },
+    { path: '/keuangan',  label: 'Keuangan',     icon: <DollarSign size={20} />,      minRole: 'ADMIN', showInNav: false },
+    { path: '/pelanggan', label: 'Pelanggan',    icon: <Users size={20} />,           minRole: 'ADMIN', showInNav: false },
+    { path: '/karyawan',  label: 'Karyawan',     icon: <UserCog size={20} />,         minRole: 'ADMIN', showInNav: false },
+    { path: '/pesanan',   label: 'Pesanan',      icon: <Clock size={20} />,           minRole: 'ADMIN', showInNav: false },
+    { path: '/supplier',  label: 'Supplier',     icon: <UserCog size={20} />,         minRole: 'ADMIN', showInNav: false },
+    { path: '/activity-logs', label: 'Log Aktivitas', icon: <History size={20} />,    minRole: 'ADMIN', showInNav: false },
   ];
 
   // Demo user diperlakukan sebagai OWNER untuk navigasi (akses semua halaman)
@@ -127,6 +140,13 @@ const Navigation = ({ user, onLogout }) => {
   const navItems = allNavItems.filter(item =>
     hasRole(effectiveRole, item.minRole) && item.showInNav
   );
+
+  const showModeSwitcher = hasRole(user?.role, 'ADMIN') && !isExcludedName(user?.name);
+
+  const handleModeChange = (newMode) => {
+    localStorage.setItem('posbah_app_mode', newMode);
+    setAppMode(newMode);
+  };
 
   const RoleBadge = () => (
     <span style={{
@@ -165,6 +185,19 @@ const Navigation = ({ user, onLogout }) => {
           ))}
         </nav>
         <div style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid rgba(0,0,0,0.08)' }}>
+          {showModeSwitcher && (
+            <div style={{ marginBottom: '12px' }}>
+              <div style={{ fontSize: '0.7rem', color: '#6B7280', fontWeight: 800, marginBottom: '4px', textTransform: 'uppercase' }}>Mode POS</div>
+              <select
+                value={appMode}
+                onChange={(e) => handleModeChange(e.target.value)}
+                style={{ width: '100%', padding: '6px 10px', borderRadius: '8px', border: '1.5px solid #E5E7EB', fontSize: '0.8rem', fontWeight: 800, background: 'white', color: '#374151', cursor: 'pointer' }}
+              >
+                <option value="FNB">🍹 UMKM & Jus</option>
+                <option value="RENTAL">🚗 Rental Mobil</option>
+              </select>
+            </div>
+          )}
           <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1F2937', marginBottom: '4px' }}>{user?.name}</div>
           <RoleBadge />
           <button onClick={onLogout} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', padding: '8px 0 0', fontWeight: 600 }}>
@@ -187,7 +220,7 @@ const Navigation = ({ user, onLogout }) => {
 };
 
 // ─── App Content ───────────────────────────────────────────────
-function AppContent({ user, onLogout }) {
+function AppContent({ user, onLogout, appMode, setAppMode }) {
   const location = useLocation();
   const isPublicStore = location.pathname === '/toko-online';
 
@@ -202,12 +235,12 @@ function AppContent({ user, onLogout }) {
 
   return (
     <div className="app-layout">
-      <Navigation user={user} onLogout={onLogout} />
+      <Navigation user={user} onLogout={onLogout} appMode={appMode} setAppMode={setAppMode} />
       <main className="main-content">
         <Routes>
-          <Route path="/"          element={<Kasir />} />
+          <Route path="/"          element={appMode === 'RENTAL' ? <RentalMobil /> : <Kasir />} />
           <Route path="/katalog"   element={<Katalog />} />
-          {canAccess(effectiveRole, '/dashboard')  && <Route path="/dashboard"  element={<Dashboard />} />}
+          {canAccess(effectiveRole, '/dashboard')  && <Route path="/dashboard"  element={<Dashboard appMode={appMode} />} />}
           {canAccess(effectiveRole, '/keuangan')   && <Route path="/keuangan"   element={<Keuangan />} />}
           {canAccess(effectiveRole, '/pelanggan')  && <Route path="/pelanggan"  element={<Pelanggan />} />}
           {canAccess(effectiveRole, '/karyawan')   && <Route path="/karyawan"   element={<Karyawan />} />}
@@ -252,6 +285,73 @@ function DemoBanner() {
   );
 }
 
+// Onboarding Business Mode Selection Modal
+function BusinessModeModal({ onSelectMode }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 99999,
+      background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem'
+    }}>
+      <div style={{
+        background: 'white', borderRadius: '24px', padding: '2rem',
+        maxWidth: '520px', width: '100%', textAlign: 'center',
+        boxShadow: '0 25px 50px rgba(0,0,0,0.3)',
+        animation: 'slideUp 0.3s ease'
+      }}>
+        <h2 style={{ margin: '0 0 8px', fontSize: '1.4rem', fontWeight: 900, color: '#111827' }}>
+          Selamat Datang di POSBah! 👋
+        </h2>
+        <p style={{ margin: '0 0 1.5rem', color: '#6B7280', fontSize: '0.9rem' }}>
+          Silakan pilih jenis sistem POS yang ingin Anda gunakan untuk memulai operasional:
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '1.5rem' }}>
+          {/* Card 1: UMKM F&B */}
+          <div 
+            onClick={() => onSelectMode('FNB')}
+            style={{
+              border: '2px solid #E5E7EB', borderRadius: '18px', padding: '1.5rem 1rem',
+              cursor: 'pointer', transition: 'all 0.2s', display: 'flex', flexDirection: 'column',
+              alignItems: 'center', gap: '10px'
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#10B981'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#E5E7EB'; e.currentTarget.style.transform = ''; }}
+          >
+            <div style={{ fontSize: '2.5rem' }}>🍹</div>
+            <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#111827' }}>POS UMKM & Retail</div>
+            <div style={{ fontSize: '0.75rem', color: '#6B7280', lineHeight: 1.4 }}>
+              Cocok untuk Kedai Jus, Pisang Keju, Toko Kelontong, & Kuliner lainnya.
+            </div>
+          </div>
+
+          {/* Card 2: Rental Mobil */}
+          <div 
+            onClick={() => onSelectMode('RENTAL')}
+            style={{
+              border: '2px solid #E5E7EB', borderRadius: '18px', padding: '1.5rem 1rem',
+              cursor: 'pointer', transition: 'all 0.2s', display: 'flex', flexDirection: 'column',
+              alignItems: 'center', gap: '10px'
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#4F46E5'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#E5E7EB'; e.currentTarget.style.transform = ''; }}
+          >
+            <div style={{ fontSize: '2.5rem' }}>🚗</div>
+            <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#111827' }}>POS Rental Mobil</div>
+            <div style={{ fontSize: '0.75rem', color: '#6B7280', lineHeight: 1.4 }}>
+              Kelola daftar unit kendaraan, status penyewaan, kalkulator tarif, & pengembalian.
+            </div>
+          </div>
+        </div>
+
+        <p style={{ fontSize: '0.75rem', color: '#9CA3AF', margin: 0 }}>
+          💡 Admin & Owner dapat mengganti jenis POS kapan saja melalui menu di sidebar.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Root App ──────────────────────────────────────────────────
 function App() {
   const [user, setUser] = useState(() => {
@@ -267,16 +367,38 @@ function App() {
     } catch { return null; }
   });
 
+  const isExcludedName = (name) => {
+    if (!name) return false;
+    return ['hanafi', 'fed', 'fahri'].includes(name.toLowerCase());
+  };
+
+  const [appMode, setAppMode] = useState(() => {
+    return localStorage.getItem('posbah_app_mode') || 'FNB';
+  });
+
+  const [showModePrompt, setShowModePrompt] = useState(false);
+
   // Demo block modal state
   const [demoBlockMsg, setDemoBlockMsg] = useState(null);
   const showDemoBlock = (message) => setDemoBlockMsg(message || true);
 
-  const demoDaysLeft = user?.isDemo && user?.expiresAt
-    ? Math.ceil((user.expiresAt - Date.now()) / (1000 * 60 * 60 * 24))
-    : null;
-  const demoHoursLeft = user?.isDemo && user?.expiresAt
-    ? Math.ceil((user.expiresAt - Date.now()) / (1000 * 60 * 60))
-    : null;
+  useEffect(() => {
+    if (user) {
+      if (isExcludedName(user.name)) {
+        localStorage.setItem('posbah_app_mode', 'FNB');
+        setAppMode('FNB');
+        setShowModePrompt(false);
+      } else if (!localStorage.getItem('posbah_app_mode')) {
+        setShowModePrompt(true);
+      }
+    }
+  }, [user]);
+
+  const handleSelectMode = (mode) => {
+    localStorage.setItem('posbah_app_mode', mode);
+    setAppMode(mode);
+    setShowModePrompt(false);
+  };
 
   const handleLogin = (userData) => {
     localStorage.setItem('posbah_user', JSON.stringify(userData));
@@ -285,6 +407,7 @@ function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('posbah_user');
+    localStorage.removeItem('posbah_app_mode');
     setUser(null);
   };
 
@@ -298,8 +421,13 @@ function App() {
           {user?.isDemo && <DemoBanner />}
 
           <div style={{ paddingTop: user?.isDemo ? '36px' : 0, height: '100dvh', boxSizing: 'border-box' }}>
-            <AppContent user={user} onLogout={handleLogout} />
+            <AppContent user={user} onLogout={handleLogout} appMode={appMode} setAppMode={setAppMode} />
           </div>
+
+          {/* Onboarding Mode Selection Modal */}
+          {showModePrompt && (
+            <BusinessModeModal onSelectMode={handleSelectMode} />
+          )}
 
           {/* Demo Block Modal */}
           {demoBlockMsg && (

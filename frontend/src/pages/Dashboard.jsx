@@ -9,7 +9,7 @@ import api from '../api';
 import { useAuth, useIsAdmin, useIsOwner } from '../AuthContext';
 import { useDemoBlock } from '../AuthContext';
 
-export default function Dashboard() {
+export default function Dashboard({ appMode }) {
   const { user } = useAuth();
   const isAdmin = useIsAdmin();
   const isOwner = useIsOwner();
@@ -17,6 +17,8 @@ export default function Dashboard() {
 
   const [report, setReport] = useState(null);
   const [products, setProducts] = useState([]);
+  const [cars, setCars] = useState([]);
+  const [rentals, setRentals] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const DEMO_PRODUCTS = [
@@ -46,17 +48,28 @@ export default function Dashboard() {
         return;
       }
       try {
-        const [rRes, pRes] = await Promise.all([
-          api.get('/reports'),
-          api.get('/products'),
-        ]);
-        setReport(rRes.data);
-        setProducts(pRes.data);
+        if (appMode === 'RENTAL') {
+          const [rRes, cRes, rentRes] = await Promise.all([
+            api.get('/reports'),
+            api.get('/cars'),
+            api.get('/rentals'),
+          ]);
+          setReport(rRes.data);
+          setCars(cRes.data);
+          setRentals(rentRes.data);
+        } else {
+          const [rRes, pRes] = await Promise.all([
+            api.get('/reports'),
+            api.get('/products'),
+          ]);
+          setReport(rRes.data);
+          setProducts(pRes.data);
+        }
       } catch (_) { }
       finally { setLoading(false); }
     };
     load();
-  }, []);
+  }, [appMode]);
 
   const now = new Date();
   const greeting = now.getHours() < 12 ? 'Selamat Pagi' : now.getHours() < 17 ? 'Selamat Siang' : 'Selamat Malam';
@@ -73,7 +86,7 @@ export default function Dashboard() {
     { path: '/pelanggan', label: 'Pelanggan', icon: <Contact size={22} />, grad: 'linear-gradient(135deg,#3B82F6,#2563EB)', show: isAdmin },
     { path: '/karyawan', label: 'Karyawan', icon: <Users size={22} />, grad: 'linear-gradient(135deg,#F59E0B,#D97706)', show: isAdmin },
     { path: '/activity-logs', label: 'Log Aktivitas', icon: <History size={22} />, grad: 'linear-gradient(135deg,#EC4899,#BE185D)', show: isAdmin },
-    { path: '/toko-online', label: 'Toko Online', icon: <Globe size={22} />, grad: 'linear-gradient(135deg,#8B5CF6,#6D28D9)', show: true },
+    { path: '/toko-online', label: 'Toko Online', icon: <Globe size={22} />, grad: 'linear-gradient(135deg,#8B5CF6,#6D28D9)', show: appMode === 'FNB' },
   ].filter(m => m.show);
 
   return (
@@ -187,61 +200,111 @@ export default function Dashboard() {
         {/* Alerts + Stok column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1, minWidth: 0 }}>
 
-          {/* Stok summary */}
-          <div style={{
-            background: 'white', border: '1px solid #E5E7EB',
-            borderRadius: 14, padding: '12px 16px', flex: 1, overflow: 'hidden'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <Package size={16} color="#6B7280" />
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Status Stok</span>
-            </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <div style={{ flex: 1, background: '#F0FDF4', borderRadius: 10, padding: '8px 10px', textAlign: 'center' }}>
-                <div style={{ fontSize: 22, fontWeight: 900, color: '#16A34A' }}>{products.length}</div>
-                <div style={{ fontSize: 10, color: '#15803D', fontWeight: 600 }}>Total Produk</div>
+          {appMode === 'RENTAL' ? (
+            <>
+              {/* Mobil availability summary */}
+              <div style={{
+                background: 'white', border: '1px solid #E5E7EB',
+                borderRadius: 14, padding: '12px 16px', flex: 1, overflow: 'hidden'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <Package size={16} color="#6B7280" />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Status Armada Mobil</span>
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <div style={{ flex: 1, background: '#EEF2FF', borderRadius: 10, padding: '8px 10px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 22, fontWeight: 900, color: '#4F46E5' }}>{cars.length}</div>
+                    <div style={{ fontSize: 10, color: '#4338CA', fontWeight: 600 }}>Total Mobil</div>
+                  </div>
+                  <div style={{ flex: 1, background: '#F0FDF4', borderRadius: 10, padding: '8px 10px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 22, fontWeight: 900, color: '#16A34A' }}>{cars.filter(c => c.status === 'AVAILABLE').length}</div>
+                    <div style={{ fontSize: 10, color: '#15803D', fontWeight: 600 }}>Tersedia</div>
+                  </div>
+                  <div style={{ flex: 1, background: '#FFFBEB', borderRadius: 10, padding: '8px 10px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 22, fontWeight: 900, color: '#D97706' }}>{cars.filter(c => c.status === 'RENTED').length}</div>
+                    <div style={{ fontSize: 10, color: '#92400E', fontWeight: 600 }}>Disewa</div>
+                  </div>
+                </div>
               </div>
-              <div style={{ flex: 1, background: '#FFFBEB', borderRadius: 10, padding: '8px 10px', textAlign: 'center' }}>
-                <div style={{ fontSize: 22, fontWeight: 900, color: '#D97706' }}>{lowStock.length}</div>
-                <div style={{ fontSize: 10, color: '#92400E', fontWeight: 600 }}>Stok Menipis</div>
-              </div>
-              <div style={{ flex: 1, background: '#FEF2F2', borderRadius: 10, padding: '8px 10px', textAlign: 'center' }}>
-                <div style={{ fontSize: 22, fontWeight: 900, color: '#DC2626' }}>{outStock.length}</div>
-                <div style={{ fontSize: 10, color: '#991B1B', fontWeight: 600 }}>Stok Habis</div>
-              </div>
-            </div>
-          </div>
 
-          {/* Alert produk */}
-          {(lowStock.length > 0 || outStock.length > 0) ? (
-            <div style={{
-              background: '#FFFBEB', border: '1px solid #FCD34D',
-              borderRadius: 14, padding: '16px 18px', flex: 1, overflow: 'hidden',
-              display: 'flex', flexDirection: 'column', justifyContent: 'center'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <AlertTriangle size={18} color="#D97706" />
-                <span style={{ fontSize: 13, fontWeight: 800, color: '#92400E' }}>Perlu Perhatian</span>
+              {/* Active rentals summary */}
+              <div style={{
+                background: '#F5F3FF', border: '1px solid #DDD6FE',
+                borderRadius: 14, padding: '16px 18px', flex: 1, overflow: 'hidden',
+                display: 'flex', flexDirection: 'column', justifyContent: 'center'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <Clock size={18} color="#8B5CF6" />
+                  <span style={{ fontSize: 13, fontWeight: 800, color: '#6D28D9' }}>Penyewaan Aktif</span>
+                </div>
+                <div style={{ fontSize: 13, color: '#5B21B6', lineHeight: 1.6 }}>
+                  {rentals.filter(r => r.status === 'ACTIVE').length > 0 ? (
+                    <div>🚗 <b>{rentals.filter(r => r.status === 'ACTIVE').length} mobil</b> sedang aktif disewa saat ini.</div>
+                  ) : (
+                    <div>✅ Semua armada terparkir rapi di garasi.</div>
+                  )}
+                </div>
               </div>
-              <div style={{ fontSize: 13, color: '#78350F', lineHeight: 1.6, overflow: 'hidden' }}>
-                {outStock.length > 0 && (
-                  <div style={{ marginBottom: 4 }}>🚫 <b>Habis:</b> {outStock.slice(0, 3).map(p => p.name).join(', ')}{outStock.length > 3 ? ` +${outStock.length - 3} lagi` : ''}</div>
-                )}
-                {lowStock.length > 0 && (
-                  <div>⚠️ <b>Menipis:</b> {lowStock.slice(0, 3).map(p => `${p.name} (${p.stock})`).join(', ')}{lowStock.length > 3 ? ` +${lowStock.length - 3} lagi` : ''}</div>
-                )}
-              </div>
-            </div>
+            </>
           ) : (
-            <div style={{
-              background: '#F0FDF4', border: '1px solid #86EFAC',
-              borderRadius: 14, padding: '20px 16px', flex: 1,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              flexDirection: 'column', gap: 8
-            }}>
-              <div style={{ fontSize: 36 }}>✅</div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: '#166534', textAlign: 'center' }}>Semua stok aman</div>
-            </div>
+            <>
+              {/* Stok summary */}
+              <div style={{
+                background: 'white', border: '1px solid #E5E7EB',
+                borderRadius: 14, padding: '12px 16px', flex: 1, overflow: 'hidden'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <Package size={16} color="#6B7280" />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Status Stok</span>
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <div style={{ flex: 1, background: '#F0FDF4', borderRadius: 10, padding: '8px 10px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 22, fontWeight: 900, color: '#16A34A' }}>{products.length}</div>
+                    <div style={{ fontSize: 10, color: '#15803D', fontWeight: 600 }}>Total Produk</div>
+                  </div>
+                  <div style={{ flex: 1, background: '#FFFBEB', borderRadius: 10, padding: '8px 10px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 22, fontWeight: 900, color: '#D97706' }}>{lowStock.length}</div>
+                    <div style={{ fontSize: 10, color: '#92400E', fontWeight: 600 }}>Stok Menipis</div>
+                  </div>
+                  <div style={{ flex: 1, background: '#FEF2F2', borderRadius: 10, padding: '8px 10px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 22, fontWeight: 900, color: '#DC2626' }}>{outStock.length}</div>
+                    <div style={{ fontSize: 10, color: '#991B1B', fontWeight: 600 }}>Stok Habis</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Alert produk */}
+              {(lowStock.length > 0 || outStock.length > 0) ? (
+                <div style={{
+                  background: '#FFFBEB', border: '1px solid #FCD34D',
+                  borderRadius: 14, padding: '16px 18px', flex: 1, overflow: 'hidden',
+                  display: 'flex', flexDirection: 'column', justifyContent: 'center'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <AlertTriangle size={18} color="#D97706" />
+                    <span style={{ fontSize: 13, fontWeight: 800, color: '#92400E' }}>Perlu Perhatian</span>
+                  </div>
+                  <div style={{ fontSize: 13, color: '#78350F', lineHeight: 1.6, overflow: 'hidden' }}>
+                    {outStock.length > 0 && (
+                      <div style={{ marginBottom: 4 }}>🚫 <b>Habis:</b> {outStock.slice(0, 3).map(p => p.name).join(', ')}{outStock.length > 3 ? ` +${outStock.length - 3} lagi` : ''}</div>
+                    )}
+                    {lowStock.length > 0 && (
+                      <div>⚠️ <b>Menipis:</b> {lowStock.slice(0, 3).map(p => `${p.name} (${p.stock})`).join(', ')}{lowStock.length > 3 ? ` +${lowStock.length - 3} lagi` : ''}</div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div style={{
+                  background: '#F0FDF4', border: '1px solid #86EFAC',
+                  borderRadius: 14, padding: '20px 16px', flex: 1,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexDirection: 'column', gap: 8
+                }}>
+                  <div style={{ fontSize: 36 }}>✅</div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: '#166534', textAlign: 'center' }}>Semua stok aman</div>
+                </div>
+              )}
+            </>
           )}
 
         </div>
