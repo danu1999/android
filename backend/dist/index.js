@@ -568,7 +568,7 @@ app.delete('/api/employees/:id', requireOwner, (req, res) => __awaiter(void 0, v
 // ─────────────────────────────────────────────────────────────
 // Activity Logs
 // ─────────────────────────────────────────────────────────────
-app.get('/api/activity-logs', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+app.get('/api/activity-logs', requireOwner, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const logs = yield prisma.activityLog.findMany({
             include: {

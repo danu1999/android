@@ -23,7 +23,7 @@ import './index.css';
 const ROLE_ACCESS = {
   KASIR:    ['/', '/katalog'],
   CASHIER:  ['/', '/katalog'],
-  ADMIN:    ['/', '/katalog', '/dashboard', '/keuangan', '/pelanggan', '/karyawan', '/pesanan', '/supplier', '/activity-logs'],
+  ADMIN:    ['/', '/katalog', '/dashboard', '/keuangan', '/pelanggan', '/karyawan', '/pesanan', '/supplier'],
   OWNER:    ['/', '/katalog', '/dashboard', '/keuangan', '/pelanggan', '/karyawan', '/pesanan', '/supplier', '/activity-logs'],
 };
 

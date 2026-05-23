@@ -649,7 +649,7 @@ app.delete('/api/employees/:id', requireOwner, async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 // Activity Logs
 // ─────────────────────────────────────────────────────────────
-app.get('/api/activity-logs', requireAdmin, async (req, res) => {
+app.get('/api/activity-logs', requireOwner, async (req, res) => {
   try {
     const logs = await prisma.activityLog.findMany({
       include: {
