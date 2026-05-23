@@ -166,8 +166,12 @@ const Navigation = ({ user, onLogout, appMode, setAppMode }) => {
       <div className="mobile-header glass-panel md-hidden" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div className="brand" style={{ fontSize: '1.1rem' }}>POSBah</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '0.75rem', color: '#1F2937', fontWeight: 600 }}>{user?.name}</span>
-          <RoleBadge />
+          {user?.name?.toLowerCase() !== 'muizz' && (
+            <>
+              <span style={{ fontSize: '0.75rem', color: '#1F2937', fontWeight: 600 }}>{user?.name}</span>
+              <RoleBadge />
+            </>
+          )}
           <button onClick={onLogout} title="Keluar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280', padding: '4px' }}>
             <LogOut size={16} />
           </button>
@@ -198,8 +202,12 @@ const Navigation = ({ user, onLogout, appMode, setAppMode }) => {
               </select>
             </div>
           )}
-          <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1F2937', marginBottom: '4px' }}>{user?.name}</div>
-          <RoleBadge />
+          {user?.name?.toLowerCase() !== 'muizz' && (
+            <>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1F2937', marginBottom: '4px' }}>{user?.name}</div>
+              <RoleBadge />
+            </>
+          )}
           <button onClick={onLogout} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', padding: '8px 0 0', fontWeight: 600 }}>
             <LogOut size={14} /> Keluar
           </button>
