@@ -660,8 +660,29 @@ app.delete('/api/finances/:id', requireAdmin, async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 app.get('/api/reports', requireAdmin, async (req, res) => {
   try {
+    const { from, to } = req.query;
+
+    const salesWhere: any = { type: 'SALES', status: { not: 'CANCELLED' } };
+    const expenseWhere: any = { type: 'EXPENSE' };
+    const receivableWhere: any = { type: 'RECEIVABLE', status: 'PENDING' };
+    const payableWhere: any = { type: 'PAYABLE', status: 'PENDING' };
+
+    if (from || to) {
+      const dateFilter: any = {};
+      if (from) dateFilter.gte = new Date(from as string);
+      if (to) {
+        const toDate = new Date(to as string);
+        toDate.setHours(23, 59, 59, 999);
+        dateFilter.lte = toDate;
+      }
+      salesWhere.date = dateFilter;
+      expenseWhere.date = dateFilter;
+      receivableWhere.date = dateFilter;
+      payableWhere.date = dateFilter;
+    }
+
     const totalSales = await prisma.transaction.aggregate({
-      where: { type: 'SALES', status: { not: 'CANCELLED' } },
+      where: salesWhere,
       _sum: { total: true }
     });
 
@@ -681,15 +702,15 @@ app.get('/api/reports', requireAdmin, async (req, res) => {
     });
 
     const expenses = await prisma.finance.aggregate({
-      where: { type: 'EXPENSE' },
+      where: expenseWhere,
       _sum: { amount: true }
     });
     const receivables = await prisma.finance.aggregate({
-      where: { type: 'RECEIVABLE', status: 'PENDING' },
+      where: receivableWhere,
       _sum: { amount: true }
     });
     const payables = await prisma.finance.aggregate({
-      where: { type: 'PAYABLE', status: 'PENDING' },
+      where: payableWhere,
       _sum: { amount: true }
     });
     res.json({

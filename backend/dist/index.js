@@ -610,8 +610,27 @@ app.delete('/api/finances/:id', requireAdmin, (req, res) => __awaiter(void 0, vo
 // ─────────────────────────────────────────────────────────────
 app.get('/api/reports', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        const { from, to } = req.query;
+        const salesWhere = { type: 'SALES', status: { not: 'CANCELLED' } };
+        const expenseWhere = { type: 'EXPENSE' };
+        const receivableWhere = { type: 'RECEIVABLE', status: 'PENDING' };
+        const payableWhere = { type: 'PAYABLE', status: 'PENDING' };
+        if (from || to) {
+            const dateFilter = {};
+            if (from)
+                dateFilter.gte = new Date(from);
+            if (to) {
+                const toDate = new Date(to);
+                toDate.setHours(23, 59, 59, 999);
+                dateFilter.lte = toDate;
+            }
+            salesWhere.date = dateFilter;
+            expenseWhere.date = dateFilter;
+            receivableWhere.date = dateFilter;
+            payableWhere.date = dateFilter;
+        }
         const totalSales = yield prisma.transaction.aggregate({
-            where: { type: 'SALES', status: { not: 'CANCELLED' } },
+            where: salesWhere,
             _sum: { total: true }
         });
         // Hitung total penjualan hari ini (zona waktu GMT+7 Jakarta)
@@ -628,15 +647,15 @@ app.get('/api/reports', requireAdmin, (req, res) => __awaiter(void 0, void 0, vo
             _sum: { total: true }
         });
         const expenses = yield prisma.finance.aggregate({
-            where: { type: 'EXPENSE' },
+            where: expenseWhere,
             _sum: { amount: true }
         });
         const receivables = yield prisma.finance.aggregate({
-            where: { type: 'RECEIVABLE', status: 'PENDING' },
+            where: receivableWhere,
             _sum: { amount: true }
         });
         const payables = yield prisma.finance.aggregate({
-            where: { type: 'PAYABLE', status: 'PENDING' },
+            where: payableWhere,
             _sum: { amount: true }
         });
         res.json({

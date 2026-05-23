@@ -28,6 +28,24 @@ export default function Keuangan() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
+  const filteredFinances = finances.filter(item => {
+    if (!item.date) return true;
+    const itemDate = new Date(item.date);
+    const checkDate = new Date(itemDate.getFullYear(), itemDate.getMonth(), itemDate.getDate()).getTime();
+    
+    if (dateFrom) {
+      const fromDate = new Date(dateFrom);
+      const checkFrom = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate()).getTime();
+      if (checkDate < checkFrom) return false;
+    }
+    if (dateTo) {
+      const toDate = new Date(dateTo);
+      const checkTo = new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate()).getTime();
+      if (checkDate > checkTo) return false;
+    }
+    return true;
+  });
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({ id: null, type: 'EXPENSE', amount: '', description: '', date: '', status: 'PENDING' });
 
@@ -42,7 +60,7 @@ export default function Keuangan() {
       }
       fetchData();
     }
-  }, [activeTab, isPremium]);
+  }, [activeTab, isPremium, dateFrom, dateTo]);
 
   const fetchData = async () => {
     if (isDemo) {
@@ -93,7 +111,7 @@ export default function Keuangan() {
 
     try {
       if (activeTab === 'REKAP') {
-        const res = await api.get('/reports');
+        const res = await api.get('/reports', { params: { from: dateFrom, to: dateTo } });
         setReports(res.data);
       } else if (activeTab === 'SALES') {
         const res = await api.get('/transactions');
@@ -114,7 +132,7 @@ export default function Keuangan() {
   const fetchReports = async () => {
     if (isDemo) return;
     try {
-      const res = await api.get('/reports');
+      const res = await api.get('/reports', { params: { from: dateFrom, to: dateTo } });
       setReports(res.data);
     } catch (err) {
       console.error('Failed to refresh reports', err);
@@ -417,22 +435,8 @@ export default function Keuangan() {
   const renderRekap = () => {
     if (!reports) return <p>Loading...</p>;
 
-    // Filter transaksi berdasarkan tanggal jika filter aktif
-    const filterInfo = dateFrom || dateTo
-      ? `Periode: ${dateFrom ? new Date(dateFrom).toLocaleDateString('id-ID') : '—'} s/d ${dateTo ? new Date(dateTo).toLocaleDateString('id-ID') : 'sekarang'}`
-      : 'Semua waktu';
-
     return (
       <div>
-        {/* Filter Tanggal */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', background: '#F8FAFC', padding: '12px', borderRadius: 14, border: '1px solid #E2E8F0' }}>
-          <span style={{ fontWeight: 700, fontSize: 13, color: '#475569', width: '100%' }}>📅 Filter Periode</span>
-          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ flex: 1, minWidth: 130, padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 10, fontSize: 13 }} />
-          <span style={{ alignSelf: 'center', color: '#94A3B8' }}>–</span>
-          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ flex: 1, minWidth: 130, padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 10, fontSize: 13 }} />
-          {(dateFrom || dateTo) && <button onClick={() => { setDateFrom(''); setDateTo(''); }} style={{ padding: '8px 12px', background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 12 }}>✕ Reset</button>}
-        </div>
-
         {/* Stat cards 2×2 */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
           {[
@@ -464,8 +468,8 @@ export default function Keuangan() {
           </tr>
         </thead>
         <tbody>
-          {finances.length > 0 ? (
-            finances.map((item) => (
+          {filteredFinances.length > 0 ? (
+            filteredFinances.map((item) => (
               <tr
                 key={item.id}
                 onClick={() => activeTab !== 'SALES' && canEdit(item) && handleOpenModal(item)}
@@ -550,7 +554,7 @@ export default function Keuangan() {
       csvContent += "Piutang Tertunda," + reports.pendingReceivables + "\n";
     } else if (activeTab === 'SALES') {
       csvContent += "Tanggal,No Struk,Tipe,Total (Rp),Diskon (Rp),Metode Bayar\n";
-      finances.forEach(item => {
+      filteredFinances.forEach(item => {
         const row = [
           new Date(item.date).toLocaleDateString('id-ID'),
           item.receiptNumber || `#${item.id}`,
@@ -563,7 +567,7 @@ export default function Keuangan() {
       });
     } else {
       csvContent += "Tanggal,Deskripsi,Jumlah (Rp),Status\n";
-      finances.forEach(item => {
+      filteredFinances.forEach(item => {
         const row = [
           new Date(item.date).toLocaleDateString('id-ID'),
           `"${item.description || ''}"`,
@@ -624,7 +628,7 @@ export default function Keuangan() {
             </tr>
           </thead>
           <tbody>
-            ${finances.map(item => `
+            ${filteredFinances.map(item => `
               <tr>
                 <td>${new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
                 <td>${item.receiptNumber || '#' + item.id}</td>
@@ -642,7 +646,7 @@ export default function Keuangan() {
             <tr><th>Tanggal</th><th>Deskripsi</th><th>Jumlah (Rp)</th><th>Status</th></tr>
           </thead>
           <tbody>
-            ${finances.map(item => `
+            ${filteredFinances.map(item => `
               <tr>
                 <td>${new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
                 <td>${item.description || '-'}</td>
@@ -732,6 +736,17 @@ export default function Keuangan() {
       )}
 
       {renderTabs()}
+
+      {/* Filter Tanggal (Berlaku untuk semua tab kecuali MARGIN) */}
+      {activeTab !== 'MARGIN' && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', background: '#F8FAFC', padding: '12px', borderRadius: 14, border: '1px solid #E2E8F0' }}>
+          <span style={{ fontWeight: 700, fontSize: 13, color: '#475569', width: '100%' }}>📅 Filter Periode</span>
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ flex: 1, minWidth: 130, padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 10, fontSize: 13 }} />
+          <span style={{ alignSelf: 'center', color: '#94A3B8' }}>–</span>
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ flex: 1, minWidth: 130, padding: '8px 10px', border: '1px solid #E2E8F0', borderRadius: 10, fontSize: 13 }} />
+          {(dateFrom || dateTo) && <button onClick={() => { setDateFrom(''); setDateTo(''); }} style={{ padding: '8px 12px', background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: 10, fontWeight: 700, cursor: 'pointer', fontSize: 12 }}>✕ Reset</button>}
+        </div>
+      )}
 
       {isLockedTab
         ? renderPaywall()
