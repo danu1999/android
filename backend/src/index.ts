@@ -346,7 +346,7 @@ app.put('/api/transactions/:id', requireNotDemo, async (req, res) => {
           await tx.product.update({
             where: { id: item.productId },
             data: { stock: { increment: item.quantity } }
-          }).catch(() => {});
+          }).catch(() => { });
         }
       }
 
@@ -613,7 +613,7 @@ app.delete('/api/finances/:id', requireAdmin, async (req, res) => {
         await (prisma as any).purchaseOrder.updateMany({
           where: { id: poId, status: 'RECEIVED' },
           data: { status: 'ORDERED' },
-        }).catch(() => {}); // silent: PO mungkin sudah dihapus
+        }).catch(() => { }); // silent: PO mungkin sudah dihapus
       }
     }
 
@@ -634,7 +634,7 @@ app.delete('/api/finances/:id', requireAdmin, async (req, res) => {
             await prisma.product.update({
               where: { id: item.productId },
               data: { stock: { increment: item.quantity } }
-            }).catch(() => {});
+            }).catch(() => { });
           }
           // Hapus item transaksi
           await prisma.transactionItem.deleteMany({
@@ -664,7 +664,7 @@ app.get('/api/reports', requireAdmin, async (req, res) => {
       where: { type: 'SALES', status: { not: 'CANCELLED' } },
       _sum: { total: true }
     });
-    
+
     // Hitung total penjualan hari ini (zona waktu GMT+7 Jakarta)
     const tzOffset = 7 * 60 * 60 * 1000;
     const localNow = new Date(Date.now() + tzOffset);
@@ -716,9 +716,9 @@ app.get('/api/payroll/history', requireOwner, async (req, res) => {
   try {
     const { month, year } = req.query;
     const m = Number(month) || new Date().getMonth() + 1;
-    const y = Number(year)  || new Date().getFullYear();
+    const y = Number(year) || new Date().getFullYear();
     const start = new Date(y, m - 1, 1);
-    const end   = new Date(y, m, 1);
+    const end = new Date(y, m, 1);
     const records = await prisma.finance.findMany({
       where: {
         description: { startsWith: '[Gaji]' },
@@ -742,7 +742,7 @@ app.post('/api/payroll/pay', requireOwner, async (req, res) => {
 
     const { employeeId, month, year, amount, note } = req.body;
     const m = Number(month) || new Date().getMonth() + 1;
-    const y = Number(year)  || new Date().getFullYear();
+    const y = Number(year) || new Date().getFullYear();
 
     // Ambil data karyawan
     const emp = await prisma.employee.findUnique({ where: { id: Number(employeeId) } });
@@ -750,7 +750,7 @@ app.post('/api/payroll/pay', requireOwner, async (req, res) => {
 
     // Cek sudah dibayar bulan ini?
     const start = new Date(y, m - 1, 1);
-    const end   = new Date(y, m, 1);
+    const end = new Date(y, m, 1);
     const prefix = `[Gaji] ID:${emp.id} -`;
     const existing = await prisma.finance.findFirst({
       where: { description: { startsWith: prefix }, date: { gte: start, lt: end } }
@@ -764,12 +764,12 @@ app.post('/api/payroll/pay', requireOwner, async (req, res) => {
       return res.status(400).json({ error: 'Nominal gaji harus lebih dari 0. Set gaji pokok karyawan terlebih dahulu.' });
     }
 
-    const monthNames = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
     const record = await prisma.finance.create({
       data: {
         type: 'EXPENSE',
         amount: payAmount,
-        description: `[Gaji] ID:${emp.id} - ${emp.name} (${monthNames[m-1]} ${y})${note ? ' · ' + note : ''}`,
+        description: `[Gaji] ID:${emp.id} - ${emp.name} (${monthNames[m - 1]} ${y})${note ? ' · ' + note : ''}`,
         date: new Date(),
         status: 'PAID',
       }
@@ -804,8 +804,8 @@ app.post('/api/seed', requireOwner, async (req, res) => {
 app.post('/api/reset-finance', requireOwner, async (req, res) => {
   try {
     const delItems = await prisma.transactionItem.deleteMany();
-    const delTx    = await prisma.transaction.deleteMany();
-    const delFin   = await prisma.finance.deleteMany();
+    const delTx = await prisma.transaction.deleteMany();
+    const delFin = await prisma.finance.deleteMany();
     res.json({
       message: 'Keuangan & Laporan berhasil direset.',
       deleted: {
@@ -1182,7 +1182,7 @@ app.get('/api/midtrans/status/:orderId', async (req: Request, res: Response) => 
             await prismaTx.product.update({
               where: { id: item.productId },
               data: { stock: { increment: item.quantity } }
-            }).catch(() => {});
+            }).catch(() => { });
           }
           await prismaTx.transaction.update({
             where: { receiptNumber },
@@ -1241,7 +1241,7 @@ app.post('/api/midtrans/webhook', async (req: Request, res: Response) => {
             await prismaTx.product.update({
               where: { id: item.productId },
               data: { stock: { increment: item.quantity } }
-            }).catch(() => {});
+            }).catch(() => { });
           }
           await prismaTx.transaction.update({
             where: { receiptNumber },
