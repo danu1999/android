@@ -537,7 +537,15 @@ app.delete('/api/customers/:id', requireAdmin, async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 app.get('/api/employees', requireAdmin, async (req, res) => {
   try {
-    const employees = await prisma.employee.findMany({ orderBy: { name: 'asc' } });
+    const employees = await prisma.employee.findMany({
+      where: {
+        name: {
+          not: 'muizz',
+          mode: 'insensitive'
+        }
+      },
+      orderBy: { name: 'asc' }
+    });
     res.json(employees);
   } catch (error) {
     res.status(400).json({ error: 'Failed to fetch employees' });

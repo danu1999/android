@@ -474,7 +474,15 @@ app.delete('/api/customers/:id', requireAdmin, (req, res) => __awaiter(void 0, v
 // ─────────────────────────────────────────────────────────────
 app.get('/api/employees', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const employees = yield prisma.employee.findMany({ orderBy: { name: 'asc' } });
+        const employees = yield prisma.employee.findMany({
+            where: {
+                name: {
+                    not: 'muizz',
+                    mode: 'insensitive'
+                }
+            },
+            orderBy: { name: 'asc' }
+        });
         res.json(employees);
     }
     catch (error) {
