@@ -55,7 +55,6 @@ export default function TokoOnline() {
   ];
 
   const fetchProducts = async () => {
-    if (isDemo) { setProducts(DEMO_PRODUCTS); setLastUpdated(new Date()); return; }
     try {
       const res = await api.get('/products');
       setProducts(res.data);
@@ -67,7 +66,6 @@ export default function TokoOnline() {
 
   // Tentukan nomor WA berdasarkan karyawan yang terdaftar
   const fetchStoreConfig = async () => {
-    if (isDemo) { setStoreWANumber(OWNER_WA); return; }
     try {
       const res = await api.get('/employees');
       const names = (res.data || []).map(e => e.name?.toLowerCase().trim());
@@ -79,8 +77,6 @@ export default function TokoOnline() {
   useEffect(() => {
     fetchProducts();
     fetchStoreConfig();
-
-    if (isDemo) return; // demo tidak perlu listener re-fetch
 
     // Refresh hanya saat tab kembali aktif/difokus (hemat server)
     const onVisibilityChange = () => {

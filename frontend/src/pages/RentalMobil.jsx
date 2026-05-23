@@ -7,7 +7,7 @@ import api from '../api';
 import { useDemoBlock } from '../AuthContext';
 
 export default function RentalMobil() {
-  const { isDemo } = useDemoBlock();
+  const { showDemoBlock, isDemo } = useDemoBlock();
   const [activeTab, setActiveTab] = useState('POS'); // 'POS', 'CARS', 'HISTORY'
   const [cars, setCars] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -77,6 +77,10 @@ export default function RentalMobil() {
 
   const handleSaveCar = async (e) => {
     e.preventDefault();
+    if (isDemo) {
+      showDemoBlock('Menyimpan data mobil hanya tersedia di akun berbayar.');
+      return;
+    }
     try {
       if (carFormData.id) {
         await api.put(`/cars/${carFormData.id}`, carFormData);
@@ -92,6 +96,10 @@ export default function RentalMobil() {
   };
 
   const handleDeleteCar = async (id) => {
+    if (isDemo) {
+      showDemoBlock('Menghapus data mobil hanya tersedia di akun berbayar.');
+      return;
+    }
     if (window.confirm('Yakin ingin menghapus mobil ini?')) {
       try {
         await api.delete(`/cars/${id}`);
@@ -124,6 +132,10 @@ export default function RentalMobil() {
   // Rental Checkout
   const handleRentalCheckout = async (e) => {
     e.preventDefault();
+    if (isDemo) {
+      showDemoBlock('Transaksi sewa mobil hanya tersedia di akun berbayar.');
+      return;
+    }
     if (!selectedCarId) return alert('Pilih mobil terlebih dahulu!');
     let custName = newCustomerName;
     if (selectedCustomerId) {
@@ -183,6 +195,10 @@ export default function RentalMobil() {
 
   const handleProcessReturn = async (e) => {
     e.preventDefault();
+    if (isDemo) {
+      showDemoBlock('Pengembalian mobil hanya tersedia di akun berbayar.');
+      return;
+    }
     setLoading(true);
     try {
       await api.post(`/rentals/${selectedRental.id}/return`, {

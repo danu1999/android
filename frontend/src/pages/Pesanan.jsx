@@ -29,7 +29,6 @@ export default function Pesanan() {
   const [newItem, setNewItem] = useState({ productId: '', quantity: 1, price: '' });
 
   const fetchOrders = async () => {
-    if (isDemo) { setOrders(DEMO_ORDERS); return; }
     try {
       setLoading(true);
       const r = await api.get('/pre-orders');

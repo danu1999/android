@@ -63,51 +63,6 @@ export default function Keuangan() {
   }, [activeTab, isPremium, dateFrom, dateTo]);
 
   const fetchData = async () => {
-    if (isDemo) {
-      if (activeTab === 'REKAP') {
-        setReports({
-          totalSales: 45280000,
-          totalExpenses: 12400000,
-          netIncome: 32880000,
-          pendingReceivables: 1850000
-        });
-      } else if (activeTab === 'SALES') {
-        setFinances([
-          { id: 'f101', date: '2026-05-20T10:15:00.000Z', customerName: 'Budi Santoso (Demo)', total: 155000, paymentMethod: 'QRIS', status: 'COMPLETED' },
-          { id: 'f102', date: '2026-05-20T09:40:00.000Z', customerName: 'Siti Rahma (Demo)', total: 75000, paymentMethod: 'CASH', status: 'COMPLETED' },
-          { id: 'f103', date: '2026-05-19T17:20:00.000Z', customerName: 'Andi Wijaya (Demo)', total: 320000, paymentMethod: 'CASH', status: 'COMPLETED' },
-          { id: 'f104', date: '2026-05-19T14:10:00.000Z', customerName: 'Dewi Lestari (Demo)', total: 110000, paymentMethod: 'QRIS', status: 'COMPLETED' },
-          { id: 'f105', date: '2026-05-18T11:05:00.000Z', customerName: 'Rian Hidayat (Demo)', total: 45000, paymentMethod: 'CASH', status: 'COMPLETED' },
-        ]);
-      } else if (activeTab === 'MARGIN') {
-        setProducts([
-          { id: 'p301', name: 'Pisang Keju Cokelat', price: 15000, costPrice: 9000, stock: 120, variantEnabled: false, variants: null },
-          { id: 'p302', name: 'Pisang Keju Stroberi', price: 15000, costPrice: 9500, stock: 85, variantEnabled: false, variants: null },
-          { id: 'p303', name: 'Pisang Keju Premium', price: 20000, costPrice: 11000, stock: 50, variantEnabled: true, variants: JSON.stringify([{ name: 'Keju Melimpah', price: 25000, costPrice: 13000, stock: 30 }, { name: 'Milo Almond', price: 28000, costPrice: 15000, stock: 20 }]) },
-          { id: 'p304', name: 'Jus Alpukat', price: 18000, costPrice: 10000, stock: 60, variantEnabled: false, variants: null },
-          { id: 'p305', name: 'Jus Mangga', price: 15000, costPrice: 8000, stock: 75, variantEnabled: false, variants: null },
-          { id: 'p306', name: 'Es Teh Manis', price: 8000, costPrice: 3000, stock: 200, variantEnabled: false, variants: null },
-        ]);
-      } else if (activeTab === 'EXPENSE') {
-        setFinances([
-          { id: 'f201', date: '2026-05-18T08:00:00.000Z', description: 'Belanja Pisang & Bahan Baku Keju (Demo)', amount: 850000, type: 'EXPENSE', status: 'PAID' },
-          { id: 'f202', date: '2026-05-15T09:30:00.000Z', description: 'Beli Cup & Plastik Kemasan (Demo)', amount: 350000, type: 'EXPENSE', status: 'PAID' },
-          { id: 'f203', date: '2026-05-02T10:00:00.000Z', description: 'Bayar Token Listrik Outlet (Demo)', amount: 200000, type: 'EXPENSE', status: 'PAID' },
-          { id: 'f204', date: '2026-05-01T17:00:00.000Z', description: 'Uang Keamanan & Kebersihan (Demo)', amount: 50000, type: 'EXPENSE', status: 'PAID' },
-        ]);
-      } else if (activeTab === 'PAYABLE') {
-        setFinances([
-          { id: 'f401', date: '2026-05-10T12:00:00.000Z', description: 'Hutang Agen Pisang Pak Slamet (Demo)', amount: 1500000, type: 'PAYABLE', status: 'PENDING' },
-          { id: 'f402', date: '2026-05-05T14:30:00.000Z', description: 'Sewa Ruko Sisa Bulan Depan (Demo)', amount: 3000000, type: 'PAYABLE', status: 'PENDING' },
-        ]);
-      } else if (activeTab === 'RECEIVABLE') {
-        setFinances([
-          { id: 'f501', date: '2026-05-18T16:00:00.000Z', description: 'Piutang Catering Ibu Ratna (Demo)', amount: 1200000, type: 'RECEIVABLE', status: 'PENDING' },
-          { id: 'f502', date: '2026-05-17T11:00:00.000Z', description: 'Titipan Modal Koperasi (Demo)', amount: 650000, type: 'RECEIVABLE', status: 'PENDING' },
-        ]);
-      }
-      return;
-    }
 
     try {
       if (activeTab === 'REKAP') {
@@ -130,7 +85,6 @@ export default function Keuangan() {
 
   // Selalu refresh rekap setelah mutasi — agar kartu ringkasan sinkron
   const fetchReports = async () => {
-    if (isDemo) return;
     try {
       const res = await api.get('/reports', { params: { from: dateFrom, to: dateTo } });
       setReports(res.data);

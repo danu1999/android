@@ -46,7 +46,6 @@ export default function Katalog() {
   ];
 
   const fetchProducts = async () => {
-    if (isDemo) { setProducts(DEMO_PRODUCTS); return; }
     try {
       const res = await api.get('/products');
       setProducts(res.data);

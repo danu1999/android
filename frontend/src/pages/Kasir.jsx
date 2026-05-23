@@ -419,7 +419,6 @@ export default function Kasir() {
   ];
 
   const fetchProducts = async () => {
-    if (isDemo) { setProducts(DEMO_PRODUCTS); return; }
     try { const r = await api.get('/products'); setProducts(r.data); } catch { }
   };
 
@@ -570,6 +569,10 @@ export default function Kasir() {
   };
 
   const payQueue = async (id, method) => {
+    if (isDemo) {
+      showDemoBlock('Memproses pembayaran antrian hanya tersedia di akun berbayar.');
+      return;
+    }
     try {
       if (method === 'HUTANG') {
         if (!debtDueDate) { alert('Silakan pilih tanggal jatuh tempo!'); return; }

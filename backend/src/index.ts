@@ -47,9 +47,16 @@ const requireAdmin = async (req: Request, res: Response, next: NextFunction) => 
   const role = req.headers['x-employee-role'] as string;
   const employeeId = req.headers['x-employee-id'] as string;
 
-  // Blokir demo (id=0) atau request tanpa ID
-  if (!employeeId || employeeId === '0') {
-    return res.status(403).json({ error: 'Demo mode tidak mengizinkan operasi ini' });
+  if (!employeeId) {
+    return res.status(403).json({ error: 'Akses ditolak. ID karyawan diperlukan.' });
+  }
+
+  // Jika akun demo (id=0)
+  if (employeeId === '0') {
+    if (req.method !== 'GET') {
+      return res.status(403).json({ error: 'Demo mode tidak mengizinkan operasi ini' });
+    }
+    return next();
   }
 
   if (!hasRole(role, 'ADMIN')) {
@@ -63,9 +70,16 @@ const requireOwner = async (req: Request, res: Response, next: NextFunction) => 
   const role = req.headers['x-employee-role'] as string;
   const employeeId = req.headers['x-employee-id'] as string;
 
-  // Blokir demo (id=0) atau request tanpa ID
-  if (!employeeId || employeeId === '0') {
-    return res.status(403).json({ error: 'Demo mode tidak mengizinkan operasi ini' });
+  if (!employeeId) {
+    return res.status(403).json({ error: 'Akses ditolak. ID karyawan diperlukan.' });
+  }
+
+  // Jika akun demo (id=0)
+  if (employeeId === '0') {
+    if (req.method !== 'GET') {
+      return res.status(403).json({ error: 'Demo mode tidak mengizinkan operasi ini' });
+    }
+    return next();
   }
 
   if (!hasRole(role, 'OWNER')) {
@@ -1174,7 +1188,7 @@ app.get('/api/midtrans/config', (req: Request, res: Response) => {
 });
 
 // Generate Midtrans QRIS
-app.post('/api/midtrans/charge', async (req: Request, res: Response) => {
+app.post('/api/midtrans/charge', requireNotDemo, async (req: Request, res: Response) => {
   try {
     const { transactionId } = req.body;
     const tx = await prisma.transaction.findUnique({
@@ -1230,7 +1244,7 @@ app.post('/api/midtrans/charge', async (req: Request, res: Response) => {
 });
 
 // Generate Midtrans Snap Token
-app.post('/api/midtrans/snap-token', async (req: Request, res: Response) => {
+app.post('/api/midtrans/snap-token', requireNotDemo, async (req: Request, res: Response) => {
   try {
     const { transactionId } = req.body;
     const tx = await prisma.transaction.findUnique({

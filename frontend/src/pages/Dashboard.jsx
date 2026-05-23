@@ -41,12 +41,6 @@ export default function Dashboard({ appMode }) {
 
   useEffect(() => {
     const load = async () => {
-      if (isDemo) {
-        setReport(DEMO_REPORT);
-        setProducts(DEMO_PRODUCTS);
-        setLoading(false);
-        return;
-      }
       try {
         if (appMode === 'RENTAL') {
           const [rRes, cRes, rentRes] = await Promise.all([

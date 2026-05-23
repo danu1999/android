@@ -57,9 +57,15 @@ const hasRole = (userRole, required) => {
 const requireAdmin = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     const role = req.headers['x-employee-role'];
     const employeeId = req.headers['x-employee-id'];
-    // Blokir demo (id=0) atau request tanpa ID
-    if (!employeeId || employeeId === '0') {
-        return res.status(403).json({ error: 'Demo mode tidak mengizinkan operasi ini' });
+    if (!employeeId) {
+        return res.status(403).json({ error: 'Akses ditolak. ID karyawan diperlukan.' });
+    }
+    // Jika akun demo (id=0)
+    if (employeeId === '0') {
+        if (req.method !== 'GET') {
+            return res.status(403).json({ error: 'Demo mode tidak mengizinkan operasi ini' });
+        }
+        return next();
     }
     if (!hasRole(role, 'ADMIN')) {
         return res.status(403).json({ error: 'Akses ditolak. Minimal role ADMIN diperlukan.' });
@@ -70,9 +76,15 @@ const requireAdmin = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
 const requireOwner = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     const role = req.headers['x-employee-role'];
     const employeeId = req.headers['x-employee-id'];
-    // Blokir demo (id=0) atau request tanpa ID
-    if (!employeeId || employeeId === '0') {
-        return res.status(403).json({ error: 'Demo mode tidak mengizinkan operasi ini' });
+    if (!employeeId) {
+        return res.status(403).json({ error: 'Akses ditolak. ID karyawan diperlukan.' });
+    }
+    // Jika akun demo (id=0)
+    if (employeeId === '0') {
+        if (req.method !== 'GET') {
+            return res.status(403).json({ error: 'Demo mode tidak mengizinkan operasi ini' });
+        }
+        return next();
     }
     if (!hasRole(role, 'OWNER')) {
         return res.status(403).json({ error: 'Akses ditolak. Hanya OWNER yang dapat melakukan ini.' });
@@ -1060,7 +1072,7 @@ app.get('/api/midtrans/config', (req, res) => {
     });
 });
 // Generate Midtrans QRIS
-app.post('/api/midtrans/charge', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+app.post('/api/midtrans/charge', requireNotDemo, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     try {
         const { transactionId } = req.body;
@@ -1110,7 +1122,7 @@ app.post('/api/midtrans/charge', (req, res) => __awaiter(void 0, void 0, void 0,
     }
 }));
 // Generate Midtrans Snap Token
-app.post('/api/midtrans/snap-token', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+app.post('/api/midtrans/snap-token', requireNotDemo, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { transactionId } = req.body;
         const tx = yield prisma.transaction.findUnique({

@@ -35,12 +35,10 @@ export default function Supplier() {
   const [newPOItem, setNewPOItem] = useState({ productId: '', quantity: 1, costPrice: '' });
 
   const fetchSuppliers = async () => {
-    if (isDemo) { setSuppliers(DEMO_SUPPLIERS); return; }
     try { const r = await api.get('/suppliers'); setSuppliers(r.data); } catch { }
   };
 
   const fetchPOs = async () => {
-    if (isDemo) { setPos(DEMO_POS); return; }
     try { const r = await api.get('/purchase-orders'); setPos(r.data); } catch { }
   };
 
