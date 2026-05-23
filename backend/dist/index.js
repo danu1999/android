@@ -611,7 +611,20 @@ app.delete('/api/finances/:id', requireAdmin, (req, res) => __awaiter(void 0, vo
 app.get('/api/reports', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const totalSales = yield prisma.transaction.aggregate({
-            where: { type: 'SALES' },
+            where: { type: 'SALES', status: { not: 'CANCELLED' } },
+            _sum: { total: true }
+        });
+        // Hitung total penjualan hari ini (zona waktu GMT+7 Jakarta)
+        const tzOffset = 7 * 60 * 60 * 1000;
+        const localNow = new Date(Date.now() + tzOffset);
+        const startOfToday = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate(), 0, 0, 0, 0) - tzOffset);
+        const endOfToday = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate(), 23, 59, 59, 999) - tzOffset);
+        const todaySales = yield prisma.transaction.aggregate({
+            where: {
+                type: 'SALES',
+                status: { not: 'CANCELLED' },
+                date: { gte: startOfToday, lte: endOfToday }
+            },
             _sum: { total: true }
         });
         const expenses = yield prisma.finance.aggregate({
@@ -628,6 +641,7 @@ app.get('/api/reports', requireAdmin, (req, res) => __awaiter(void 0, void 0, vo
         });
         res.json({
             totalSales: totalSales._sum.total || 0,
+            todaySales: todaySales._sum.total || 0,
             totalExpenses: expenses._sum.amount || 0,
             pendingReceivables: receivables._sum.amount || 0,
             pendingPayables: payables._sum.amount || 0,

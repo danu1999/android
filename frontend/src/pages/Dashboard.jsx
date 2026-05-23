@@ -117,19 +117,39 @@ export default function Dashboard() {
         {isAdmin && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1, minWidth: 0 }}>
 
-            {/* Total Penjualan */}
-            <div style={{
-              background: 'linear-gradient(135deg,#ECFDF5,#D1FAE5)',
-              border: '1px solid #6EE7B7', borderRadius: 14, padding: '12px 16px',
-              display: 'flex', alignItems: 'center', gap: 12, flex: 1
-            }}>
-              <div style={{ background: '#10B981', borderRadius: 12, padding: 10, display: 'flex' }}>
-                <TrendingUp size={20} color="white" />
+            {/* Row 1: Penjualan Hari Ini & Total Penjualan */}
+            <div style={{ display: 'flex', gap: 10, flex: 1 }}>
+              {/* Penjualan Hari Ini */}
+              <div style={{
+                background: 'linear-gradient(135deg,#ECFDF5,#D1FAE5)',
+                border: '1px solid #6EE7B7', borderRadius: 14, padding: '12px 14px',
+                display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0
+              }}>
+                <div style={{ background: '#10B981', borderRadius: 10, padding: 8, display: 'flex', flexShrink: 0 }}>
+                  <TrendingUp size={16} color="white" />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 9, color: '#065F46', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>Hari Ini</div>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: '#065F46', lineHeight: 1.1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {loading ? '—' : `Rp ${fmt(report?.todaySales)}`}
+                  </div>
+                </div>
               </div>
-              <div>
-                <div style={{ fontSize: 10, color: '#065F46', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1 }}>Total Penjualan</div>
-                <div style={{ fontSize: 18, fontWeight: 900, color: '#065F46', lineHeight: 1.1 }}>
-                  {loading ? '—' : `Rp ${fmt(report?.totalSales)}`}
+
+              {/* Total Penjualan */}
+              <div style={{
+                background: 'linear-gradient(135deg,#ECFDF5,#D1FAE5)',
+                border: '1px solid #6EE7B7', borderRadius: 14, padding: '12px 14px',
+                display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0
+              }}>
+                <div style={{ background: '#059669', borderRadius: 10, padding: 8, display: 'flex', flexShrink: 0 }}>
+                  <TrendingUp size={16} color="white" />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 9, color: '#065F46', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>Total Penjualan</div>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: '#065F46', lineHeight: 1.1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {loading ? '—' : `Rp ${fmt(report?.totalSales)}`}
+                  </div>
                 </div>
               </div>
             </div>
@@ -203,30 +223,31 @@ export default function Dashboard() {
           {(lowStock.length > 0 || outStock.length > 0) ? (
             <div style={{
               background: '#FFFBEB', border: '1px solid #FCD34D',
-              borderRadius: 14, padding: '10px 14px', flex: 1, overflow: 'hidden'
+              borderRadius: 14, padding: '16px 18px', flex: 1, overflow: 'hidden',
+              display: 'flex', flexDirection: 'column', justifyContent: 'center'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                <AlertTriangle size={14} color="#D97706" />
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#92400E' }}>Perlu Perhatian</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <AlertTriangle size={18} color="#D97706" />
+                <span style={{ fontSize: 13, fontWeight: 800, color: '#92400E' }}>Perlu Perhatian</span>
               </div>
-              <div style={{ fontSize: 11, color: '#78350F', lineHeight: 1.6, overflow: 'hidden', maxHeight: 80 }}>
+              <div style={{ fontSize: 13, color: '#78350F', lineHeight: 1.6, overflow: 'hidden' }}>
                 {outStock.length > 0 && (
-                  <div>🚫 <b>Habis:</b> {outStock.slice(0, 3).map(p => p.name).join(', ')}{outStock.length > 3 ? ` +${outStock.length - 3} lagi` : ''}</div>
+                  <div style={{ marginBottom: 4 }}>🚫 <b>Habis:</b> {outStock.slice(0, 3).map(p => p.name).join(', ')}{outStock.length > 3 ? ` +${outStock.length - 3} lagi` : ''}</div>
                 )}
                 {lowStock.length > 0 && (
-                  <div>⚠️ <b>Menipis:</b> {lowStock.slice(0, 3).map(p => `${p.name}(${p.stock})`).join(', ')}{lowStock.length > 3 ? ` +${lowStock.length - 3} lagi` : ''}</div>
+                  <div>⚠️ <b>Menipis:</b> {lowStock.slice(0, 3).map(p => `${p.name} (${p.stock})`).join(', ')}{lowStock.length > 3 ? ` +${lowStock.length - 3} lagi` : ''}</div>
                 )}
               </div>
             </div>
           ) : (
             <div style={{
               background: '#F0FDF4', border: '1px solid #86EFAC',
-              borderRadius: 14, padding: '10px 14px', flex: 1,
+              borderRadius: 14, padding: '20px 16px', flex: 1,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              flexDirection: 'column', gap: 4
+              flexDirection: 'column', gap: 8
             }}>
-              <div style={{ fontSize: 22 }}>✅</div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#166534' }}>Semua stok aman</div>
+              <div style={{ fontSize: 36 }}>✅</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: '#166534', textAlign: 'center' }}>Semua stok aman</div>
             </div>
           )}
 
