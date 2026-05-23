@@ -76,15 +76,7 @@ export default function Dashboard() {
   ].filter(m => m.show);
 
   return (
-    <div style={{
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 14,
-      padding: '1rem',
-      boxSizing: 'border-box',
-      overflow: 'hidden',
-    }}>
+    <div className="db-container">
 
       {/* ── Header row ─────────────────────────────────────────── */}
       <div style={{
@@ -111,14 +103,14 @@ export default function Dashboard() {
       </div>
 
       {/* ── Middle: stats + alerts ─────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 14, flex: 1, minHeight: 0 }}>
+      <div className="db-middle">
 
         {/* Stats column */}
         {isAdmin && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1, minWidth: 0 }}>
+          <div className="db-stats-col">
 
             {/* Row 1: Penjualan Hari Ini & Total Penjualan */}
-            <div style={{ display: 'flex', gap: 10, flex: 1 }}>
+            <div className="db-row-1">
               {/* Penjualan Hari Ini */}
               <div style={{
                 background: 'linear-gradient(135deg,#ECFDF5,#D1FAE5)',
@@ -255,11 +247,7 @@ export default function Dashboard() {
       </div>
 
       {/* ── Menu shortcut grid ─────────────────────────────────── */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: `repeat(${menus.length}, 1fr)`,
-        gap: 10, flexShrink: 0,
-      }}>
+      <div className="db-shortcut-grid">
         {menus.map((m, i) => (
           <Link
             key={i}

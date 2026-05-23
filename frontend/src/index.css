@@ -996,6 +996,7 @@ h1 {
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -1132,4 +1133,61 @@ h1 {
   0% { transform: scale(0.9); opacity: 0.6; }
   50% { transform: scale(1.1); opacity: 1; }
   100% { transform: scale(0.9); opacity: 0.6; }
+}
+
+/* Dashboard Responsive Redesign */
+.db-container {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+
+.db-middle {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+@media (min-width: 768px) {
+  .db-middle {
+    flex-direction: row;
+    flex: 1;
+    min-height: 0;
+  }
+}
+
+.db-stats-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+
+.db-row-1 {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+@media (min-width: 480px) {
+  .db-row-1 {
+    flex-direction: row;
+    flex: 1;
+  }
+}
+
+.db-shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+@media (min-width: 600px) {
+  .db-shortcut-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
