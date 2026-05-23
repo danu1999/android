@@ -458,7 +458,7 @@ export default function Keuangan() {
         <thead>
           <tr>
             <th>Tanggal</th>
-            <th>{activeTab === 'SALES' ? 'ID Transaksi / Tipe' : 'Deskripsi'}</th>
+            <th>{activeTab === 'SALES' ? 'Nama Transaksi' : 'Deskripsi'}</th>
             <th>{activeTab === 'SALES' ? 'Total / Diskon' : 'Jumlah (Rp)'}</th>
             {activeTab !== 'EXPENSE' && <th>Status / Info</th>}
           </tr>
@@ -482,7 +482,13 @@ export default function Keuangan() {
                   <>
                     <td>
                       <div className="font-bold">{item.receiptNumber || `#${item.id}`}</div>
-                      <div className="text-xs text-gray-500">{item.type} • {item.items?.length || 0} item</div>
+                      <div className="text-xs text-gray-600" style={{ marginTop: 2, fontStyle: 'italic' }}>
+                        {item.items?.map(it => {
+                          const name = it.product?.name || 'Produk';
+                          const variant = it.variantName ? ` [${it.variantName}]` : '';
+                          return `${name}${variant} (${it.quantity} ${it.product?.unit || 'pcs'})`;
+                        }).join(', ') || 'Tidak ada detail item'}
+                      </div>
                     </td>
                     <td>
                       <div className="font-bold text-gray-800">Rp {Number(item.total || 0).toLocaleString('id-ID')}</div>
