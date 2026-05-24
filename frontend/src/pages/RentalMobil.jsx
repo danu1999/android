@@ -397,7 +397,7 @@ export default function RentalMobil() {
                   <div style={{ marginTop: '8px', border: '1.5px solid #10B981', borderRadius: '12px', padding: '8px', background: '#F0FDF4', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <img src={identityText} alt="Dokumen Preview" style={{ width: '80px', height: '50px', objectFit: 'cover', borderRadius: '6px' }} />
                     <div>
-                      <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#065F46' }}>Dokumen terkonversi ke teks!</div>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#065F46' }}>Sukses upload!</div>
                       <div style={{ fontSize: '0.7rem', color: '#047857' }}>Ukuran data: {Math.round(identityText.length / 1024)} KB</div>
                     </div>
                     <button
