@@ -632,6 +632,8 @@ export default function Kasir() {
     const discRow = dAmt > 0 ? `<tr><td colspan="2">${dLabel}</td><td class="r">-Rp${Number(dAmt).toLocaleString('id-ID')}</td></tr>` : '';
     const subRow = dAmt > 0 ? `<tr><td colspan="2">Subtotal</td><td class="r">Rp${Number(sub).toLocaleString('id-ID')}</td></tr>` : '';
     const paidRow = t.amountPaid > 0 ? `<tr><td colspan="2">Tunai</td><td class="r">Rp${Number(t.amountPaid).toLocaleString('id-ID')}</td></tr><tr><td colspan="2">Kembali</td><td class="r">Rp${Number(t.change || 0).toLocaleString('id-ID')}</td></tr>` : '';
+    const isTargetUser = ['hanafi', 'fed', 'fahri'].includes(user?.name?.toLowerCase().trim());
+    const brandRow = isTargetUser ? '<div class="c" style="font-size:10px;margin-top:6px;opacity:0.7">POSBah</div>' : '';
     return `<html><head><style>${RECEIPT_STYLE(size)}</style></head><body>
       <div class="c b" style="font-size:16px">PISANG KEJU RAMAYANA</div>
       <div class="c">Struk Pembayaran</div><hr>
@@ -640,6 +642,7 @@ export default function Kasir() {
       <table width="100%">${itemsHtml}</table><hr>
       <table width="100%">${subRow}${discRow}<tr><td colspan="2" class="b">TOTAL</td><td class="r b">Rp${Number(t.total).toLocaleString('id-ID')}</td></tr>${paidRow}</table><hr>
       <div class="c">Terima Kasih! 🙏</div>
+      ${brandRow}
       <script>window.print();window.onafterprint=()=>window.close()</script></body></html>`;
   };
 
@@ -766,6 +769,10 @@ export default function Kasir() {
 
       d += CENTER + 'Terima kasih atas pembelian Anda! 🙏' + LINE_FEED;
       d += CENTER + '- POSBAH -' + LINE_FEED;
+      const isTargetUser = ['hanafi', 'fed', 'fahri'].includes(user?.name?.toLowerCase().trim());
+      if (isTargetUser) {
+        d += CENTER + 'POSBah' + LINE_FEED;
+      }
       d += LINE_FEED + LINE_FEED + LINE_FEED;
 
       const rawBytes = encoder.encode(d);
