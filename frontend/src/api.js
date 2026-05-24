@@ -29,7 +29,7 @@ api.interceptors.request.use((config) => {
 // ─────────────────────────────────────────────────────────────
 
 const initDemoData = () => {
-  const DEMO_VERSION_KEY = 'posbah_demo_version_v3';
+  const DEMO_VERSION_KEY = 'posbah_demo_version_v4';
   if (localStorage.getItem(DEMO_VERSION_KEY) !== 'true') {
     // Clear all demo-related localStorage entries to force fresh initialization
     for (let i = localStorage.length - 1; i >= 0; i--) {
@@ -71,6 +71,11 @@ const initDemoData = () => {
         { id: 808, name: 'Hyundai Stargazer Prime', plateNumber: 'D 999 HND', type: 'MPV', pricePerDay: 400000, status: 'AVAILABLE' },
         { id: 809, name: 'Toyota Fortuner GR Sport', plateNumber: 'D 777 FTR', type: 'SUV', pricePerDay: 850000, status: 'AVAILABLE' },
         { id: 810, name: 'Honda HR-V SE', plateNumber: 'D 3020 HRV', type: 'Crossover', pricePerDay: 450000, status: 'AVAILABLE' },
+        { id: 811, name: 'Toyota Alphard VIP', plateNumber: 'D 1 VIP', type: 'Luxury MPV', pricePerDay: 1800000, status: 'AVAILABLE' },
+        { id: 812, name: 'Hyundai Ioniq 5 EV', plateNumber: 'D 2024 EV', type: 'Electric', pricePerDay: 750000, status: 'RENTED' },
+        { id: 813, name: 'Toyota Calya G', plateNumber: 'D 1456 CAL', type: 'Family Car', pricePerDay: 200000, status: 'AVAILABLE' },
+        { id: 814, name: 'Mitsubishi Xpander Ultimate', plateNumber: 'D 4321 XPD', type: 'LMPV', pricePerDay: 380000, status: 'AVAILABLE' },
+        { id: 815, name: 'Wuling Air EV Lite', plateNumber: 'D 77 EV', type: 'Electric', pricePerDay: 300000, status: 'AVAILABLE' }
       ]));
     }
     if (!localStorage.getItem(getDemoKey('posbah_demo_rentals'))) {
@@ -80,7 +85,11 @@ const initDemoData = () => {
         { id: 903, carId: 804, car: { name: 'Toyota Innova Zenix Hybrid', plateNumber: 'D 2026 HYB', pricePerDay: 650000 }, customerId: 503, customerName: 'Andi Wijaya', startDate: new Date(Date.now() - 4 * 86400000).toISOString(), endDate: new Date(Date.now() - 2 * 86400000).toISOString(), totalPrice: 1300000, status: 'RETURNED', actualReturnDate: new Date(Date.now() - 2 * 86400000).toISOString(), lateFee: 0, employeeId: 1 },
         { id: 904, carId: 807, car: { name: 'Suzuki Ertiga Hybrid', plateNumber: 'D 4321 ERT', pricePerDay: 300000 }, customerId: 504, customerName: 'Dewi Lestari', startDate: new Date(Date.now() - 3 * 86400000).toISOString(), endDate: new Date(Date.now() + 2 * 86400000).toISOString(), totalPrice: 1500000, status: 'ACTIVE', actualReturnDate: null, lateFee: 0, employeeId: 2 },
         { id: 905, carId: 809, car: { name: 'Toyota Fortuner GR Sport', plateNumber: 'D 777 FTR', pricePerDay: 850000 }, customerId: 505, customerName: 'Rian Hidayat', startDate: new Date(Date.now() - 6 * 86400000).toISOString(), endDate: new Date(Date.now() - 4 * 86400000).toISOString(), totalPrice: 1700000, status: 'RETURNED', actualReturnDate: new Date(Date.now() - 4 * 86400000).toISOString(), lateFee: 0, employeeId: 2 },
-        { id: 906, carId: 805, car: { name: 'Honda Civic RS Turbo', plateNumber: 'D 1999 CIV', pricePerDay: 900000 }, customerId: 501, customerName: 'Budi Santoso', startDate: new Date(Date.now() - 3 * 86400000).toISOString(), endDate: new Date(Date.now() - 1 * 86400000).toISOString(), totalPrice: 1800000, status: 'RETURNED', actualReturnDate: new Date(Date.now() - 1 * 86400000).toISOString(), lateFee: 0, employeeId: 1 }
+        { id: 906, carId: 805, car: { name: 'Honda Civic RS Turbo', plateNumber: 'D 1999 CIV', pricePerDay: 900000 }, customerId: 501, customerName: 'Budi Santoso', startDate: new Date(Date.now() - 3 * 86400000).toISOString(), endDate: new Date(Date.now() - 1 * 86400000).toISOString(), totalPrice: 1800000, status: 'RETURNED', actualReturnDate: new Date(Date.now() - 1 * 86400000).toISOString(), lateFee: 0, employeeId: 1 },
+        { id: 907, carId: 811, car: { name: 'Toyota Alphard VIP', plateNumber: 'D 1 VIP', pricePerDay: 1800000 }, customerId: 503, customerName: 'Andi Wijaya', startDate: new Date(Date.now() - 4 * 86400000).toISOString(), endDate: new Date(Date.now() - 3 * 86400000).toISOString(), totalPrice: 1800000, status: 'RETURNED', actualReturnDate: new Date(Date.now() - 3 * 86400000).toISOString(), lateFee: 0, employeeId: 1 },
+        { id: 908, carId: 812, car: { name: 'Hyundai Ioniq 5 EV', plateNumber: 'D 2024 EV', pricePerDay: 750000 }, customerId: 504, customerName: 'Dewi Lestari', startDate: new Date(Date.now() - 1 * 86400000).toISOString(), endDate: new Date(Date.now() + 2 * 86400000).toISOString(), totalPrice: 2250000, status: 'ACTIVE', actualReturnDate: null, lateFee: 0, employeeId: 2 },
+        { id: 909, carId: 813, car: { name: 'Toyota Calya G', plateNumber: 'D 1456 CAL', pricePerDay: 200000 }, customerId: 502, customerName: 'Siti Rahma', startDate: new Date(Date.now() - 6 * 86400000).toISOString(), endDate: new Date(Date.now() - 4 * 86400000).toISOString(), totalPrice: 400000, status: 'RETURNED', actualReturnDate: new Date(Date.now() - 4 * 86400000).toISOString(), lateFee: 0, employeeId: 1 },
+        { id: 910, carId: 814, car: { name: 'Mitsubishi Xpander Ultimate', plateNumber: 'D 4321 XPD', pricePerDay: 380000 }, customerId: 505, customerName: 'Rian Hidayat', startDate: new Date(Date.now() - 3 * 86400000).toISOString(), endDate: new Date(Date.now()).toISOString(), totalPrice: 1140000, status: 'RETURNED', actualReturnDate: new Date().toISOString(), lateFee: 0, employeeId: 2 }
       ]));
     }
     if (!localStorage.getItem(getDemoKey('posbah_demo_finances'))) {
@@ -96,6 +105,10 @@ const initDemoData = () => {
         { id: 409, type: 'EXPENSE', amount: 600000, description: 'Belanja BBM & Operasional Kantor (Demo)', date: new Date(Date.now() - 1 * 86400000).toISOString(), status: 'PAID' },
         { id: 410, type: 'EXPENSE', amount: 2500000, description: 'Gaji Bulanan Karyawan - Kasir Utama (Demo)', date: new Date().toISOString(), status: 'PAID' },
         { id: 411, type: 'EXPENSE', amount: 3000000, description: 'Gaji Bulanan Karyawan - Admin Gudang (Demo)', date: new Date().toISOString(), status: 'PAID' },
+        { id: 412, type: 'INCOME', amount: 1800000, description: 'Pelunasan Sewa Toyota Alphard - Andi Wijaya (Demo)', date: new Date(Date.now() - 3 * 86400000).toISOString(), status: 'PAID' },
+        { id: 413, type: 'RECEIVABLE', amount: 2250000, description: 'Piutang Sewa Hyundai Ioniq 5 - Dewi Lestari (Demo)', date: new Date(Date.now() - 1 * 86400000).toISOString(), status: 'PENDING' },
+        { id: 414, type: 'INCOME', amount: 400000, description: 'Pelunasan Sewa Toyota Calya - Siti Rahma (Demo)', date: new Date(Date.now() - 4 * 86400000).toISOString(), status: 'PAID' },
+        { id: 415, type: 'INCOME', amount: 1140000, description: 'Pelunasan Sewa Mitsubishi Xpander - Rian Hidayat (Demo)', date: new Date().toISOString(), status: 'PAID' }
       ]));
     }
     if (!localStorage.getItem(getDemoKey('posbah_demo_logs'))) {
@@ -106,6 +119,13 @@ const initDemoData = () => {
         { id: 4, action: 'CREATE_RENTAL', description: 'Admin Gudang menyewakan mobil Suzuki Ertiga ke Dewi Lestari', createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), employee: { name: 'Admin Gudang', role: 'ADMIN' } },
         { id: 5, action: 'RETURN_CAR', description: 'Pengembalian mobil Toyota Fortuner oleh Rian Hidayat', createdAt: new Date(Date.now() - 4 * 86400000).toISOString(), employee: { name: 'Admin Gudang', role: 'ADMIN' } },
         { id: 6, action: 'RETURN_CAR', description: 'Pengembalian mobil Honda Civic RS oleh Budi Santoso', createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+        { id: 7, action: 'CREATE_RENTAL', description: 'Kasir Utama menyewakan mobil Toyota Alphard VIP ke Andi Wijaya', createdAt: new Date(Date.now() - 4 * 86400000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+        { id: 8, action: 'RETURN_CAR', description: 'Pengembalian mobil Toyota Alphard VIP oleh Andi Wijaya', createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+        { id: 9, action: 'CREATE_RENTAL', description: 'Admin Gudang menyewakan mobil Hyundai Ioniq 5 EV ke Dewi Lestari', createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), employee: { name: 'Admin Gudang', role: 'ADMIN' } },
+        { id: 10, action: 'CREATE_RENTAL', description: 'Kasir Utama menyewakan mobil Toyota Calya G ke Siti Rahma', createdAt: new Date(Date.now() - 6 * 86400000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+        { id: 11, action: 'RETURN_CAR', description: 'Pengembalian mobil Toyota Calya G oleh Siti Rahma', createdAt: new Date(Date.now() - 4 * 86400000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+        { id: 12, action: 'CREATE_RENTAL', description: 'Admin Gudang menyewakan mobil Mitsubishi Xpander ke Rian Hidayat', createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), employee: { name: 'Admin Gudang', role: 'ADMIN' } },
+        { id: 13, action: 'RETURN_CAR', description: 'Pengembalian mobil Mitsubishi Xpander oleh Rian Hidayat', createdAt: new Date().toISOString(), employee: { name: 'Admin Gudang', role: 'ADMIN' } }
       ]));
     }
   } else {
