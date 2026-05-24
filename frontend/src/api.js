@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { getAdapter } from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -217,7 +217,7 @@ const getTable = (key) => JSON.parse(localStorage.getItem(getDemoKey(key)) || '[
 const saveTable = (key, data) => localStorage.setItem(getDemoKey(key), JSON.stringify(data));
 
 // Override Axios Adapter for Demo User
-const defaultAdapter = api.defaults.adapter || axios.defaults.adapter;
+const defaultAdapter = getAdapter(api.defaults.adapter || axios.defaults.adapter);
 api.defaults.adapter = async function (config) {
   const storedUser = localStorage.getItem('posbah_user');
   let isDemo = false;
@@ -228,8 +228,16 @@ api.defaults.adapter = async function (config) {
     } catch (_) {}
   }
 
-  // Jika bukan user demo, jalankan request jaringan standard ke backend
-  if (!isDemo) {
+  let pathname = '';
+  try {
+    pathname = new URL(config.url, config.baseURL || window.location.origin).pathname;
+  } catch {
+    pathname = config.url;
+  }
+  const route = pathname.replace(/^\/api/, '').replace(/^\//, '').replace(/\/$/, '');
+
+  // Jangan pernah intercept request login, selalu arahkan ke backend
+  if (route === 'auth/login' || !isDemo) {
     return defaultAdapter(config);
   }
 
@@ -237,15 +245,6 @@ api.defaults.adapter = async function (config) {
   initDemoData();
 
   const method = config.method.toUpperCase();
-  let pathname = '';
-  try {
-    pathname = new URL(config.url, config.baseURL || window.location.origin).pathname;
-  } catch {
-    pathname = config.url;
-  }
-
-  // extract relative route path
-  const route = pathname.replace(/^\/api/, '').replace(/^\//, '').replace(/\/$/, '');
   const parts = route.split('/');
   
   let data = null;
