@@ -2,14 +2,27 @@ import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
+import { AsyncLocalStorage } from 'async_hooks';
 
 const prisma = new PrismaClient();
 const app = express();
 const port = process.env.PORT || 3001;
 
+const asyncLocalStorage = new AsyncLocalStorage<Map<string, string>>();
+
 /** Helper: Catat Log Aktivitas Karyawan ke Database */
 const logActivity = async (employeeId: any, action: string, description: string) => {
   try {
+    const store = asyncLocalStorage.getStore();
+    let appMode = store ? store.get('appMode') : 'FNB';
+
+    // Override/enforce appMode based on action to prevent any context loss leaks
+    if (['CREATE_CAR', 'UPDATE_CAR', 'DELETE_CAR', 'CREATE_RENTAL', 'RETURN_RENTAL'].includes(action)) {
+      appMode = 'RENTAL';
+    } else if (['CREATE_TRANSACTION', 'CANCEL_TRANSACTION', 'UPDATE_TRANSACTION', 'CREATE_SUPPLIER', 'UPDATE_SUPPLIER', 'DELETE_SUPPLIER', 'CREATE_PO', 'RECEIVE_PO', 'CANCEL_PO'].includes(action)) {
+      appMode = 'FNB';
+    }
+
     const empId = Number(employeeId);
     if (!empId || isNaN(empId)) return;
 
@@ -26,7 +39,8 @@ const logActivity = async (employeeId: any, action: string, description: string)
       data: {
         action,
         description,
-        employeeId: empId
+        employeeId: empId,
+        appMode: appMode || 'FNB'
       }
     });
   } catch (error) {
@@ -36,6 +50,16 @@ const logActivity = async (employeeId: any, action: string, description: string)
 
 app.use(cors());
 app.use(express.json());
+
+// Middleware to store x-app-mode header in execution context
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const store = new Map<string, string>();
+  const appMode = (req.headers['x-app-mode'] as string) || 'FNB';
+  store.set('appMode', appMode);
+  asyncLocalStorage.run(store, () => {
+    next();
+  });
+});
 
 // ─────────────────────────────────────────────────────────────
 // Role hierarchy helpers
@@ -698,7 +722,11 @@ app.delete('/api/employees/:id', requireOwner, async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 app.get('/api/activity-logs', requireOwner, async (req, res) => {
   try {
+    const appMode = (req.headers['x-app-mode'] as string) || 'FNB';
     const logs = await prisma.activityLog.findMany({
+      where: {
+        appMode: appMode === 'RENTAL' ? 'RENTAL' : 'FNB'
+      },
       include: {
         employee: {
           select: {
@@ -909,9 +937,11 @@ app.get('/api/reports', requireAdmin, async (req, res) => {
 
     const dateFilter: any = {};
     let dateFilterActive = false;
-    if (from || to) {
-      if (from) dateFilter.gte = new Date(from as string);
-      if (to) {
+    const isValidDateStr = (val: any) => val && val !== 'undefined' && val !== 'null' && String(val).trim() !== '';
+
+    if (isValidDateStr(from) || isValidDateStr(to)) {
+      if (isValidDateStr(from)) dateFilter.gte = new Date(from as string);
+      if (isValidDateStr(to)) {
         const toDate = new Date(to as string);
         toDate.setHours(23, 59, 59, 999);
         dateFilter.lte = toDate;
@@ -1887,6 +1917,44 @@ const autoCreateMuizz = async () => {
   }
 };
 autoCreateMuizz();
+
+const migrateActivityLogs = async () => {
+  try {
+    // 1. Mark logs as RENTAL if they were logged as FNB but are rental-related based on legacy prefixes/contents
+    await prisma.activityLog.updateMany({
+      where: {
+        appMode: 'FNB',
+        OR: [
+          { description: { startsWith: '[RENTAL]' } },
+          { description: { startsWith: 'Sewa Mobil' } },
+          { description: { startsWith: 'Denda Telat' } }
+        ]
+      },
+      data: {
+        appMode: 'RENTAL'
+      }
+    });
+
+    // 2. Strip prefix [RENTAL] from descriptions of all RENTAL logs to clean them up
+    const rentalLogsWithPrefix = await prisma.activityLog.findMany({
+      where: {
+        description: { startsWith: '[RENTAL]' }
+      }
+    });
+    for (const log of rentalLogsWithPrefix) {
+      await prisma.activityLog.update({
+        where: { id: log.id },
+        data: {
+          description: log.description.replace(/^\[RENTAL\]\s*/, '')
+        }
+      });
+    }
+    console.log('Activity logs migration completed successfully.');
+  } catch (error) {
+    console.error('Failed to migrate activity logs:', error);
+  }
+};
+migrateActivityLogs();
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);

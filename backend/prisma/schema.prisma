@@ -177,6 +177,7 @@ model ActivityLog {
   employeeId  Int
   employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())
+  appMode     String   @default("FNB") // "FNB" or "RENTAL"
 }
 
 model Car {

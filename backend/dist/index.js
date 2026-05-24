@@ -16,12 +16,23 @@ require("dotenv/config");
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const client_1 = require("@prisma/client");
+const async_hooks_1 = require("async_hooks");
 const prisma = new client_1.PrismaClient();
 const app = (0, express_1.default)();
 const port = process.env.PORT || 3001;
+const asyncLocalStorage = new async_hooks_1.AsyncLocalStorage();
 /** Helper: Catat Log Aktivitas Karyawan ke Database */
 const logActivity = (employeeId, action, description) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        const store = asyncLocalStorage.getStore();
+        let appMode = store ? store.get('appMode') : 'FNB';
+        // Override/enforce appMode based on action to prevent any context loss leaks
+        if (['CREATE_CAR', 'UPDATE_CAR', 'DELETE_CAR', 'CREATE_RENTAL', 'RETURN_RENTAL'].includes(action)) {
+            appMode = 'RENTAL';
+        }
+        else if (['CREATE_TRANSACTION', 'CANCEL_TRANSACTION', 'UPDATE_TRANSACTION', 'CREATE_SUPPLIER', 'UPDATE_SUPPLIER', 'DELETE_SUPPLIER', 'CREATE_PO', 'RECEIVE_PO', 'CANCEL_PO'].includes(action)) {
+            appMode = 'FNB';
+        }
         const empId = Number(employeeId);
         if (!empId || isNaN(empId))
             return;
@@ -37,7 +48,8 @@ const logActivity = (employeeId, action, description) => __awaiter(void 0, void 
             data: {
                 action,
                 description,
-                employeeId: empId
+                employeeId: empId,
+                appMode: appMode || 'FNB'
             }
         });
     }
@@ -47,6 +59,15 @@ const logActivity = (employeeId, action, description) => __awaiter(void 0, void 
 });
 app.use((0, cors_1.default)());
 app.use(express_1.default.json());
+// Middleware to store x-app-mode header in execution context
+app.use((req, res, next) => {
+    const store = new Map();
+    const appMode = req.headers['x-app-mode'] || 'FNB';
+    store.set('appMode', appMode);
+    asyncLocalStorage.run(store, () => {
+        next();
+    });
+});
 // ─────────────────────────────────────────────────────────────
 // Role hierarchy helpers
 // ─────────────────────────────────────────────────────────────
@@ -401,7 +422,16 @@ app.put('/api/transactions/:id', requireNotDemo, (req, res) => __awaiter(void 0,
 // HARUS di atas /api/customers agar tidak ter-override
 app.get('/api/customers/list', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        const appMode = req.headers['x-app-mode'];
         const customers = yield prisma.customer.findMany({
+            where: appMode === 'RENTAL' ? {
+                address: { startsWith: '[RENTAL]' }
+            } : {
+                OR: [
+                    { address: null },
+                    { address: { not: { startsWith: '[RENTAL]' } } }
+                ]
+            },
             select: { id: true, name: true, phone: true },
             orderBy: { name: 'asc' }
         });
@@ -413,8 +443,25 @@ app.get('/api/customers/list', (req, res) => __awaiter(void 0, void 0, void 0, f
 }));
 app.get('/api/customers', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const customers = yield prisma.customer.findMany({ orderBy: { name: 'asc' } });
-        res.json(customers);
+        const appMode = req.headers['x-app-mode'];
+        const customers = yield prisma.customer.findMany({
+            where: appMode === 'RENTAL' ? {
+                address: { startsWith: '[RENTAL]' }
+            } : {
+                OR: [
+                    { address: null },
+                    { address: { not: { startsWith: '[RENTAL]' } } }
+                ]
+            },
+            orderBy: { name: 'asc' }
+        });
+        const sanitized = customers.map(c => {
+            if (c.address && c.address.startsWith('[RENTAL]')) {
+                return Object.assign(Object.assign({}, c), { address: c.address.replace(/^\[RENTAL\]\s*/, '') });
+            }
+            return c;
+        });
+        res.json(sanitized);
     }
     catch (error) {
         res.status(400).json({ error: 'Failed to fetch customers' });
@@ -423,8 +470,14 @@ app.get('/api/customers', requireAdmin, (req, res) => __awaiter(void 0, void 0, 
 app.post('/api/customers', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { name, phone, address } = req.body;
-        const customer = yield prisma.customer.create({ data: { name, phone, address } });
-        res.json(customer);
+        const appMode = req.headers['x-app-mode'];
+        let finalAddress = address;
+        if (appMode === 'RENTAL') {
+            finalAddress = `[RENTAL] ${address || ''}`.trim();
+        }
+        const customer = yield prisma.customer.create({ data: { name, phone, address: finalAddress } });
+        const sanitized = Object.assign(Object.assign({}, customer), { address: customer.address ? customer.address.replace(/^\[RENTAL\]\s*/, '') : customer.address });
+        res.json(sanitized);
     }
     catch (error) {
         res.status(400).json({ error: 'Failed to create customer' });
@@ -434,11 +487,17 @@ app.put('/api/customers/:id', requireAdmin, (req, res) => __awaiter(void 0, void
     try {
         const { id } = req.params;
         const { name, phone, address } = req.body;
+        const appMode = req.headers['x-app-mode'];
+        let finalAddress = address;
+        if (appMode === 'RENTAL') {
+            finalAddress = `[RENTAL] ${address || ''}`.trim();
+        }
         const customer = yield prisma.customer.update({
             where: { id: Number(id) },
-            data: { name, phone, address }
+            data: { name, phone, address: finalAddress }
         });
-        res.json(customer);
+        const sanitized = Object.assign(Object.assign({}, customer), { address: customer.address ? customer.address.replace(/^\[RENTAL\]\s*/, '') : customer.address });
+        res.json(sanitized);
     }
     catch (error) {
         res.status(400).json({ error: 'Failed to update customer' });
@@ -570,7 +629,11 @@ app.delete('/api/employees/:id', requireOwner, (req, res) => __awaiter(void 0, v
 // ─────────────────────────────────────────────────────────────
 app.get('/api/activity-logs', requireOwner, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        const appMode = req.headers['x-app-mode'] || 'FNB';
         const logs = yield prisma.activityLog.findMany({
+            where: {
+                appMode: appMode === 'RENTAL' ? 'RENTAL' : 'FNB'
+            },
             include: {
                 employee: {
                     select: {
@@ -596,7 +659,21 @@ app.get('/api/activity-logs', requireOwner, (req, res) => __awaiter(void 0, void
 // ─────────────────────────────────────────────────────────────
 app.get('/api/finances', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        const appMode = req.headers['x-app-mode'];
         const finances = yield prisma.finance.findMany({
+            where: appMode === 'RENTAL' ? {
+                OR: [
+                    { description: { startsWith: '[RENTAL]' } },
+                    { description: { startsWith: 'Sewa Mobil' } },
+                    { description: { startsWith: 'Denda Telat Sewa Mobil' } }
+                ]
+            } : {
+                AND: [
+                    { description: { not: { startsWith: '[RENTAL]' } } },
+                    { description: { not: { startsWith: 'Sewa Mobil' } } },
+                    { description: { not: { startsWith: 'Denda Telat' } } }
+                ]
+            },
             include: { customer: true },
             orderBy: { date: 'desc' }
         });
@@ -609,11 +686,16 @@ app.get('/api/finances', requireAdmin, (req, res) => __awaiter(void 0, void 0, v
 app.post('/api/finances', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { type, amount, description, date, status, customerId } = req.body;
+        const appMode = req.headers['x-app-mode'];
+        let finalDesc = description;
+        if (appMode === 'RENTAL' && !description.startsWith('[RENTAL]')) {
+            finalDesc = `[RENTAL] ${description}`;
+        }
         const finance = yield prisma.finance.create({
             data: {
                 type,
                 amount: Number(amount),
-                description,
+                description: finalDesc,
                 date: date ? new Date(date) : new Date(),
                 status: status || 'PENDING',
                 customerId: customerId ? Number(customerId) : null,
@@ -633,10 +715,15 @@ app.put('/api/finances/:id', requireAdmin, (req, res) => __awaiter(void 0, void 
         if (Number(amount) <= 0) {
             return res.status(400).json({ error: 'Nominal harus lebih dari 0' });
         }
+        const appMode = req.headers['x-app-mode'];
+        let finalDesc = description;
+        if (description && appMode === 'RENTAL' && !description.startsWith('[RENTAL]')) {
+            finalDesc = `[RENTAL] ${description}`;
+        }
         const finance = yield prisma.finance.update({
             where: { id: Number(id) },
             data: {
-                type, amount: Number(amount), description,
+                type, amount: Number(amount), description: finalDesc,
                 date: date ? new Date(date) : undefined,
                 status, customerId: customerId ? Number(customerId) : null,
             },
@@ -714,41 +801,83 @@ app.delete('/api/finances/:id', requireAdmin, (req, res) => __awaiter(void 0, vo
 app.get('/api/reports', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { from, to } = req.query;
-        const salesWhere = { type: 'SALES', status: { not: 'CANCELLED' } };
-        const expenseWhere = { type: 'EXPENSE' };
-        const receivableWhere = { type: 'RECEIVABLE', status: 'PENDING' };
-        const payableWhere = { type: 'PAYABLE', status: 'PENDING' };
-        if (from || to) {
-            const dateFilter = {};
-            if (from)
+        const appMode = req.headers['x-app-mode'];
+        const financeBaseWhere = appMode === 'RENTAL' ? {
+            OR: [
+                { description: { startsWith: '[RENTAL]' } },
+                { description: { startsWith: 'Sewa Mobil' } },
+                { description: { startsWith: 'Denda Telat Sewa Mobil' } }
+            ]
+        } : {
+            AND: [
+                { description: { not: { startsWith: '[RENTAL]' } } },
+                { description: { not: { startsWith: 'Sewa Mobil' } } },
+                { description: { not: { startsWith: 'Denda Telat' } } }
+            ]
+        };
+        const expenseWhere = Object.assign({ type: 'EXPENSE' }, financeBaseWhere);
+        const receivableWhere = Object.assign({ type: 'RECEIVABLE', status: 'PENDING' }, financeBaseWhere);
+        const payableWhere = Object.assign({ type: 'PAYABLE', status: 'PENDING' }, financeBaseWhere);
+        const dateFilter = {};
+        let dateFilterActive = false;
+        const isValidDateStr = (val) => val && val !== 'undefined' && val !== 'null' && String(val).trim() !== '';
+        if (isValidDateStr(from) || isValidDateStr(to)) {
+            if (isValidDateStr(from))
                 dateFilter.gte = new Date(from);
-            if (to) {
+            if (isValidDateStr(to)) {
                 const toDate = new Date(to);
                 toDate.setHours(23, 59, 59, 999);
                 dateFilter.lte = toDate;
             }
-            salesWhere.date = dateFilter;
+            dateFilterActive = true;
             expenseWhere.date = dateFilter;
             receivableWhere.date = dateFilter;
             payableWhere.date = dateFilter;
         }
-        const totalSales = yield prisma.transaction.aggregate({
-            where: salesWhere,
-            _sum: { total: true }
-        });
-        // Hitung total penjualan hari ini (zona waktu GMT+7 Jakarta)
+        let totalSalesVal = 0;
+        let todaySalesVal = 0;
         const tzOffset = 7 * 60 * 60 * 1000;
         const localNow = new Date(Date.now() + tzOffset);
         const startOfToday = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate(), 0, 0, 0, 0) - tzOffset);
         const endOfToday = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate(), 23, 59, 59, 999) - tzOffset);
-        const todaySales = yield prisma.transaction.aggregate({
-            where: {
-                type: 'SALES',
-                status: { not: 'CANCELLED' },
-                date: { gte: startOfToday, lte: endOfToday }
-            },
-            _sum: { total: true }
-        });
+        if (appMode === 'RENTAL') {
+            const rentalWhere = {};
+            if (dateFilterActive) {
+                rentalWhere.createdAt = dateFilter;
+            }
+            const totalRentals = yield prisma.rental.aggregate({
+                where: rentalWhere,
+                _sum: { totalPrice: true }
+            });
+            totalSalesVal = totalRentals._sum.totalPrice || 0;
+            const todayRentals = yield prisma.rental.aggregate({
+                where: {
+                    createdAt: { gte: startOfToday, lte: endOfToday }
+                },
+                _sum: { totalPrice: true }
+            });
+            todaySalesVal = todayRentals._sum.totalPrice || 0;
+        }
+        else {
+            const salesWhere = { type: 'SALES', status: { not: 'CANCELLED' } };
+            if (dateFilterActive) {
+                salesWhere.date = dateFilter;
+            }
+            const totalSales = yield prisma.transaction.aggregate({
+                where: salesWhere,
+                _sum: { total: true }
+            });
+            totalSalesVal = totalSales._sum.total || 0;
+            const todaySales = yield prisma.transaction.aggregate({
+                where: {
+                    type: 'SALES',
+                    status: { not: 'CANCELLED' },
+                    date: { gte: startOfToday, lte: endOfToday }
+                },
+                _sum: { total: true }
+            });
+            todaySalesVal = todaySales._sum.total || 0;
+        }
         const expenses = yield prisma.finance.aggregate({
             where: expenseWhere,
             _sum: { amount: true }
@@ -762,12 +891,12 @@ app.get('/api/reports', requireAdmin, (req, res) => __awaiter(void 0, void 0, vo
             _sum: { amount: true }
         });
         res.json({
-            totalSales: totalSales._sum.total || 0,
-            todaySales: todaySales._sum.total || 0,
+            totalSales: totalSalesVal,
+            todaySales: todaySalesVal,
             totalExpenses: expenses._sum.amount || 0,
             pendingReceivables: receivables._sum.amount || 0,
             pendingPayables: payables._sum.amount || 0,
-            netIncome: (totalSales._sum.total || 0) - (expenses._sum.amount || 0)
+            netIncome: totalSalesVal - (expenses._sum.amount || 0)
         });
     }
     catch (error) {
@@ -1434,11 +1563,34 @@ app.post('/api/rentals', requireAdmin, checkExcludedEmployee, (req, res) => __aw
                 where: { id: Number(carId) },
                 data: { status: 'RENTED' }
             });
-            // 3. Catat di tabel Rental
+            // 3. Lookup or create customer record to keep database cohesive
+            let finalCustomerId = customerId ? Number(customerId) : null;
+            if (!finalCustomerId && customerName) {
+                const existingCust = yield tx.customer.findFirst({
+                    where: {
+                        name: { equals: customerName, mode: 'insensitive' },
+                        address: { startsWith: '[RENTAL]' }
+                    }
+                });
+                if (existingCust) {
+                    finalCustomerId = existingCust.id;
+                }
+                else {
+                    const newCust = yield tx.customer.create({
+                        data: {
+                            name: customerName,
+                            address: '[RENTAL]',
+                            phone: ''
+                        }
+                    });
+                    finalCustomerId = newCust.id;
+                }
+            }
+            // 4. Catat di tabel Rental
             const createdRental = yield tx.rental.create({
                 data: {
                     carId: Number(carId),
-                    customerId: customerId ? Number(customerId) : null,
+                    customerId: finalCustomerId,
                     customerName,
                     startDate: new Date(startDate),
                     endDate: new Date(endDate),
@@ -1449,14 +1601,14 @@ app.post('/api/rentals', requireAdmin, checkExcludedEmployee, (req, res) => __aw
                 },
                 include: { car: true }
             });
-            // 4. Catat di keuangan
+            // 5. Catat di keuangan
             yield tx.finance.create({
                 data: {
                     type: 'RECEIVABLE',
                     amount: Number(totalPrice),
                     description: `Sewa Mobil ${car.name} (${car.plateNumber}) - ${customerName} (Sewa #${createdRental.id})`,
                     status: paymentMethod === 'CASH' || paymentMethod === 'TRANSFER' || paymentMethod === 'QRIS' ? 'PAID' : 'PENDING',
-                    customerId: customerId ? Number(customerId) : null,
+                    customerId: finalCustomerId,
                     date: new Date()
                 }
             });
@@ -1555,6 +1707,43 @@ const autoCreateMuizz = () => __awaiter(void 0, void 0, void 0, function* () {
     }
 });
 autoCreateMuizz();
+const migrateActivityLogs = () => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        // 1. Mark logs as RENTAL if they were logged as FNB but are rental-related based on legacy prefixes/contents
+        yield prisma.activityLog.updateMany({
+            where: {
+                appMode: 'FNB',
+                OR: [
+                    { description: { startsWith: '[RENTAL]' } },
+                    { description: { startsWith: 'Sewa Mobil' } },
+                    { description: { startsWith: 'Denda Telat' } }
+                ]
+            },
+            data: {
+                appMode: 'RENTAL'
+            }
+        });
+        // 2. Strip prefix [RENTAL] from descriptions of all RENTAL logs to clean them up
+        const rentalLogsWithPrefix = yield prisma.activityLog.findMany({
+            where: {
+                description: { startsWith: '[RENTAL]' }
+            }
+        });
+        for (const log of rentalLogsWithPrefix) {
+            yield prisma.activityLog.update({
+                where: { id: log.id },
+                data: {
+                    description: log.description.replace(/^\[RENTAL\]\s*/, '')
+                }
+            });
+        }
+        console.log('Activity logs migration completed successfully.');
+    }
+    catch (error) {
+        console.error('Failed to migrate activity logs:', error);
+    }
+});
+migrateActivityLogs();
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 });
