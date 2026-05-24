@@ -461,7 +461,16 @@ app.put('/api/transactions/:id', requireNotDemo, async (req, res) => {
 // HARUS di atas /api/customers agar tidak ter-override
 app.get('/api/customers/list', async (req, res) => {
   try {
+    const appMode = req.headers['x-app-mode'] as string;
     const customers = await prisma.customer.findMany({
+      where: appMode === 'RENTAL' ? {
+        address: { startsWith: '[RENTAL]' }
+      } : {
+        OR: [
+          { address: null },
+          { address: { not: { startsWith: '[RENTAL]' } } }
+        ]
+      },
       select: { id: true, name: true, phone: true },
       orderBy: { name: 'asc' }
     });
@@ -473,8 +482,28 @@ app.get('/api/customers/list', async (req, res) => {
 
 app.get('/api/customers', requireAdmin, async (req, res) => {
   try {
-    const customers = await prisma.customer.findMany({ orderBy: { name: 'asc' } });
-    res.json(customers);
+    const appMode = req.headers['x-app-mode'] as string;
+    const customers = await prisma.customer.findMany({
+      where: appMode === 'RENTAL' ? {
+        address: { startsWith: '[RENTAL]' }
+      } : {
+        OR: [
+          { address: null },
+          { address: { not: { startsWith: '[RENTAL]' } } }
+        ]
+      },
+      orderBy: { name: 'asc' }
+    });
+    const sanitized = customers.map(c => {
+      if (c.address && c.address.startsWith('[RENTAL]')) {
+        return {
+          ...c,
+          address: c.address.replace(/^\[RENTAL\]\s*/, '')
+        };
+      }
+      return c;
+    });
+    res.json(sanitized);
   } catch (error) {
     res.status(400).json({ error: 'Failed to fetch customers' });
   }
@@ -483,8 +512,17 @@ app.get('/api/customers', requireAdmin, async (req, res) => {
 app.post('/api/customers', requireAdmin, async (req, res) => {
   try {
     const { name, phone, address } = req.body;
-    const customer = await prisma.customer.create({ data: { name, phone, address } });
-    res.json(customer);
+    const appMode = req.headers['x-app-mode'] as string;
+    let finalAddress = address;
+    if (appMode === 'RENTAL') {
+      finalAddress = `[RENTAL] ${address || ''}`.trim();
+    }
+    const customer = await prisma.customer.create({ data: { name, phone, address: finalAddress } });
+    const sanitized = {
+      ...customer,
+      address: customer.address ? customer.address.replace(/^\[RENTAL\]\s*/, '') : customer.address
+    };
+    res.json(sanitized);
   } catch (error) {
     res.status(400).json({ error: 'Failed to create customer' });
   }
@@ -494,11 +532,20 @@ app.put('/api/customers/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, phone, address } = req.body;
+    const appMode = req.headers['x-app-mode'] as string;
+    let finalAddress = address;
+    if (appMode === 'RENTAL') {
+      finalAddress = `[RENTAL] ${address || ''}`.trim();
+    }
     const customer = await prisma.customer.update({
       where: { id: Number(id) },
-      data: { name, phone, address }
+      data: { name, phone, address: finalAddress }
     });
-    res.json(customer);
+    const sanitized = {
+      ...customer,
+      address: customer.address ? customer.address.replace(/^\[RENTAL\]\s*/, '') : customer.address
+    };
+    res.json(sanitized);
   } catch (error) {
     res.status(400).json({ error: 'Failed to update customer' });
   }
