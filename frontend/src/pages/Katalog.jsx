@@ -119,11 +119,6 @@ export default function Katalog() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (isDemo && user?.name?.toLowerCase() !== 'userdemo' && !formData.id && products.length >= DEMO_LIMITS.PRODUCTS) {
-      showDemoBlock(`Batas maksimal ${DEMO_LIMITS.PRODUCTS} produk untuk akun demo. Upgrade untuk produk tidak terbatas!`);
-      return;
-    }
-
     try {
       // Filter hanya wholesale yang terisi
       const filledWholesale = formData.wholesalePrices.filter(

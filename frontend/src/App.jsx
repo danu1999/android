@@ -149,19 +149,18 @@ const Navigation = ({ user, onLogout, appMode, setAppMode }) => {
   };
 
   const RoleBadge = () => {
-    const isUserDemo = user?.name?.toLowerCase() === 'userdemo';
     return (
       <span style={{
         fontSize: '0.65rem',
         background: user?.isDemo 
-          ? (isUserDemo ? 'linear-gradient(90deg,#7C3AED,#4F46E5)' : 'linear-gradient(90deg,#F59E0B,#EF4444)')
+          ? 'linear-gradient(90deg,#7C3AED,#4F46E5)'
           : roleStyle.bg,
         color: user?.isDemo ? 'white' : roleStyle.color,
         padding: '2px 7px', borderRadius: '99px', fontWeight: 700,
         display: 'inline-flex', alignItems: 'center', gap: 3,
       }}>
         {user?.isDemo 
-          ? (isUserDemo ? '⚡ ULTRA DEMO' : '🎯 DEMO') 
+          ? '⚡ ULTRA DEMO' 
           : <>{roleStyle.icon} {user?.role}</>}
       </span>
     );
@@ -270,56 +269,22 @@ function AppContent({ user, onLogout, appMode, setAppMode }) {
 
 // ─── Demo Banner ───────────────────────────────────────────────
 function DemoBanner() {
-  const { user } = useAuth();
-  const isUserDemo = user?.name?.toLowerCase() === 'userdemo';
-
-  if (isUserDemo) {
-    return (
-      <div style={{
-        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
-        background: 'linear-gradient(90deg, #7C3AED, #4F46E5)',
-        color: 'white', padding: '0 16px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        minHeight: '36px', gap: '8px', fontSize: '0.78rem', fontWeight: 700,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-          <span>⚡ Mode Ultra (Simulasi)</span>
-          <span style={{ fontWeight: 400, opacity: 0.9 }}>·</span>
-          <span style={{ fontWeight: 600, opacity: 0.9 }}>Data Anda sepenuhnya terisolasi dari database produksi</span>
-        </div>
-        <div style={{ fontSize: '0.7rem', opacity: 0.8 }}>
-          Demo Mode &amp; Offline Simulation
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
-      background: 'linear-gradient(90deg, #F59E0B, #D97706)',
+      background: 'linear-gradient(90deg, #7C3AED, #4F46E5)',
       color: 'white', padding: '0 16px',
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       minHeight: '36px', gap: '8px', fontSize: '0.78rem', fontWeight: 700,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-        <span>🎯 Mode Demo</span>
+        <span>⚡ Mode Ultra (Simulasi)</span>
         <span style={{ fontWeight: 400, opacity: 0.9 }}>·</span>
-        <span style={{ fontWeight: 600, opacity: 0.9 }}>Maks: {DEMO_LIMITS.PRODUCTS} produk · {DEMO_LIMITS.TRANSACTIONS} transaksi · {DEMO_LIMITS.EMPLOYEES} karyawan · {DEMO_LIMITS.CUSTOMERS} pelanggan</span>
+        <span style={{ 0.9: undefined, fontWeight: 600 }}>Data Anda sepenuhnya terisolasi dari database produksi</span>
       </div>
-      <a
-        href="https://wa.me/6282245077959?text=Halo%2C%20saya%20ingin%20berlangganan%20POSBah"
-        target="_blank"
-        rel="noreferrer"
-        style={{
-          background: 'white', color: '#D97706',
-          borderRadius: '99px', padding: '3px 10px',
-          fontWeight: 800, fontSize: '0.75rem',
-          textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0
-        }}
-      >
-        Upgrade →
-      </a>
+      <div style={{ fontSize: '0.7rem', opacity: 0.8 }}>
+        Demo Mode &amp; Offline Simulation
+      </div>
     </div>
   );
 }

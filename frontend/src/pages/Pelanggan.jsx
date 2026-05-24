@@ -37,11 +37,6 @@ export default function Pelanggan() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (isDemo && user?.name?.toLowerCase() !== 'userdemo' && !formData.id && customers.length >= DEMO_LIMITS.CUSTOMERS) {
-      showDemoBlock(`Batas maksimal ${DEMO_LIMITS.CUSTOMERS} pelanggan untuk akun demo. Upgrade untuk pelanggan tidak terbatas!`);
-      return;
-    }
-
     try {
       if (formData.id) {
         await api.put(`/customers/${formData.id}`, formData);
