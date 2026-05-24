@@ -22,6 +22,7 @@ const EMPTY_FORM = {
 };
 
 export default function Katalog() {
+  const { user } = useAuth();
   const isAdmin = useIsAdmin();
   const { showDemoBlock, isDemo } = useDemoBlock();
   const [products, setProducts] = useState([]);
@@ -118,7 +119,7 @@ export default function Katalog() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (isDemo && !formData.id && products.length >= DEMO_LIMITS.PRODUCTS) {
+    if (isDemo && user?.name?.toLowerCase() !== 'userdemo' && !formData.id && products.length >= DEMO_LIMITS.PRODUCTS) {
       showDemoBlock(`Batas maksimal ${DEMO_LIMITS.PRODUCTS} produk untuk akun demo. Upgrade untuk produk tidak terbatas!`);
       return;
     }

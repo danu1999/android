@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Search, User } from 'lucide-react';
 import api from '../api';
-import { useDemoBlock, DEMO_LIMITS } from '../AuthContext';
+import { useDemoBlock, DEMO_LIMITS, useAuth } from '../AuthContext';
 
 
 export default function Pelanggan() {
+  const { user } = useAuth();
   const { showDemoBlock, isDemo } = useDemoBlock();
   const [customers, setCustomers] = useState([]);
 
@@ -36,7 +37,7 @@ export default function Pelanggan() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (isDemo && !formData.id && customers.length >= DEMO_LIMITS.CUSTOMERS) {
+    if (isDemo && user?.name?.toLowerCase() !== 'userdemo' && !formData.id && customers.length >= DEMO_LIMITS.CUSTOMERS) {
       showDemoBlock(`Batas maksimal ${DEMO_LIMITS.CUSTOMERS} pelanggan untuk akun demo. Upgrade untuk pelanggan tidak terbatas!`);
       return;
     }

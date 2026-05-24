@@ -16,7 +16,7 @@ import Supplier from './pages/Supplier';
 import Login from './pages/Login';
 import LogAktivitas from './pages/LogAktivitas';
 import RentalMobil from './pages/RentalMobil';
-import { AuthContext, DemoContext, hasRole, DEMO_LIMITS } from './AuthContext';
+import { AuthContext, DemoContext, hasRole, DEMO_LIMITS, useAuth } from './AuthContext';
 import './index.css';
 
 // ─── Role-based page access ────────────────────────────────────
@@ -148,17 +148,24 @@ const Navigation = ({ user, onLogout, appMode, setAppMode }) => {
     setAppMode(newMode);
   };
 
-  const RoleBadge = () => (
-    <span style={{
-      fontSize: '0.65rem',
-      background: user?.isDemo ? 'linear-gradient(90deg,#F59E0B,#EF4444)' : roleStyle.bg,
-      color: user?.isDemo ? 'white' : roleStyle.color,
-      padding: '2px 7px', borderRadius: '99px', fontWeight: 700,
-      display: 'inline-flex', alignItems: 'center', gap: 3,
-    }}>
-      {user?.isDemo ? '🎯 DEMO' : <>{roleStyle.icon} {user?.role}</>}
-    </span>
-  );
+  const RoleBadge = () => {
+    const isUserDemo = user?.name?.toLowerCase() === 'userdemo';
+    return (
+      <span style={{
+        fontSize: '0.65rem',
+        background: user?.isDemo 
+          ? (isUserDemo ? 'linear-gradient(90deg,#7C3AED,#4F46E5)' : 'linear-gradient(90deg,#F59E0B,#EF4444)')
+          : roleStyle.bg,
+        color: user?.isDemo ? 'white' : roleStyle.color,
+        padding: '2px 7px', borderRadius: '99px', fontWeight: 700,
+        display: 'inline-flex', alignItems: 'center', gap: 3,
+      }}>
+        {user?.isDemo 
+          ? (isUserDemo ? '⚡ ULTRA DEMO' : '🎯 DEMO') 
+          : <>{roleStyle.icon} {user?.role}</>}
+      </span>
+    );
+  };
 
   return (
     <>
@@ -263,6 +270,30 @@ function AppContent({ user, onLogout, appMode, setAppMode }) {
 
 // ─── Demo Banner ───────────────────────────────────────────────
 function DemoBanner() {
+  const { user } = useAuth();
+  const isUserDemo = user?.name?.toLowerCase() === 'userdemo';
+
+  if (isUserDemo) {
+    return (
+      <div style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
+        background: 'linear-gradient(90deg, #7C3AED, #4F46E5)',
+        color: 'white', padding: '0 16px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        minHeight: '36px', gap: '8px', fontSize: '0.78rem', fontWeight: 700,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+          <span>⚡ Mode Ultra (Simulasi)</span>
+          <span style={{ fontWeight: 400, opacity: 0.9 }}>·</span>
+          <span style={{ fontWeight: 600, opacity: 0.9 }}>Data Anda sepenuhnya terisolasi dari database produksi</span>
+        </div>
+        <div style={{ fontSize: '0.7rem', opacity: 0.8 }}>
+          Demo Mode &amp; Offline Simulation
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,

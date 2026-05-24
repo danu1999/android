@@ -85,8 +85,8 @@ const requireAdmin = async (req: Request, res: Response, next: NextFunction) => 
     return res.status(403).json({ error: 'Akses ditolak. ID karyawan diperlukan.' });
   }
 
-  // Jika akun demo (id=0)
-  if (employeeId === '0') {
+  // Jika akun demo (id=0) atau userdemo (id=9999)
+  if (employeeId === '0' || employeeId === '9999') {
     if (req.method !== 'GET') {
       return res.status(403).json({ error: 'Demo mode tidak mengizinkan operasi ini' });
     }
@@ -108,8 +108,8 @@ const requireOwner = async (req: Request, res: Response, next: NextFunction) => 
     return res.status(403).json({ error: 'Akses ditolak. ID karyawan diperlukan.' });
   }
 
-  // Jika akun demo (id=0)
-  if (employeeId === '0') {
+  // Jika akun demo (id=0) atau userdemo (id=9999)
+  if (employeeId === '0' || employeeId === '9999') {
     if (req.method !== 'GET') {
       return res.status(403).json({ error: 'Demo mode tidak mengizinkan operasi ini' });
     }
@@ -122,10 +122,10 @@ const requireOwner = async (req: Request, res: Response, next: NextFunction) => 
   next();
 };
 
-/** Middleware: blokir akun demo (id=0) atau tanpa ID dari semua operasi tulis */
+/** Middleware: blokir akun demo (id=0 atau id=9999) atau tanpa ID dari semua operasi tulis */
 const requireNotDemo = (req: Request, res: Response, next: NextFunction) => {
   const employeeId = req.headers['x-employee-id'] as string;
-  if (!employeeId || employeeId === '0') {
+  if (!employeeId || employeeId === '0' || employeeId === '9999') {
     return res.status(403).json({ error: 'Akun demo tidak dapat menyimpan data. Upgrade untuk menggunakan fitur penuh.' });
   }
   next();
@@ -134,7 +134,7 @@ const requireNotDemo = (req: Request, res: Response, next: NextFunction) => {
 /** Middleware: blokir akses karyawan tertentu dari fitur rental (Hanafi, Fed, Fahri) */
 const checkExcludedEmployee = async (req: Request, res: Response, next: NextFunction) => {
   const employeeId = req.headers['x-employee-id'] as string;
-  if (employeeId && employeeId !== '0') {
+  if (employeeId && employeeId !== '0' && employeeId !== '9999') {
     try {
       const emp = await prisma.employee.findUnique({ where: { id: Number(employeeId) } });
       if (emp && ['hanafi', 'fed', 'fahri'].includes(emp.name.toLowerCase())) {
@@ -161,6 +161,12 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     const { name, pin } = req.body;
     if (!name || !pin) return res.status(400).json({ error: 'Nama dan PIN wajib diisi' });
+
+    // Bypass untuk userdemo
+    if (name.toLowerCase() === 'userdemo') {
+      return res.json({ id: 9999, name: 'userdemo', role: 'OWNER', isDemo: true });
+    }
+
     const employee = await prisma.employee.findFirst({
       where: { name: { equals: name, mode: 'insensitive' }, pin }
     });
@@ -626,8 +632,8 @@ app.get('/api/employees', requireAdmin, async (req, res) => {
 app.post('/api/employees', requireOwner, async (req, res) => {
   try {
     const employeeIdHeader = req.headers['x-employee-id'] as string;
-    // Blokir demo user (id = 0)
-    if (Number(employeeIdHeader) === 0) {
+    // Blokir demo user (id = 0 atau id = 9999)
+    if (Number(employeeIdHeader) === 0 || Number(employeeIdHeader) === 9999) {
       return res.status(403).json({ error: 'Akun demo tidak dapat menambah karyawan' });
     }
     const count = await prisma.employee.count();
@@ -658,8 +664,8 @@ app.put('/api/employees/:id', requireOwner, async (req, res) => {
   try {
     const { id } = req.params;
     const employeeIdHeader = req.headers['x-employee-id'] as string;
-    // Blokir demo user (id = 0)
-    if (Number(employeeIdHeader) === 0) {
+    // Blokir demo user (id = 0 atau id = 9999)
+    if (Number(employeeIdHeader) === 0 || Number(employeeIdHeader) === 9999) {
       return res.status(403).json({ error: 'Akun demo tidak dapat mengubah karyawan' });
     }
     const { name, role, pin, salary } = req.body;
@@ -688,8 +694,8 @@ app.delete('/api/employees/:id', requireOwner, async (req, res) => {
   try {
     const { id } = req.params;
     const employeeIdHeader = req.headers['x-employee-id'] as string;
-    // Blokir demo user (id = 0)
-    if (Number(employeeIdHeader) === 0) {
+    // Blokir demo user (id = 0 atau id = 9999)
+    if (Number(employeeIdHeader) === 0 || Number(employeeIdHeader) === 9999) {
       return res.status(403).json({ error: 'Akun demo tidak dapat menghapus karyawan' });
     }
     if (Number(id) === Number(employeeIdHeader)) {
@@ -1057,7 +1063,7 @@ app.get('/api/payroll/history', requireOwner, async (req, res) => {
 app.post('/api/payroll/pay', requireOwner, async (req, res) => {
   try {
     const employeeIdHeader = req.headers['x-employee-id'] as string;
-    if (Number(employeeIdHeader) === 0) {
+    if (Number(employeeIdHeader) === 0 || Number(employeeIdHeader) === 9999) {
       return res.status(403).json({ error: 'Akun demo tidak dapat membayar gaji' });
     }
 

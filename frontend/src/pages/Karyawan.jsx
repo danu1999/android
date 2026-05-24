@@ -40,7 +40,10 @@ export default function Karyawan() {
 
   // ── Mode Ultra ──────────────────────────────────────────────
   const ultraKey = `posbah_ultra_${user?.id}`;
-  const [isUltra, setIsUltra] = useState(() => localStorage.getItem(`posbah_ultra_${user?.id}`) === 'true');
+  const [isUltra, setIsUltra] = useState(() => {
+    if (user?.name?.toLowerCase() === 'userdemo') return true;
+    return localStorage.getItem(`posbah_ultra_${user?.id}`) === 'true';
+  });
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [masterPin, setMasterPin] = useState('');
   const [masterOk, setMasterOk] = useState(false);
@@ -96,7 +99,7 @@ export default function Karyawan() {
       if (formData.id) {
         await api.put(`/employees/${formData.id}`, payload);
       } else {
-        if (isDemo && employees.length >= DEMO_LIMITS.EMPLOYEES) {
+        if (isDemo && user?.name?.toLowerCase() !== 'userdemo' && employees.length >= DEMO_LIMITS.EMPLOYEES) {
           showDemoBlock(`Batas maksimal ${DEMO_LIMITS.EMPLOYEES} karyawan untuk akun demo. Upgrade untuk karyawan tidak terbatas!`);
           return;
         }
