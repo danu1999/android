@@ -237,9 +237,15 @@ api.defaults.adapter = async function (config) {
   }
   const route = pathname.replace(/^\/api/, '').replace(/^\//, '').replace(/\/$/, '');
 
+  const isOffline = !navigator.onLine;
+
   // Jangan pernah intercept request login, selalu arahkan ke backend
-  if (route === 'auth/login' || !isDemo) {
+  if (route === 'auth/login' || (!isDemo && !isOffline)) {
     return defaultAdapter(config);
+  }
+
+  if (!isDemo && isOffline) {
+    return handleOfflineRequest(config, route);
   }
 
   // Simulasikan data locally di browser
@@ -670,5 +676,247 @@ api.defaults.adapter = async function (config) {
     config
   };
 };
+
+// ─────────────────────────────────────────────────────────────
+// Offline Mode Helper Functions & Response Caching Interceptor
+// ─────────────────────────────────────────────────────────────
+
+function showOfflineToast(message) {
+  let toast = document.getElementById('posbah-offline-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'posbah-offline-toast';
+    toast.style.position = 'fixed';
+    toast.style.bottom = '24px';
+    toast.style.left = '50%';
+    toast.style.transform = 'translateX(-50%)';
+    toast.style.background = 'rgba(30, 27, 75, 0.95)';
+    toast.style.backdropFilter = 'blur(8px)';
+    toast.style.border = '1px solid rgba(255, 255, 255, 0.15)';
+    toast.style.color = '#FDE047';
+    toast.style.padding = '12px 20px';
+    toast.style.borderRadius = '16px';
+    toast.style.fontSize = '0.85rem';
+    toast.style.fontWeight = '600';
+    toast.style.zIndex = '999999';
+    toast.style.boxShadow = '0 10px 25px rgba(0, 0, 0, 0.3)';
+    toast.style.display = 'flex';
+    toast.style.alignItems = 'center';
+    toast.style.gap = '8px';
+    toast.style.transition = 'all 0.3s ease-in-out';
+    document.body.appendChild(toast);
+  }
+  toast.innerHTML = `⚠️ <span>${message}</span>`;
+  toast.style.opacity = '1';
+  
+  if (window.offlineToastTimeout) clearTimeout(window.offlineToastTimeout);
+  window.offlineToastTimeout = setTimeout(() => {
+    toast.style.opacity = '0';
+  }, 4000);
+}
+
+async function handleOfflineRequest(config, route) {
+  const method = config.method.toUpperCase();
+  const parts = route.split('/');
+  
+  if (method === 'GET') {
+    let data = null;
+    let status = 200;
+    const cacheKey = `posbah_cache_${parts[0]}`;
+    const cachedData = localStorage.getItem(cacheKey);
+    
+    if (parts[0] === 'reports') {
+      const txs = JSON.parse(localStorage.getItem('posbah_cache_transactions') || '[]').filter(t => t.status === 'COMPLETED');
+      const fins = JSON.parse(localStorage.getItem('posbah_cache_finances') || '[]');
+      const totalExpenses = fins.filter(f => f.type === 'EXPENSE' && f.status === 'PAID').reduce((sum, f) => sum + f.amount, 0);
+      const pendingReceivables = fins.filter(f => f.type === 'RECEIVABLE' && f.status === 'PENDING').reduce((sum, f) => sum + f.amount, 0);
+      
+      const totalSales = txs.reduce((sum, t) => sum + (t.total || t.totalPrice || 0), 0);
+      const todaySales = txs.filter(t => new Date(t.date || t.createdAt).toDateString() === new Date().toDateString()).reduce((sum, t) => sum + (t.total || t.totalPrice || 0), 0);
+      
+      data = {
+        totalSales,
+        totalExpenses,
+        netIncome: totalSales - totalExpenses,
+        pendingReceivables,
+        todaySales,
+        transactionCount: txs.length
+      };
+    } else if (parts[0] === 'payroll' && parts[1] === 'history') {
+      data = JSON.parse(localStorage.getItem('posbah_cache_payroll_history') || '[]');
+    } else if (parts[1] && !isNaN(Number(parts[1]))) {
+      const id = Number(parts[1]);
+      const list = JSON.parse(cachedData || '[]');
+      data = list.find(item => item.id === id) || null;
+      if (!data) status = 404;
+    } else {
+      data = JSON.parse(cachedData || '[]');
+    }
+    
+    return {
+      data,
+      status,
+      statusText: status === 200 ? 'OK' : 'Not Found',
+      headers: {},
+      config
+    };
+  }
+  
+  const payload = config.data ? JSON.parse(config.data) : {};
+  const queue = JSON.parse(localStorage.getItem('posbah_offline_writes') || '[]');
+  
+  queue.push({
+    url: config.url,
+    method: config.method,
+    data: payload,
+    headers: config.headers,
+    timestamp: Date.now()
+  });
+  localStorage.setItem('posbah_offline_writes', JSON.stringify(queue));
+  
+  const cacheKey = `posbah_cache_${parts[0]}`;
+  let list = JSON.parse(localStorage.getItem(cacheKey) || '[]');
+  let responseData = { success: true };
+  
+  if (method === 'POST') {
+    const newId = Date.now();
+    const newItem = { ...payload, id: newId, createdAt: new Date().toISOString() };
+    
+    if (parts[0] === 'transactions') {
+      const num = list.length + 1;
+      newItem.receiptNumber = `TX-OFFLINE-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(num).padStart(3, '0')}`;
+      newItem.date = new Date().toISOString();
+      
+      const prodsKey = 'posbah_cache_products';
+      const prods = JSON.parse(localStorage.getItem(prodsKey) || '[]');
+      (newItem.items || []).forEach(item => {
+        const pr = prods.find(p => p.id === Number(item.productId));
+        if (pr) pr.stock -= item.quantity;
+      });
+      localStorage.setItem(prodsKey, JSON.stringify(prods));
+      
+      if (newItem.paymentMethod === 'HUTANG') {
+        const finsKey = 'posbah_cache_finances';
+        const fins = JSON.parse(localStorage.getItem(finsKey) || '[]');
+        fins.push({
+          id: Date.now() + 1,
+          type: 'RECEIVABLE',
+          amount: newItem.total,
+          description: `Piutang (Hutang pelanggan) - ${newItem.customerName || newItem.receiptNumber}`,
+          date: new Date().toISOString(),
+          status: 'PENDING'
+        });
+        localStorage.setItem(finsKey, JSON.stringify(fins));
+      }
+    } else if (parts[0] === 'rentals') {
+      newItem.status = 'ACTIVE';
+      newItem.startDate = newItem.startDate || new Date().toISOString();
+      const carsKey = 'posbah_cache_cars';
+      const cars = JSON.parse(localStorage.getItem(carsKey) || '[]');
+      const car = cars.find(c => c.id === Number(newItem.carId));
+      if (car) car.status = 'RENTED';
+      localStorage.setItem(carsKey, JSON.stringify(cars));
+    }
+    
+    list.push(newItem);
+    responseData = newItem;
+  } else if (method === 'PUT' && parts[1]) {
+    const id = Number(parts[1]);
+    const idx = list.findIndex(item => item.id === id);
+    if (idx !== -1) {
+      list[idx] = { ...list[idx], ...payload };
+      responseData = list[idx];
+    }
+  } else if (method === 'DELETE' && parts[1]) {
+    const id = Number(parts[1]);
+    list = list.filter(item => item.id !== id);
+  }
+  
+  localStorage.setItem(cacheKey, JSON.stringify(list));
+  showOfflineToast('Data disimpan secara lokal (Offline Mode). Data akan disinkronkan saat terhubung.');
+  
+  return {
+    data: responseData,
+    status: 200,
+    statusText: 'OK',
+    headers: {},
+    config
+  };
+}
+
+export async function syncOfflineWrites() {
+  const queue = JSON.parse(localStorage.getItem('posbah_offline_writes') || '[]');
+  if (queue.length === 0) return;
+  if (window.isSyncingOffline) return;
+  window.isSyncingOffline = true;
+  
+  console.log(`Syncing ${queue.length} offline changes...`);
+  showOfflineToast(`Menyinkronkan ${queue.length} perubahan offline...`);
+  
+  const remaining = [];
+  let successCount = 0;
+  
+  for (const item of queue) {
+    try {
+      await defaultAdapter({
+        url: item.url,
+        method: item.method,
+        data: item.data ? JSON.stringify(item.data) : undefined,
+        headers: {
+          ...item.headers,
+          'Content-Type': 'application/json',
+          'x-offline-sync': 'true'
+        }
+      });
+      successCount++;
+    } catch (err) {
+      console.error('Failed to sync offline item:', item, err);
+      remaining.push(item);
+    }
+  }
+  
+  localStorage.setItem('posbah_offline_writes', JSON.stringify(remaining));
+  window.isSyncingOffline = false;
+  
+  if (successCount > 0) {
+    window.dispatchEvent(new CustomEvent('posbah_sync_complete', { detail: { count: successCount } }));
+  }
+}
+
+// Intercept responses to cache successful GETs
+api.interceptors.response.use(
+  (response) => {
+    const config = response.config;
+    let pathname = '';
+    try {
+      pathname = new URL(config.url, config.baseURL || window.location.origin).pathname;
+    } catch {
+      pathname = config.url;
+    }
+    const route = pathname.replace(/^\/api/, '').replace(/^\//, '').replace(/\/$/, '');
+    
+    if (config.method.toUpperCase() === 'GET' && response.status === 200) {
+      const storedUser = localStorage.getItem('posbah_user');
+      let isDemo = false;
+      if (storedUser) {
+        try {
+          const u = JSON.parse(storedUser);
+          isDemo = u?.isDemo === true;
+        } catch (_) {}
+      }
+      
+      if (!isDemo && route !== 'auth/login' && !route.startsWith('midtrans/')) {
+        const parts = route.split('/');
+        if (parts.length === 1) {
+          localStorage.setItem(`posbah_cache_${route}`, JSON.stringify(response.data));
+        }
+      }
+    }
+    return response;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 
 export default api;

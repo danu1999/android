@@ -17,6 +17,7 @@ import Login from './pages/Login';
 import LogAktivitas from './pages/LogAktivitas';
 import RentalMobil from './pages/RentalMobil';
 import { AuthContext, DemoContext, hasRole, DEMO_LIMITS, useAuth } from './AuthContext';
+import { syncOfflineWrites } from './api';
 import './index.css';
 
 // ─── Role-based page access ────────────────────────────────────
@@ -356,8 +357,56 @@ function BusinessModeModal({ onSelectMode }) {
   );
 }
 
+function OfflineBanner() {
+  return (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 99999,
+      background: 'linear-gradient(90deg, #EF4444, #B91C1C)',
+      color: 'white', padding: '0 16px',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      minHeight: '36px', gap: '8px', fontSize: '0.78rem', fontWeight: 700,
+      boxShadow: '0 2px 10px rgba(0,0,0,0.2)'
+    }}>
+      <span>⚠️ Koneksi Terputus (Mode Offline) · Transaksi &amp; data disimpan secara lokal.</span>
+    </div>
+  );
+}
+
 // ─── Root App ──────────────────────────────────────────────────
 function App() {
+  const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOffline(false);
+      syncOfflineWrites();
+    };
+    const handleOffline = () => {
+      setIsOffline(true);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Initial check on startup
+    if (navigator.onLine) {
+      syncOfflineWrites();
+    }
+
+    const handleSyncComplete = (e) => {
+      alert(`Koneksi terhubung kembali! Berhasil menyinkronkan ${e.detail.count} data transaksi/perubahan offline.`);
+      window.location.reload();
+    };
+
+    window.addEventListener('posbah_sync_complete', handleSyncComplete);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('posbah_sync_complete', handleSyncComplete);
+    };
+  }, []);
+
   const [user, setUser] = useState(() => {
     try {
       const stored = localStorage.getItem('posbah_user');
@@ -421,10 +470,10 @@ function App() {
     <AuthContext.Provider value={{ user }}>
       <DemoContext.Provider value={{ showDemoBlock, isDemo: user?.isDemo === true }}>
         <BrowserRouter>
-          {/* Demo Banner */}
-          {user?.isDemo && <DemoBanner />}
+          {/* Offline/Demo Banner */}
+          {isOffline ? <OfflineBanner /> : (user?.isDemo && <DemoBanner />)}
 
-          <div style={{ paddingTop: user?.isDemo ? '36px' : 0, height: '100dvh', boxSizing: 'border-box' }}>
+          <div style={{ paddingTop: (isOffline || user?.isDemo) ? '36px' : 0, height: '100dvh', boxSizing: 'border-box' }}>
             <AppContent user={user} onLogout={handleLogout} appMode={appMode} setAppMode={setAppMode} />
           </div>
 
