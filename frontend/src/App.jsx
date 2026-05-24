@@ -308,7 +308,7 @@ function BusinessModeModal({ onSelectMode }) {
           Selamat Datang di POSBah! 👋
         </h2>
         <p style={{ margin: '0 0 1.5rem', color: '#6B7280', fontSize: '0.9rem' }}>
-          Silakan pilih jenis sistem POS yang ingin Anda gunakan untuk memulai operasional:
+          Silakan pilih jenis sistem POS yang ingin kamu gunakan untuk memulai operasional:
         </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '1.5rem' }}>
@@ -344,7 +344,7 @@ function BusinessModeModal({ onSelectMode }) {
             <div style={{ fontSize: '2.5rem' }}>🚗</div>
             <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#111827' }}>POS Rental Mobil</div>
             <div style={{ fontSize: '0.75rem', color: '#6B7280', lineHeight: 1.4 }}>
-              Kelola daftar unit kendaraan, status penyewaan, kalkulator tarif, & pengembalian.
+              Kelola kendaraan, status penyewaan, kalkulator tarif, pengembalian, biaya benkel dan margin.
             </div>
           </div>
         </div>
