@@ -438,30 +438,52 @@ export default function Keuangan({ appMode: propAppMode }) {
                 }}
                 className={activeTab !== 'SALES' && canEdit(item) ? 'hover-row' : ''}
               >
-                <td>{new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                <td>{new Date(item.date || item.createdAt || item.startDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
 
                 {activeTab === 'SALES' ? (
-                  <>
-                    <td>
-                      <div className="font-bold">{item.receiptNumber || `#${item.id}`}</div>
-                      <div className="text-xs text-gray-600" style={{ marginTop: 2, fontStyle: 'italic' }}>
-                        {item.items?.map(it => {
-                          const name = it.product?.name || 'Produk';
-                          const variant = it.variantName ? ` [${it.variantName}]` : '';
-                          return `${name}${variant} (${it.quantity} ${it.product?.unit || 'pcs'})`;
-                        }).join(', ') || 'Tidak ada detail item'}
-                      </div>
-                    </td>
-                    <td>
-                      <div className="font-bold text-gray-800">Rp {Number(item.total || 0).toLocaleString('id-ID')}</div>
-                      {item.discount > 0 && <div className="text-xs text-red-500">Diskon: Rp {Number(item.discount || 0).toLocaleString('id-ID')}</div>}
-                    </td>
-                    <td>
-                      <span className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full font-bold">
-                        {item.paymentMethod}
-                      </span>
-                    </td>
-                  </>
+                  appMode === 'RENTAL' ? (
+                    <>
+                      <td>
+                        <div className="font-bold">{item.car?.name} ({item.car?.plateNumber})</div>
+                        <div className="text-xs text-gray-600" style={{ marginTop: 2, fontStyle: 'italic' }}>
+                          Pelanggan: {item.customerName}
+                        </div>
+                      </td>
+                      <td>
+                        <div className="font-bold text-gray-800">Rp {Number(item.totalPrice || 0).toLocaleString('id-ID')}</div>
+                        <div className="text-xs text-gray-500" style={{ marginTop: 2 }}>
+                          {new Date(item.startDate).toLocaleDateString('id-ID')} s.d. {new Date(item.endDate).toLocaleDateString('id-ID')}
+                        </div>
+                      </td>
+                      <td>
+                        <span className={`px-2 py-1 text-xs rounded-full font-bold ${item.status === 'RETURNED' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {item.status === 'RETURNED' ? 'Selesai (Mobil Kembali)' : 'Aktif (Disewa)'}
+                        </span>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td>
+                        <div className="font-bold">{item.receiptNumber || `#${item.id}`}</div>
+                        <div className="text-xs text-gray-600" style={{ marginTop: 2, fontStyle: 'italic' }}>
+                          {item.items?.map(it => {
+                            const name = it.product?.name || 'Produk';
+                            const variant = it.variantName ? ` [${it.variantName}]` : '';
+                            return `${name}${variant} (${it.quantity} ${it.product?.unit || 'pcs'})`;
+                          }).join(', ') || 'Tidak ada detail item'}
+                        </div>
+                      </td>
+                      <td>
+                        <div className="font-bold text-gray-800">Rp {Number(item.total || 0).toLocaleString('id-ID')}</div>
+                        {item.discount > 0 && <div className="text-xs text-red-500">Diskon: Rp {Number(item.discount || 0).toLocaleString('id-ID')}</div>}
+                      </td>
+                      <td>
+                        <span className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full font-bold">
+                          {item.paymentMethod}
+                        </span>
+                      </td>
+                    </>
+                  )
                 ) : (
                   <>
                     <td>{item.description}</td>

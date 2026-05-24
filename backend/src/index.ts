@@ -1796,17 +1796,19 @@ app.post('/api/rentals', requireAdmin, checkExcludedEmployee, async (req, res) =
         include: { car: true }
       });
 
-      // 5. Catat di keuangan
-      await tx.finance.create({
-        data: {
-          type: 'RECEIVABLE',
-          amount: Number(totalPrice),
-          description: `Sewa Mobil ${car.name} (${car.plateNumber}) - ${customerName} (Sewa #${createdRental.id})`,
-          status: paymentMethod === 'CASH' || paymentMethod === 'TRANSFER' || paymentMethod === 'QRIS' ? 'PAID' : 'PENDING',
-          customerId: finalCustomerId,
-          date: new Date()
-        }
-      });
+      // 5. Catat di keuangan (Piutang) hanya jika belum lunas (bukan CASH, TRANSFER, atau QRIS)
+      if (paymentMethod !== 'CASH' && paymentMethod !== 'TRANSFER' && paymentMethod !== 'QRIS') {
+        await tx.finance.create({
+          data: {
+            type: 'RECEIVABLE',
+            amount: Number(totalPrice),
+            description: `Sewa Mobil ${car.name} (${car.plateNumber}) - ${customerName} (Sewa #${createdRental.id})`,
+            status: 'PENDING',
+            customerId: finalCustomerId,
+            date: new Date()
+          }
+        });
+      }
 
       return createdRental;
     });
@@ -1859,15 +1861,15 @@ app.post('/api/rentals/:id/return', requireAdmin, checkExcludedEmployee, async (
         include: { car: true }
       });
 
-      // 3. Jika ada denda (lateFee > 0), catat sebagai tambahan keuangan RECEIVABLE
+      // 3. Jika ada denda (lateFee > 0), catat sebagai tambahan keuangan RECEIVABLE hanya jika belum lunas (bukan CASH, TRANSFER, atau QRIS)
       const denda = Number(lateFee || 0);
-      if (denda > 0) {
+      if (denda > 0 && paymentMethod !== 'CASH' && paymentMethod !== 'TRANSFER' && paymentMethod !== 'QRIS') {
         await tx.finance.create({
           data: {
             type: 'RECEIVABLE',
             amount: denda,
             description: `Denda Telat Sewa Mobil ${current.car.name} (${current.car.plateNumber}) - ${current.customerName} (Sewa #${rentalId})`,
-            status: paymentMethod === 'CASH' || paymentMethod === 'TRANSFER' || paymentMethod === 'QRIS' ? 'PAID' : 'PENDING',
+            status: 'PENDING',
             customerId: current.customerId,
             date: new Date()
           }

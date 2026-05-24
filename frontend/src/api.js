@@ -428,17 +428,19 @@ api.defaults.adapter = async function (config) {
       table.push(payload);
       saveTable('posbah_demo_rentals', table);
 
-      const fins = getTable('posbah_demo_finances');
-      fins.push({
-        id: Date.now(),
-        type: 'RECEIVABLE',
-        amount: payload.totalPrice,
-        description: `Piutang sewa mobil ${payload.car.name} ke ${payload.customerName}`,
-        date: new Date().toISOString(),
-        status: payload.paymentMethod === 'HUTANG' ? 'PENDING' : 'PAID',
-        customerId: finalCustomerId
-      });
-      saveTable('posbah_demo_finances', fins);
+      if (payload.paymentMethod !== 'CASH' && payload.paymentMethod !== 'TRANSFER' && payload.paymentMethod !== 'QRIS') {
+        const fins = getTable('posbah_demo_finances');
+        fins.push({
+          id: Date.now(),
+          type: 'RECEIVABLE',
+          amount: payload.totalPrice,
+          description: `Piutang sewa mobil ${payload.car.name} ke ${payload.customerName}`,
+          date: new Date().toISOString(),
+          status: 'PENDING',
+          customerId: finalCustomerId
+        });
+        saveTable('posbah_demo_finances', fins);
+      }
 
       logDemoActivity('CREATE_RENTAL', `Menyewakan mobil ${payload.car.name} (${payload.car.plateNumber}) ke ${payload.customerName}`);
       data = payload;
@@ -458,7 +460,7 @@ api.defaults.adapter = async function (config) {
 
         saveTable('posbah_demo_rentals', table);
 
-        if (rental.lateFee > 0) {
+        if (rental.lateFee > 0 && payload.paymentMethod !== 'CASH' && payload.paymentMethod !== 'TRANSFER' && payload.paymentMethod !== 'QRIS') {
           const fins = getTable('posbah_demo_finances');
           fins.push({
             id: Date.now(),
@@ -466,7 +468,7 @@ api.defaults.adapter = async function (config) {
             amount: rental.lateFee,
             description: `Denda telat pengembalian mobil ${rental.car?.name} oleh ${rental.customerName}`,
             date: new Date().toISOString(),
-            status: 'PAID'
+            status: 'PENDING'
           });
           saveTable('posbah_demo_finances', fins);
         }
