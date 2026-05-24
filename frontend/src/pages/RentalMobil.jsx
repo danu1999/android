@@ -592,26 +592,26 @@ export default function RentalMobil() {
               </div>
 
               {/* Period Start - End */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div className="form-group flex flex-col gap-1.5">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Tanggal Mulai Sewa</label>
+                  <label className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider truncate">Mulai Sewa</label>
                   <input
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
                     required
-                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm md:text-base text-gray-800 outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 transition-all duration-200 h-12"
+                    className="w-full bg-white border border-gray-200 rounded-xl px-2 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-base text-gray-800 outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 transition-all duration-200 h-11 sm:h-12"
                   />
                 </div>
                 <div className="form-group flex flex-col gap-1.5">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Tanggal Akhir Sewa</label>
+                  <label className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider truncate">Akhir Sewa</label>
                   <input
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
                     required
                     min={startDate}
-                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm md:text-base text-gray-800 outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 transition-all duration-200 h-12"
+                    className="w-full bg-white border border-gray-200 rounded-xl px-2 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-base text-gray-800 outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 transition-all duration-200 h-11 sm:h-12"
                   />
                 </div>
               </div>
