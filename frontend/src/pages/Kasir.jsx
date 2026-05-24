@@ -54,6 +54,10 @@ export default function Kasir() {
   const [lastCart, setLastCart] = useState([]);
   const [queueToPrint, setQueueToPrint] = useState(null);
 
+  // Printing States
+  const [printingBluetooth, setPrintingBluetooth] = useState(false);
+  const [paperSize, setPaperSize] = useState('58mm');
+
   // ---- Midtrans QRIS States ----
   const [midtransActiveTx, setMidtransActiveTx] = useState(null);
   const [midtransQrUrl, setMidtransQrUrl] = useState(null);
@@ -651,6 +655,136 @@ export default function Kasir() {
     w.document.close();
   };
 
+  const printViaBluetooth = async (t, cartSnapshot, size) => {
+    if (!navigator.bluetooth) {
+      alert('Browser Anda tidak mendukung Web Bluetooth. Silakan gunakan opsi Cetak Sistem (Browser).');
+      return;
+    }
+    
+    setPrintingBluetooth(true);
+    try {
+      const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
+      });
+
+      const server = await device.gatt.connect();
+      
+      let service;
+      try {
+        service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
+      } catch (e) {
+        const services = await server.getPrimaryServices();
+        if (services.length > 0) {
+          service = services[0];
+        } else {
+          throw new Error('Gagal menemukan layanan printer Bluetooth.');
+        }
+      }
+
+      const characteristics = await service.getCharacteristics();
+      const writeChar = characteristics.find(c => c.properties.write || c.properties.writeWithoutResponse);
+      if (!writeChar) {
+        throw new Error('Karakteristik menulis tidak ditemukan di printer Bluetooth.');
+      }
+
+      const charLimit = size === '58mm' ? 32 : 48;
+      const encoder = new TextEncoder();
+      
+      const ESC = '\x1b';
+      const RESET = ESC + '@';
+      const CENTER = ESC + 'a\x01';
+      const LEFT = ESC + 'a\x00';
+      const DOUBLE_HEIGHT = ESC + '!' + '\x10';
+      const NORMAL = ESC + '!' + '\x00';
+      const BOLD_ON = ESC + 'E\x01';
+      const BOLD_OFF = ESC + 'E\x00';
+      const LINE_FEED = '\n';
+
+      const padText = (left, right) => {
+        const spaceNeeded = charLimit - left.length - right.length;
+        return left + ' '.repeat(spaceNeeded > 0 ? spaceNeeded : 1) + right;
+      };
+
+      let d = '';
+      d += RESET;
+      d += CENTER + DOUBLE_HEIGHT + BOLD_ON + 'PISANG KEJU RAMAYANA' + NORMAL + LINE_FEED;
+      d += CENTER + 'Struk Pembayaran UMKM' + LINE_FEED;
+      d += CENTER + '-'.repeat(charLimit) + LINE_FEED;
+
+      d += LEFT;
+      if (t.queueNumber) {
+        d += BOLD_ON + CENTER + `No. Antrian: #${t.queueNumber}` + BOLD_OFF + LEFT + LINE_FEED;
+        d += CENTER + '-'.repeat(charLimit) + LEFT + LINE_FEED;
+      }
+      d += `No. Trans: ${t.receiptNumber}` + LINE_FEED;
+      d += `Tanggal  : ${new Date(t.createdAt || Date.now()).toLocaleString('id-ID')}` + LINE_FEED;
+      if (t.customerName) {
+        d += `Pelanggan: ${t.customerName}` + LINE_FEED;
+      }
+      d += `Metode   : ${t.paymentMethod}` + LINE_FEED;
+      if (t.notes) {
+        d += `Catatan  : ${t.notes}` + LINE_FEED;
+      }
+      d += '-'.repeat(charLimit) + LINE_FEED;
+
+      const items = t.items || cartSnapshot || [];
+      items.forEach((item) => {
+        const prod = products.find(p => p.id === (item.productId || item.product?.id)) || item.product;
+        const prodName = item.productName || prod?.name || 'Item';
+        const varName = item.variantName || findVariantName(prod, item.price);
+        const nameRow = varName ? `${prodName} (${varName})` : prodName;
+        d += `${nameRow}` + LINE_FEED;
+        
+        if (item.note) {
+          d += `  * ${item.note}` + LINE_FEED;
+        }
+
+        const lineTotal = item.quantity * item.price - (item.discount || 0);
+        const priceDetail = `${item.quantity}x Rp ${Number(item.price).toLocaleString('id-ID')}`;
+        const totalStr = `Rp ${lineTotal.toLocaleString('id-ID')}`;
+        d += padText(priceDetail, totalStr) + LINE_FEED;
+      });
+      d += '-'.repeat(charLimit) + LINE_FEED;
+
+      const sub = t.subtotal || t.total;
+      const dAmt = t.discountAmt || t.discount || 0;
+      const dLabel = t.discountType === 'percent' ? `Diskon (${t.discountInput}%)` : dAmt > 0 ? 'Diskon' : '';
+
+      if (dAmt > 0) {
+        d += padText('Subtotal', `Rp ${Number(sub).toLocaleString('id-ID')}`) + LINE_FEED;
+        d += padText(dLabel, `-Rp ${Number(dAmt).toLocaleString('id-ID')}`) + LINE_FEED;
+      }
+
+      d += BOLD_ON + padText('TOTAL', `Rp ${Number(t.total).toLocaleString('id-ID')}`) + BOLD_OFF + LINE_FEED;
+
+      if (t.amountPaid > 0) {
+        d += padText('Tunai', `Rp ${Number(t.amountPaid).toLocaleString('id-ID')}`) + LINE_FEED;
+        d += padText('Kembali', `Rp ${Number(t.change || 0).toLocaleString('id-ID')}`) + LINE_FEED;
+      }
+      d += '-'.repeat(charLimit) + LINE_FEED;
+
+      d += CENTER + 'Terima kasih atas pembelian Anda! 🙏' + LINE_FEED;
+      d += CENTER + '- POSBAH -' + LINE_FEED;
+      d += LINE_FEED + LINE_FEED + LINE_FEED;
+
+      const rawBytes = encoder.encode(d);
+      const chunkSize = 20;
+      for (let i = 0; i < rawBytes.length; i += chunkSize) {
+        const chunk = rawBytes.slice(i, i + chunkSize);
+        await writeChar.writeValue(chunk);
+      }
+
+      alert('Berhasil mengirim data ke printer Bluetooth!');
+      device.gatt.disconnect();
+    } catch (err) {
+      console.error(err);
+      alert(`Gagal koneksi printer Bluetooth: ${err.message || err}`);
+    } finally {
+      setPrintingBluetooth(false);
+    }
+  };
+
   const filtered = products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   // ---- STYLES ----
@@ -1189,15 +1323,58 @@ export default function Kasir() {
 
       {/* Receipt Modal — Direct Checkout */}
       {receipt && (
-        <div className="modal-overlay">
-          <div className="modal-content glass-panel text-center">
-            <div style={{ fontSize: '3rem', marginBottom: '8px' }}>✅</div>
-            <h2 style={{ color: '#16A34A', margin: '0 0 4px' }}>Berhasil!</h2>
-            <p style={{ color: '#6B7280', fontSize: '0.85rem', marginBottom: '20px' }}>{receipt.receiptNumber}</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <button style={S.btnPrimary} onClick={() => printReceipt('58mm')}><Printer size={16} style={{ marginRight: 8 }} />Cetak Struk 58mm</button>
-              <button style={S.btnPrimary} onClick={() => printReceipt('80mm')}><Printer size={16} style={{ marginRight: 8 }} />Cetak Struk 80mm</button>
-              <button style={S.btnSecondary} onClick={() => setReceipt(null)}>Tutup</button>
+        <div className="modal-overlay z-50 backdrop-blur-md bg-black/35 flex items-center justify-center px-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl flex flex-col gap-4 text-center animate-in fade-in zoom-in-95 duration-200">
+            <div style={{ fontSize: '3rem', marginBottom: '-5px' }}>✅</div>
+            <h2 style={{ color: '#16A34A', margin: '0 0 2px', fontSize: '1.25rem', fontWeight: 900 }}>Pembayaran Berhasil!</h2>
+            <p style={{ color: '#6B7280', fontSize: '0.85rem', margin: '0 0 10px', fontWeight: 700 }}>{receipt.receiptNumber}</p>
+            
+            {/* Paper Size Picker */}
+            <div className="flex flex-col gap-1.5 text-left">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Ukuran Kertas Struk</span>
+              <div className="grid grid-cols-2 gap-2 bg-gray-50/50 p-1 rounded-xl border border-gray-100">
+                {['58mm', '80mm'].map(size => (
+                  <button
+                    key={size}
+                    type="button"
+                    onClick={() => setPaperSize(size)}
+                    className={`py-2 text-xs font-black text-center transition-all cursor-pointer rounded-lg border-none ${
+                      paperSize === size
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'bg-white border border-gray-200/50 text-gray-550 hover:bg-gray-50'
+                    }`}
+                  >
+                    Thermal {size}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Print Triggers */}
+            <div className="flex flex-col gap-2.5 mt-2">
+              <button
+                type="button"
+                onClick={() => printViaBluetooth(receipt, lastCart, paperSize)}
+                disabled={printingBluetooth}
+                className="w-full flex items-center justify-center gap-1.5 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black cursor-pointer shadow-md shadow-indigo-600/10 transition-all border-none active:scale-[0.98] disabled:bg-gray-300 disabled:shadow-none"
+              >
+                <Printer size={15} />
+                {printingBluetooth ? 'Menghubungkan...' : 'Hubungkan & Cetak (Bluetooth)'}
+              </button>
+              <button
+                type="button"
+                onClick={() => printReceipt(paperSize)}
+                className="w-full flex items-center justify-center gap-1.5 py-3 bg-gray-100 hover:bg-gray-250 text-gray-700 rounded-xl text-xs font-bold cursor-pointer transition-all border-none active:scale-[0.98]"
+              >
+                Cetak Sistem (Browser)
+              </button>
+              <button
+                type="button"
+                onClick={() => setReceipt(null)}
+                className="w-full py-2.5 text-gray-500 hover:text-gray-800 text-xs font-bold rounded-xl border border-gray-200/50 bg-white cursor-pointer transition-all mt-1"
+              >
+                Tutup
+              </button>
             </div>
           </div>
         </div>
@@ -1205,18 +1382,61 @@ export default function Kasir() {
 
       {/* Receipt Modal — Queue Payment */}
       {queueToPrint && (
-        <div className="modal-overlay">
-          <div className="modal-content glass-panel text-center">
-            <div style={{ fontSize: '3rem', marginBottom: '8px' }}>✅</div>
-            <h2 style={{ color: '#16A34A', margin: '0 0 4px' }}>Pembayaran Berhasil!</h2>
-            <p style={{ color: '#6B7280', fontSize: '0.85rem', marginBottom: '4px' }}>
+        <div className="modal-overlay z-50 backdrop-blur-md bg-black/35 flex items-center justify-center px-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl flex flex-col gap-4 text-center animate-in fade-in zoom-in-95 duration-200">
+            <div style={{ fontSize: '3rem', marginBottom: '-5px' }}>✅</div>
+            <h2 style={{ color: '#16A34A', margin: '0 0 2px', fontSize: '1.25rem', fontWeight: 900 }}>Pembayaran Antrian Sukses!</h2>
+            <p style={{ color: '#6B7280', fontSize: '0.85rem', margin: '0 0 2px', fontWeight: 700 }}>
               {queueToPrint.queueNumber && <><b>Antrian #{queueToPrint.queueNumber}</b> &middot; </>}{queueToPrint.receiptNumber}
             </p>
-            <p style={{ color: '#6B7280', fontSize: '0.82rem', marginBottom: '20px' }}>Metode: {queueToPrint.paymentMethod}</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <button style={S.btnPrimary} onClick={() => printQueueReceipt(queueToPrint, '58mm')}><Printer size={16} style={{ marginRight: 8 }} />Cetak Struk 58mm</button>
-              <button style={S.btnPrimary} onClick={() => printQueueReceipt(queueToPrint, '80mm')}><Printer size={16} style={{ marginRight: 8 }} />Cetak Struk 80mm</button>
-              <button style={S.btnSecondary} onClick={() => setQueueToPrint(null)}>Tutup</button>
+            <p style={{ color: '#6B7280', fontSize: '0.78rem', margin: '0 0 10px', fontWeight: 600 }}>Metode: {queueToPrint.paymentMethod}</p>
+
+            {/* Paper Size Picker */}
+            <div className="flex flex-col gap-1.5 text-left">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Ukuran Kertas Struk</span>
+              <div className="grid grid-cols-2 gap-2 bg-gray-50/50 p-1 rounded-xl border border-gray-100">
+                {['58mm', '80mm'].map(size => (
+                  <button
+                    key={size}
+                    type="button"
+                    onClick={() => setPaperSize(size)}
+                    className={`py-2 text-xs font-black text-center transition-all cursor-pointer rounded-lg border-none ${
+                      paperSize === size
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'bg-white border border-gray-200/50 text-gray-550 hover:bg-gray-50'
+                    }`}
+                  >
+                    Thermal {size}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Print Triggers */}
+            <div className="flex flex-col gap-2.5 mt-2">
+              <button
+                type="button"
+                onClick={() => printViaBluetooth(queueToPrint, null, paperSize)}
+                disabled={printingBluetooth}
+                className="w-full flex items-center justify-center gap-1.5 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black cursor-pointer shadow-md shadow-indigo-600/10 transition-all border-none active:scale-[0.98] disabled:bg-gray-300 disabled:shadow-none"
+              >
+                <Printer size={15} />
+                {printingBluetooth ? 'Menghubungkan...' : 'Hubungkan & Cetak (Bluetooth)'}
+              </button>
+              <button
+                type="button"
+                onClick={() => printQueueReceipt(queueToPrint, paperSize)}
+                className="w-full flex items-center justify-center gap-1.5 py-3 bg-gray-100 hover:bg-gray-250 text-gray-700 rounded-xl text-xs font-bold cursor-pointer transition-all border-none active:scale-[0.98]"
+              >
+                Cetak Sistem (Browser)
+              </button>
+              <button
+                type="button"
+                onClick={() => setQueueToPrint(null)}
+                className="w-full py-2.5 text-gray-500 hover:text-gray-800 text-xs font-bold rounded-xl border border-gray-200/50 bg-white cursor-pointer transition-all mt-1"
+              >
+                Tutup
+              </button>
             </div>
           </div>
         </div>
