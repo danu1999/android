@@ -10,7 +10,8 @@ const toLocalDatetime = (date = new Date()) => {
   return new Date(d.getTime() - offset).toISOString().slice(0, 16);
 };
 
-export default function Keuangan() {
+export default function Keuangan({ appMode: propAppMode }) {
+  const appMode = propAppMode || localStorage.getItem('posbah_app_mode') || 'FNB';
   const { showDemoBlock, isDemo } = useDemoBlock();
   const { user } = useAuth();
 
@@ -29,8 +30,9 @@ export default function Keuangan() {
   const [dateTo, setDateTo] = useState('');
 
   const filteredFinances = finances.filter(item => {
-    if (!item.date) return true;
-    const itemDate = new Date(item.date);
+    const itemDateStr = item.date || item.createdAt || item.startDate;
+    if (!itemDateStr) return true;
+    const itemDate = new Date(itemDateStr);
     const checkDate = new Date(itemDate.getFullYear(), itemDate.getMonth(), itemDate.getDate()).getTime();
     
     if (dateFrom) {
@@ -69,7 +71,8 @@ export default function Keuangan() {
         const res = await api.get('/reports', { params: { from: dateFrom, to: dateTo } });
         setReports(res.data);
       } else if (activeTab === 'SALES') {
-        const res = await api.get('/transactions');
+        const endpoint = appMode === 'RENTAL' ? '/rentals' : '/transactions';
+        const res = await api.get(endpoint);
         setFinances(res.data);
       } else if (activeTab === 'MARGIN') {
         const res = await api.get('/products');
@@ -165,28 +168,31 @@ export default function Keuangan() {
     }
   };
 
-  const renderTabs = () => (
-    <div style={{ display: 'flex', gap: 8, overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: 4, marginBottom: 16, scrollbarWidth: 'none' }}>
-      {[
-        { id: 'REKAP', label: '📊 Rekap' },
-        { id: 'SALES', label: '🛒 Transaksi' },
-        { id: 'EXPENSE', label: '💸 Pengeluaran' },
-        { id: 'MARGIN', label: '📈 Margin' },
-        { id: 'PAYABLE', label: '🔴 Hutang' },
-        { id: 'RECEIVABLE', label: '🟢 Piutang' },
-      ].map(tab => (
-        <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-          padding: '9px 18px', borderRadius: 99, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
-          fontWeight: 700, fontSize: 13, flexShrink: 0, transition: 'all 0.2s',
-          background: activeTab === tab.id ? 'linear-gradient(135deg,#6366F1,#4F46E5)' : '#F1F5F9',
-          color: activeTab === tab.id ? 'white' : '#64748B',
-          boxShadow: activeTab === tab.id ? '0 4px 12px rgba(99,102,241,0.3)' : 'none',
-        }}>
-          {tab.label}{PREMIUM_TABS.includes(tab.id) && !isPremium ? ' 🔒' : ''}
-        </button>
-      ))}
-    </div>
-  );
+  const renderTabs = () => {
+    const tabs = [
+      { id: 'REKAP', label: '📊 Rekap' },
+      { id: 'SALES', label: appMode === 'RENTAL' ? '🚗 Sewa Mobil' : '🛒 Transaksi' },
+      { id: 'EXPENSE', label: '💸 Pengeluaran' },
+      ...(appMode === 'RENTAL' ? [] : [{ id: 'MARGIN', label: '📈 Margin' }]),
+      { id: 'PAYABLE', label: '🔴 Hutang' },
+      { id: 'RECEIVABLE', label: '🟢 Piutang' },
+    ];
+    return (
+      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: 4, marginBottom: 16, scrollbarWidth: 'none' }}>
+        {tabs.map(tab => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+            padding: '9px 18px', borderRadius: 99, border: 'none', cursor: 'pointer', whiteSpace: 'nowrap',
+            fontWeight: 700, fontSize: 13, flexShrink: 0, transition: 'all 0.2s',
+            background: activeTab === tab.id ? 'linear-gradient(135deg,#6366F1,#4F46E5)' : '#F1F5F9',
+            color: activeTab === tab.id ? 'white' : '#64748B',
+            boxShadow: activeTab === tab.id ? '0 4px 12px rgba(99,102,241,0.3)' : 'none',
+          }}>
+            {tab.label}{PREMIUM_TABS.includes(tab.id) && !isPremium ? ' 🔒' : ''}
+          </button>
+        ))}
+      </div>
+    );
+  };
 
   const renderMargin = () => {
     const flattenedProducts = [];
@@ -414,8 +420,8 @@ export default function Keuangan() {
         <thead>
           <tr>
             <th>Tanggal</th>
-            <th>{activeTab === 'SALES' ? 'Nama Transaksi' : 'Deskripsi'}</th>
-            <th>{activeTab === 'SALES' ? 'Total / Diskon' : 'Jumlah (Rp)'}</th>
+            <th>{activeTab === 'SALES' ? (appMode === 'RENTAL' ? 'Mobil & Pelanggan' : 'Nama Transaksi') : 'Deskripsi'}</th>
+            <th>{activeTab === 'SALES' ? (appMode === 'RENTAL' ? 'Durasi / Biaya' : 'Total / Diskon') : 'Jumlah (Rp)'}</th>
             {activeTab !== 'EXPENSE' && <th>Status / Info</th>}
           </tr>
         </thead>
@@ -505,18 +511,34 @@ export default function Keuangan() {
       csvContent += "Pendapatan Bersih," + reports.netIncome + "\n";
       csvContent += "Piutang Tertunda," + reports.pendingReceivables + "\n";
     } else if (activeTab === 'SALES') {
-      csvContent += "Tanggal,No Struk,Tipe,Total (Rp),Diskon (Rp),Metode Bayar\n";
-      filteredFinances.forEach(item => {
-        const row = [
-          new Date(item.date).toLocaleDateString('id-ID'),
-          item.receiptNumber || `#${item.id}`,
-          item.type,
-          item.total || 0,
-          item.discount || 0,
-          item.paymentMethod || '-'
-        ].join(",");
-        csvContent += row + "\n";
-      });
+      if (appMode === 'RENTAL') {
+        csvContent += "Tanggal,Mobil,Pelanggan,Mulai,Selesai,Total Biaya (Rp),Status\n";
+        filteredFinances.forEach(item => {
+          const row = [
+            new Date(item.createdAt || item.startDate).toLocaleDateString('id-ID'),
+            `"${item.car?.name || ''} (${item.car?.plateNumber || ''})"`,
+            `"${item.customerName || ''}"`,
+            new Date(item.startDate).toLocaleDateString('id-ID'),
+            new Date(item.endDate).toLocaleDateString('id-ID'),
+            item.totalPrice || 0,
+            item.status || '-'
+          ].join(",");
+          csvContent += row + "\n";
+        });
+      } else {
+        csvContent += "Tanggal,No Struk,Tipe,Total (Rp),Diskon (Rp),Metode Bayar\n";
+        filteredFinances.forEach(item => {
+          const row = [
+            new Date(item.date).toLocaleDateString('id-ID'),
+            item.receiptNumber || `#${item.id}`,
+            item.type,
+            item.total || 0,
+            item.discount || 0,
+            item.paymentMethod || '-'
+          ].join(",");
+          csvContent += row + "\n";
+        });
+      }
     } else {
       csvContent += "Tanggal,Deskripsi,Jumlah (Rp),Status\n";
       filteredFinances.forEach(item => {
@@ -557,7 +579,7 @@ export default function Keuangan() {
         </head>
         <body>
           <div class="header">
-            <div class="title">POSBah - Laporan ${activeTab}</div>
+            <div class="title">POSBah - Laporan ${activeTab === 'SALES' && appMode === 'RENTAL' ? 'Sewa Mobil' : activeTab}</div>
             <div>Tanggal Cetak: ${new Date().toLocaleString('id-ID')}</div>
           </div>
     `;
@@ -572,26 +594,51 @@ export default function Keuangan() {
         </div>
       `;
     } else if (activeTab === 'SALES') {
-      content += `
-        <table>
-          <thead>
-            <tr>
-              <th>Tanggal</th><th>No Struk</th><th>Tipe</th><th>Total (Rp)</th><th>Metode Bayar</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${filteredFinances.map(item => `
+      if (appMode === 'RENTAL') {
+        content += `
+          <table>
+            <thead>
               <tr>
-                <td>${new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
-                <td>${item.receiptNumber || '#' + item.id}</td>
-                <td>${item.type}</td>
-                <td>Rp ${Number(item.total || 0).toLocaleString('id-ID')}</td>
-                <td>${item.paymentMethod || '-'}</td>
+                <th>Tanggal</th><th>Mobil</th><th>Pelanggan</th><th>Durasi</th><th>Total Biaya (Rp)</th><th>Status</th>
               </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      `;
+            </thead>
+            <tbody>
+              ${filteredFinances.map(item => `
+                <tr>
+                  <td>${new Date(item.createdAt || item.startDate).toLocaleDateString('id-ID')}</td>
+                  <td>${item.car?.name || ''} (${item.car?.plateNumber || ''})</td>
+                  <td>${item.customerName}</td>
+                  <td>${new Date(item.startDate).toLocaleDateString('id-ID')} - ${new Date(item.endDate).toLocaleDateString('id-ID')}</td>
+                  <td>Rp ${Number(item.totalPrice || 0).toLocaleString('id-ID')}</td>
+                  <td>${item.status === 'RETURNED' ? 'Selesai' : 'Aktif'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } else {
+        content += `
+          <table>
+            <thead>
+              <tr>
+                <th>Tanggal</th><th>No Struk</th><th>Tipe</th><th>Total (Rp)</th><th>Metode Bayar</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredFinances.map(item => `
+                <tr>
+                  <td>${new Date(item.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                  <td>${item.receiptNumber || '#' + item.id}</td>
+                  <td>${item.type}</td>
+                  <td>Rp ${Number(item.total || 0).toLocaleString('id-ID')}</td>
+                  <td>${item.paymentMethod || '-'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      }
+    } else {
       content += `
         <table>
           <thead>

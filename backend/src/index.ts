@@ -677,7 +677,21 @@ app.get('/api/activity-logs', requireOwner, async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 app.get('/api/finances', requireAdmin, async (req, res) => {
   try {
+    const appMode = req.headers['x-app-mode'] as string;
     const finances = await prisma.finance.findMany({
+      where: appMode === 'RENTAL' ? {
+        OR: [
+          { description: { startsWith: '[RENTAL]' } },
+          { description: { startsWith: 'Sewa Mobil' } },
+          { description: { startsWith: 'Denda Telat Sewa Mobil' } }
+        ]
+      } : {
+        AND: [
+          { description: { not: { startsWith: '[RENTAL]' } } },
+          { description: { not: { startsWith: 'Sewa Mobil' } } },
+          { description: { not: { startsWith: 'Denda Telat' } } }
+        ]
+      },
       include: { customer: true },
       orderBy: { date: 'desc' }
     });
@@ -690,11 +704,16 @@ app.get('/api/finances', requireAdmin, async (req, res) => {
 app.post('/api/finances', requireAdmin, async (req, res) => {
   try {
     const { type, amount, description, date, status, customerId } = req.body;
+    const appMode = req.headers['x-app-mode'] as string;
+    let finalDesc = description;
+    if (appMode === 'RENTAL' && !description.startsWith('[RENTAL]')) {
+      finalDesc = `[RENTAL] ${description}`;
+    }
     const finance = await prisma.finance.create({
       data: {
         type,
         amount: Number(amount),
-        description,
+        description: finalDesc,
         date: date ? new Date(date) : new Date(),
         status: status || 'PENDING',
         customerId: customerId ? Number(customerId) : null,
@@ -720,10 +739,16 @@ app.put('/api/finances/:id', requireAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Nominal harus lebih dari 0' });
     }
 
+    const appMode = req.headers['x-app-mode'] as string;
+    let finalDesc = description;
+    if (description && appMode === 'RENTAL' && !description.startsWith('[RENTAL]')) {
+      finalDesc = `[RENTAL] ${description}`;
+    }
+
     const finance = await prisma.finance.update({
       where: { id: Number(id) },
       data: {
-        type, amount: Number(amount), description,
+        type, amount: Number(amount), description: finalDesc,
         date: date ? new Date(date) : undefined,
         status, customerId: customerId ? Number(customerId) : null,
       },
@@ -815,45 +840,88 @@ app.delete('/api/finances/:id', requireAdmin, async (req, res) => {
 app.get('/api/reports', requireAdmin, async (req, res) => {
   try {
     const { from, to } = req.query;
+    const appMode = req.headers['x-app-mode'] as string;
 
-    const salesWhere: any = { type: 'SALES', status: { not: 'CANCELLED' } };
-    const expenseWhere: any = { type: 'EXPENSE' };
-    const receivableWhere: any = { type: 'RECEIVABLE', status: 'PENDING' };
-    const payableWhere: any = { type: 'PAYABLE', status: 'PENDING' };
+    const financeBaseWhere = appMode === 'RENTAL' ? {
+      OR: [
+        { description: { startsWith: '[RENTAL]' } },
+        { description: { startsWith: 'Sewa Mobil' } },
+        { description: { startsWith: 'Denda Telat Sewa Mobil' } }
+      ]
+    } : {
+      AND: [
+        { description: { not: { startsWith: '[RENTAL]' } } },
+        { description: { not: { startsWith: 'Sewa Mobil' } } },
+        { description: { not: { startsWith: 'Denda Telat' } } }
+      ]
+    };
 
+    const expenseWhere: any = { type: 'EXPENSE', ...financeBaseWhere };
+    const receivableWhere: any = { type: 'RECEIVABLE', status: 'PENDING', ...financeBaseWhere };
+    const payableWhere: any = { type: 'PAYABLE', status: 'PENDING', ...financeBaseWhere };
+
+    const dateFilter: any = {};
+    let dateFilterActive = false;
     if (from || to) {
-      const dateFilter: any = {};
       if (from) dateFilter.gte = new Date(from as string);
       if (to) {
         const toDate = new Date(to as string);
         toDate.setHours(23, 59, 59, 999);
         dateFilter.lte = toDate;
       }
-      salesWhere.date = dateFilter;
+      dateFilterActive = true;
       expenseWhere.date = dateFilter;
       receivableWhere.date = dateFilter;
       payableWhere.date = dateFilter;
     }
 
-    const totalSales = await prisma.transaction.aggregate({
-      where: salesWhere,
-      _sum: { total: true }
-    });
+    let totalSalesVal = 0;
+    let todaySalesVal = 0;
 
-    // Hitung total penjualan hari ini (zona waktu GMT+7 Jakarta)
     const tzOffset = 7 * 60 * 60 * 1000;
     const localNow = new Date(Date.now() + tzOffset);
     const startOfToday = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate(), 0, 0, 0, 0) - tzOffset);
     const endOfToday = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate(), 23, 59, 59, 999) - tzOffset);
 
-    const todaySales = await prisma.transaction.aggregate({
-      where: {
-        type: 'SALES',
-        status: { not: 'CANCELLED' },
-        date: { gte: startOfToday, lte: endOfToday }
-      },
-      _sum: { total: true }
-    });
+    if (appMode === 'RENTAL') {
+      const rentalWhere: any = {};
+      if (dateFilterActive) {
+        rentalWhere.createdAt = dateFilter;
+      }
+      const totalRentals = await prisma.rental.aggregate({
+        where: rentalWhere,
+        _sum: { totalPrice: true }
+      });
+      totalSalesVal = totalRentals._sum.totalPrice || 0;
+
+      const todayRentals = await prisma.rental.aggregate({
+        where: {
+          createdAt: { gte: startOfToday, lte: endOfToday }
+        },
+        _sum: { totalPrice: true }
+      });
+      todaySalesVal = todayRentals._sum.totalPrice || 0;
+    } else {
+      const salesWhere: any = { type: 'SALES', status: { not: 'CANCELLED' } };
+      if (dateFilterActive) {
+        salesWhere.date = dateFilter;
+      }
+      const totalSales = await prisma.transaction.aggregate({
+        where: salesWhere,
+        _sum: { total: true }
+      });
+      totalSalesVal = totalSales._sum.total || 0;
+
+      const todaySales = await prisma.transaction.aggregate({
+        where: {
+          type: 'SALES',
+          status: { not: 'CANCELLED' },
+          date: { gte: startOfToday, lte: endOfToday }
+        },
+        _sum: { total: true }
+      });
+      todaySalesVal = todaySales._sum.total || 0;
+    }
 
     const expenses = await prisma.finance.aggregate({
       where: expenseWhere,
@@ -867,13 +935,14 @@ app.get('/api/reports', requireAdmin, async (req, res) => {
       where: payableWhere,
       _sum: { amount: true }
     });
+
     res.json({
-      totalSales: totalSales._sum.total || 0,
-      todaySales: todaySales._sum.total || 0,
+      totalSales: totalSalesVal,
+      todaySales: todaySalesVal,
       totalExpenses: expenses._sum.amount || 0,
       pendingReceivables: receivables._sum.amount || 0,
       pendingPayables: payables._sum.amount || 0,
-      netIncome: (totalSales._sum.total || 0) - (expenses._sum.amount || 0)
+      netIncome: totalSalesVal - (expenses._sum.amount || 0)
     });
   } catch (error) {
     console.error('Error generating report:', error);

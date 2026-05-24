@@ -249,7 +249,7 @@ function AppContent({ user, onLogout, appMode, setAppMode }) {
           <Route path="/"          element={appMode === 'RENTAL' ? <RentalMobil /> : <Kasir />} />
           <Route path="/katalog"   element={<Katalog />} />
           {canAccess(effectiveRole, '/dashboard')  && <Route path="/dashboard"  element={<Dashboard appMode={appMode} />} />}
-          {canAccess(effectiveRole, '/keuangan')   && <Route path="/keuangan"   element={<Keuangan />} />}
+          {canAccess(effectiveRole, '/keuangan')   && <Route path="/keuangan"   element={<Keuangan appMode={appMode} />} />}
           {canAccess(effectiveRole, '/pelanggan')  && <Route path="/pelanggan"  element={<Pelanggan />} />}
           {canAccess(effectiveRole, '/karyawan')   && <Route path="/karyawan"   element={<Karyawan />} />}
           {canAccess(effectiveRole, '/pesanan')    && <Route path="/pesanan"    element={<Pesanan />} />}

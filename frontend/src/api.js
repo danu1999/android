@@ -9,7 +9,7 @@ const api = axios.create({
   },
 });
 
-// Inject user ID & role ke setiap request agar backend bisa validasi akses
+// Inject user ID, role, dan app mode ke setiap request agar backend bisa validasi akses & filter data
 api.interceptors.request.use((config) => {
   try {
     const stored = localStorage.getItem('posbah_user');
@@ -18,6 +18,8 @@ api.interceptors.request.use((config) => {
       if (user?.id !== undefined && user?.id !== null) config.headers['x-employee-id'] = String(user.id);
       if (user?.role) config.headers['x-employee-role'] = user.role;
     }
+    const appMode = localStorage.getItem('posbah_app_mode') || 'FNB';
+    config.headers['x-app-mode'] = appMode;
   } catch (_) {}
   return config;
 });
@@ -282,20 +284,34 @@ api.defaults.adapter = async function (config) {
     } else if (route === 'payroll/history') {
       data = [];
     } else if (route === 'reports') {
-      const txs = getTable('posbah_demo_transactions').filter(t => t.status === 'COMPLETED');
+      const mode = localStorage.getItem('posbah_app_mode') || 'FNB';
       const fins = getTable('posbah_demo_finances');
-      
-      const totalSales = txs.reduce((sum, t) => sum + t.total, 0);
       const totalExpenses = fins.filter(f => f.type === 'EXPENSE' && f.status === 'PAID').reduce((sum, f) => sum + f.amount, 0);
       const pendingReceivables = fins.filter(f => f.type === 'RECEIVABLE' && f.status === 'PENDING').reduce((sum, f) => sum + f.amount, 0);
+
+      let totalSales = 0;
+      let todaySales = 0;
+      let count = 0;
+
+      if (mode === 'RENTAL') {
+        const rentals = getTable('posbah_demo_rentals');
+        totalSales = rentals.reduce((sum, r) => sum + r.totalPrice, 0);
+        todaySales = rentals.filter(r => new Date(r.createdAt || r.startDate).toDateString() === new Date().toDateString()).reduce((sum, r) => sum + r.totalPrice, 0);
+        count = rentals.length;
+      } else {
+        const txs = getTable('posbah_demo_transactions').filter(t => t.status === 'COMPLETED');
+        totalSales = txs.reduce((sum, t) => sum + t.total, 0);
+        todaySales = txs.filter(t => new Date(t.date).toDateString() === new Date().toDateString()).reduce((sum, t) => sum + t.total, 0);
+        count = txs.length;
+      }
       
       data = {
         totalSales,
         totalExpenses,
         netIncome: totalSales - totalExpenses,
         pendingReceivables,
-        todaySales: txs.filter(t => new Date(t.date).toDateString() === new Date().toDateString()).reduce((sum, t) => sum + t.total, 0),
-        transactionCount: txs.length
+        todaySales,
+        transactionCount: count
       };
     }
   } else if (method === 'POST') {
