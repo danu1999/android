@@ -27,129 +27,159 @@ api.interceptors.request.use((config) => {
 // ─────────────────────────────────────────────────────────────
 
 const initDemoData = () => {
-  if (!localStorage.getItem('posbah_demo_products')) {
-    localStorage.setItem('posbah_demo_products', JSON.stringify([
-      { id: 301, name: 'Pisang Keju Cokelat', price: 15000, costPrice: 9000, stock: 120, unit: 'pcs', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: '/demo/pisang-keju-coklat.png' },
-      { id: 302, name: 'Pisang Keju Stroberi', price: 15000, costPrice: 9500, stock: 85, unit: 'pcs', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: '/demo/pisang-keju-stroberi.png' },
-      { id: 303, name: 'Pisang Keju Premium', price: 20000, costPrice: 11000, stock: 50, unit: 'pcs', wholesaleEnabled: false, wholesalePrices: null, variants: JSON.stringify([{ id: 1, name: 'Keju Melimpah', price: 25000, costPrice: 13000, stock: 30 }, { id: 2, name: 'Milo Almond', price: 28000, costPrice: 15000, stock: 20 }]), barcode: null, image: '/demo/pisang-keju-premium.png' },
-      { id: 304, name: 'Jus Alpukat', price: 18000, costPrice: 10000, stock: 60, unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: '/demo/jus-alpukat.png' },
-      { id: 305, name: 'Jus Mangga', price: 15000, costPrice: 8000, stock: 75, unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: '/demo/jus-mangga.png' },
-      { id: 306, name: 'Es Teh Manis', price: 8000, costPrice: 3000, stock: 200, unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: null },
-    ]));
-  }
-  if (!localStorage.getItem('posbah_demo_customers')) {
-    localStorage.setItem('posbah_demo_customers', JSON.stringify([
-      { id: 501, name: 'Budi Santoso', phone: '08123456789', address: 'Jl. Merdeka No. 10' },
-      { id: 502, name: 'Siti Rahma', phone: '08567890123', address: 'Jl. Mawar No. 4' },
-      { id: 503, name: 'Andi Wijaya', phone: '08789012345', address: 'Jl. Melati No. 15' },
-    ]));
-  }
-  if (!localStorage.getItem('posbah_demo_employees')) {
-    localStorage.setItem('posbah_demo_employees', JSON.stringify([
-      { id: 1, name: 'Kasir Utama', role: 'KASIR', pin: '111111', salary: 2500000 },
-      { id: 2, name: 'Admin Gudang', role: 'ADMIN', pin: '222222', salary: 3000000 },
-    ]));
-  }
-  if (!localStorage.getItem('posbah_demo_suppliers')) {
-    localStorage.setItem('posbah_demo_suppliers', JSON.stringify([
-      { id: 601, name: 'CV Maju Bersama (Demo)', phone: '081234567890', address: 'Jl. Raya No. 12, Bandung', notes: 'Supplier utama bahan baku' },
-      { id: 602, name: 'Toko Grosir Pak Haji (Demo)', phone: '081298765432', address: 'Pasar Induk Timur Blok C-7', notes: 'Sayuran & bumbu segar' },
-    ]));
-  }
-  if (!localStorage.getItem('posbah_demo_purchase_orders')) {
-    localStorage.setItem('posbah_demo_purchase_orders', JSON.stringify([
-      { id: 701, supplierId: 601, supplier: { name: 'CV Maju Bersama (Demo)' }, date: new Date(Date.now() - 3 * 86400000).toISOString(), status: 'RECEIVED', total: 1200000, notes: 'Restok bahan baku bulan ini', items: [{ productId: 301, product: { name: 'Tepung Terigu (Demo)' }, quantity: 50, costPrice: 12000 }, { productId: 302, product: { name: 'Gula Pasir (Demo)' }, quantity: 30, costPrice: 15000 }] },
-      { id: 702, supplierId: 602, supplier: { name: 'Toko Grosir Pak Haji (Demo)' }, date: new Date(Date.now() - 1 * 86400000).toISOString(), status: 'ORDERED', total: 450000, notes: '', items: [{ productId: 304, product: { name: 'Bawang Merah (Demo)' }, quantity: 20, costPrice: 22500 }] },
-    ]));
-  }
-  if (!localStorage.getItem('posbah_demo_cars')) {
-    localStorage.setItem('posbah_demo_cars', JSON.stringify([
-      { id: 801, name: 'Toyota Avanza', plateNumber: 'D 1234 ABC', type: 'MPV', pricePerDay: 350000, status: 'AVAILABLE' },
-      { id: 802, name: 'Mitsubishi Pajero', plateNumber: 'D 8888 BOSS', type: 'SUV', pricePerDay: 800000, status: 'AVAILABLE' },
-      { id: 803, name: 'Honda Brio', plateNumber: 'D 5678 XYZ', type: 'City Car', pricePerDay: 250000, status: 'RENTED' },
-    ]));
-  }
-  if (!localStorage.getItem('posbah_demo_rentals')) {
-    localStorage.setItem('posbah_demo_rentals', JSON.stringify([
-      { id: 901, carId: 803, car: { name: 'Honda Brio', plateNumber: 'D 5678 XYZ', pricePerDay: 250000 }, customerId: 501, customerName: 'Budi Santoso', startDate: new Date(Date.now() - 2 * 86400000).toISOString(), endDate: new Date(Date.now() + 1 * 86400000).toISOString(), totalPrice: 750000, status: 'ACTIVE', actualReturnDate: null, lateFee: 0, employeeId: 1 },
-      { id: 902, carId: 801, car: { name: 'Toyota Avanza', plateNumber: 'D 1234 ABC', pricePerDay: 350000 }, customerId: 502, customerName: 'Siti Rahma', startDate: new Date(Date.now() - 5 * 86400000).toISOString(), endDate: new Date(Date.now() - 3 * 86400000).toISOString(), totalPrice: 700000, status: 'RETURNED', actualReturnDate: new Date(Date.now() - 3 * 86400000).toISOString(), lateFee: 0, employeeId: 1 },
-    ]));
-  }
-  if (!localStorage.getItem('posbah_demo_transactions')) {
-    localStorage.setItem('posbah_demo_transactions', JSON.stringify([
-      {
-        id: 1001,
-        receiptNumber: 'TX-20260520-001',
-        date: new Date(Date.now() - 4 * 3600000).toISOString(),
-        subtotal: 155000,
-        discountType: null,
-        discountInput: 0,
-        discountAmt: 0,
-        total: 155000,
-        paymentMethod: 'QRIS',
-        status: 'COMPLETED',
-        type: 'SALES',
-        employeeId: 1,
-        customerName: 'Budi Santoso',
-        items: [
-          { productId: 301, quantity: 5, price: 15000, costPrice: 9000, product: { name: 'Pisang Keju Cokelat' } },
-          { productId: 304, quantity: 4, price: 18000, costPrice: 10000, product: { name: 'Jus Alpukat' } },
-        ]
-      },
-      {
-        id: 1002,
-        receiptNumber: 'TX-20260520-002',
-        date: new Date(Date.now() - 3 * 3600000).toISOString(),
-        subtotal: 75000,
-        discountType: null,
-        discountInput: 0,
-        discountAmt: 0,
-        total: 75000,
-        paymentMethod: 'CASH',
-        status: 'COMPLETED',
-        type: 'SALES',
-        employeeId: 1,
-        customerName: 'Siti Rahma',
-        items: [
-          { productId: 302, quantity: 5, price: 15000, costPrice: 9500, product: { name: 'Pisang Keju Stroberi' } }
-        ]
-      },
-      {
-        id: 1003,
-        receiptNumber: 'PO-DEMO-001',
-        date: new Date(Date.now() - 1 * 86400000).toISOString(),
-        subtotal: 1500000,
-        discountType: null,
-        discountInput: 0,
-        discountAmt: 0,
-        total: 1500000,
-        paymentMethod: 'CASH',
-        status: 'PENDING',
-        type: 'PRE_ORDER',
-        orderStatus: 'DP_PAID',
-        dpAmount: 500000,
-        deliveryDate: new Date(Date.now() + 2 * 86400000).toISOString(),
-        notes: 'Nasi kotak 100 box, antar jam 10 pagi',
-        employeeId: 1,
-        customerName: 'Catering Bu Dewi',
-        items: [{ productId: 301, quantity: 100, price: 15000, costPrice: 9000, product: { name: 'Nasi Kotak Spesial (Demo)' } }]
-      }
-    ]));
-  }
-  if (!localStorage.getItem('posbah_demo_finances')) {
-    localStorage.setItem('posbah_demo_finances', JSON.stringify([
-      { id: 401, type: 'EXPENSE', amount: 850000, description: 'Belanja Pisang & Bahan Baku Keju (Demo)', date: new Date(Date.now() - 6 * 86400000).toISOString(), status: 'PAID' },
-      { id: 402, type: 'EXPENSE', amount: 350000, description: 'Beli Cup & Plastik Kemasan (Demo)', date: new Date(Date.now() - 9 * 86400000).toISOString(), status: 'PAID' },
-      { id: 403, type: 'PAYABLE', amount: 1500000, description: 'Hutang Agen Pisang Pak Slamet (Demo)', date: new Date(Date.now() - 14 * 86400000).toISOString(), status: 'PENDING' },
-      { id: 404, type: 'RECEIVABLE', amount: 1200000, description: 'Piutang Catering Ibu Ratna (Demo)', date: new Date(Date.now() - 6 * 86400000).toISOString(), status: 'PENDING' },
-    ]));
-  }
-  if (!localStorage.getItem('posbah_demo_logs')) {
-    localStorage.setItem('posbah_demo_logs', JSON.stringify([
-      { id: 1, action: 'CREATE_TRANSACTION', description: 'Kasir Utama membuat transaksi baru TX-20260520-001', createdAt: new Date(Date.now() - 4 * 3600000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
-      { id: 2, action: 'CREATE_TRANSACTION', description: 'Kasir Utama membuat transaksi baru TX-20260520-002', createdAt: new Date(Date.now() - 3 * 3600000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
-      { id: 3, action: 'CREATE_RENTAL', description: 'Kasir Utama menyewakan mobil Honda Brio ke Budi Santoso', createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
-    ]));
+  const mode = localStorage.getItem('posbah_app_mode') || 'FNB';
+
+  if (mode === 'RENTAL') {
+    if (!localStorage.getItem(getDemoKey('posbah_demo_customers'))) {
+      localStorage.setItem(getDemoKey('posbah_demo_customers'), JSON.stringify([
+        { id: 501, name: 'Budi Santoso', phone: '08123456789', address: 'Jl. Merdeka No. 10' },
+        { id: 502, name: 'Siti Rahma', phone: '08567890123', address: 'Jl. Mawar No. 4' },
+        { id: 503, name: 'Andi Wijaya', phone: '08789012345', address: 'Jl. Melati No. 15' },
+      ]));
+    }
+    if (!localStorage.getItem(getDemoKey('posbah_demo_employees'))) {
+      localStorage.setItem(getDemoKey('posbah_demo_employees'), JSON.stringify([
+        { id: 1, name: 'Kasir Utama', role: 'KASIR', pin: '111111', salary: 2500000 },
+        { id: 2, name: 'Admin Gudang', role: 'ADMIN', pin: '222222', salary: 3000000 },
+      ]));
+    }
+    if (!localStorage.getItem(getDemoKey('posbah_demo_cars'))) {
+      localStorage.setItem(getDemoKey('posbah_demo_cars'), JSON.stringify([
+        { id: 801, name: 'Toyota Avanza', plateNumber: 'D 1234 ABC', type: 'MPV', pricePerDay: 350000, status: 'AVAILABLE' },
+        { id: 802, name: 'Mitsubishi Pajero', plateNumber: 'D 8888 BOSS', type: 'SUV', pricePerDay: 800000, status: 'AVAILABLE' },
+        { id: 803, name: 'Honda Brio', plateNumber: 'D 5678 XYZ', type: 'City Car', pricePerDay: 250000, status: 'RENTED' },
+      ]));
+    }
+    if (!localStorage.getItem(getDemoKey('posbah_demo_rentals'))) {
+      localStorage.setItem(getDemoKey('posbah_demo_rentals'), JSON.stringify([
+        { id: 901, carId: 803, car: { name: 'Honda Brio', plateNumber: 'D 5678 XYZ', pricePerDay: 250000 }, customerId: 501, customerName: 'Budi Santoso', startDate: new Date(Date.now() - 2 * 86400000).toISOString(), endDate: new Date(Date.now() + 1 * 86400000).toISOString(), totalPrice: 750000, status: 'ACTIVE', actualReturnDate: null, lateFee: 0, employeeId: 1 },
+        { id: 902, carId: 801, car: { name: 'Toyota Avanza', plateNumber: 'D 1234 ABC', pricePerDay: 350000 }, customerId: 502, customerName: 'Siti Rahma', startDate: new Date(Date.now() - 5 * 86400000).toISOString(), endDate: new Date(Date.now() - 3 * 86400000).toISOString(), totalPrice: 700000, status: 'RETURNED', actualReturnDate: new Date(Date.now() - 3 * 86400000).toISOString(), lateFee: 0, employeeId: 1 },
+      ]));
+    }
+    if (!localStorage.getItem(getDemoKey('posbah_demo_finances'))) {
+      localStorage.setItem(getDemoKey('posbah_demo_finances'), JSON.stringify([
+        { id: 401, type: 'EXPENSE', amount: 1500000, description: 'Servis rutin Toyota Avanza (Demo)', date: new Date(Date.now() - 6 * 86400000).toISOString(), status: 'PAID' },
+        { id: 402, type: 'EXPENSE', amount: 800000, description: 'Beli Ban Baru Honda Brio (Demo)', date: new Date(Date.now() - 9 * 86400000).toISOString(), status: 'PAID' },
+        { id: 404, type: 'RECEIVABLE', amount: 700000, description: 'Pendapatan Sewa Avanza (Siti Rahma)', date: new Date(Date.now() - 6 * 86400000).toISOString(), status: 'PAID' },
+      ]));
+    }
+    if (!localStorage.getItem(getDemoKey('posbah_demo_logs'))) {
+      localStorage.setItem(getDemoKey('posbah_demo_logs'), JSON.stringify([
+        { id: 1, action: 'CREATE_RENTAL', description: 'Kasir Utama menyewakan mobil Honda Brio ke Budi Santoso', createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+        { id: 2, action: 'RETURN_CAR', description: 'Pengembalian mobil Toyota Avanza oleh Siti Rahma', createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+      ]));
+    }
+  } else {
+    if (!localStorage.getItem(getDemoKey('posbah_demo_products'))) {
+      localStorage.setItem(getDemoKey('posbah_demo_products'), JSON.stringify([
+        { id: 301, name: 'Pisang Keju Cokelat', price: 15000, costPrice: 9000, stock: 120, unit: 'pcs', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: '/demo/pisang-keju-coklat.png' },
+        { id: 302, name: 'Pisang Keju Stroberi', price: 15000, costPrice: 9500, stock: 85, unit: 'pcs', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: '/demo/pisang-keju-stroberi.png' },
+        { id: 303, name: 'Pisang Keju Premium', price: 20000, costPrice: 11000, stock: 50, unit: 'pcs', wholesaleEnabled: false, wholesalePrices: null, variants: JSON.stringify([{ id: 1, name: 'Keju Melimpah', price: 25000, costPrice: 13000, stock: 30 }, { id: 2, name: 'Milo Almond', price: 28000, costPrice: 15000, stock: 20 }]), barcode: null, image: '/demo/pisang-keju-premium.png' },
+        { id: 304, name: 'Jus Alpukat', price: 18000, costPrice: 10000, stock: 60, unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: '/demo/jus-alpukat.png' },
+        { id: 305, name: 'Jus Mangga', price: 15000, costPrice: 8000, stock: 75, unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: '/demo/jus-mangga.png' },
+        { id: 306, name: 'Es Teh Manis', price: 8000, costPrice: 3000, stock: 200, unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: null },
+      ]));
+    }
+    if (!localStorage.getItem(getDemoKey('posbah_demo_customers'))) {
+      localStorage.setItem(getDemoKey('posbah_demo_customers'), JSON.stringify([
+        { id: 501, name: 'Budi Santoso', phone: '08123456789', address: 'Jl. Merdeka No. 10' },
+        { id: 502, name: 'Siti Rahma', phone: '08567890123', address: 'Jl. Mawar No. 4' },
+        { id: 503, name: 'Andi Wijaya', phone: '08789012345', address: 'Jl. Melati No. 15' },
+      ]));
+    }
+    if (!localStorage.getItem(getDemoKey('posbah_demo_employees'))) {
+      localStorage.setItem(getDemoKey('posbah_demo_employees'), JSON.stringify([
+        { id: 1, name: 'Kasir Utama', role: 'KASIR', pin: '111111', salary: 2500000 },
+        { id: 2, name: 'Admin Gudang', role: 'ADMIN', pin: '222222', salary: 3000000 },
+      ]));
+    }
+    if (!localStorage.getItem(getDemoKey('posbah_demo_suppliers'))) {
+      localStorage.setItem(getDemoKey('posbah_demo_suppliers'), JSON.stringify([
+        { id: 601, name: 'CV Maju Bersama (Demo)', phone: '081234567890', address: 'Jl. Raya No. 12, Bandung', notes: 'Supplier utama bahan baku' },
+        { id: 602, name: 'Toko Grosir Pak Haji (Demo)', phone: '081298765432', address: 'Pasar Induk Timur Blok C-7', notes: 'Sayuran & bumbu segar' },
+      ]));
+    }
+    if (!localStorage.getItem(getDemoKey('posbah_demo_purchase_orders'))) {
+      localStorage.setItem(getDemoKey('posbah_demo_purchase_orders'), JSON.stringify([
+        { id: 701, supplierId: 601, supplier: { name: 'CV Maju Bersama (Demo)' }, date: new Date(Date.now() - 3 * 86400000).toISOString(), status: 'RECEIVED', total: 1200000, notes: 'Restok bahan baku bulan ini', items: [{ productId: 301, product: { name: 'Tepung Terigu (Demo)' }, quantity: 50, costPrice: 12000 }, { productId: 302, product: { name: 'Gula Pasir (Demo)' }, quantity: 30, costPrice: 15000 }] },
+        { id: 702, supplierId: 602, supplier: { name: 'Toko Grosir Pak Haji (Demo)' }, date: new Date(Date.now() - 1 * 86400000).toISOString(), status: 'ORDERED', total: 450000, notes: '', items: [{ productId: 304, product: { name: 'Bawang Merah (Demo)' }, quantity: 20, costPrice: 22500 }] },
+      ]));
+    }
+    if (!localStorage.getItem(getDemoKey('posbah_demo_transactions'))) {
+      localStorage.setItem(getDemoKey('posbah_demo_transactions'), JSON.stringify([
+        {
+          id: 1001,
+          receiptNumber: 'TX-20260520-001',
+          date: new Date(Date.now() - 4 * 3600000).toISOString(),
+          subtotal: 155000,
+          discountType: null,
+          discountInput: 0,
+          discountAmt: 0,
+          total: 155000,
+          paymentMethod: 'QRIS',
+          status: 'COMPLETED',
+          type: 'SALES',
+          employeeId: 1,
+          customerName: 'Budi Santoso',
+          items: [
+            { productId: 301, quantity: 5, price: 15000, costPrice: 9000, product: { name: 'Pisang Keju Cokelat' } },
+            { productId: 304, quantity: 4, price: 18000, costPrice: 10000, product: { name: 'Jus Alpukat' } },
+          ]
+        },
+        {
+          id: 1002,
+          receiptNumber: 'TX-20260520-002',
+          date: new Date(Date.now() - 3 * 3600000).toISOString(),
+          subtotal: 75000,
+          discountType: null,
+          discountInput: 0,
+          discountAmt: 0,
+          total: 75000,
+          paymentMethod: 'CASH',
+          status: 'COMPLETED',
+          type: 'SALES',
+          employeeId: 1,
+          customerName: 'Siti Rahma',
+          items: [
+            { productId: 302, quantity: 5, price: 15000, costPrice: 9500, product: { name: 'Pisang Keju Stroberi' } }
+          ]
+        },
+        {
+          id: 1003,
+          receiptNumber: 'PO-DEMO-001',
+          date: new Date(Date.now() - 1 * 86400000).toISOString(),
+          subtotal: 1500000,
+          discountType: null,
+          discountInput: 0,
+          discountAmt: 0,
+          total: 1500000,
+          paymentMethod: 'CASH',
+          status: 'PENDING',
+          type: 'PRE_ORDER',
+          orderStatus: 'DP_PAID',
+          dpAmount: 500000,
+          deliveryDate: new Date(Date.now() + 2 * 86400000).toISOString(),
+          notes: 'Nasi kotak 100 box, antar jam 10 pagi',
+          employeeId: 1,
+          customerName: 'Catering Bu Dewi',
+          items: [{ productId: 301, quantity: 100, price: 15000, costPrice: 9000, product: { name: 'Nasi Kotak Spesial (Demo)' } }]
+        }
+      ]));
+    }
+    if (!localStorage.getItem(getDemoKey('posbah_demo_finances'))) {
+      localStorage.setItem(getDemoKey('posbah_demo_finances'), JSON.stringify([
+        { id: 401, type: 'EXPENSE', amount: 850000, description: 'Belanja Pisang & Bahan Baku Keju (Demo)', date: new Date(Date.now() - 6 * 86400000).toISOString(), status: 'PAID' },
+        { id: 402, type: 'EXPENSE', amount: 350000, description: 'Beli Cup & Plastik Kemasan (Demo)', date: new Date(Date.now() - 9 * 86400000).toISOString(), status: 'PAID' },
+        { id: 403, type: 'PAYABLE', amount: 1500000, description: 'Hutang Agen Pisang Pak Slamet (Demo)', date: new Date(Date.now() - 14 * 86400000).toISOString(), status: 'PENDING' },
+        { id: 404, type: 'RECEIVABLE', amount: 1200000, description: 'Piutang Catering Ibu Ratna (Demo)', date: new Date(Date.now() - 6 * 86400000).toISOString(), status: 'PENDING' },
+      ]));
+    }
+    if (!localStorage.getItem(getDemoKey('posbah_demo_logs'))) {
+      localStorage.setItem(getDemoKey('posbah_demo_logs'), JSON.stringify([
+        { id: 1, action: 'CREATE_TRANSACTION', description: 'Kasir Utama membuat transaksi baru TX-20260520-001', createdAt: new Date(Date.now() - 4 * 3600000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+        { id: 2, action: 'CREATE_TRANSACTION', description: 'Kasir Utama membuat transaksi baru TX-20260520-002', createdAt: new Date(Date.now() - 3 * 3600000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+      ]));
+    }
   }
 };
 
@@ -162,7 +192,8 @@ const logDemoActivity = (action, description) => {
       empName = u.name || 'Demo User';
     } catch (_) {}
   }
-  const table = JSON.parse(localStorage.getItem('posbah_demo_logs') || '[]');
+  const logsKey = getDemoKey('posbah_demo_logs');
+  const table = JSON.parse(localStorage.getItem(logsKey) || '[]');
   table.unshift({
     id: Date.now(),
     action,
@@ -170,11 +201,20 @@ const logDemoActivity = (action, description) => {
     createdAt: new Date().toISOString(),
     employee: { name: empName, role: 'OWNER' }
   });
-  localStorage.setItem('posbah_demo_logs', JSON.stringify(table.slice(0, 100)));
+  localStorage.setItem(logsKey, JSON.stringify(table.slice(0, 100)));
 };
 
-const getTable = (key) => JSON.parse(localStorage.getItem(key) || '[]');
-const saveTable = (key, data) => localStorage.setItem(key, JSON.stringify(data));
+const getDemoKey = (key) => {
+  if (key && key.startsWith('posbah_demo_')) {
+    const tableName = key.replace('posbah_demo_', '');
+    const mode = localStorage.getItem('posbah_app_mode') || 'FNB';
+    return `posbah_demo_${mode.toLowerCase()}_${tableName}`;
+  }
+  return key;
+};
+
+const getTable = (key) => JSON.parse(localStorage.getItem(getDemoKey(key)) || '[]');
+const saveTable = (key, data) => localStorage.setItem(getDemoKey(key), JSON.stringify(data));
 
 // Override Axios Adapter for Demo User
 const defaultAdapter = api.defaults.adapter || axios.defaults.adapter;

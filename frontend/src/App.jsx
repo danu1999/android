@@ -141,7 +141,7 @@ const Navigation = ({ user, onLogout, appMode, setAppMode }) => {
     hasRole(effectiveRole, item.minRole) && item.showInNav
   );
 
-  const showModeSwitcher = hasRole(user?.role, 'ADMIN') && !isExcludedName(user?.name);
+  const showModeSwitcher = hasRole(user?.role, 'ADMIN') && !isExcludedName(user?.name) && !user?.isDemo;
 
   const handleModeChange = (newMode) => {
     localStorage.setItem('posbah_app_mode', newMode);
