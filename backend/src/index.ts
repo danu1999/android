@@ -1727,11 +1727,34 @@ app.post('/api/rentals', requireAdmin, checkExcludedEmployee, async (req, res) =
         data: { status: 'RENTED' }
       });
 
-      // 3. Catat di tabel Rental
+      // 3. Lookup or create customer record to keep database cohesive
+      let finalCustomerId = customerId ? Number(customerId) : null;
+      if (!finalCustomerId && customerName) {
+        const existingCust = await tx.customer.findFirst({
+          where: {
+            name: { equals: customerName, mode: 'insensitive' },
+            address: { startsWith: '[RENTAL]' }
+          }
+        });
+        if (existingCust) {
+          finalCustomerId = existingCust.id;
+        } else {
+          const newCust = await tx.customer.create({
+            data: {
+              name: customerName,
+              address: '[RENTAL]',
+              phone: ''
+            }
+          });
+          finalCustomerId = newCust.id;
+        }
+      }
+
+      // 4. Catat di tabel Rental
       const createdRental = await tx.rental.create({
         data: {
           carId: Number(carId),
-          customerId: customerId ? Number(customerId) : null,
+          customerId: finalCustomerId,
           customerName,
           startDate: new Date(startDate),
           endDate: new Date(endDate),
@@ -1743,14 +1766,14 @@ app.post('/api/rentals', requireAdmin, checkExcludedEmployee, async (req, res) =
         include: { car: true }
       });
 
-      // 4. Catat di keuangan
+      // 5. Catat di keuangan
       await tx.finance.create({
         data: {
           type: 'RECEIVABLE',
           amount: Number(totalPrice),
           description: `Sewa Mobil ${car.name} (${car.plateNumber}) - ${customerName} (Sewa #${createdRental.id})`,
           status: paymentMethod === 'CASH' || paymentMethod === 'TRANSFER' || paymentMethod === 'QRIS' ? 'PAID' : 'PENDING',
-          customerId: customerId ? Number(customerId) : null,
+          customerId: finalCustomerId,
           date: new Date()
         }
       });

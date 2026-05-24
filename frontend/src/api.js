@@ -402,6 +402,26 @@ api.defaults.adapter = async function (config) {
       if (car) car.status = 'RENTED';
       saveTable('posbah_demo_cars', cars);
 
+      let finalCustomerId = payload.customerId ? Number(payload.customerId) : null;
+      if (!finalCustomerId && payload.customerName) {
+        const custs = getTable('posbah_demo_customers');
+        const existing = custs.find(c => c.name.toLowerCase() === payload.customerName.toLowerCase());
+        if (existing) {
+          finalCustomerId = existing.id;
+        } else {
+          const newCust = {
+            id: Date.now() + Math.floor(Math.random() * 1000),
+            name: payload.customerName,
+            phone: '',
+            address: ''
+          };
+          custs.push(newCust);
+          saveTable('posbah_demo_customers', custs);
+          finalCustomerId = newCust.id;
+        }
+      }
+      payload.customerId = finalCustomerId;
+
       payload.car = car || { name: 'Mobil', plateNumber: '', pricePerDay: 0 };
       payload.status = 'ACTIVE';
       payload.createdAt = new Date().toISOString();
@@ -415,7 +435,8 @@ api.defaults.adapter = async function (config) {
         amount: payload.totalPrice,
         description: `Piutang sewa mobil ${payload.car.name} ke ${payload.customerName}`,
         date: new Date().toISOString(),
-        status: payload.paymentMethod === 'HUTANG' ? 'PENDING' : 'PAID'
+        status: payload.paymentMethod === 'HUTANG' ? 'PENDING' : 'PAID',
+        customerId: finalCustomerId
       });
       saveTable('posbah_demo_finances', fins);
 
