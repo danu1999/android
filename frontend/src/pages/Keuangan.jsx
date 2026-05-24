@@ -399,23 +399,55 @@ export default function Keuangan({ appMode: propAppMode }) {
   const renderRekap = () => {
     if (!reports) return <p>Loading...</p>;
 
+    const r = reports;
+    const mainCards = [
+      { icon: '📈', label: 'Total Penjualan', value: r.totalSales || 0, color: '#3B82F6', bg: '#EFF6FF', border: '#BFDBFE' },
+      { icon: '💸', label: 'Total Pengeluaran', value: r.totalExpenses || 0, color: '#EF4444', bg: '#FEF2F2', border: '#FECACA' },
+      { icon: '💰', label: 'Pendapatan Bersih', value: r.netIncome || 0, color: (r.netIncome || 0) >= 0 ? '#10B981' : '#EF4444', bg: (r.netIncome || 0) >= 0 ? '#F0FDF4' : '#FEF2F2', border: (r.netIncome || 0) >= 0 ? '#A7F3D0' : '#FECACA' },
+      { icon: '⏳', label: 'Piutang Pending', value: r.pendingReceivables || 0, color: '#F59E0B', bg: '#FFFBEB', border: '#FDE68A' },
+    ];
+
+    const extraCards = [];
+    if (r.grossProfit !== undefined && appMode !== 'RENTAL') {
+      extraCards.push({ icon: '📊', label: 'Laba Kotor (Gross Profit)', value: r.grossProfit || 0, color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE' });
+    }
+    if (r.totalPayable !== undefined) {
+      extraCards.push({ icon: '🔴', label: 'Hutang Pending', value: r.totalPayable || 0, color: '#DC2626', bg: '#FEF2F2', border: '#FECACA' });
+    }
+    if (r.todaySales !== undefined) {
+      extraCards.push({ icon: '🗓️', label: 'Penjualan Hari Ini', value: r.todaySales || 0, color: '#0EA5E9', bg: '#F0F9FF', border: '#BAE6FD' });
+    }
+    if (r.transactionCount !== undefined) {
+      extraCards.push({ icon: '🧾', label: 'Jumlah Transaksi', value: r.transactionCount || 0, color: '#64748B', bg: '#F8FAFC', border: '#E2E8F0', isCount: true });
+    }
+
     return (
       <div>
-        {/* Stat cards 2×2 */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 4 }}>
-          {[
-            { icon: '📈', label: 'Total Penjualan', value: reports.totalSales, color: '#3B82F6', bg: '#EFF6FF', border: '#BFDBFE' },
-            { icon: '💸', label: 'Pengeluaran', value: reports.totalExpenses, color: '#EF4444', bg: '#FEF2F2', border: '#FECACA' },
-            { icon: '💰', label: 'Pendapatan Bersih', value: reports.netIncome, color: reports.netIncome >= 0 ? '#10B981' : '#EF4444', bg: reports.netIncome >= 0 ? '#F0FDF4' : '#FEF2F2', border: reports.netIncome >= 0 ? '#A7F3D0' : '#FECACA' },
-            { icon: '⏳', label: 'Piutang Pending', value: reports.pendingReceivables, color: '#F59E0B', bg: '#FFFBEB', border: '#FDE68A' },
-          ].map(s => (
+        {/* Kartu Utama 2×2 */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+          {mainCards.map(s => (
             <div key={s.label} style={{ background: s.bg, border: `1.5px solid ${s.border}`, borderRadius: 16, padding: '14px 14px' }}>
               <div style={{ fontSize: 20, marginBottom: 4 }}>{s.icon}</div>
               <div style={{ fontSize: 11, fontWeight: 700, color: s.color, opacity: 0.8, marginBottom: 4 }}>{s.label}</div>
-              <div style={{ fontSize: 16, fontWeight: 900, color: s.color, lineHeight: 1.2 }}>Rp {s.value.toLocaleString('id-ID')}</div>
+              <div style={{ fontSize: 16, fontWeight: 900, color: s.color, lineHeight: 1.2 }}>Rp {(s.value).toLocaleString('id-ID')}</div>
             </div>
           ))}
         </div>
+
+        {/* Kartu Tambahan */}
+        {extraCards.length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10, marginBottom: 4 }}>
+            {extraCards.map(s => (
+              <div key={s.label} style={{ background: s.bg, border: `1.5px solid ${s.border}`, borderRadius: 14, padding: '12px 14px' }}>
+                <div style={{ fontSize: 18, marginBottom: 4 }}>{s.icon}</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: s.color, opacity: 0.8, marginBottom: 4 }}>{s.label}</div>
+                <div style={{ fontSize: 15, fontWeight: 900, color: s.color, lineHeight: 1.2 }}>
+                  {s.isCount ? s.value : `Rp ${(s.value).toLocaleString('id-ID')}`}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
   };

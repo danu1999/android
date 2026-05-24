@@ -290,31 +290,61 @@ api.defaults.adapter = async function (config) {
       data = [];
     } else if (route === 'reports') {
       const mode = localStorage.getItem('posbah_app_mode') || 'FNB';
+      // Parse date filters from query params
+      let paramFrom = null;
+      let paramTo = null;
+      try {
+        const fullUrl = new URL(config.url, config.baseURL || window.location.origin);
+        const pf = fullUrl.searchParams.get('from');
+        const pt = fullUrl.searchParams.get('to');
+        if (pf) paramFrom = new Date(pf);
+        if (pt) { paramTo = new Date(pt); paramTo.setHours(23, 59, 59, 999); }
+      } catch (_) {}
+
+      const inRange = (dateStr) => {
+        if (!dateStr) return true;
+        const d = new Date(dateStr);
+        if (paramFrom && d < paramFrom) return false;
+        if (paramTo && d > paramTo) return false;
+        return true;
+      };
+
       const fins = getTable('posbah_demo_finances');
-      const totalExpenses = fins.filter(f => f.type === 'EXPENSE' && f.status === 'PAID').reduce((sum, f) => sum + f.amount, 0);
-      const pendingReceivables = fins.filter(f => f.type === 'RECEIVABLE' && f.status === 'PENDING').reduce((sum, f) => sum + f.amount, 0);
+      const filteredFins = fins.filter(f => inRange(f.date || f.createdAt));
+      const totalExpenses = filteredFins.filter(f => f.type === 'EXPENSE' && f.status === 'PAID').reduce((sum, f) => sum + f.amount, 0);
+      const pendingReceivables = filteredFins.filter(f => f.type === 'RECEIVABLE' && f.status === 'PENDING').reduce((sum, f) => sum + f.amount, 0);
+      const totalPayable = filteredFins.filter(f => f.type === 'PAYABLE' && f.status === 'PENDING').reduce((sum, f) => sum + f.amount, 0);
 
       let totalSales = 0;
       let todaySales = 0;
       let count = 0;
+      let grossProfit = 0;
 
       if (mode === 'RENTAL') {
-        const rentals = getTable('posbah_demo_rentals');
-        totalSales = rentals.reduce((sum, r) => sum + r.totalPrice, 0);
-        todaySales = rentals.filter(r => new Date(r.createdAt || r.startDate).toDateString() === new Date().toDateString()).reduce((sum, r) => sum + r.totalPrice, 0);
+        const rentals = getTable('posbah_demo_rentals').filter(r => inRange(r.createdAt || r.startDate));
+        totalSales = rentals.reduce((sum, r) => sum + (r.totalPrice || 0), 0);
+        todaySales = rentals.filter(r => new Date(r.createdAt || r.startDate).toDateString() === new Date().toDateString()).reduce((sum, r) => sum + (r.totalPrice || 0), 0);
         count = rentals.length;
+        grossProfit = totalSales;
       } else {
-        const txs = getTable('posbah_demo_transactions').filter(t => t.status === 'COMPLETED');
-        totalSales = txs.reduce((sum, t) => sum + t.total, 0);
-        todaySales = txs.filter(t => new Date(t.date).toDateString() === new Date().toDateString()).reduce((sum, t) => sum + t.total, 0);
+        const txs = getTable('posbah_demo_transactions').filter(t => t.status === 'COMPLETED' && inRange(t.date));
+        totalSales = txs.reduce((sum, t) => sum + (t.total || 0), 0);
+        todaySales = txs.filter(t => new Date(t.date).toDateString() === new Date().toDateString()).reduce((sum, t) => sum + (t.total || 0), 0);
         count = txs.length;
+        // Gross profit = total revenue - COGS
+        grossProfit = txs.reduce((sum, t) => {
+          const cogs = (t.items || []).reduce((s, i) => s + ((i.costPrice || 0) * (i.quantity || 1)), 0);
+          return sum + (t.total || 0) - cogs;
+        }, 0);
       }
       
       data = {
         totalSales,
         totalExpenses,
         netIncome: totalSales - totalExpenses,
+        grossProfit,
         pendingReceivables,
+        totalPayable,
         todaySales,
         transactionCount: count
       };
@@ -433,8 +463,20 @@ api.defaults.adapter = async function (config) {
       table.push(payload);
       saveTable('posbah_demo_rentals', table);
 
-      if (payload.paymentMethod !== 'CASH' && payload.paymentMethod !== 'TRANSFER' && payload.paymentMethod !== 'QRIS') {
-        const fins = getTable('posbah_demo_finances');
+      // Selalu catat pemasukan rental ke keuangan
+      const fins = getTable('posbah_demo_finances');
+      if (payload.paymentMethod === 'CASH' || payload.paymentMethod === 'TRANSFER' || payload.paymentMethod === 'QRIS') {
+        // Langsung tercatat sebagai pendapatan tunai
+        fins.push({
+          id: Date.now(),
+          type: 'INCOME',
+          amount: payload.totalPrice,
+          description: `Pendapatan sewa mobil ${payload.car.name} (${payload.car.plateNumber}) - ${payload.customerName}`,
+          date: new Date().toISOString(),
+          status: 'PAID'
+        });
+      } else {
+        // Kredit — catat sebagai piutang
         fins.push({
           id: Date.now(),
           type: 'RECEIVABLE',
@@ -444,8 +486,8 @@ api.defaults.adapter = async function (config) {
           status: 'PENDING',
           customerId: finalCustomerId
         });
-        saveTable('posbah_demo_finances', fins);
       }
+      saveTable('posbah_demo_finances', fins);
 
       logDemoActivity('CREATE_RENTAL', `Menyewakan mobil ${payload.car.name} (${payload.car.plateNumber}) ke ${payload.customerName}`);
       data = payload;
@@ -519,6 +561,25 @@ api.defaults.adapter = async function (config) {
     } else if (route === 'midtrans/charge' || route === 'midtrans/snap-token') {
       data = { qrUrl: 'https://demo.midtrans.com/qr', token: 'demo-snap-token', redirectUrl: 'https://demo.midtrans.com/snap' };
     } else if (parts[0] === 'payroll' && parts[1] === 'pay') {
+      // Catat pembayaran gaji sebagai pengeluaran
+      const payrollPayload = JSON.parse(config.data || '{}');
+      if (payrollPayload.employeeId || payrollPayload.amount) {
+        const emps = getTable('posbah_demo_employees');
+        const emp = emps.find(e => e.id === Number(payrollPayload.employeeId));
+        const salaryAmt = payrollPayload.amount || (emp ? emp.salary : 0);
+        if (salaryAmt > 0) {
+          const fins = getTable('posbah_demo_finances');
+          fins.push({
+            id: Date.now(),
+            type: 'EXPENSE',
+            amount: salaryAmt,
+            description: `[Gaji] Pembayaran gaji ${emp ? emp.name : 'Karyawan'} - ${new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}`,
+            date: new Date().toISOString(),
+            status: 'PAID'
+          });
+          saveTable('posbah_demo_finances', fins);
+        }
+      }
       data = { success: true };
       logDemoActivity('PAY_SALARY', `Membayar gaji karyawan.`);
     } else if (route === 'reset-finance') {
@@ -658,8 +719,45 @@ api.defaults.adapter = async function (config) {
         if (payload.dpAmount !== undefined) table[idx].dpAmount = payload.dpAmount;
         if (payload.orderStatus === 'COMPLETED') {
           table[idx].status = 'COMPLETED';
+          // Catat pelunasan pre-order sebagai pemasukan di keuangan
+          const fins = getTable('posbah_demo_finances');
+          const remainingAmt = (table[idx].total || 0) - (table[idx].dpAmount || 0);
+          fins.push({
+            id: Date.now(),
+            type: 'INCOME',
+            amount: remainingAmt > 0 ? remainingAmt : (table[idx].total || 0),
+            description: `Pelunasan pre-order ${table[idx].receiptNumber} - ${table[idx].customerName || ''}`,
+            date: new Date().toISOString(),
+            status: 'PAID'
+          });
+          // Hapus piutang terkait pre-order ini jika ada
+          const filteredFins = fins.filter(f => !(f.type === 'RECEIVABLE' && f.description && f.description.includes(table[idx].receiptNumber)));
+          saveTable('posbah_demo_finances', filteredFins.length < fins.length ? filteredFins : fins);
           logDemoActivity('UPDATE_TRANSACTION', `Melunasi pre-order ${table[idx].receiptNumber}`);
         } else if (payload.orderStatus === 'DP_PAID') {
+          // Catat DP sebagai pemasukan parsial
+          const fins = getTable('posbah_demo_finances');
+          fins.push({
+            id: Date.now(),
+            type: 'INCOME',
+            amount: payload.dpAmount || table[idx].dpAmount || 0,
+            description: `DP pre-order ${table[idx].receiptNumber} - ${table[idx].customerName || ''}`,
+            date: new Date().toISOString(),
+            status: 'PAID'
+          });
+          // Catat sisa sebagai piutang
+          const remainingDebt = (table[idx].total || 0) - (payload.dpAmount || table[idx].dpAmount || 0);
+          if (remainingDebt > 0) {
+            fins.push({
+              id: Date.now() + 1,
+              type: 'RECEIVABLE',
+              amount: remainingDebt,
+              description: `Sisa piutang pre-order ${table[idx].receiptNumber} - ${table[idx].customerName || ''}`,
+              date: new Date().toISOString(),
+              status: 'PENDING'
+            });
+          }
+          saveTable('posbah_demo_finances', fins);
           logDemoActivity('UPDATE_TRANSACTION', `Menerima DP untuk pre-order ${table[idx].receiptNumber}`);
         }
         saveTable('posbah_demo_transactions', table);
