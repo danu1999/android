@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Car, Plus, Edit2, Trash2, Calendar, DollarSign,
-  User, ClipboardList, CheckCircle, AlertTriangle, Search, RefreshCw
+  User, ClipboardList, CheckCircle, AlertTriangle, Search, RefreshCw, Printer
 } from 'lucide-react';
 import api from '../api';
 import { useDemoBlock } from '../AuthContext';
@@ -34,6 +34,217 @@ export default function RentalMobil() {
   const [selectedRental, setSelectedRental] = useState(null);
   const [actualReturnDate, setActualReturnDate] = useState('');
   const [lateFee, setLateFee] = useState(0);
+
+  // Printing States
+  const [printRental, setPrintRental] = useState(null);
+  const [paperSize, setPaperSize] = useState('58mm');
+  const [printingBluetooth, setPrintingBluetooth] = useState(false);
+
+  const printViaSystem = (rental, size) => {
+    const width = size === '58mm' ? '58mm' : '80mm';
+    const printWindow = window.open('', '_blank');
+    
+    const start = new Date(rental.startDate);
+    const end = new Date(rental.endDate);
+    const diffTime = Math.abs(end - start);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+    const basicCost = (rental.car?.pricePerDay || 0) * diffDays;
+    const grandTotal = Number(rental.totalPrice || 0) + Number(rental.status === 'RETURNED' ? (rental.lateFee || 0) : 0);
+
+    const content = `
+      <html>
+        <head>
+          <title>Cetak Struk RENT-${rental.id}</title>
+          <style>
+            @page { size: ${width} auto; margin: 0; }
+            body {
+              font-family: 'Courier New', Courier, monospace;
+              width: ${width};
+              margin: 0;
+              padding: 6px;
+              font-size: 11px;
+              line-height: 1.3;
+              color: #000;
+              background: #fff;
+            }
+            .c { text-align: center; }
+            .r { text-align: right; }
+            .b { font-weight: bold; }
+            hr { border: none; border-top: 1px dashed #000; margin: 6px 0; }
+            .title { font-size: 14px; font-weight: bold; margin-bottom: 2px; }
+            .subtitle { font-size: 9px; margin-bottom: 4px; }
+            table { width: 100%; border-collapse: collapse; margin: 4px 0; }
+            td { vertical-align: top; padding: 2px 0; }
+            .footer { margin-top: 10px; font-size: 9px; }
+          </style>
+        </head>
+        <body>
+          <div class="c title">POSBAH RENTAL MOBIL</div>
+          <div class="c subtitle">Jasa Sewa Mobil Terbaik & Cepat</div>
+          <hr>
+          <div>No. Sewa : RENT-${rental.id}</div>
+          <div>Tanggal  : ${new Date(rental.createdAt || Date.now()).toLocaleString('id-ID')}</div>
+          <div>Penyewa  : ${rental.customerName}</div>
+          ${rental.customer?.phone ? `<div>No. HP   : ${rental.customer.phone}</div>` : ''}
+          <hr>
+          <div class="b">Mobil    : ${rental.car?.name}</div>
+          <div>Plat No  : ${rental.car?.plateNumber || '-'}</div>
+          <div>Tipe     : ${rental.car?.type || '-'}</div>
+          <hr>
+          <div>Mulai    : ${new Date(rental.startDate).toLocaleDateString('id-ID')}</div>
+          <div>Tenggat  : ${new Date(rental.endDate).toLocaleDateString('id-ID')}</div>
+          ${rental.status === 'RETURNED' && rental.actualReturnDate ? `<div>Kembali  : ${new Date(rental.actualReturnDate).toLocaleDateString('id-ID')}</div>` : ''}
+          <div>Durasi   : ${diffDays} Hari</div>
+          <hr>
+          <table>
+            <tr><td>Tarif Sewa</td><td class="r">Rp ${Number(rental.car?.pricePerDay || 0).toLocaleString('id-ID')}/hr</td></tr>
+            <tr><td>Biaya Dasar</td><td class="r">Rp ${basicCost.toLocaleString('id-ID')}</td></tr>
+            ${rental.lateFee > 0 ? `<tr><td>Denda Telat</td><td class="r">Rp ${Number(rental.lateFee).toLocaleString('id-ID')}</td></tr>` : ''}
+          </table>
+          <hr>
+          <table>
+            <tr class="b"><td>GRAND TOTAL</td><td class="r">Rp ${grandTotal.toLocaleString('id-ID')}</td></tr>
+            <tr><td>Metode Bayar</td><td class="r">${String(rental.paymentMethod || 'CASH').toUpperCase()}</td></tr>
+            <tr><td>Status Sewa</td><td class="r">${rental.status === 'ACTIVE' ? 'DISEWA (AKTIF)' : 'KEMBALI (SELESAI)'}</td></tr>
+          </table>
+          <hr>
+          <div class="c footer">
+            Terima kasih atas kunjungan Anda!<br>
+            Harap berkendara dengan aman.<br>
+            - POSBAH -
+          </div>
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+    printWindow.document.write(content);
+    printWindow.document.close();
+  };
+
+  const printViaBluetooth = async (rental, size) => {
+    if (!navigator.bluetooth) {
+      alert('Browser Anda tidak mendukung Web Bluetooth. Silakan gunakan opsi Cetak Sistem (Browser).');
+      return;
+    }
+    
+    setPrintingBluetooth(true);
+    try {
+      const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb']
+      });
+
+      const server = await device.gatt.connect();
+      
+      let service;
+      try {
+        service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
+      } catch (e) {
+        const services = await server.getPrimaryServices();
+        if (services.length > 0) {
+          service = services[0];
+        } else {
+          throw new Error('Gagal menemukan layanan printer Bluetooth.');
+        }
+      }
+
+      const characteristics = await service.getCharacteristics();
+      const writeChar = characteristics.find(c => c.properties.write || c.properties.writeWithoutResponse);
+      if (!writeChar) {
+        throw new Error('Karakteristik menulis tidak ditemukan di printer Bluetooth.');
+      }
+
+      const charLimit = size === '58mm' ? 32 : 48;
+      const encoder = new TextEncoder();
+      
+      const ESC = '\x1b';
+      const RESET = ESC + '@';
+      const CENTER = ESC + 'a\x01';
+      const LEFT = ESC + 'a\x00';
+      const DOUBLE_HEIGHT = ESC + '!' + '\x10';
+      const NORMAL = ESC + '!' + '\x00';
+      const BOLD_ON = ESC + 'E\x01';
+      const BOLD_OFF = ESC + 'E\x00';
+      const LINE_FEED = '\n';
+
+      const start = new Date(rental.startDate);
+      const end = new Date(rental.endDate);
+      const diffTime = Math.abs(end - start);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+      const basicCost = (rental.car?.pricePerDay || 0) * diffDays;
+      const grandTotal = Number(rental.totalPrice || 0) + Number(rental.status === 'RETURNED' ? (rental.lateFee || 0) : 0);
+
+      const padText = (left, right) => {
+        const spaceNeeded = charLimit - left.length - right.length;
+        return left + ' '.repeat(spaceNeeded > 0 ? spaceNeeded : 1) + right;
+      };
+
+      let d = '';
+      d += RESET;
+      d += CENTER + DOUBLE_HEIGHT + BOLD_ON + 'POSBAH RENTAL MOBIL' + NORMAL + LINE_FEED;
+      d += CENTER + 'Jasa Sewa Mobil Terbaik' + LINE_FEED;
+      d += CENTER + '-'.repeat(charLimit) + LINE_FEED;
+
+      d += LEFT;
+      d += `No. Sewa : RENT-${rental.id}` + LINE_FEED;
+      d += `Tanggal  : ${new Date(rental.createdAt || Date.now()).toLocaleString('id-ID')}` + LINE_FEED;
+      d += `Penyewa  : ${rental.customerName}` + LINE_FEED;
+      if (rental.customer?.phone) {
+        d += `No. HP   : ${rental.customer.phone}` + LINE_FEED;
+      }
+      d += '-'.repeat(charLimit) + LINE_FEED;
+
+      d += BOLD_ON + `Mobil    : ${rental.car?.name}` + BOLD_OFF + LINE_FEED;
+      d += `Plat No  : ${rental.car?.plateNumber || '-'}` + LINE_FEED;
+      d += `Tipe     : ${rental.car?.type || '-'}` + LINE_FEED;
+      d += '-'.repeat(charLimit) + LINE_FEED;
+
+      d += `Mulai    : ${new Date(rental.startDate).toLocaleDateString('id-ID')}` + LINE_FEED;
+      d += `Tenggat  : ${new Date(rental.endDate).toLocaleDateString('id-ID')}` + LINE_FEED;
+      if (rental.status === 'RETURNED' && rental.actualReturnDate) {
+        d += `Kembali  : ${new Date(rental.actualReturnDate).toLocaleDateString('id-ID')}` + LINE_FEED;
+      }
+      d += `Durasi   : ${diffDays} Hari` + LINE_FEED;
+      d += '-'.repeat(charLimit) + LINE_FEED;
+
+      d += padText('Tarif Sewa', `Rp ${Number(rental.car?.pricePerDay || 0).toLocaleString('id-ID')}/hr`) + LINE_FEED;
+      d += padText('Biaya Dasar', `Rp ${basicCost.toLocaleString('id-ID')}`) + LINE_FEED;
+      if (rental.lateFee > 0) {
+        d += padText('Denda Telat', `Rp ${Number(rental.lateFee).toLocaleString('id-ID')}`) + LINE_FEED;
+      }
+      d += '-'.repeat(charLimit) + LINE_FEED;
+
+      d += BOLD_ON + padText('GRAND TOTAL', `Rp ${grandTotal.toLocaleString('id-ID')}`) + BOLD_OFF + LINE_FEED;
+      d += padText('Metode Bayar', String(rental.paymentMethod || 'CASH').toUpperCase()) + LINE_FEED;
+      d += padText('Status Sewa', rental.status === 'ACTIVE' ? 'DISEWA (AKTIF)' : 'KEMBALI (SELESAI)') + LINE_FEED;
+      d += '-'.repeat(charLimit) + LINE_FEED;
+
+      d += CENTER + 'Terima kasih atas kunjungan Anda!' + LINE_FEED;
+      d += CENTER + 'Harap berkendara dengan aman.' + LINE_FEED;
+      d += CENTER + '- POSBAH -' + LINE_FEED;
+      d += LINE_FEED + LINE_FEED + LINE_FEED;
+
+      const rawBytes = encoder.encode(d);
+      const chunkSize = 20;
+      for (let i = 0; i < rawBytes.length; i += chunkSize) {
+        const chunk = rawBytes.slice(i, i + chunkSize);
+        await writeChar.writeValue(chunk);
+      }
+
+      alert('Berhasil mengirim data ke printer Bluetooth!');
+      device.gatt.disconnect();
+    } catch (err) {
+      console.error(err);
+      alert(`Gagal koneksi printer Bluetooth: ${err.message || err}`);
+    } finally {
+      setPrintingBluetooth(false);
+    }
+  };
 
   useEffect(() => {
     fetchCars();
@@ -175,7 +386,7 @@ export default function RentalMobil() {
 
     setLoading(true);
     try {
-      await api.post('/rentals', {
+      const res = await api.post('/rentals', {
         carId: Number(selectedCarId),
         customerId: selectedCustomerId ? Number(selectedCustomerId) : null,
         customerName: custName,
@@ -197,6 +408,12 @@ export default function RentalMobil() {
       alert('Penyewaan mobil berhasil diproses!');
       fetchCars();
       fetchRentals();
+      
+      // Auto open print modal for the newly created transaction
+      if (res.data) {
+        setPrintRental(res.data);
+      }
+      
       setActiveTab('HISTORY');
     } catch (err) {
       console.error(err);
@@ -228,7 +445,7 @@ export default function RentalMobil() {
     e.preventDefault();
     setLoading(true);
     try {
-      await api.post(`/rentals/${selectedRental.id}/return`, {
+      const res = await api.post(`/rentals/${selectedRental.id}/return`, {
         actualReturnDate,
         lateFee,
         paymentMethod
@@ -237,6 +454,11 @@ export default function RentalMobil() {
       fetchCars();
       fetchRentals();
       alert('Mobil berhasil dikembalikan!');
+
+      // Auto open print modal for return transaction (including return dates / late fee denda)
+      if (res.data) {
+        setPrintRental(res.data);
+      }
     } catch (err) {
       console.error(err);
       alert(err.response?.data?.error || 'Gagal memproses pengembalian.');
@@ -649,19 +871,28 @@ export default function RentalMobil() {
                       </span>
                     </td>
                     <td className="py-4 px-4 text-center">
-                      {rental.status === 'ACTIVE' ? (
+                      <div className="flex items-center justify-center gap-2">
+                        {rental.status === 'ACTIVE' ? (
+                          <button
+                            onClick={() => handleOpenReturnModal(rental)}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 px-3.5 rounded-lg text-xs shadow-sm shadow-indigo-600/10 cursor-pointer transition-all active:scale-[0.97]"
+                          >
+                            Kembalikan Mobil
+                          </button>
+                        ) : (
+                          <div className="text-left text-xs text-gray-500 font-medium">
+                            Kembali: {new Date(rental.actualReturnDate).toLocaleDateString('id-ID')}
+                            {rental.lateFee > 0 && <div className="text-rose-600 font-bold mt-0.5">Denda: Rp {fmt(rental.lateFee)}</div>}
+                          </div>
+                        )}
                         <button
-                          onClick={() => handleOpenReturnModal(rental)}
-                          className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 px-3.5 rounded-lg text-xs shadow-sm shadow-indigo-600/10 cursor-pointer transition-all active:scale-[0.97]"
+                          onClick={() => setPrintRental(rental)}
+                          className="p-2 bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200/50 rounded-xl cursor-pointer transition-all flex items-center justify-center"
+                          title="Cetak Struk"
                         >
-                          Kembalikan Mobil
+                          <Printer size={14} />
                         </button>
-                      ) : (
-                        <div className="text-xs text-gray-500 font-medium">
-                          Kembali: {new Date(rental.actualReturnDate).toLocaleDateString('id-ID')}
-                          {rental.lateFee > 0 && <div className="text-rose-600 font-bold mt-0.5">Denda: Rp {fmt(rental.lateFee)}</div>}
-                        </div>
-                      )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -725,13 +956,20 @@ export default function RentalMobil() {
                       Kembalikan Mobil
                     </button>
                   ) : (
-                    <div className="bg-gray-50 border border-gray-100 rounded-xl p-2.5 text-center text-xs text-gray-500 font-medium leading-relaxed">
+                    <div className="bg-gray-50 border border-gray-100 rounded-xl p-2.5 text-center text-xs text-gray-500 font-medium leading-relaxed mb-1">
                       Kembali: {new Date(rental.actualReturnDate).toLocaleDateString('id-ID')}
                       {rental.lateFee > 0 && (
                         <div className="text-rose-600 font-bold mt-0.5">Denda: Rp {fmt(rental.lateFee)}</div>
                       )}
                     </div>
                   )}
+
+                  <button
+                    onClick={() => setPrintRental(rental)}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 bg-gray-50 hover:bg-gray-100 text-gray-600 border border-gray-200/50 rounded-xl text-xs font-bold cursor-pointer transition-all"
+                  >
+                    <Printer size={14} /> Cetak Struk (58/80mm)
+                  </button>
                 </div>
               </div>
             ))}
@@ -950,6 +1188,133 @@ export default function RentalMobil() {
             >
               Tutup
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Cetak Struk */}
+      {printRental && (
+        <div className="modal-overlay z-[999] backdrop-blur-md bg-black/45 flex items-center justify-center px-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl flex flex-col gap-4 relative animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center pb-2 border-b border-gray-100">
+              <div>
+                <h3 className="text-base font-black text-gray-800 m-0">Cetak Struk Transaksi</h3>
+                <p className="text-[10px] text-gray-400 font-semibold mt-0.5">Pilih ukuran kertas dan metode cetak</p>
+              </div>
+              <button
+                onClick={() => setPrintRental(null)}
+                className="text-gray-400 hover:text-gray-650 font-bold text-lg cursor-pointer border-none bg-transparent"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Paper Size Picker */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Ukuran Kertas Struk</span>
+              <div className="grid grid-cols-2 gap-2 bg-gray-50/50 p-1 rounded-xl border border-gray-100">
+                {['58mm', '80mm'].map(size => (
+                  <button
+                    key={size}
+                    type="button"
+                    onClick={() => setPaperSize(size)}
+                    className={`py-2 text-xs font-black text-center transition-all cursor-pointer rounded-lg ${
+                      paperSize === size
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'bg-white border border-gray-200/50 text-gray-500 hover:bg-gray-50'
+                    }`}
+                  >
+                    Thermal {size}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Receipt Styled Preview Box */}
+            <div className="flex flex-col gap-1">
+              <span className="text-[10px] font-bold text-gray-450 uppercase tracking-wider">Pratinjau Kertas</span>
+              <div className="bg-slate-900 text-slate-100 p-4 rounded-xl text-left overflow-y-auto" style={{ maxHeight: '180px' }}>
+                <pre className="font-mono text-[9px] leading-relaxed whitespace-pre font-bold select-all">
+                  {(() => {
+                    const start = new Date(printRental.startDate);
+                    const end = new Date(printRental.endDate);
+                    const diffTime = Math.abs(end - start);
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+                    const basicCost = (printRental.car?.pricePerDay || 0) * diffDays;
+                    const grandTotal = Number(printRental.totalPrice || 0) + Number(printRental.status === 'RETURNED' ? (printRental.lateFee || 0) : 0);
+                    const charLimit = paperSize === '58mm' ? 32 : 48;
+                    const padText = (left, right) => {
+                      const spaceNeeded = charLimit - left.length - right.length;
+                      return left + ' '.repeat(spaceNeeded > 0 ? spaceNeeded : 1) + right;
+                    };
+                    
+                    let text = '';
+                    text += '      POSBAH RENTAL MOBIL\n';
+                    text += '    Jasa Sewa Mobil Terbaik\n';
+                    text += '-'.repeat(charLimit) + '\n';
+                    text += `No. Sewa : RENT-${printRental.id}\n`;
+                    text += `Tanggal  : ${new Date(printRental.createdAt || Date.now()).toLocaleDateString('id-ID')}\n`;
+                    text += `Penyewa  : ${printRental.customerName}\n`;
+                    if (printRental.customer?.phone) {
+                      text += `No. HP   : ${printRental.customer.phone}\n`;
+                    }
+                    text += '-'.repeat(charLimit) + '\n';
+                    text += `Mobil    : ${printRental.car?.name}\n`;
+                    text += `Plat No  : ${printRental.car?.plateNumber || '-'}\n`;
+                    text += `Tipe     : ${printRental.car?.type || '-'}\n`;
+                    text += '-'.repeat(charLimit) + '\n';
+                    text += `Mulai    : ${new Date(printRental.startDate).toLocaleDateString('id-ID')}\n`;
+                    text += `Tenggat  : ${new Date(printRental.endDate).toLocaleDateString('id-ID')}\n`;
+                    if (printRental.status === 'RETURNED' && printRental.actualReturnDate) {
+                      text += `Kembali  : ${new Date(printRental.actualReturnDate).toLocaleDateString('id-ID')}\n`;
+                    }
+                    text += `Durasi   : ${diffDays} Hari\n`;
+                    text += '-'.repeat(charLimit) + '\n';
+                    text += padText('Tarif Sewa', `Rp ${Number(printRental.car?.pricePerDay || 0).toLocaleString('id-ID')}/hr`) + '\n';
+                    text += padText('Biaya Dasar', `Rp ${basicCost.toLocaleString('id-ID')}`) + '\n';
+                    if (printRental.lateFee > 0) {
+                      text += padText('Denda Telat', `Rp ${Number(printRental.lateFee).toLocaleString('id-ID')}`) + '\n';
+                    }
+                    text += '-'.repeat(charLimit) + '\n';
+                    text += padText('GRAND TOTAL', `Rp ${grandTotal.toLocaleString('id-ID')}`) + '\n';
+                    text += padText('Metode Bayar', String(printRental.paymentMethod || 'CASH').toUpperCase()) + '\n';
+                    text += padText('Status Sewa', printRental.status === 'ACTIVE' ? 'DISEWA (AKTIF)' : 'KEMBALI (SELESAI)') + '\n';
+                    text += '-'.repeat(charLimit) + '\n';
+                    text += '  Terima kasih atas kunjungan Anda!\n';
+                    text += '    Harap berkendara dengan aman.\n';
+                    text += '              - POSBAH -';
+                    return text;
+                  })()}
+                </pre>
+              </div>
+            </div>
+
+            {/* Print Triggers */}
+            <div className="flex flex-col gap-2.5 mt-2">
+              <button
+                type="button"
+                onClick={() => printViaBluetooth(printRental, paperSize)}
+                disabled={printingBluetooth}
+                className="w-full flex items-center justify-center gap-1.5 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black cursor-pointer shadow-md shadow-indigo-600/10 transition-all active:scale-[0.98] disabled:bg-gray-300 disabled:shadow-none"
+              >
+                <Printer size={15} />
+                {printingBluetooth ? 'Menghubungkan...' : 'Hubungkan & Cetak (Bluetooth)'}
+              </button>
+              <button
+                type="button"
+                onClick={() => printViaSystem(printRental, paperSize)}
+                className="w-full flex items-center justify-center gap-1.5 py-3 bg-gray-100 hover:bg-gray-250 text-gray-700 rounded-xl text-xs font-bold cursor-pointer transition-all active:scale-[0.98]"
+              >
+                Cetak Sistem (Browser)
+              </button>
+              <button
+                type="button"
+                onClick={() => setPrintRental(null)}
+                className="w-full py-2.5 text-gray-500 hover:text-gray-800 text-xs font-bold rounded-xl border border-gray-200/50 cursor-pointer transition-all mt-1"
+              >
+                Tutup
+              </button>
+            </div>
           </div>
         </div>
       )}
