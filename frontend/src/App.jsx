@@ -22,10 +22,10 @@ import './index.css';
 
 // ─── Role-based page access ────────────────────────────────────
 const ROLE_ACCESS = {
-  KASIR:    ['/', '/katalog'],
-  CASHIER:  ['/', '/katalog'],
-  ADMIN:    ['/', '/katalog', '/dashboard', '/keuangan', '/pelanggan', '/karyawan', '/pesanan', '/supplier'],
-  OWNER:    ['/', '/katalog', '/dashboard', '/keuangan', '/pelanggan', '/karyawan', '/pesanan', '/supplier', '/activity-logs'],
+  KASIR: ['/', '/katalog'],
+  CASHIER: ['/', '/katalog'],
+  ADMIN: ['/', '/katalog', '/dashboard', '/keuangan', '/pelanggan', '/karyawan', '/pesanan', '/supplier'],
+  OWNER: ['/', '/katalog', '/dashboard', '/keuangan', '/pelanggan', '/karyawan', '/pesanan', '/supplier', '/activity-logs'],
 };
 
 const canAccess = (role, path) => {
@@ -101,10 +101,10 @@ function DemoBlockModal({ message, onClose }) {
 
 // Badge warna per role
 const ROLE_STYLE = {
-  KASIR:   { bg: '#EEF2FF', color: '#4F46E5', icon: <Calculator size={10} /> },
+  KASIR: { bg: '#EEF2FF', color: '#4F46E5', icon: <Calculator size={10} /> },
   CASHIER: { bg: '#EEF2FF', color: '#4F46E5', icon: <Calculator size={10} /> },
-  ADMIN:   { bg: '#F0FDF4', color: '#16A34A', icon: <ShieldCheck size={10} /> },
-  OWNER:   { bg: '#FEF3C7', color: '#D97706', icon: <Crown size={10} /> },
+  ADMIN: { bg: '#F0FDF4', color: '#16A34A', icon: <ShieldCheck size={10} /> },
+  OWNER: { bg: '#FEF3C7', color: '#D97706', icon: <Crown size={10} /> },
 };
 
 // ─── Navigation ────────────────────────────────────────────────
@@ -118,22 +118,22 @@ const Navigation = ({ user, onLogout, appMode, setAppMode }) => {
   };
 
   const allNavItems = appMode === 'RENTAL' ? [
-    { path: '/',          label: 'Kasir Rental', icon: <Car size={20} />,             minRole: 'KASIR', showInNav: true  },
-    { path: '/dashboard', label: 'Dashboard',    icon: <LayoutDashboard size={20} />, minRole: 'ADMIN', showInNav: true  },
-    { path: '/keuangan',  label: 'Keuangan',     icon: <DollarSign size={20} />,      minRole: 'ADMIN', showInNav: false },
-    { path: '/pelanggan', label: 'Pelanggan',    icon: <Users size={20} />,           minRole: 'ADMIN', showInNav: false },
-    { path: '/karyawan',  label: 'Karyawan',     icon: <UserCog size={20} />,         minRole: 'ADMIN', showInNav: false },
-    { path: '/activity-logs', label: 'Log Aktivitas', icon: <History size={20} />,    minRole: 'ADMIN', showInNav: false },
+    { path: '/', label: 'Kasir Rental', icon: <Car size={20} />, minRole: 'KASIR', showInNav: true },
+    { path: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} />, minRole: 'ADMIN', showInNav: true },
+    { path: '/keuangan', label: 'Keuangan', icon: <DollarSign size={20} />, minRole: 'ADMIN', showInNav: false },
+    { path: '/pelanggan', label: 'Pelanggan', icon: <Users size={20} />, minRole: 'ADMIN', showInNav: false },
+    { path: '/karyawan', label: 'Karyawan', icon: <UserCog size={20} />, minRole: 'ADMIN', showInNav: false },
+    { path: '/activity-logs', label: 'Log Aktivitas', icon: <History size={20} />, minRole: 'ADMIN', showInNav: false },
   ] : [
-    { path: '/',          label: 'Kasir',        icon: <Calculator size={20} />,      minRole: 'KASIR', showInNav: true  },
-    { path: '/katalog',   label: 'Katalog',      icon: <Package size={20} />,         minRole: 'KASIR', showInNav: true  },
-    { path: '/dashboard', label: 'Dashboard',    icon: <LayoutDashboard size={20} />, minRole: 'ADMIN', showInNav: true  },
-    { path: '/keuangan',  label: 'Keuangan',     icon: <DollarSign size={20} />,      minRole: 'ADMIN', showInNav: false },
-    { path: '/pelanggan', label: 'Pelanggan',    icon: <Users size={20} />,           minRole: 'ADMIN', showInNav: false },
-    { path: '/karyawan',  label: 'Karyawan',     icon: <UserCog size={20} />,         minRole: 'ADMIN', showInNav: false },
-    { path: '/pesanan',   label: 'Pesanan',      icon: <Clock size={20} />,           minRole: 'ADMIN', showInNav: false },
-    { path: '/supplier',  label: 'Supplier',     icon: <UserCog size={20} />,         minRole: 'ADMIN', showInNav: false },
-    { path: '/activity-logs', label: 'Log Aktivitas', icon: <History size={20} />,    minRole: 'ADMIN', showInNav: false },
+    { path: '/', label: 'Kasir', icon: <Calculator size={20} />, minRole: 'KASIR', showInNav: true },
+    { path: '/katalog', label: 'Katalog', icon: <Package size={20} />, minRole: 'KASIR', showInNav: true },
+    { path: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} />, minRole: 'ADMIN', showInNav: true },
+    { path: '/keuangan', label: 'Keuangan', icon: <DollarSign size={20} />, minRole: 'ADMIN', showInNav: false },
+    { path: '/pelanggan', label: 'Pelanggan', icon: <Users size={20} />, minRole: 'ADMIN', showInNav: false },
+    { path: '/karyawan', label: 'Karyawan', icon: <UserCog size={20} />, minRole: 'ADMIN', showInNav: false },
+    { path: '/pesanan', label: 'Pesanan', icon: <Clock size={20} />, minRole: 'ADMIN', showInNav: false },
+    { path: '/supplier', label: 'Supplier', icon: <UserCog size={20} />, minRole: 'ADMIN', showInNav: false },
+    { path: '/activity-logs', label: 'Log Aktivitas', icon: <History size={20} />, minRole: 'ADMIN', showInNav: false },
   ];
 
   // Demo user diperlakukan sebagai OWNER untuk navigasi (akses semua halaman)
@@ -153,15 +153,15 @@ const Navigation = ({ user, onLogout, appMode, setAppMode }) => {
     return (
       <span style={{
         fontSize: '0.65rem',
-        background: user?.isDemo 
+        background: user?.isDemo
           ? 'linear-gradient(90deg,#7C3AED,#4F46E5)'
           : roleStyle.bg,
         color: user?.isDemo ? 'white' : roleStyle.color,
         padding: '2px 7px', borderRadius: '99px', fontWeight: 700,
         display: 'inline-flex', alignItems: 'center', gap: 3,
       }}>
-        {user?.isDemo 
-          ? '⚡ ULTRA DEMO' 
+        {user?.isDemo
+          ? '⚡ ULTRA DEMO'
           : <>{roleStyle.icon} {user?.role}</>}
       </span>
     );
@@ -253,14 +253,14 @@ function AppContent({ user, onLogout, appMode, setAppMode }) {
       <Navigation user={user} onLogout={onLogout} appMode={appMode} setAppMode={setAppMode} />
       <main className="main-content">
         <Routes>
-          <Route path="/"          element={appMode === 'RENTAL' ? <RentalMobil /> : <Kasir />} />
-          <Route path="/katalog"   element={<Katalog />} />
-          {canAccess(effectiveRole, '/dashboard')  && <Route path="/dashboard"  element={<Dashboard appMode={appMode} />} />}
-          {canAccess(effectiveRole, '/keuangan')   && <Route path="/keuangan"   element={<Keuangan appMode={appMode} />} />}
-          {canAccess(effectiveRole, '/pelanggan')  && <Route path="/pelanggan"  element={<Pelanggan />} />}
-          {canAccess(effectiveRole, '/karyawan')   && <Route path="/karyawan"   element={<Karyawan />} />}
-          {canAccess(effectiveRole, '/pesanan')    && <Route path="/pesanan"    element={<Pesanan />} />}
-          {canAccess(effectiveRole, '/supplier')   && <Route path="/supplier"   element={<Supplier />} />}
+          <Route path="/" element={appMode === 'RENTAL' ? <RentalMobil /> : <Kasir />} />
+          <Route path="/katalog" element={<Katalog />} />
+          {canAccess(effectiveRole, '/dashboard') && <Route path="/dashboard" element={<Dashboard appMode={appMode} />} />}
+          {canAccess(effectiveRole, '/keuangan') && <Route path="/keuangan" element={<Keuangan appMode={appMode} />} />}
+          {canAccess(effectiveRole, '/pelanggan') && <Route path="/pelanggan" element={<Pelanggan />} />}
+          {canAccess(effectiveRole, '/karyawan') && <Route path="/karyawan" element={<Karyawan />} />}
+          {canAccess(effectiveRole, '/pesanan') && <Route path="/pesanan" element={<Pesanan />} />}
+          {canAccess(effectiveRole, '/supplier') && <Route path="/supplier" element={<Supplier />} />}
           {canAccess(effectiveRole, '/activity-logs') && <Route path="/activity-logs" element={<LogAktivitas />} />}
         </Routes>
       </main>
@@ -313,7 +313,7 @@ function BusinessModeModal({ onSelectMode }) {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '1.5rem' }}>
           {/* Card 1: UMKM F&B */}
-          <div 
+          <div
             onClick={() => onSelectMode('FNB')}
             style={{
               border: '2px solid #E5E7EB', borderRadius: '18px', padding: '1.5rem 1rem',
@@ -331,7 +331,7 @@ function BusinessModeModal({ onSelectMode }) {
           </div>
 
           {/* Card 2: Rental Mobil */}
-          <div 
+          <div
             onClick={() => onSelectMode('RENTAL')}
             style={{
               border: '2px solid #E5E7EB', borderRadius: '18px', padding: '1.5rem 1rem',
@@ -350,7 +350,7 @@ function BusinessModeModal({ onSelectMode }) {
         </div>
 
         <p style={{ fontSize: '0.75rem', color: '#9CA3AF', margin: 0 }}>
-          💡 Admin & Owner dapat mengganti jenis POS kapan saja melalui menu di sidebar.
+          pilih sesuai kebutuhan kamu
         </p>
       </div>
     </div>
