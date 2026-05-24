@@ -62,7 +62,6 @@ const initDemoData = () => {
       localStorage.setItem(getDemoKey('posbah_demo_finances'), JSON.stringify([
         { id: 401, type: 'EXPENSE', amount: 1500000, description: 'Servis rutin Toyota Avanza (Demo)', date: new Date(Date.now() - 6 * 86400000).toISOString(), status: 'PAID' },
         { id: 402, type: 'EXPENSE', amount: 800000, description: 'Beli Ban Baru Honda Brio (Demo)', date: new Date(Date.now() - 9 * 86400000).toISOString(), status: 'PAID' },
-        { id: 404, type: 'RECEIVABLE', amount: 700000, description: 'Pendapatan Sewa Avanza (Siti Rahma)', date: new Date(Date.now() - 6 * 86400000).toISOString(), status: 'PAID' },
       ]));
     }
     if (!localStorage.getItem(getDemoKey('posbah_demo_logs'))) {
