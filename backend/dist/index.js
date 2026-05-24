@@ -1417,7 +1417,7 @@ app.get('/api/rentals', requireAdmin, checkExcludedEmployee, (req, res) => __awa
 // Rent a car
 app.post('/api/rentals', requireAdmin, checkExcludedEmployee, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { carId, customerId, customerName, startDate, endDate, totalPrice, paymentMethod } = req.body;
+        const { carId, customerId, customerName, startDate, endDate, totalPrice, paymentMethod, identityText } = req.body;
         const employeeIdHeader = req.headers['x-employee-id'];
         const empId = Number(employeeIdHeader) || 1;
         if (!carId || !customerName || !startDate || !endDate || !totalPrice || !paymentMethod) {
@@ -1444,7 +1444,8 @@ app.post('/api/rentals', requireAdmin, checkExcludedEmployee, (req, res) => __aw
                     endDate: new Date(endDate),
                     totalPrice: Number(totalPrice),
                     employeeId: empId,
-                    status: 'ACTIVE'
+                    status: 'ACTIVE',
+                    identityText: identityText || null
                 },
                 include: { car: true }
             });

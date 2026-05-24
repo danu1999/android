@@ -206,6 +206,7 @@ model Rental {
   lateFee          Float     @default(0)
   employeeId       Int
   employee         Employee  @relation(fields: [employeeId], references: [id])
+  identityText     String?
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }

@@ -1590,7 +1590,7 @@ app.get('/api/rentals', requireAdmin, checkExcludedEmployee, async (req, res) =>
 // Rent a car
 app.post('/api/rentals', requireAdmin, checkExcludedEmployee, async (req, res) => {
   try {
-    const { carId, customerId, customerName, startDate, endDate, totalPrice, paymentMethod } = req.body;
+    const { carId, customerId, customerName, startDate, endDate, totalPrice, paymentMethod, identityText } = req.body;
     const employeeIdHeader = req.headers['x-employee-id'] as string;
     const empId = Number(employeeIdHeader) || 1;
 
@@ -1621,7 +1621,8 @@ app.post('/api/rentals', requireAdmin, checkExcludedEmployee, async (req, res) =
           endDate: new Date(endDate),
           totalPrice: Number(totalPrice),
           employeeId: empId,
-          status: 'ACTIVE'
+          status: 'ACTIVE',
+          identityText: identityText || null
         },
         include: { car: true }
       });

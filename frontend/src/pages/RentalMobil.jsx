@@ -25,6 +25,9 @@ export default function RentalMobil() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('CASH');
+  const [identityText, setIdentityText] = useState('');
+  const [compressing, setCompressing] = useState(false);
+  const [viewIdentity, setViewIdentity] = useState(null);
 
   // Return Modal State
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
@@ -121,6 +124,44 @@ export default function RentalMobil() {
     return calculateDays() * getSelectedCarPrice();
   };
 
+  const handleIdentityUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setCompressing(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 600;
+
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
+        setIdentityText(compressedBase64);
+        setCompressing(false);
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Rental Checkout
   const handleRentalCheckout = async (e) => {
     e.preventDefault();
@@ -141,7 +182,8 @@ export default function RentalMobil() {
         startDate,
         endDate,
         totalPrice: calculateTotalPrice(),
-        paymentMethod
+        paymentMethod,
+        identityText: identityText || null
       });
 
       // Reset
@@ -150,6 +192,7 @@ export default function RentalMobil() {
       setNewCustomerName('');
       setStartDate('');
       setEndDate('');
+      setIdentityText('');
       
       alert('Penyewaan mobil berhasil diproses!');
       fetchCars();
@@ -338,6 +381,36 @@ export default function RentalMobil() {
                 </div>
               </div>
 
+              {/* Bukti Identitas */}
+              <div className="form-group">
+                <label style={{ fontWeight: 700, fontSize: '0.85rem', color: '#4B5563', marginBottom: '6px', display: 'block' }}>
+                  Bukti Identitas (KTP/KTA/Passport)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleIdentityUpload}
+                  style={{ width: '100%', padding: '10px', fontSize: '0.85rem', borderRadius: '12px', border: '1.5px solid #E5E7EB', background: 'white' }}
+                />
+                {compressing && <span style={{ fontSize: '0.8rem', color: '#6B7280', display: 'block', marginTop: '4px' }}>Mengompresi dokumen...</span>}
+                {identityText && (
+                  <div style={{ marginTop: '8px', border: '1.5px solid #10B981', borderRadius: '12px', padding: '8px', background: '#F0FDF4', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <img src={identityText} alt="Dokumen Preview" style={{ width: '80px', height: '50px', objectFit: 'cover', borderRadius: '6px' }} />
+                    <div>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#065F46' }}>Dokumen terkonversi ke teks!</div>
+                      <div style={{ fontSize: '0.7rem', color: '#047857' }}>Ukuran data: {Math.round(identityText.length / 1024)} KB</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIdentityText('')}
+                      style={{ marginLeft: 'auto', background: '#EF4444', color: 'white', border: 'none', borderRadius: '6px', padding: '4px 8px', fontSize: '0.75rem', cursor: 'pointer' }}
+                    >
+                      Hapus
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <button
                 type="submit"
                 className="btn btn-primary"
@@ -469,6 +542,29 @@ export default function RentalMobil() {
                     <td style={{ padding: '12px 8px', fontWeight: 750 }}>
                       {rental.customerName}
                       {rental.customer?.phone && <div style={{ fontSize: '0.75rem', color: '#6B7280', fontWeight: 400 }}>{rental.customer.phone}</div>}
+                      {rental.identityText ? (
+                        <button
+                          onClick={() => setViewIdentity(rental.identityText)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            marginTop: '4px',
+                            background: '#EFF6FF',
+                            color: '#2563EB',
+                            border: '1px solid #BFDBFE',
+                            borderRadius: '6px',
+                            padding: '2px 6px',
+                            fontSize: '0.7rem',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          👁️ Lihat Identitas
+                        </button>
+                      ) : (
+                        <div style={{ fontSize: '0.7rem', color: '#9CA3AF', fontStyle: 'italic', marginTop: '4px' }}>Tidak ada identitas</div>
+                      )}
                     </td>
                     <td style={{ padding: '12px 8px' }}>
                       {rental.car?.name}
@@ -668,6 +764,24 @@ export default function RentalMobil() {
                 <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Konfirmasi Selesai</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal View Identitas */}
+      {viewIdentity && (
+        <div className="modal-overlay" style={{ zIndex: 99999 }}>
+          <div className="modal-content glass-panel" style={{ maxWidth: '400px', width: '100%', textAlign: 'center' }}>
+            <h3 style={{ margin: '0 0 16px', fontSize: '1.1rem', fontWeight: 900, color: '#1F2937' }}>Dokumen Bukti Identitas</h3>
+            <img src={viewIdentity} alt="Bukti Identitas" style={{ width: '100%', maxHeight: '350px', objectFit: 'contain', borderRadius: '12px', border: '1px solid #E5E7EB', marginBottom: '16px' }} />
+            <button
+              type="button"
+              onClick={() => setViewIdentity(null)}
+              className="btn btn-secondary"
+              style={{ width: '100%', padding: '10px', borderRadius: '10px', fontWeight: 700 }}
+            >
+              Tutup
+            </button>
           </div>
         </div>
       )}
