@@ -29,14 +29,28 @@ api.interceptors.request.use((config) => {
 // ─────────────────────────────────────────────────────────────
 
 const initDemoData = () => {
+  const DEMO_VERSION_KEY = 'posbah_demo_version_v3';
+  if (localStorage.getItem(DEMO_VERSION_KEY) !== 'true') {
+    // Clear all demo-related localStorage entries to force fresh initialization
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('posbah_demo_')) {
+        localStorage.removeItem(key);
+      }
+    }
+    localStorage.setItem(DEMO_VERSION_KEY, 'true');
+  }
+
   const mode = localStorage.getItem('posbah_app_mode') || 'FNB';
 
   if (mode === 'RENTAL') {
     if (!localStorage.getItem(getDemoKey('posbah_demo_customers'))) {
       localStorage.setItem(getDemoKey('posbah_demo_customers'), JSON.stringify([
-        { id: 501, name: 'Budi Santoso', phone: '08123456789', address: 'Jl. Merdeka No. 10' },
-        { id: 502, name: 'Siti Rahma', phone: '08567890123', address: 'Jl. Mawar No. 4' },
-        { id: 503, name: 'Andi Wijaya', phone: '08789012345', address: 'Jl. Melati No. 15' },
+        { id: 501, name: 'Budi Santoso', phone: '08123456789', address: 'Jl. Merdeka No. 10, Bandung' },
+        { id: 502, name: 'Siti Rahma', phone: '08567890123', address: 'Jl. Mawar No. 4, Cimahi' },
+        { id: 503, name: 'Andi Wijaya', phone: '08789012345', address: 'Jl. Melati No. 15, Bandung' },
+        { id: 504, name: 'Dewi Lestari', phone: '08991234567', address: 'Komp. Buah Batu Indah Reg-3' },
+        { id: 505, name: 'Rian Hidayat', phone: '08215432765', address: 'Jl. Cihampelas No. 102' }
       ]));
     }
     if (!localStorage.getItem(getDemoKey('posbah_demo_employees'))) {
@@ -47,45 +61,81 @@ const initDemoData = () => {
     }
     if (!localStorage.getItem(getDemoKey('posbah_demo_cars'))) {
       localStorage.setItem(getDemoKey('posbah_demo_cars'), JSON.stringify([
-        { id: 801, name: 'Toyota Avanza', plateNumber: 'D 1234 ABC', type: 'MPV', pricePerDay: 350000, status: 'AVAILABLE' },
-        { id: 802, name: 'Mitsubishi Pajero', plateNumber: 'D 8888 BOSS', type: 'SUV', pricePerDay: 800000, status: 'AVAILABLE' },
-        { id: 803, name: 'Honda Brio', plateNumber: 'D 5678 XYZ', type: 'City Car', pricePerDay: 250000, status: 'RENTED' },
+        { id: 801, name: 'Toyota Avanza Veloz', plateNumber: 'D 1234 ABC', type: 'MPV', pricePerDay: 350000, status: 'AVAILABLE' },
+        { id: 802, name: 'Mitsubishi Pajero Sport', plateNumber: 'D 8888 BOSS', type: 'SUV', pricePerDay: 800000, status: 'AVAILABLE' },
+        { id: 803, name: 'Honda Brio RS', plateNumber: 'D 5678 XYZ', type: 'City Car', pricePerDay: 250000, status: 'RENTED' },
+        { id: 804, name: 'Toyota Innova Zenix Hybrid', plateNumber: 'D 2026 HYB', type: 'MPV', pricePerDay: 650000, status: 'AVAILABLE' },
+        { id: 805, name: 'Honda Civic RS Turbo', plateNumber: 'D 1999 CIV', type: 'Sedan', pricePerDay: 900000, status: 'AVAILABLE' },
+        { id: 806, name: 'Daihatsu Sigra X', plateNumber: 'D 1742 SGR', type: 'Family Car', pricePerDay: 220000, status: 'AVAILABLE' },
+        { id: 807, name: 'Suzuki Ertiga Hybrid', plateNumber: 'D 4321 ERT', type: 'MPV', pricePerDay: 300000, status: 'RENTED' },
+        { id: 808, name: 'Hyundai Stargazer Prime', plateNumber: 'D 999 HND', type: 'MPV', pricePerDay: 400000, status: 'AVAILABLE' },
+        { id: 809, name: 'Toyota Fortuner GR Sport', plateNumber: 'D 777 FTR', type: 'SUV', pricePerDay: 850000, status: 'AVAILABLE' },
+        { id: 810, name: 'Honda HR-V SE', plateNumber: 'D 3020 HRV', type: 'Crossover', pricePerDay: 450000, status: 'AVAILABLE' },
       ]));
     }
     if (!localStorage.getItem(getDemoKey('posbah_demo_rentals'))) {
       localStorage.setItem(getDemoKey('posbah_demo_rentals'), JSON.stringify([
-        { id: 901, carId: 803, car: { name: 'Honda Brio', plateNumber: 'D 5678 XYZ', pricePerDay: 250000 }, customerId: 501, customerName: 'Budi Santoso', startDate: new Date(Date.now() - 2 * 86400000).toISOString(), endDate: new Date(Date.now() + 1 * 86400000).toISOString(), totalPrice: 750000, status: 'ACTIVE', actualReturnDate: null, lateFee: 0, employeeId: 1 },
-        { id: 902, carId: 801, car: { name: 'Toyota Avanza', plateNumber: 'D 1234 ABC', pricePerDay: 350000 }, customerId: 502, customerName: 'Siti Rahma', startDate: new Date(Date.now() - 5 * 86400000).toISOString(), endDate: new Date(Date.now() - 3 * 86400000).toISOString(), totalPrice: 700000, status: 'RETURNED', actualReturnDate: new Date(Date.now() - 3 * 86400000).toISOString(), lateFee: 0, employeeId: 1 },
+        { id: 901, carId: 803, car: { name: 'Honda Brio RS', plateNumber: 'D 5678 XYZ', pricePerDay: 250000 }, customerId: 501, customerName: 'Budi Santoso', startDate: new Date(Date.now() - 2 * 86400000).toISOString(), endDate: new Date(Date.now() + 1 * 86400000).toISOString(), totalPrice: 750000, status: 'ACTIVE', actualReturnDate: null, lateFee: 0, employeeId: 1 },
+        { id: 902, carId: 801, car: { name: 'Toyota Avanza Veloz', plateNumber: 'D 1234 ABC', pricePerDay: 350000 }, customerId: 502, customerName: 'Siti Rahma', startDate: new Date(Date.now() - 5 * 86400000).toISOString(), endDate: new Date(Date.now() - 3 * 86400000).toISOString(), totalPrice: 700000, status: 'RETURNED', actualReturnDate: new Date(Date.now() - 3 * 86400000).toISOString(), lateFee: 0, employeeId: 1 },
+        { id: 903, carId: 804, car: { name: 'Toyota Innova Zenix Hybrid', plateNumber: 'D 2026 HYB', pricePerDay: 650000 }, customerId: 503, customerName: 'Andi Wijaya', startDate: new Date(Date.now() - 4 * 86400000).toISOString(), endDate: new Date(Date.now() - 2 * 86400000).toISOString(), totalPrice: 1300000, status: 'RETURNED', actualReturnDate: new Date(Date.now() - 2 * 86400000).toISOString(), lateFee: 0, employeeId: 1 },
+        { id: 904, carId: 807, car: { name: 'Suzuki Ertiga Hybrid', plateNumber: 'D 4321 ERT', pricePerDay: 300000 }, customerId: 504, customerName: 'Dewi Lestari', startDate: new Date(Date.now() - 3 * 86400000).toISOString(), endDate: new Date(Date.now() + 2 * 86400000).toISOString(), totalPrice: 1500000, status: 'ACTIVE', actualReturnDate: null, lateFee: 0, employeeId: 2 },
+        { id: 905, carId: 809, car: { name: 'Toyota Fortuner GR Sport', plateNumber: 'D 777 FTR', pricePerDay: 850000 }, customerId: 505, customerName: 'Rian Hidayat', startDate: new Date(Date.now() - 6 * 86400000).toISOString(), endDate: new Date(Date.now() - 4 * 86400000).toISOString(), totalPrice: 1700000, status: 'RETURNED', actualReturnDate: new Date(Date.now() - 4 * 86400000).toISOString(), lateFee: 0, employeeId: 2 },
+        { id: 906, carId: 805, car: { name: 'Honda Civic RS Turbo', plateNumber: 'D 1999 CIV', pricePerDay: 900000 }, customerId: 501, customerName: 'Budi Santoso', startDate: new Date(Date.now() - 3 * 86400000).toISOString(), endDate: new Date(Date.now() - 1 * 86400000).toISOString(), totalPrice: 1800000, status: 'RETURNED', actualReturnDate: new Date(Date.now() - 1 * 86400000).toISOString(), lateFee: 0, employeeId: 1 }
       ]));
     }
     if (!localStorage.getItem(getDemoKey('posbah_demo_finances'))) {
       localStorage.setItem(getDemoKey('posbah_demo_finances'), JSON.stringify([
         { id: 401, type: 'EXPENSE', amount: 1500000, description: 'Servis rutin Toyota Avanza (Demo)', date: new Date(Date.now() - 6 * 86400000).toISOString(), status: 'PAID' },
         { id: 402, type: 'EXPENSE', amount: 800000, description: 'Beli Ban Baru Honda Brio (Demo)', date: new Date(Date.now() - 9 * 86400000).toISOString(), status: 'PAID' },
+        { id: 403, type: 'INCOME', amount: 700000, description: 'Pelunasan Sewa Toyota Avanza - Siti Rahma (Demo)', date: new Date(Date.now() - 3 * 86400000).toISOString(), status: 'PAID' },
+        { id: 404, type: 'INCOME', amount: 1700000, description: 'Pelunasan Sewa Toyota Fortuner - Rian Hidayat (Demo)', date: new Date(Date.now() - 4 * 86400000).toISOString(), status: 'PAID' },
+        { id: 405, type: 'INCOME', amount: 1300000, description: 'Pelunasan Sewa Toyota Innova - Andi Wijaya (Demo)', date: new Date(Date.now() - 2 * 86400000).toISOString(), status: 'PAID' },
+        { id: 406, type: 'INCOME', amount: 1800000, description: 'Pelunasan Sewa Honda Civic RS - Budi Santoso (Demo)', date: new Date(Date.now() - 1 * 86400000).toISOString(), status: 'PAID' },
+        { id: 407, type: 'RECEIVABLE', amount: 750000, description: 'Piutang Sewa Honda Brio RS - Budi Santoso (Demo)', date: new Date(Date.now() - 2 * 86400000).toISOString(), status: 'PENDING' },
+        { id: 408, type: 'RECEIVABLE', amount: 1500000, description: 'Piutang Sewa Suzuki Ertiga - Dewi Lestari (Demo)', date: new Date(Date.now() - 3 * 86400000).toISOString(), status: 'PENDING' },
+        { id: 409, type: 'EXPENSE', amount: 600000, description: 'Belanja BBM & Operasional Kantor (Demo)', date: new Date(Date.now() - 1 * 86400000).toISOString(), status: 'PAID' },
+        { id: 410, type: 'EXPENSE', amount: 2500000, description: 'Gaji Bulanan Karyawan - Kasir Utama (Demo)', date: new Date().toISOString(), status: 'PAID' },
+        { id: 411, type: 'EXPENSE', amount: 3000000, description: 'Gaji Bulanan Karyawan - Admin Gudang (Demo)', date: new Date().toISOString(), status: 'PAID' },
       ]));
     }
     if (!localStorage.getItem(getDemoKey('posbah_demo_logs'))) {
       localStorage.setItem(getDemoKey('posbah_demo_logs'), JSON.stringify([
-        { id: 1, action: 'CREATE_RENTAL', description: 'Kasir Utama menyewakan mobil Honda Brio ke Budi Santoso', createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
-        { id: 2, action: 'RETURN_CAR', description: 'Pengembalian mobil Toyota Avanza oleh Siti Rahma', createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+        { id: 1, action: 'CREATE_RENTAL', description: 'Kasir Utama menyewakan mobil Honda Brio RS ke Budi Santoso', createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+        { id: 2, action: 'RETURN_CAR', description: 'Pengembalian mobil Toyota Avanza Veloz oleh Siti Rahma', createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+        { id: 3, action: 'RETURN_CAR', description: 'Pengembalian mobil Toyota Innova Zenix oleh Andi Wijaya', createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+        { id: 4, action: 'CREATE_RENTAL', description: 'Admin Gudang menyewakan mobil Suzuki Ertiga ke Dewi Lestari', createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), employee: { name: 'Admin Gudang', role: 'ADMIN' } },
+        { id: 5, action: 'RETURN_CAR', description: 'Pengembalian mobil Toyota Fortuner oleh Rian Hidayat', createdAt: new Date(Date.now() - 4 * 86400000).toISOString(), employee: { name: 'Admin Gudang', role: 'ADMIN' } },
+        { id: 6, action: 'RETURN_CAR', description: 'Pengembalian mobil Honda Civic RS oleh Budi Santoso', createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
       ]));
     }
   } else {
     if (!localStorage.getItem(getDemoKey('posbah_demo_products'))) {
       localStorage.setItem(getDemoKey('posbah_demo_products'), JSON.stringify([
-        { id: 301, name: 'Pisang Keju Cokelat', price: 15000, costPrice: 9000, stock: 120, unit: 'pcs', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: '/demo/pisang-keju-coklat.png' },
-        { id: 302, name: 'Pisang Keju Stroberi', price: 15000, costPrice: 9500, stock: 85, unit: 'pcs', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: '/demo/pisang-keju-stroberi.png' },
-        { id: 303, name: 'Pisang Keju Premium', price: 20000, costPrice: 11000, stock: 50, unit: 'pcs', wholesaleEnabled: false, wholesalePrices: null, variants: JSON.stringify([{ id: 1, name: 'Keju Melimpah', price: 25000, costPrice: 13000, stock: 30 }, { id: 2, name: 'Milo Almond', price: 28000, costPrice: 15000, stock: 20 }]), barcode: null, image: '/demo/pisang-keju-premium.png' },
-        { id: 304, name: 'Jus Alpukat', price: 18000, costPrice: 10000, stock: 60, unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: '/demo/jus-alpukat.png' },
-        { id: 305, name: 'Jus Mangga', price: 15000, costPrice: 8000, stock: 75, unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: '/demo/jus-mangga.png' },
-        { id: 306, name: 'Es Teh Manis', price: 8000, costPrice: 3000, stock: 200, unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: null, image: null },
+        { id: 301, name: 'Pisang Goreng Keju Cokelat', price: 15000, costPrice: 9000, stock: 120, unit: 'porsi', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: '899123456001', image: null },
+        { id: 302, name: 'Pisang Goreng Keju Stroberi', price: 15000, costPrice: 9500, stock: 85, unit: 'porsi', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: '899123456002', image: null },
+        { id: 303, name: 'Pisang Goreng Keju Premium', price: 20000, costPrice: 11000, stock: 50, unit: 'porsi', wholesaleEnabled: false, wholesalePrices: null, variants: JSON.stringify([{ id: 1, name: 'Keju Double', price: 23000, costPrice: 12000, stock: 30 }, { id: 2, name: 'Milo Almond', price: 28000, costPrice: 15000, stock: 20 }]), barcode: '899123456003', image: null },
+        { id: 304, name: 'Pisang Bakar Caramel Extra', price: 17000, costPrice: 10000, stock: 65, unit: 'porsi', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: '899123456004', image: null },
+        { id: 305, name: 'Roti Bakar Bandung Cokelat', price: 18000, costPrice: 10000, stock: 40, unit: 'porsi', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: '899123456005', image: null },
+        { id: 306, name: 'Roti Bakar Bandung Keju Special', price: 22000, costPrice: 12000, stock: 35, unit: 'porsi', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: '899123456006', image: null },
+        { id: 307, name: 'Jus Alpukat Mentega Super', price: 18000, costPrice: 10000, stock: 60, unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: '899123456007', image: null },
+        { id: 308, name: 'Jus Mangga Arumanis', price: 16000, costPrice: 8000, stock: 75, unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: '899123456008', image: null },
+        { id: 309, name: 'Jus Stroberi Segar', price: 16000, costPrice: 8500, stock: 55, unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: '899123456009', image: null },
+        { id: 310, name: 'Es Kopi Susu Gula Aren', price: 15000, costPrice: 7000, stock: 150, unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: '899123456010', image: null },
+        { id: 311, name: 'Es Kopi Cappuccino Creamy', price: 17000, costPrice: 8000, stock: 90, unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: '899123456011', image: null },
+        { id: 312, name: 'Es Matcha Latte Japan', price: 18000, costPrice: 9000, stock: 80, unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: '899123456012', image: null },
+        { id: 313, name: 'Es Teh Manis Jasmine', price: 7000, costPrice: 2000, stock: 300, unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: '899123456013', image: null },
+        { id: 314, name: 'Es Lemon Tea Segar', price: 10000, costPrice: 4000, stock: 200, unit: 'cup', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: '899123456014', image: null },
+        { id: 315, name: 'French Fries / Kentang Goreng', price: 15000, costPrice: 8000, stock: 110, unit: 'porsi', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: '899123456015', image: null },
+        { id: 316, name: 'Singkong Goreng Garlic Crispy', price: 12000, costPrice: 6000, stock: 95, unit: 'porsi', wholesaleEnabled: false, wholesalePrices: null, variants: null, barcode: '899123456016', image: null },
       ]));
     }
     if (!localStorage.getItem(getDemoKey('posbah_demo_customers'))) {
       localStorage.setItem(getDemoKey('posbah_demo_customers'), JSON.stringify([
-        { id: 501, name: 'Budi Santoso', phone: '08123456789', address: 'Jl. Merdeka No. 10' },
-        { id: 502, name: 'Siti Rahma', phone: '08567890123', address: 'Jl. Mawar No. 4' },
-        { id: 503, name: 'Andi Wijaya', phone: '08789012345', address: 'Jl. Melati No. 15' },
+        { id: 501, name: 'Budi Santoso', phone: '08123456789', address: 'Jl. Merdeka No. 10, Bandung' },
+        { id: 502, name: 'Siti Rahma', phone: '08567890123', address: 'Jl. Mawar No. 4, Cimahi' },
+        { id: 503, name: 'Andi Wijaya', phone: '08789012345', address: 'Jl. Melati No. 15, Bandung' },
+        { id: 504, name: 'Dewi Lestari', phone: '08991234567', address: 'Komp. Buah Batu Indah Reg-3' },
+        { id: 505, name: 'Rian Hidayat', phone: '08215432765', address: 'Jl. Cihampelas No. 102' }
       ]));
     }
     if (!localStorage.getItem(getDemoKey('posbah_demo_employees'))) {
@@ -96,14 +146,16 @@ const initDemoData = () => {
     }
     if (!localStorage.getItem(getDemoKey('posbah_demo_suppliers'))) {
       localStorage.setItem(getDemoKey('posbah_demo_suppliers'), JSON.stringify([
-        { id: 601, name: 'CV Maju Bersama (Demo)', phone: '081234567890', address: 'Jl. Raya No. 12, Bandung', notes: 'Supplier utama bahan baku' },
-        { id: 602, name: 'Toko Grosir Pak Haji (Demo)', phone: '081298765432', address: 'Pasar Induk Timur Blok C-7', notes: 'Sayuran & bumbu segar' },
+        { id: 601, name: 'CV Maju Bersama (Demo)', phone: '081234567890', address: 'Jl. Kopo Jaya No. 12, Bandung', notes: 'Supplier utama bahan baku buah, kopi, dan keju' },
+        { id: 602, name: 'Toko Grosir Pak Haji (Demo)', phone: '081298765432', address: 'Pasar Induk Caringin Blok C-7', notes: 'Supplier sayuran segar & kemasan cup/sedotan' },
+        { id: 603, name: 'PT Duta Susu Nusantara (Demo)', phone: '082265789012', address: 'Kawasan Industri Rancaekek K-15', notes: 'Distributor resmi susu UHT & kental manis' }
       ]));
     }
     if (!localStorage.getItem(getDemoKey('posbah_demo_purchase_orders'))) {
       localStorage.setItem(getDemoKey('posbah_demo_purchase_orders'), JSON.stringify([
-        { id: 701, supplierId: 601, supplier: { name: 'CV Maju Bersama (Demo)' }, date: new Date(Date.now() - 3 * 86400000).toISOString(), status: 'RECEIVED', total: 1200000, notes: 'Restok bahan baku bulan ini', items: [{ productId: 301, product: { name: 'Tepung Terigu (Demo)' }, quantity: 50, costPrice: 12000 }, { productId: 302, product: { name: 'Gula Pasir (Demo)' }, quantity: 30, costPrice: 15000 }] },
-        { id: 702, supplierId: 602, supplier: { name: 'Toko Grosir Pak Haji (Demo)' }, date: new Date(Date.now() - 1 * 86400000).toISOString(), status: 'ORDERED', total: 450000, notes: '', items: [{ productId: 304, product: { name: 'Bawang Merah (Demo)' }, quantity: 20, costPrice: 22500 }] },
+        { id: 701, supplierId: 601, supplier: { name: 'CV Maju Bersama (Demo)' }, date: new Date(Date.now() - 3 * 86400000).toISOString(), status: 'RECEIVED', total: 1200000, notes: 'Restok bahan baku pisang & keju', items: [{ productId: 301, product: { name: 'Pisang Raja (Demo)' }, quantity: 100, costPrice: 6000 }, { productId: 302, product: { name: 'Keju Cheddar Kraft (Demo)' }, quantity: 30, costPrice: 20000 }] },
+        { id: 702, supplierId: 602, supplier: { name: 'Toko Grosir Pak Haji (Demo)' }, date: new Date(Date.now() - 1 * 86400000).toISOString(), status: 'ORDERED', total: 450000, notes: 'Pesanan alpukat & mangga segar', items: [{ productId: 307, product: { name: 'Alpukat Mentega (Demo)' }, quantity: 20, costPrice: 15000 }, { productId: 308, product: { name: 'Mangga Arumanis (Demo)' }, quantity: 15, costPrice: 10000 }] },
+        { id: 703, supplierId: 603, supplier: { name: 'PT Duta Susu Nusantara (Demo)' }, date: new Date().toISOString(), status: 'RECEIVED', total: 850000, notes: 'Susu cair & kental manis untuk kopi/matcha', items: [{ productId: 310, product: { name: 'Susu UHT Full Cream (Demo)' }, quantity: 50, costPrice: 17000 }] }
       ]));
     }
     if (!localStorage.getItem(getDemoKey('posbah_demo_transactions'))) {
@@ -111,26 +163,27 @@ const initDemoData = () => {
         {
           id: 1001,
           receiptNumber: 'TX-20260520-001',
-          date: new Date(Date.now() - 4 * 3600000).toISOString(),
-          subtotal: 155000,
+          date: new Date(Date.now() - 4 * 86400000).toISOString(),
+          subtotal: 162000,
           discountType: null,
           discountInput: 0,
           discountAmt: 0,
-          total: 155000,
+          total: 162000,
           paymentMethod: 'QRIS',
           status: 'COMPLETED',
           type: 'SALES',
           employeeId: 1,
           customerName: 'Budi Santoso',
           items: [
-            { productId: 301, quantity: 5, price: 15000, costPrice: 9000, product: { name: 'Pisang Keju Cokelat' } },
-            { productId: 304, quantity: 4, price: 18000, costPrice: 10000, product: { name: 'Jus Alpukat' } },
+            { productId: 301, quantity: 5, price: 15000, costPrice: 9000, product: { name: 'Pisang Goreng Keju Cokelat' } },
+            { productId: 307, quantity: 4, price: 18000, costPrice: 10000, product: { name: 'Jus Alpukat Mentega Super' } },
+            { productId: 310, quantity: 1, price: 15000, costPrice: 7000, product: { name: 'Es Kopi Susu Gula Aren' } }
           ]
         },
         {
           id: 1002,
           receiptNumber: 'TX-20260520-002',
-          date: new Date(Date.now() - 3 * 3600000).toISOString(),
+          date: new Date(Date.now() - 4 * 86400000).toISOString(),
           subtotal: 75000,
           discountType: null,
           discountInput: 0,
@@ -142,11 +195,125 @@ const initDemoData = () => {
           employeeId: 1,
           customerName: 'Siti Rahma',
           items: [
-            { productId: 302, quantity: 5, price: 15000, costPrice: 9500, product: { name: 'Pisang Keju Stroberi' } }
+            { productId: 302, quantity: 5, price: 15000, costPrice: 9500, product: { name: 'Pisang Goreng Keju Stroberi' } }
           ]
         },
         {
           id: 1003,
+          receiptNumber: 'TX-20260521-001',
+          date: new Date(Date.now() - 3 * 86400000).toISOString(),
+          subtotal: 124000,
+          discountType: null,
+          discountInput: 0,
+          discountAmt: 0,
+          total: 124000,
+          paymentMethod: 'QRIS',
+          status: 'COMPLETED',
+          type: 'SALES',
+          employeeId: 1,
+          customerName: 'Andi Wijaya',
+          items: [
+            { productId: 303, quantity: 3, price: 28000, costPrice: 15000, variantId: 2, variantName: 'Milo Almond', product: { name: 'Pisang Goreng Keju Premium' } },
+            { productId: 314, quantity: 4, price: 10000, costPrice: 4000, product: { name: 'Es Lemon Tea Segar' } }
+          ]
+        },
+        {
+          id: 1004,
+          receiptNumber: 'TX-20260521-002',
+          date: new Date(Date.now() - 3 * 86400000).toISOString(),
+          subtotal: 143000,
+          discountType: null,
+          discountInput: 0,
+          discountAmt: 0,
+          total: 143000,
+          paymentMethod: 'CASH',
+          status: 'COMPLETED',
+          type: 'SALES',
+          employeeId: 1,
+          customerName: 'Dewi Lestari',
+          items: [
+            { productId: 305, quantity: 6, price: 18000, costPrice: 10000, product: { name: 'Roti Bakar Bandung Cokelat' } },
+            { productId: 313, quantity: 5, price: 7000, costPrice: 2000, product: { name: 'Es Teh Manis Jasmine' } }
+          ]
+        },
+        {
+          id: 1005,
+          receiptNumber: 'TX-20260522-001',
+          date: new Date(Date.now() - 2 * 86400000).toISOString(),
+          subtotal: 120000,
+          discountType: null,
+          discountInput: 0,
+          discountAmt: 0,
+          total: 120000,
+          paymentMethod: 'QRIS',
+          status: 'COMPLETED',
+          type: 'SALES',
+          employeeId: 2,
+          customerName: 'Rian Hidayat',
+          items: [
+            { productId: 316, quantity: 4, price: 12000, costPrice: 6000, product: { name: 'Singkong Goreng Garlic Crispy' } },
+            { productId: 312, quantity: 4, price: 18000, costPrice: 9000, product: { name: 'Es Matcha Latte Japan' } }
+          ]
+        },
+        {
+          id: 1006,
+          receiptNumber: 'TX-20260522-002',
+          date: new Date(Date.now() - 2 * 86400000).toISOString(),
+          subtotal: 222000,
+          discountType: null,
+          discountInput: 0,
+          discountAmt: 0,
+          total: 222000,
+          paymentMethod: 'CASH',
+          status: 'COMPLETED',
+          type: 'SALES',
+          employeeId: 1,
+          customerName: 'Budi Santoso',
+          items: [
+            { productId: 301, quantity: 8, price: 15000, costPrice: 9000, product: { name: 'Pisang Goreng Keju Cokelat' } },
+            { productId: 311, quantity: 6, price: 17000, costPrice: 8000, product: { name: 'Es Kopi Cappuccino Creamy' } }
+          ]
+        },
+        {
+          id: 1007,
+          receiptNumber: 'TX-20260523-001',
+          date: new Date(Date.now() - 1 * 86400000).toISOString(),
+          subtotal: 155000,
+          discountType: null,
+          discountInput: 0,
+          discountAmt: 0,
+          total: 155000,
+          paymentMethod: 'QRIS',
+          status: 'COMPLETED',
+          type: 'SALES',
+          employeeId: 1,
+          customerName: 'Siti Rahma',
+          items: [
+            { productId: 315, quantity: 5, price: 15000, costPrice: 8000, product: { name: 'French Fries / Kentang Goreng' } },
+            { productId: 309, quantity: 5, price: 16000, costPrice: 8500, product: { name: 'Jus Stroberi Segar' } }
+          ]
+        },
+        {
+          id: 1008,
+          receiptNumber: 'TX-20260523-002',
+          date: new Date(Date.now() - 1 * 86400000).toISOString(),
+          subtotal: 155000,
+          discountType: null,
+          discountInput: 0,
+          discountAmt: 0,
+          total: 155000,
+          paymentMethod: 'CASH',
+          status: 'COMPLETED',
+          type: 'SALES',
+          employeeId: 2,
+          customerName: 'Andi Wijaya',
+          items: [
+            { productId: 313, quantity: 10, price: 7000, costPrice: 2000, product: { name: 'Es Teh Manis Jasmine' } },
+            { productId: 304, quantity: 5, price: 17000, costPrice: 10000, product: { name: 'Pisang Bakar Caramel Extra' } }
+          ]
+        },
+        {
+          id: 1009,
           receiptNumber: 'PO-DEMO-001',
           date: new Date(Date.now() - 1 * 86400000).toISOString(),
           subtotal: 1500000,
@@ -160,10 +327,48 @@ const initDemoData = () => {
           orderStatus: 'DP_PAID',
           dpAmount: 500000,
           deliveryDate: new Date(Date.now() + 2 * 86400000).toISOString(),
-          notes: 'Nasi kotak 100 box, antar jam 10 pagi',
+          notes: 'Nasi kotak 100 box untuk acara reuni akbar',
           employeeId: 1,
-          customerName: 'Catering Bu Dewi',
+          customerName: 'Dewi Lestari',
           items: [{ productId: 301, quantity: 100, price: 15000, costPrice: 9000, product: { name: 'Nasi Kotak Spesial (Demo)' } }]
+        },
+        {
+          id: 1010,
+          receiptNumber: 'TX-20260524-001',
+          date: new Date(Date.now() - 4 * 3600000).toISOString(),
+          subtotal: 148000,
+          discountType: null,
+          discountInput: 0,
+          discountAmt: 0,
+          total: 148000,
+          paymentMethod: 'QRIS',
+          status: 'COMPLETED',
+          type: 'SALES',
+          employeeId: 1,
+          customerName: 'Rian Hidayat',
+          items: [
+            { productId: 306, quantity: 4, price: 22000, costPrice: 12000, product: { name: 'Roti Bakar Bandung Keju Special' } },
+            { productId: 310, quantity: 4, price: 15000, costPrice: 7000, product: { name: 'Es Kopi Susu Gula Aren' } }
+          ]
+        },
+        {
+          id: 1011,
+          receiptNumber: 'TX-20260524-002',
+          date: new Date(Date.now() - 2 * 3600000).toISOString(),
+          subtotal: 190000,
+          discountType: null,
+          discountInput: 0,
+          discountAmt: 0,
+          total: 190000,
+          paymentMethod: 'CASH',
+          status: 'COMPLETED',
+          type: 'SALES',
+          employeeId: 2,
+          customerName: 'Budi Santoso',
+          items: [
+            { productId: 303, quantity: 5, price: 23000, costPrice: 12000, variantId: 1, variantName: 'Keju Double', product: { name: 'Pisang Goreng Keju Premium' } },
+            { productId: 308, quantity: 5, price: 15000, costPrice: 8000, product: { name: 'Jus Mangga Arumanis' } }
+          ]
         }
       ]));
     }
@@ -173,12 +378,39 @@ const initDemoData = () => {
         { id: 402, type: 'EXPENSE', amount: 350000, description: 'Beli Cup & Plastik Kemasan (Demo)', date: new Date(Date.now() - 9 * 86400000).toISOString(), status: 'PAID' },
         { id: 403, type: 'PAYABLE', amount: 1500000, description: 'Hutang Agen Pisang Pak Slamet (Demo)', date: new Date(Date.now() - 14 * 86400000).toISOString(), status: 'PENDING' },
         { id: 404, type: 'RECEIVABLE', amount: 1200000, description: 'Piutang Catering Ibu Ratna (Demo)', date: new Date(Date.now() - 6 * 86400000).toISOString(), status: 'PENDING' },
+        { id: 405, type: 'INCOME', amount: 162000, description: 'Penjualan TX-20260520-001 (Demo)', date: new Date(Date.now() - 4 * 86400000).toISOString(), status: 'PAID' },
+        { id: 406, type: 'INCOME', amount: 75000, description: 'Penjualan TX-20260520-002 (Demo)', date: new Date(Date.now() - 4 * 86400000).toISOString(), status: 'PAID' },
+        { id: 407, type: 'INCOME', amount: 124000, description: 'Penjualan TX-20260521-001 (Demo)', date: new Date(Date.now() - 3 * 86400000).toISOString(), status: 'PAID' },
+        { id: 408, type: 'INCOME', amount: 143000, description: 'Penjualan TX-20260521-002 (Demo)', date: new Date(Date.now() - 3 * 86400000).toISOString(), status: 'PAID' },
+        { id: 409, type: 'INCOME', amount: 120000, description: 'Penjualan TX-20260522-001 (Demo)', date: new Date(Date.now() - 2 * 86400000).toISOString(), status: 'PAID' },
+        { id: 410, type: 'INCOME', amount: 222000, description: 'Penjualan TX-20260522-002 (Demo)', date: new Date(Date.now() - 2 * 86400000).toISOString(), status: 'PAID' },
+        { id: 411, type: 'INCOME', amount: 155000, description: 'Penjualan TX-20260523-001 (Demo)', date: new Date(Date.now() - 1 * 86400000).toISOString(), status: 'PAID' },
+        { id: 412, type: 'INCOME', amount: 155000, description: 'Penjualan TX-20260523-002 (Demo)', date: new Date(Date.now() - 1 * 86400000).toISOString(), status: 'PAID' },
+        { id: 413, type: 'INCOME', amount: 500000, description: 'DP Pre-Order PO-DEMO-001 (Demo)', date: new Date(Date.now() - 1 * 86400000).toISOString(), status: 'PAID' },
+        { id: 414, type: 'RECEIVABLE', amount: 1000000, description: 'Piutang Sisa Pelunasan PO-DEMO-001 (Demo)', date: new Date(Date.now() - 1 * 86400000).toISOString(), status: 'PENDING' },
+        { id: 415, type: 'EXPENSE', amount: 1200000, description: 'Pelunasan PO Restok CV Maju Bersama (Demo)', date: new Date().toISOString(), status: 'PAID' },
+        { id: 416, type: 'INCOME', amount: 148000, description: 'Penjualan TX-20260524-001 (Demo)', date: new Date().toISOString(), status: 'PAID' },
+        { id: 417, type: 'INCOME', amount: 190000, description: 'Penjualan TX-20260524-002 (Demo)', date: new Date().toISOString(), status: 'PAID' },
+        { id: 418, type: 'EXPENSE', amount: 2500000, description: 'Gaji Bulanan Karyawan - Kasir Utama (Demo)', date: new Date().toISOString(), status: 'PAID' },
+        { id: 419, type: 'EXPENSE', amount: 3000000, description: 'Gaji Bulanan Karyawan - Admin Gudang (Demo)', date: new Date().toISOString(), status: 'PAID' },
       ]));
     }
     if (!localStorage.getItem(getDemoKey('posbah_demo_logs'))) {
       localStorage.setItem(getDemoKey('posbah_demo_logs'), JSON.stringify([
-        { id: 1, action: 'CREATE_TRANSACTION', description: 'Kasir Utama membuat transaksi baru TX-20260520-001', createdAt: new Date(Date.now() - 4 * 3600000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
-        { id: 2, action: 'CREATE_TRANSACTION', description: 'Kasir Utama membuat transaksi baru TX-20260520-002', createdAt: new Date(Date.now() - 3 * 3600000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+        { id: 1, action: 'CREATE_TRANSACTION', description: 'Kasir Utama membuat transaksi baru TX-20260520-001', createdAt: new Date(Date.now() - 4 * 86400000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+        { id: 2, action: 'CREATE_TRANSACTION', description: 'Kasir Utama membuat transaksi baru TX-20260520-002', createdAt: new Date(Date.now() - 4 * 86400000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+        { id: 3, action: 'CREATE_TRANSACTION', description: 'Kasir Utama membuat transaksi baru TX-20260521-001', createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+        { id: 4, action: 'CREATE_TRANSACTION', description: 'Kasir Utama membuat transaksi baru TX-20260521-002', createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+        { id: 5, action: 'CREATE_TRANSACTION', description: 'Kasir Utama membuat transaksi baru TX-20260522-001', createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+        { id: 6, action: 'CREATE_TRANSACTION', description: 'Kasir Utama membuat transaksi baru TX-20260522-002', createdAt: new Date(Date.now() - 2 * 86400000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+        { id: 7, action: 'RECEIVE_PO', description: 'Admin Gudang menerima barang dari PO CV Maju Bersama', createdAt: new Date(Date.now() - 3 * 86400000).toISOString(), employee: { name: 'Admin Gudang', role: 'ADMIN' } },
+        { id: 8, action: 'CREATE_TRANSACTION', description: 'Kasir Utama membuat transaksi baru TX-20260523-001', createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+        { id: 9, action: 'CREATE_TRANSACTION', description: 'Kasir Utama membuat transaksi baru TX-20260523-002', createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+        { id: 10, action: 'CREATE_TRANSACTION', description: 'Kasir Utama menerima DP Pre-Order PO-DEMO-001 sebesar Rp 500.000', createdAt: new Date(Date.now() - 1 * 86400000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+        { id: 11, action: 'CREATE_TRANSACTION', description: 'Kasir Utama membuat transaksi baru TX-20260524-001', createdAt: new Date(Date.now() - 4 * 3600000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+        { id: 12, action: 'CREATE_TRANSACTION', description: 'Kasir Utama membuat transaksi baru TX-20260524-002', createdAt: new Date(Date.now() - 2 * 3600000).toISOString(), employee: { name: 'Kasir Utama', role: 'KASIR' } },
+        { id: 13, action: 'PAY_SALARY', description: 'Owner membayarkan gaji untuk Kasir Utama sebesar Rp 2.500.000', createdAt: new Date().toISOString(), employee: { name: 'userdemo', role: 'OWNER' } },
+        { id: 14, action: 'PAY_SALARY', description: 'Owner membayarkan gaji untuk Admin Gudang sebesar Rp 3.000.000', createdAt: new Date().toISOString(), employee: { name: 'userdemo', role: 'OWNER' } },
       ]));
     }
   }
