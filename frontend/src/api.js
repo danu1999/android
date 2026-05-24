@@ -766,6 +766,16 @@ api.defaults.adapter = async function (config) {
     }
   }
 
+  // Fallback: jika route tidak tertangani oleh demo adapter, kembalikan data kosong
+  // agar UI tidak error dan tidak ada kebocoran ke data production
+  if (data === null || data === undefined) {
+    if (method === 'GET') {
+      data = [];
+    } else {
+      data = { success: true, _demo: true };
+    }
+  }
+
   return {
     data,
     status,

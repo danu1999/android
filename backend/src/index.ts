@@ -62,6 +62,26 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// FIREWALL GLOBAL: Blokir userdemo dari SEMUA data production
+// userdemo (id=9999 / id=0) tidak diizinkan melihat, merubah,
+// maupun menghapus data production. Semua data demo dikelola
+// secara lokal di browser (localStorage), BUKAN dari database ini.
+// ─────────────────────────────────────────────────────────────
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const employeeId = req.headers['x-employee-id'] as string;
+  const isLoginRoute = req.path === '/api/auth/login';
+
+  if (!isLoginRoute && (employeeId === '9999' || employeeId === '0')) {
+    return res.status(403).json({
+      error: 'Akun demo tidak diizinkan mengakses data production. Semua data dikelola secara lokal di perangkat Anda.',
+      code: 'DEMO_ACCESS_DENIED',
+      isDemo: true
+    });
+  }
+  next();
+});
+
+// ─────────────────────────────────────────────────────────────
 // Role hierarchy helpers
 // ─────────────────────────────────────────────────────────────
 // CASHIER is an alias for KASIR (legacy role name support)
@@ -85,12 +105,10 @@ const requireAdmin = async (req: Request, res: Response, next: NextFunction) => 
     return res.status(403).json({ error: 'Akses ditolak. ID karyawan diperlukan.' });
   }
 
-  // Jika akun demo (id=0) atau userdemo (id=9999)
+  // Firewall global sudah memblokir demo user (id=0 atau id=9999)
+  // sebelum middleware ini dipanggil. Blok di sini sebagai lapisan tambahan.
   if (employeeId === '0' || employeeId === '9999') {
-    if (req.method !== 'GET') {
-      return res.status(403).json({ error: 'Demo mode tidak mengizinkan operasi ini' });
-    }
-    return next();
+    return res.status(403).json({ error: 'Akun demo tidak diizinkan mengakses data production.', code: 'DEMO_ACCESS_DENIED' });
   }
 
   if (!hasRole(role, 'ADMIN')) {
@@ -108,12 +126,9 @@ const requireOwner = async (req: Request, res: Response, next: NextFunction) => 
     return res.status(403).json({ error: 'Akses ditolak. ID karyawan diperlukan.' });
   }
 
-  // Jika akun demo (id=0) atau userdemo (id=9999)
+  // Firewall global sudah memblokir demo user sebelum middleware ini.
   if (employeeId === '0' || employeeId === '9999') {
-    if (req.method !== 'GET') {
-      return res.status(403).json({ error: 'Demo mode tidak mengizinkan operasi ini' });
-    }
-    return next();
+    return res.status(403).json({ error: 'Akun demo tidak diizinkan mengakses data production.', code: 'DEMO_ACCESS_DENIED' });
   }
 
   if (!hasRole(role, 'OWNER')) {
@@ -121,6 +136,7 @@ const requireOwner = async (req: Request, res: Response, next: NextFunction) => 
   }
   next();
 };
+
 
 /** Middleware: blokir akun demo (id=0 atau id=9999) atau tanpa ID dari semua operasi tulis */
 const requireNotDemo = (req: Request, res: Response, next: NextFunction) => {
