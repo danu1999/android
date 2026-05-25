@@ -17,6 +17,8 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const client_1 = require("@prisma/client");
 const async_hooks_1 = require("async_hooks");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 const prisma = new client_1.PrismaClient();
 const app = (0, express_1.default)();
 const port = process.env.PORT || 3001;
@@ -188,6 +190,38 @@ app.post('/api/auth/login', (req, res) => __awaiter(void 0, void 0, void 0, func
     catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Login gagal' });
+    }
+}));
+// ─────────────────────────────────────────────────────────────
+// Auth - Google Login Registration for Demo Trial (3-Day Limit)
+// ─────────────────────────────────────────────────────────────
+app.post('/api/auth/google-register', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { email } = req.body;
+        if (!email)
+            return res.status(400).json({ error: 'Email wajib diisi' });
+        const filePath = path_1.default.join(process.cwd(), 'google_users.json');
+        let users = {};
+        if (fs_1.default.existsSync(filePath)) {
+            try {
+                const fileContent = fs_1.default.readFileSync(filePath, 'utf-8');
+                users = JSON.parse(fileContent);
+            }
+            catch (err) {
+                console.error('Error reading google_users.json:', err);
+            }
+        }
+        let regDate = users[email];
+        if (!regDate) {
+            regDate = new Date().toISOString();
+            users[email] = regDate;
+            fs_1.default.writeFileSync(filePath, JSON.stringify(users, null, 2), 'utf-8');
+        }
+        res.json({ email, registeredAt: regDate });
+    }
+    catch (error) {
+        console.error('Failed in google-register:', error);
+        res.status(500).json({ error: 'Gagal memproses pendaftaran Google' });
     }
 }));
 // ─────────────────────────────────────────────────────────────

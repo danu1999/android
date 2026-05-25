@@ -3,6 +3,8 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
 import { AsyncLocalStorage } from 'async_hooks';
+import fs from 'fs';
+import path from 'path';
 
 const prisma = new PrismaClient();
 const app = express();
@@ -193,6 +195,40 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Login gagal' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Auth - Google Login Registration for Demo Trial (3-Day Limit)
+// ─────────────────────────────────────────────────────────────
+app.post('/api/auth/google-register', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email wajib diisi' });
+
+    const filePath = path.join(process.cwd(), 'google_users.json');
+    let users: Record<string, string> = {};
+
+    if (fs.existsSync(filePath)) {
+      try {
+        const fileContent = fs.readFileSync(filePath, 'utf-8');
+        users = JSON.parse(fileContent);
+      } catch (err) {
+        console.error('Error reading google_users.json:', err);
+      }
+    }
+
+    let regDate = users[email];
+    if (!regDate) {
+      regDate = new Date().toISOString();
+      users[email] = regDate;
+      fs.writeFileSync(filePath, JSON.stringify(users, null, 2), 'utf-8');
+    }
+
+    res.json({ email, registeredAt: regDate });
+  } catch (error) {
+    console.error('Failed in google-register:', error);
+    res.status(500).json({ error: 'Gagal memproses pendaftaran Google' });
   }
 });
 

@@ -43,19 +43,29 @@ export default function Login({ onLogin }) {
     }
   };
 
-  const handleGoogleLoginResponse = (response) => {
+  const handleGoogleLoginResponse = async (response) => {
     const payload = parseJwt(response.credential);
-    if (payload) {
-      const expiresAt = Date.now() + 3 * 24 * 60 * 60 * 1000; // 3 days
-      onLogin({
-        id: payload.sub,
-        name: payload.name || payload.email.split('@')[0],
-        email: payload.email,
-        picture: payload.picture,
-        role: 'OWNER',
-        isDemo: true,
-        expiresAt
-      });
+    if (payload && payload.email) {
+      try {
+        const regRes = await api.post('/auth/google-register', { email: payload.email });
+        const { registeredAt } = regRes.data;
+        const regTime = new Date(registeredAt).getTime();
+        const expiresAt = regTime + 3 * 24 * 60 * 60 * 1000; // 3 days since registration
+
+        onLogin({
+          id: payload.sub,
+          name: payload.name || payload.email.split('@')[0],
+          email: payload.email,
+          picture: payload.picture,
+          role: 'OWNER',
+          isDemo: true,
+          registeredAt,
+          expiresAt
+        });
+      } catch (err) {
+        console.error('Google register error:', err);
+        setError('Gagal mendaftarkan akun Google ke server');
+      }
     } else {
       setError('Gagal membaca profil Google');
     }

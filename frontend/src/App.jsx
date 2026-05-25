@@ -448,10 +448,6 @@ function App() {
       const stored = localStorage.getItem('posbah_user');
       if (!stored) return null;
       const parsed = JSON.parse(stored);
-      if (parsed.isDemo && parsed.expiresAt && Date.now() > parsed.expiresAt) {
-        localStorage.removeItem('posbah_user');
-        return null;
-      }
       return parsed;
     } catch { return null; }
   });
@@ -501,6 +497,71 @@ function App() {
   };
 
   if (!user) return <Login onLogin={handleLogin} />;
+
+  const isTrialExpired = user?.isDemo && user?.expiresAt && Date.now() > user?.expiresAt;
+
+  if (isTrialExpired) {
+    return (
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 99999,
+        background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem',
+        fontFamily: "'Inter', sans-serif"
+      }}>
+        <div style={{
+          background: 'white', borderRadius: '24px', padding: '2.5rem 2rem',
+          maxWidth: '400px', width: '100%', textAlign: 'center',
+          boxShadow: '0 25px 50px rgba(0,0,0,0.3)',
+          animation: 'slideUp 0.25s ease'
+        }}>
+          {/* Icon */}
+          <div style={{
+            width: '72px', height: '72px', borderRadius: '50%',
+            background: 'linear-gradient(135deg, #EF4444, #B91C1C)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 1.25rem', boxShadow: '0 8px 24px rgba(239,68,68,0.35)'
+          }}>
+            <Lock size={32} color="white" />
+          </div>
+
+          <h2 style={{ margin: '0 0 10px', fontSize: '1.4rem', fontWeight: 900, color: '#111827' }}>
+            Masa Percobaan Habis ⏳
+          </h2>
+          <p style={{ margin: '0 0 1.5rem', color: '#4B5563', fontSize: '0.9rem', lineHeight: 1.6 }}>
+            Masa percobaan 3 hari untuk akun Google <strong style={{ color: '#4F46E5' }}>{user.email}</strong> telah berakhir. Silakan hubungi kami untuk berlangganan POSBah agar dapat melanjutkan akses penuh.
+          </p>
+
+          {/* CTA */}
+          <a
+            href={`https://wa.me/6282245077959?text=Halo%2C%20saya%20ingin%20berlangganan%20POSBah%20setelah%20menggunakan%20trial%20Google%20dengan%20email%20${encodeURIComponent(user.email)}`}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+              width: '100%', padding: '14px', borderRadius: '14px', border: 'none',
+              background: 'linear-gradient(135deg, #10B981, #059669)',
+              color: 'white', fontWeight: 800, fontSize: '0.95rem', cursor: 'pointer',
+              textDecoration: 'none', marginBottom: '12px', boxSizing: 'border-box',
+              boxShadow: '0 4px 14px rgba(16,185,129,0.4)'
+            }}
+          >
+            <Sparkles size={18} /> Hubungi WhatsApp (Berlangganan)
+          </a>
+          
+          <button
+            onClick={handleLogout}
+            style={{
+              width: '100%', padding: '12px', borderRadius: '14px',
+              border: '1.5px solid #E5E7EB', background: 'white',
+              color: '#6B7280', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer'
+            }}
+          >
+            Keluar / Ganti Akun
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AuthContext.Provider value={{ user }}>

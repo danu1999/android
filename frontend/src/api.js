@@ -531,8 +531,8 @@ api.defaults.adapter = async function (config) {
 
   const isOffline = !navigator.onLine;
 
-  // Jangan pernah intercept request login, selalu arahkan ke backend
-  if (route === 'auth/login' || (!isDemo && !isOffline)) {
+  // Jangan pernah intercept request login / google-register, selalu arahkan ke backend
+  if (route === 'auth/login' || route === 'auth/google-register' || (!isDemo && !isOffline)) {
     return defaultAdapter(config);
   }
 
