@@ -63,8 +63,34 @@ export default function Login({ onLogin }) {
           expiresAt
         });
       } catch (err) {
-        console.error('Google register error:', err);
-        setError('Gagal mendaftarkan akun Google ke server');
+        console.warn('Google register backend error, falling back to local registration:', err);
+        
+        // Fallback: simpan di localStorage jika server backend tidak dapat dihubungi
+        let localUsers = {};
+        try {
+          localUsers = JSON.parse(localStorage.getItem('posbah_google_users') || '{}');
+        } catch (_) {}
+        
+        let registeredAt = localUsers[payload.email];
+        if (!registeredAt) {
+          registeredAt = new Date().toISOString();
+          localUsers[payload.email] = registeredAt;
+          localStorage.setItem('posbah_google_users', JSON.stringify(localUsers));
+        }
+
+        const regTime = new Date(registeredAt).getTime();
+        const expiresAt = regTime + 3 * 24 * 60 * 60 * 1000; // 3 days since registration
+
+        onLogin({
+          id: payload.sub,
+          name: payload.name || payload.email.split('@')[0],
+          email: payload.email,
+          picture: payload.picture,
+          role: 'OWNER',
+          isDemo: true,
+          registeredAt,
+          expiresAt
+        });
       }
     } else {
       setError('Gagal membaca profil Google');
