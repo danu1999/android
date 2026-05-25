@@ -71,18 +71,48 @@ export default function Keuangan({ appMode: propAppMode }) {
   }, [activeTab, isPremium, dateFrom, dateTo]);
 
   const fetchData = async () => {
-
     try {
       if (activeTab === 'REKAP') {
         const res = await api.get('/reports', { params: { from: dateFrom, to: dateTo } });
         setReports(res.data);
       } else if (activeTab === 'SALES') {
-        const endpoint = appMode === 'RENTAL' ? '/rentals' : '/transactions';
+        const endpoint = appMode === 'RENTAL' ? '/rentals' : appMode === 'LAUNDRY' ? '/laundry/orders' : '/transactions';
         const res = await api.get(endpoint);
         setFinances(res.data);
       } else if (activeTab === 'MARGIN') {
-        const res = await api.get('/products');
-        setProducts(res.data);
+        if (appMode === 'LAUNDRY') {
+          setProducts([]);
+        } else {
+          const res = await api.get('/products');
+          setProducts(res.data);
+        }
+      } else if (appMode === 'LAUNDRY') {
+        if (activeTab === 'EXPENSE') {
+          const res = await api.get('/laundry/expenses');
+          const mapped = res.data.map(e => ({
+            id: e.id,
+            type: 'EXPENSE',
+            amount: e.nominal,
+            description: e.keterangan || e.kategori,
+            date: e.tanggal || e.createdAt,
+            category: e.kategori
+          }));
+          setFinances(mapped);
+        } else if (activeTab === 'RECEIVABLE') {
+          const res = await api.get('/laundry/orders');
+          const mapped = res.data.filter(o => o.statusBayar === 'Belum Lunas').map(o => ({
+            id: o.id,
+            type: 'RECEIVABLE',
+            amount: o.totalHarga,
+            description: `Order ${o.receiptNumber} - Pelanggan: ${o.namaPelanggan}`,
+            date: o.tanggalMasuk || o.createdAt,
+            status: 'PENDING',
+            isLaundryOrder: true
+          }));
+          setFinances(mapped);
+        } else {
+          setFinances([]);
+        }
       } else {
         const res = await api.get('/finances');
         setFinances(res.data.filter(f => f.type === activeTab));
@@ -117,7 +147,6 @@ export default function Keuangan({ appMode: propAppMode }) {
         date: toLocalDatetime(), // waktu sekarang sesuai timezone lokal
         status: 'PENDING'
       });
-
     }
     setIsModalOpen(true);
   };
@@ -129,10 +158,29 @@ export default function Keuangan({ appMode: propAppMode }) {
       return;
     }
     try {
-      if (formData.id) {
-        await api.put(`/finances/${formData.id}`, formData);
+      if (appMode === 'LAUNDRY') {
+        if (formData.type === 'EXPENSE') {
+          const payload = {
+            nominal: Number(formData.amount),
+            keterangan: formData.description,
+            kategori: formData.category || formData.description.split(' ')[0] || 'Operasional',
+            tanggal: new Date(formData.date).toISOString()
+          };
+          if (formData.id) {
+            await api.put(`/laundry/expenses/${formData.id}`, payload);
+          } else {
+            await api.post('/laundry/expenses', payload);
+          }
+        } else {
+          alert('Piutang Laundry diubah dari menu Riwayat Order (toggle pembayaran)');
+          return;
+        }
       } else {
-        await api.post('/finances', formData);
+        if (formData.id) {
+          await api.put(`/finances/${formData.id}`, formData);
+        } else {
+          await api.post('/finances', formData);
+        }
       }
       setIsModalOpen(false);
       fetchData();
@@ -150,7 +198,16 @@ export default function Keuangan({ appMode: propAppMode }) {
     }
     if (!window.confirm('Yakin ingin menghapus data ini? Rekap laporan akan ikut diperbarui.')) return;
     try {
-      await api.delete(`/finances/${id}`);
+      if (appMode === 'LAUNDRY') {
+        if (activeTab === 'EXPENSE') {
+          await api.delete(`/laundry/expenses/${id}`);
+        } else {
+          alert('Order laundry tidak dapat dihapus dari sini. Silakan hapus dari menu Riwayat Order.');
+          return;
+        }
+      } else {
+        await api.delete(`/finances/${id}`);
+      }
       fetchData();
       fetchReports();
     } catch (err) {
@@ -162,6 +219,18 @@ export default function Keuangan({ appMode: propAppMode }) {
   const handleUpdateStatus = async (id, currentStatus, item) => {
     if (isOwner && !isGajiRecord(item)) {
       alert('Role Owner hanya dapat mengubah status data Gaji Karyawan.');
+      return;
+    }
+    if (appMode === 'LAUNDRY') {
+      if (item && item.isLaundryOrder) {
+        try {
+          await api.put(`/laundry/orders/pay/${id}`);
+          fetchData();
+          fetchReports();
+        } catch (err) {
+          console.error('Failed to update laundry status', err);
+        }
+      }
       return;
     }
     const newStatus = currentStatus === 'PENDING' ? 'PAID' : 'PENDING';
@@ -177,10 +246,10 @@ export default function Keuangan({ appMode: propAppMode }) {
   const renderTabs = () => {
     const tabs = [
       { id: 'REKAP', label: '📊 Rekap' },
-      { id: 'SALES', label: appMode === 'RENTAL' ? '🚗 Sewa Mobil' : '🛒 Transaksi' },
+      { id: 'SALES', label: appMode === 'RENTAL' ? '🚗 Sewa Mobil' : appMode === 'LAUNDRY' ? '🧺 Order Laundry' : '🛒 Transaksi' },
       { id: 'EXPENSE', label: '💸 Pengeluaran' },
-      ...(appMode === 'RENTAL' ? [] : [{ id: 'MARGIN', label: '📈 Margin' }]),
-      { id: 'PAYABLE', label: '🔴 Hutang' },
+      ...(appMode === 'RENTAL' || appMode === 'LAUNDRY' ? [] : [{ id: 'MARGIN', label: '📈 Margin' }]),
+      ...(appMode === 'LAUNDRY' ? [] : [{ id: 'PAYABLE', label: '🔴 Hutang' }]),
       { id: 'RECEIVABLE', label: '🟢 Piutang' },
     ];
     return (
@@ -458,8 +527,8 @@ export default function Keuangan({ appMode: propAppMode }) {
         <thead>
           <tr>
             <th>Tanggal</th>
-            <th>{activeTab === 'SALES' ? (appMode === 'RENTAL' ? 'Mobil & Pelanggan' : 'Nama Transaksi') : 'Deskripsi'}</th>
-            <th>{activeTab === 'SALES' ? (appMode === 'RENTAL' ? 'Durasi / Biaya' : 'Total / Diskon') : 'Jumlah (Rp)'}</th>
+            <th>{activeTab === 'SALES' ? (appMode === 'RENTAL' ? 'Mobil & Pelanggan' : appMode === 'LAUNDRY' ? 'Layanan & Pelanggan' : 'Nama Transaksi') : 'Deskripsi'}</th>
+            <th>{activeTab === 'SALES' ? (appMode === 'RENTAL' ? 'Durasi / Biaya' : appMode === 'LAUNDRY' ? 'Detail / Biaya' : 'Total / Diskon') : 'Jumlah (Rp)'}</th>
             {activeTab !== 'EXPENSE' && <th>Status / Info</th>}
           </tr>
         </thead>
@@ -476,7 +545,7 @@ export default function Keuangan({ appMode: propAppMode }) {
                 }}
                 className={activeTab !== 'SALES' && canEdit(item) ? 'hover-row' : ''}
               >
-                <td>{new Date(item.date || item.createdAt || item.startDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
+                <td>{new Date(item.date || item.createdAt || item.startDate || item.tanggalMasuk).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</td>
 
                 {activeTab === 'SALES' ? (
                   appMode === 'RENTAL' ? (
@@ -496,6 +565,29 @@ export default function Keuangan({ appMode: propAppMode }) {
                       <td>
                         <span className={`px-2 py-1 text-xs rounded-full font-bold ${item.status === 'RETURNED' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
                           {item.status === 'RETURNED' ? 'Selesai (Mobil Kembali)' : 'Aktif (Disewa)'}
+                        </span>
+                      </td>
+                    </>
+                  ) : appMode === 'LAUNDRY' ? (
+                    <>
+                      <td>
+                        <div className="font-bold">{item.receiptNumber || `#${item.id}`}</div>
+                        <div className="text-xs text-gray-600" style={{ marginTop: 2, fontStyle: 'italic' }}>
+                          Pelanggan: {item.namaPelanggan} ({item.noHp})
+                        </div>
+                      </td>
+                      <td>
+                        <div className="font-bold text-gray-800">Rp {Number(item.totalHarga || 0).toLocaleString('id-ID')}</div>
+                        <div className="text-xs text-gray-500" style={{ marginTop: 2, maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.jenisLayanan}>
+                          {item.jenisLayanan}
+                        </div>
+                      </td>
+                      <td>
+                        <span className={`px-2 py-1 text-xs rounded-full font-bold ${item.statusBayar === 'Lunas' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                          {item.statusBayar}
+                        </span>
+                        <span className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full font-bold ml-2">
+                          {item.status}
                         </span>
                       </td>
                     </>
@@ -585,6 +677,21 @@ export default function Keuangan({ appMode: propAppMode }) {
           ].join(",");
           csvContent += row + "\n";
         });
+      } else if (appMode === 'LAUNDRY') {
+        csvContent += "Tanggal,No Struk,Nama Pelanggan,No HP,Layanan,Total (Rp),Status Bayar,Status Cucian\n";
+        filteredFinances.forEach(item => {
+          const row = [
+            new Date(item.tanggalMasuk || item.createdAt).toLocaleDateString('id-ID'),
+            item.receiptNumber || `#${item.id}`,
+            `"${item.namaPelanggan || ''}"`,
+            `"${item.noHp || ''}"`,
+            `"${item.jenisLayanan || ''}"`,
+            item.totalHarga || 0,
+            item.statusBayar || '',
+            item.status || ''
+          ].join(",");
+          csvContent += row + "\n";
+        });
       } else {
         csvContent += "Tanggal,No Struk,Tipe,Total (Rp),Diskon (Rp),Metode Bayar\n";
         filteredFinances.forEach(item => {
@@ -671,6 +778,29 @@ export default function Keuangan({ appMode: propAppMode }) {
                   <td>${new Date(item.startDate).toLocaleDateString('id-ID')} - ${new Date(item.endDate).toLocaleDateString('id-ID')}</td>
                   <td>Rp ${Number(item.totalPrice || 0).toLocaleString('id-ID')}</td>
                   <td>${item.status === 'RETURNED' ? 'Selesai' : 'Aktif'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } else if (appMode === 'LAUNDRY') {
+        content += `
+          <table>
+            <thead>
+              <tr>
+                <th>Tanggal</th><th>No Struk</th><th>Pelanggan</th><th>Layanan</th><th>Total (Rp)</th><th>Bayar</th><th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredFinances.map(item => `
+                <tr>
+                  <td>${new Date(item.tanggalMasuk || item.createdAt).toLocaleDateString('id-ID')}</td>
+                  <td>${item.receiptNumber || '#' + item.id}</td>
+                  <td>${item.namaPelanggan} (${item.noHp})</td>
+                  <td>${item.jenisLayanan}</td>
+                  <td>Rp ${Number(item.totalHarga || 0).toLocaleString('id-ID')}</td>
+                  <td>${item.statusBayar}</td>
+                  <td>${item.status}</td>
                 </tr>
               `).join('')}
             </tbody>

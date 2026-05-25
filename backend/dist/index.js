@@ -33,6 +33,9 @@ const logActivity = (employeeId, action, description) => __awaiter(void 0, void 
         else if (['CREATE_TRANSACTION', 'CANCEL_TRANSACTION', 'UPDATE_TRANSACTION', 'CREATE_SUPPLIER', 'UPDATE_SUPPLIER', 'DELETE_SUPPLIER', 'CREATE_PO', 'RECEIVE_PO', 'CANCEL_PO'].includes(action)) {
             appMode = 'FNB';
         }
+        else if (['CREATE_LAUNDRY_SERVICE', 'UPDATE_LAUNDRY_SERVICE', 'DELETE_LAUNDRY_SERVICE', 'CREATE_LAUNDRY_ORDER', 'UPDATE_LAUNDRY_STATUS', 'UPDATE_LAUNDRY_PAYMENT', 'DELETE_LAUNDRY_ORDER', 'CREATE_LAUNDRY_EXPENSE', 'UPDATE_LAUNDRY_EXPENSE', 'DELETE_LAUNDRY_EXPENSE'].includes(action)) {
+            appMode = 'LAUNDRY';
+        }
         const empId = Number(employeeId);
         if (!empId || isNaN(empId))
             return;
@@ -69,6 +72,24 @@ app.use((req, res, next) => {
     });
 });
 // ─────────────────────────────────────────────────────────────
+// FIREWALL GLOBAL: Blokir userdemo dari SEMUA data production
+// userdemo (id=9999 / id=0) tidak diizinkan melihat, merubah,
+// maupun menghapus data production. Semua data demo dikelola
+// secara lokal di browser (localStorage), BUKAN dari database ini.
+// ─────────────────────────────────────────────────────────────
+app.use((req, res, next) => {
+    const employeeId = req.headers['x-employee-id'];
+    const isLoginRoute = req.path === '/api/auth/login';
+    if (!isLoginRoute && (employeeId === '9999' || employeeId === '0')) {
+        return res.status(403).json({
+            error: 'Akun demo tidak diizinkan mengakses data production. Semua data dikelola secara lokal di perangkat Anda.',
+            code: 'DEMO_ACCESS_DENIED',
+            isDemo: true
+        });
+    }
+    next();
+});
+// ─────────────────────────────────────────────────────────────
 // Role hierarchy helpers
 // ─────────────────────────────────────────────────────────────
 // CASHIER is an alias for KASIR (legacy role name support)
@@ -89,12 +110,10 @@ const requireAdmin = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
     if (!employeeId) {
         return res.status(403).json({ error: 'Akses ditolak. ID karyawan diperlukan.' });
     }
-    // Jika akun demo (id=0) atau userdemo (id=9999)
+    // Firewall global sudah memblokir demo user (id=0 atau id=9999)
+    // sebelum middleware ini dipanggil. Blok di sini sebagai lapisan tambahan.
     if (employeeId === '0' || employeeId === '9999') {
-        if (req.method !== 'GET') {
-            return res.status(403).json({ error: 'Demo mode tidak mengizinkan operasi ini' });
-        }
-        return next();
+        return res.status(403).json({ error: 'Akun demo tidak diizinkan mengakses data production.', code: 'DEMO_ACCESS_DENIED' });
     }
     if (!hasRole(role, 'ADMIN')) {
         return res.status(403).json({ error: 'Akses ditolak. Minimal role ADMIN diperlukan.' });
@@ -108,12 +127,9 @@ const requireOwner = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
     if (!employeeId) {
         return res.status(403).json({ error: 'Akses ditolak. ID karyawan diperlukan.' });
     }
-    // Jika akun demo (id=0) atau userdemo (id=9999)
+    // Firewall global sudah memblokir demo user sebelum middleware ini.
     if (employeeId === '0' || employeeId === '9999') {
-        if (req.method !== 'GET') {
-            return res.status(403).json({ error: 'Demo mode tidak mengizinkan operasi ini' });
-        }
-        return next();
+        return res.status(403).json({ error: 'Akun demo tidak diizinkan mengakses data production.', code: 'DEMO_ACCESS_DENIED' });
     }
     if (!hasRole(role, 'OWNER')) {
         return res.status(403).json({ error: 'Akses ditolak. Hanya OWNER yang dapat melakukan ini.' });
@@ -636,7 +652,7 @@ app.get('/api/activity-logs', requireOwner, (req, res) => __awaiter(void 0, void
         const appMode = req.headers['x-app-mode'] || 'FNB';
         const logs = yield prisma.activityLog.findMany({
             where: {
-                appMode: appMode === 'RENTAL' ? 'RENTAL' : 'FNB'
+                appMode: ['RENTAL', 'LAUNDRY'].includes(appMode) ? appMode : 'FNB'
             },
             include: {
                 employee: {
@@ -656,6 +672,272 @@ app.get('/api/activity-logs', requireOwner, (req, res) => __awaiter(void 0, void
     }
     catch (error) {
         res.status(500).json({ error: 'Gagal mengambil log aktivitas' });
+    }
+}));
+// ─────────────────────────────────────────────────────────────
+// Laundry - Services (READ: KASIR+ | WRITE: ADMIN+)
+// ─────────────────────────────────────────────────────────────
+app.get('/api/laundry/services', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const services = yield prisma.laundryService.findMany({
+            orderBy: { id: 'desc' }
+        });
+        res.json(services);
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Gagal mengambil layanan laundry' });
+    }
+}));
+app.post('/api/laundry/services', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { kategori, proses, nama, harga, satuan, waktu, icon } = req.body;
+        const service = yield prisma.laundryService.create({
+            data: {
+                kategori,
+                proses,
+                nama,
+                harga: Number(harga),
+                satuan,
+                waktu,
+                icon: icon || '🧺'
+            }
+        });
+        logActivity(req.headers['x-employee-id'], 'CREATE_LAUNDRY_SERVICE', `Menambahkan layanan laundry baru: ${service.kategori} - ${service.nama} (Rp ${service.harga.toLocaleString('id-ID')})`);
+        res.json(service);
+    }
+    catch (error) {
+        res.status(400).json({ error: 'Gagal menambah layanan laundry' });
+    }
+}));
+app.put('/api/laundry/services/:id', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { id } = req.params;
+        const { kategori, proses, nama, harga, satuan, waktu, icon } = req.body;
+        const service = yield prisma.laundryService.update({
+            where: { id: Number(id) },
+            data: {
+                kategori,
+                proses,
+                nama,
+                harga: Number(harga),
+                satuan,
+                waktu,
+                icon
+            }
+        });
+        logActivity(req.headers['x-employee-id'], 'UPDATE_LAUNDRY_SERVICE', `Mengubah layanan laundry ID ${service.id}: ${service.kategori} - ${service.nama}`);
+        res.json(service);
+    }
+    catch (error) {
+        res.status(400).json({ error: 'Gagal mengubah layanan laundry' });
+    }
+}));
+app.delete('/api/laundry/services/:id', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { id } = req.params;
+        const service = yield prisma.laundryService.delete({
+            where: { id: Number(id) }
+        });
+        logActivity(req.headers['x-employee-id'], 'DELETE_LAUNDRY_SERVICE', `Menghapus layanan laundry: ${service.kategori} - ${service.nama}`);
+        res.json({ success: true });
+    }
+    catch (error) {
+        res.status(400).json({ error: 'Gagal menghapus layanan laundry' });
+    }
+}));
+// ─────────────────────────────────────────────────────────────
+// Laundry - Orders (READ: KASIR+ | WRITE: KASIR+)
+// ─────────────────────────────────────────────────────────────
+app.get('/api/laundry/orders', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { cari, filterBayar, filterTipe } = req.query;
+        let whereClause = {};
+        if (cari) {
+            whereClause.namaPelanggan = { contains: cari, mode: 'insensitive' };
+        }
+        if (filterBayar && filterBayar !== 'Semua') {
+            whereClause.statusBayar = filterBayar;
+        }
+        if (filterTipe === 'Plastik') {
+            whereClause.jenisLayanan = { contains: 'Barang', mode: 'insensitive' };
+        }
+        else if (filterTipe === 'Laundry') {
+            whereClause.jenisLayanan = {
+                NOT: { contains: 'Barang', mode: 'insensitive' }
+            };
+        }
+        const orders = yield prisma.laundryOrder.findMany({
+            where: whereClause,
+            include: { employee: true, customer: true },
+            orderBy: { id: 'desc' }
+        });
+        res.json(orders);
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Gagal mengambil data order laundry' });
+    }
+}));
+app.get('/api/laundry/orders/:id', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { id } = req.params;
+        const order = yield prisma.laundryOrder.findUnique({
+            where: { id: Number(id) },
+            include: { employee: true, customer: true }
+        });
+        if (!order)
+            return res.status(404).json({ error: 'Order laundry tidak ditemukan' });
+        res.json(order);
+    }
+    catch (error) {
+        res.status(500).json({ error: 'Gagal mengambil detail order laundry' });
+    }
+}));
+app.post('/api/laundry/orders', requireNotDemo, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { namaPelanggan, noHp, jenisLayanan, jenisLaundry, totalHarga, statusBayar, selimut, sprei, boneka, korden, lokasi, customerId } = req.body;
+        const employeeIdHeader = req.headers['x-employee-id'];
+        let employeeId = null;
+        if (employeeIdHeader && employeeIdHeader !== '0') {
+            employeeId = Number(employeeIdHeader);
+        }
+        const receiptNumber = `INV-LND-${Date.now()}`;
+        const order = yield prisma.laundryOrder.create({
+            data: {
+                receiptNumber,
+                namaPelanggan,
+                noHp: noHp || '-',
+                jenisLayanan: jenisLayanan || '-',
+                jenisLaundry: jenisLaundry || '-',
+                totalHarga: Number(totalHarga) || 0,
+                statusBayar: statusBayar || 'Belum Lunas',
+                status: 'Menunggu',
+                selimut: Number(selimut || 0),
+                sprei: Number(sprei || 0),
+                boneka: Number(boneka || 0),
+                korden: Number(korden || 0),
+                lokasi: lokasi || null,
+                employeeId,
+                customerId: customerId ? Number(customerId) : null
+            }
+        });
+        logActivity(employeeIdHeader, 'CREATE_LAUNDRY_ORDER', `Membuat pesanan laundry baru ${receiptNumber} untuk ${namaPelanggan} senilai Rp ${order.totalHarga.toLocaleString('id-ID')}`);
+        res.json(order);
+    }
+    catch (error) {
+        console.error(error);
+        res.status(400).json({ error: 'Gagal membuat pesanan laundry' });
+    }
+}));
+app.put('/api/laundry/orders/status/:id', requireNotDemo, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+        const order = yield prisma.laundryOrder.update({
+            where: { id: Number(id) },
+            data: Object.assign({ status }, (status === 'Selesai' || status === 'Diambil' ? { tanggalSelesai: new Date() } : {}))
+        });
+        logActivity(req.headers['x-employee-id'], 'UPDATE_LAUNDRY_STATUS', `Mengubah status pesanan laundry ${order.receiptNumber} menjadi: ${status}`);
+        res.json(order);
+    }
+    catch (error) {
+        res.status(400).json({ error: 'Gagal mengubah status pesanan laundry' });
+    }
+}));
+app.put('/api/laundry/orders/pay/:id', requireNotDemo, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { id } = req.params;
+        const order = yield prisma.laundryOrder.findUnique({ where: { id: Number(id) } });
+        if (!order)
+            return res.status(404).json({ error: 'Pesanan laundry tidak ditemukan' });
+        const statusLama = order.statusBayar || 'Belum Lunas';
+        const statusBaru = statusLama === 'Lunas' ? 'Belum Lunas' : 'Lunas';
+        const updated = yield prisma.laundryOrder.update({
+            where: { id: Number(id) },
+            data: { statusBayar: statusBaru }
+        });
+        logActivity(req.headers['x-employee-id'], 'UPDATE_LAUNDRY_PAYMENT', `Mengubah pembayaran pesanan laundry ${order.receiptNumber} menjadi: ${statusBaru}`);
+        res.json(updated);
+    }
+    catch (error) {
+        res.status(400).json({ error: 'Gagal mengubah status pembayaran laundry' });
+    }
+}));
+app.delete('/api/laundry/orders/:id', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { id } = req.params;
+        const order = yield prisma.laundryOrder.delete({
+            where: { id: Number(id) }
+        });
+        logActivity(req.headers['x-employee-id'], 'DELETE_LAUNDRY_ORDER', `Menghapus pesanan laundry ${order.receiptNumber}`);
+        res.json({ success: true });
+    }
+    catch (error) {
+        res.status(400).json({ error: 'Gagal menghapus pesanan laundry' });
+    }
+}));
+// ─────────────────────────────────────────────────────────────
+// Laundry Expenses - (READ: ADMIN+ | WRITE: ADMIN+)
+// ─────────────────────────────────────────────────────────────
+app.get('/api/laundry/expenses', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const expenses = yield prisma.laundryExpense.findMany({
+            orderBy: { tanggal: 'desc' }
+        });
+        res.json(expenses);
+    }
+    catch (error) {
+        res.status(400).json({ error: 'Gagal mengambil data pengeluaran laundry' });
+    }
+}));
+app.post('/api/laundry/expenses', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { kategori, nominal, keterangan, tanggal } = req.body;
+        const expense = yield prisma.laundryExpense.create({
+            data: {
+                kategori,
+                nominal: Number(nominal),
+                keterangan: keterangan || null,
+                tanggal: tanggal ? new Date(tanggal) : new Date()
+            }
+        });
+        logActivity(req.headers['x-employee-id'], 'CREATE_LAUNDRY_EXPENSE', `Mencatat pengeluaran laundry baru: ${expense.kategori} senilai Rp ${expense.nominal.toLocaleString('id-ID')}`);
+        res.json(expense);
+    }
+    catch (error) {
+        res.status(400).json({ error: 'Gagal mencatat pengeluaran laundry' });
+    }
+}));
+app.put('/api/laundry/expenses/:id', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { id } = req.params;
+        const { kategori, nominal, keterangan, tanggal } = req.body;
+        const expense = yield prisma.laundryExpense.update({
+            where: { id: Number(id) },
+            data: {
+                kategori,
+                nominal: Number(nominal),
+                keterangan: keterangan || null,
+                tanggal: tanggal ? new Date(tanggal) : undefined
+            }
+        });
+        logActivity(req.headers['x-employee-id'], 'UPDATE_LAUNDRY_EXPENSE', `Mengubah pengeluaran laundry ID ${expense.id}`);
+        res.json(expense);
+    }
+    catch (error) {
+        res.status(400).json({ error: 'Gagal mengubah pengeluaran laundry' });
+    }
+}));
+app.delete('/api/laundry/expenses/:id', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { id } = req.params;
+        const expense = yield prisma.laundryExpense.delete({
+            where: { id: Number(id) }
+        });
+        logActivity(req.headers['x-employee-id'], 'DELETE_LAUNDRY_EXPENSE', `Menghapus pengeluaran laundry: ${expense.kategori} senilai Rp ${expense.nominal.toLocaleString('id-ID')}`);
+        res.json({ success: true });
+    }
+    catch (error) {
+        res.status(400).json({ error: 'Gagal menghapus pengeluaran laundry' });
     }
 }));
 // ─────────────────────────────────────────────────────────────
@@ -806,6 +1088,64 @@ app.get('/api/reports', requireAdmin, (req, res) => __awaiter(void 0, void 0, vo
     try {
         const { from, to } = req.query;
         const appMode = req.headers['x-app-mode'];
+        const dateFilter = {};
+        let dateFilterActive = false;
+        const isValidDateStr = (val) => val && val !== 'undefined' && val !== 'null' && String(val).trim() !== '';
+        if (isValidDateStr(from) || isValidDateStr(to)) {
+            if (isValidDateStr(from))
+                dateFilter.gte = new Date(from);
+            if (isValidDateStr(to)) {
+                const toDate = new Date(to);
+                toDate.setHours(23, 59, 59, 999);
+                dateFilter.lte = toDate;
+            }
+            dateFilterActive = true;
+        }
+        const tzOffset = 7 * 60 * 60 * 1000;
+        const localNow = new Date(Date.now() + tzOffset);
+        const startOfToday = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate(), 0, 0, 0, 0) - tzOffset);
+        const endOfToday = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate(), 23, 59, 59, 999) - tzOffset);
+        if (appMode === 'LAUNDRY') {
+            const orderWhere = { statusBayar: 'Lunas' };
+            const pendingWhere = { statusBayar: 'Belum Lunas' };
+            const expenseWhere = {};
+            if (dateFilterActive) {
+                orderWhere.tanggalMasuk = dateFilter;
+                pendingWhere.tanggalMasuk = dateFilter;
+                expenseWhere.tanggal = dateFilter;
+            }
+            const totalSales = yield prisma.laundryOrder.aggregate({
+                where: orderWhere,
+                _sum: { totalHarga: true }
+            });
+            const totalSalesVal = totalSales._sum.totalHarga || 0;
+            const todaySales = yield prisma.laundryOrder.aggregate({
+                where: {
+                    statusBayar: 'Lunas',
+                    tanggalMasuk: { gte: startOfToday, lte: endOfToday }
+                },
+                _sum: { totalHarga: true }
+            });
+            const todaySalesVal = todaySales._sum.totalHarga || 0;
+            const expenses = yield prisma.laundryExpense.aggregate({
+                where: expenseWhere,
+                _sum: { nominal: true }
+            });
+            const totalExpensesVal = expenses._sum.nominal || 0;
+            const receivables = yield prisma.laundryOrder.aggregate({
+                where: pendingWhere,
+                _sum: { totalHarga: true }
+            });
+            const pendingReceivablesVal = receivables._sum.totalHarga || 0;
+            return res.json({
+                totalSales: totalSalesVal,
+                todaySales: todaySalesVal,
+                totalExpenses: totalExpensesVal,
+                pendingReceivables: pendingReceivablesVal,
+                pendingPayables: 0,
+                netIncome: totalSalesVal - totalExpensesVal
+            });
+        }
         const financeBaseWhere = appMode === 'RENTAL' ? {
             OR: [
                 { description: { startsWith: '[RENTAL]' } },
@@ -822,28 +1162,13 @@ app.get('/api/reports', requireAdmin, (req, res) => __awaiter(void 0, void 0, vo
         const expenseWhere = Object.assign({ type: 'EXPENSE' }, financeBaseWhere);
         const receivableWhere = Object.assign({ type: 'RECEIVABLE', status: 'PENDING' }, financeBaseWhere);
         const payableWhere = Object.assign({ type: 'PAYABLE', status: 'PENDING' }, financeBaseWhere);
-        const dateFilter = {};
-        let dateFilterActive = false;
-        const isValidDateStr = (val) => val && val !== 'undefined' && val !== 'null' && String(val).trim() !== '';
-        if (isValidDateStr(from) || isValidDateStr(to)) {
-            if (isValidDateStr(from))
-                dateFilter.gte = new Date(from);
-            if (isValidDateStr(to)) {
-                const toDate = new Date(to);
-                toDate.setHours(23, 59, 59, 999);
-                dateFilter.lte = toDate;
-            }
-            dateFilterActive = true;
+        if (dateFilterActive) {
             expenseWhere.date = dateFilter;
             receivableWhere.date = dateFilter;
             payableWhere.date = dateFilter;
         }
         let totalSalesVal = 0;
         let todaySalesVal = 0;
-        const tzOffset = 7 * 60 * 60 * 1000;
-        const localNow = new Date(Date.now() + tzOffset);
-        const startOfToday = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate(), 0, 0, 0, 0) - tzOffset);
-        const endOfToday = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate(), 23, 59, 59, 999) - tzOffset);
         if (appMode === 'RENTAL') {
             const rentalWhere = {};
             if (dateFilterActive) {

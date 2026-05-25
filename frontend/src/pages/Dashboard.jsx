@@ -19,6 +19,7 @@ export default function Dashboard({ appMode }) {
   const [products, setProducts] = useState([]);
   const [cars, setCars] = useState([]);
   const [rentals, setRentals] = useState([]);
+  const [laundryOrders, setLaundryOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const DEMO_PRODUCTS = [
@@ -51,6 +52,13 @@ export default function Dashboard({ appMode }) {
           setReport(rRes.data);
           setCars(cRes.data);
           setRentals(rentRes.data);
+        } else if (appMode === 'LAUNDRY') {
+          const [rRes, lRes] = await Promise.all([
+            api.get('/reports'),
+            api.get('/laundry/orders'),
+          ]);
+          setReport(rRes.data);
+          setLaundryOrders(lRes.data);
         } else {
           const [rRes, pRes] = await Promise.all([
             api.get('/reports'),
@@ -81,6 +89,8 @@ export default function Dashboard({ appMode }) {
     { path: '/karyawan', label: 'Karyawan', icon: <Users size={22} />, grad: 'linear-gradient(135deg,#F59E0B,#D97706)', show: isAdmin },
     { path: '/activity-logs', label: 'Log Aktivitas', icon: <History size={22} />, grad: 'linear-gradient(135deg,#EC4899,#BE185D)', show: isAdmin },
     { path: '/toko-online', label: 'Toko Online', icon: <Globe size={22} />, grad: 'linear-gradient(135deg,#8B5CF6,#6D28D9)', show: appMode === 'FNB' },
+    { path: '/orders-laundry', label: 'Riwayat Order', icon: <Clock size={22} />, grad: 'linear-gradient(135deg,#EC4899,#BE185D)', show: appMode === 'LAUNDRY' },
+    { path: '/layanan-laundry', label: 'Tarif Layanan', icon: <Package size={22} />, grad: 'linear-gradient(135deg,#8B5CF6,#6D28D9)', show: appMode === 'LAUNDRY' && isAdmin },
   ].filter(m => m.show);
 
   return (
@@ -236,6 +246,52 @@ export default function Dashboard({ appMode }) {
                     <div>🚗 <b>{rentals.filter(r => r.status === 'ACTIVE').length} mobil</b> sedang aktif disewa saat ini.</div>
                   ) : (
                     <div>✅ Semua armada terparkir rapi di garasi.</div>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : appMode === 'LAUNDRY' ? (
+            <>
+              {/* Laundry status summary */}
+              <div style={{
+                background: 'white', border: '1px solid #E5E7EB',
+                borderRadius: 14, padding: '12px 16px', flex: 1, overflow: 'hidden'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <Package size={16} color="#6B7280" />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>Status Antrean Laundry</span>
+                </div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <div style={{ flex: 1, background: '#EEF2FF', borderRadius: 10, padding: '8px 10px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 22, fontWeight: 900, color: '#4F46E5' }}>{laundryOrders.length}</div>
+                    <div style={{ fontSize: 10, color: '#4338CA', fontWeight: 600 }}>Total Order</div>
+                  </div>
+                  <div style={{ flex: 1, background: '#FFFBEB', borderRadius: 10, padding: '8px 10px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 22, fontWeight: 900, color: '#D97706' }}>{laundryOrders.filter(o => o.status === 'Menunggu' || o.status === 'Proses').length}</div>
+                    <div style={{ fontSize: 10, color: '#92400E', fontWeight: 600 }}>Antre / Proses</div>
+                  </div>
+                  <div style={{ flex: 1, background: '#F0FDF4', borderRadius: 10, padding: '8px 10px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 22, fontWeight: 900, color: '#16A34A' }}>{laundryOrders.filter(o => o.status === 'Selesai').length}</div>
+                    <div style={{ fontSize: 10, color: '#15803D', fontWeight: 600 }}>Siap Diambil</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Active orders detailed summary */}
+              <div style={{
+                background: '#EFF6FF', border: '1px solid #BFDBFE',
+                borderRadius: 14, padding: '16px 18px', flex: 1, overflow: 'hidden',
+                display: 'flex', flexDirection: 'column', justifyContent: 'center'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <Clock size={18} color="#3B82F6" />
+                  <span style={{ fontSize: 13, fontWeight: 800, color: '#1D4ED8' }}>Cucian Diproses</span>
+                </div>
+                <div style={{ fontSize: 13, color: '#1E40AF', lineHeight: 1.6 }}>
+                  {laundryOrders.filter(o => o.status === 'Proses').length > 0 ? (
+                    <div>🧺 <b>{laundryOrders.filter(o => o.status === 'Proses').length} order</b> sedang dicuci/dikeringkan.</div>
+                  ) : (
+                    <div>✅ Semua cucian selesai dikerjakan.</div>
                   )}
                 </div>
               </div>

@@ -21,6 +21,8 @@ const logActivity = async (employeeId: any, action: string, description: string)
       appMode = 'RENTAL';
     } else if (['CREATE_TRANSACTION', 'CANCEL_TRANSACTION', 'UPDATE_TRANSACTION', 'CREATE_SUPPLIER', 'UPDATE_SUPPLIER', 'DELETE_SUPPLIER', 'CREATE_PO', 'RECEIVE_PO', 'CANCEL_PO'].includes(action)) {
       appMode = 'FNB';
+    } else if (['CREATE_LAUNDRY_SERVICE', 'UPDATE_LAUNDRY_SERVICE', 'DELETE_LAUNDRY_SERVICE', 'CREATE_LAUNDRY_ORDER', 'UPDATE_LAUNDRY_STATUS', 'UPDATE_LAUNDRY_PAYMENT', 'DELETE_LAUNDRY_ORDER', 'CREATE_LAUNDRY_EXPENSE', 'UPDATE_LAUNDRY_EXPENSE', 'DELETE_LAUNDRY_EXPENSE'].includes(action)) {
+      appMode = 'LAUNDRY';
     }
 
     const empId = Number(employeeId);
@@ -747,7 +749,7 @@ app.get('/api/activity-logs', requireOwner, async (req, res) => {
     const appMode = (req.headers['x-app-mode'] as string) || 'FNB';
     const logs = await prisma.activityLog.findMany({
       where: {
-        appMode: appMode === 'RENTAL' ? 'RENTAL' : 'FNB'
+        appMode: ['RENTAL', 'LAUNDRY'].includes(appMode) ? appMode : 'FNB'
       },
       include: {
         employee: {
@@ -766,6 +768,339 @@ app.get('/api/activity-logs', requireOwner, async (req, res) => {
     res.json(logs);
   } catch (error) {
     res.status(500).json({ error: 'Gagal mengambil log aktivitas' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Laundry - Services (READ: KASIR+ | WRITE: ADMIN+)
+// ─────────────────────────────────────────────────────────────
+app.get('/api/laundry/services', async (req: Request, res: Response) => {
+  try {
+    const services = await (prisma as any).laundryService.findMany({
+      orderBy: { id: 'desc' }
+    });
+    res.json(services);
+  } catch (error) {
+    res.status(500).json({ error: 'Gagal mengambil layanan laundry' });
+  }
+});
+
+app.post('/api/laundry/services', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { kategori, proses, nama, harga, satuan, waktu, icon } = req.body;
+    const service = await (prisma as any).laundryService.create({
+      data: {
+        kategori,
+        proses,
+        nama,
+        harga: Number(harga),
+        satuan,
+        waktu,
+        icon: icon || '🧺'
+      }
+    });
+    logActivity(
+      req.headers['x-employee-id'],
+      'CREATE_LAUNDRY_SERVICE',
+      `Menambahkan layanan laundry baru: ${service.kategori} - ${service.nama} (Rp ${service.harga.toLocaleString('id-ID')})`
+    );
+    res.json(service);
+  } catch (error) {
+    res.status(400).json({ error: 'Gagal menambah layanan laundry' });
+  }
+});
+
+app.put('/api/laundry/services/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { kategori, proses, nama, harga, satuan, waktu, icon } = req.body;
+    const service = await (prisma as any).laundryService.update({
+      where: { id: Number(id) },
+      data: {
+        kategori,
+        proses,
+        nama,
+        harga: Number(harga),
+        satuan,
+        waktu,
+        icon
+      }
+    });
+    logActivity(
+      req.headers['x-employee-id'],
+      'UPDATE_LAUNDRY_SERVICE',
+      `Mengubah layanan laundry ID ${service.id}: ${service.kategori} - ${service.nama}`
+    );
+    res.json(service);
+  } catch (error) {
+    res.status(400).json({ error: 'Gagal mengubah layanan laundry' });
+  }
+});
+
+app.delete('/api/laundry/services/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const service = await (prisma as any).laundryService.delete({
+      where: { id: Number(id) }
+    });
+    logActivity(
+      req.headers['x-employee-id'],
+      'DELETE_LAUNDRY_SERVICE',
+      `Menghapus layanan laundry: ${service.kategori} - ${service.nama}`
+    );
+    res.json({ success: true });
+  } catch (error) {
+    res.status(400).json({ error: 'Gagal menghapus layanan laundry' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Laundry - Orders (READ: KASIR+ | WRITE: KASIR+)
+// ─────────────────────────────────────────────────────────────
+app.get('/api/laundry/orders', async (req: Request, res: Response) => {
+  try {
+    const { cari, filterBayar, filterTipe } = req.query;
+    let whereClause: any = {};
+
+    if (cari) {
+      whereClause.namaPelanggan = { contains: cari as string, mode: 'insensitive' };
+    }
+
+    if (filterBayar && filterBayar !== 'Semua') {
+      whereClause.statusBayar = filterBayar;
+    }
+
+    if (filterTipe === 'Plastik') {
+      whereClause.jenisLayanan = { contains: 'Barang', mode: 'insensitive' };
+    } else if (filterTipe === 'Laundry') {
+      whereClause.jenisLayanan = {
+        NOT: { contains: 'Barang', mode: 'insensitive' }
+      };
+    }
+
+    const orders = await (prisma as any).laundryOrder.findMany({
+      where: whereClause,
+      include: { employee: true, customer: true },
+      orderBy: { id: 'desc' }
+    });
+    res.json(orders);
+  } catch (error) {
+    res.status(500).json({ error: 'Gagal mengambil data order laundry' });
+  }
+});
+
+app.get('/api/laundry/orders/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const order = await (prisma as any).laundryOrder.findUnique({
+      where: { id: Number(id) },
+      include: { employee: true, customer: true }
+    });
+    if (!order) return res.status(404).json({ error: 'Order laundry tidak ditemukan' });
+    res.json(order);
+  } catch (error) {
+    res.status(500).json({ error: 'Gagal mengambil detail order laundry' });
+  }
+});
+
+app.post('/api/laundry/orders', requireNotDemo, async (req: Request, res: Response) => {
+  try {
+    const {
+      namaPelanggan, noHp, jenisLayanan, jenisLaundry, totalHarga, statusBayar,
+      selimut, sprei, boneka, korden, lokasi, customerId
+    } = req.body;
+
+    const employeeIdHeader = req.headers['x-employee-id'] as string;
+    let employeeId: number | null = null;
+    if (employeeIdHeader && employeeIdHeader !== '0') {
+      employeeId = Number(employeeIdHeader);
+    }
+
+    const receiptNumber = `INV-LND-${Date.now()}`;
+
+    const order = await (prisma as any).laundryOrder.create({
+      data: {
+        receiptNumber,
+        namaPelanggan,
+        noHp: noHp || '-',
+        jenisLayanan: jenisLayanan || '-',
+        jenisLaundry: jenisLaundry || '-',
+        totalHarga: Number(totalHarga) || 0,
+        statusBayar: statusBayar || 'Belum Lunas',
+        status: 'Menunggu',
+        selimut: Number(selimut || 0),
+        sprei: Number(sprei || 0),
+        boneka: Number(boneka || 0),
+        korden: Number(korden || 0),
+        lokasi: lokasi || null,
+        employeeId,
+        customerId: customerId ? Number(customerId) : null
+      }
+    });
+
+    logActivity(
+      employeeIdHeader,
+      'CREATE_LAUNDRY_ORDER',
+      `Membuat pesanan laundry baru ${receiptNumber} untuk ${namaPelanggan} senilai Rp ${order.totalHarga.toLocaleString('id-ID')}`
+    );
+
+    res.json(order);
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({ error: 'Gagal membuat pesanan laundry' });
+  }
+});
+
+app.put('/api/laundry/orders/status/:id', requireNotDemo, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const order = await (prisma as any).laundryOrder.update({
+      where: { id: Number(id) },
+      data: {
+        status,
+        ...(status === 'Selesai' || status === 'Diambil' ? { tanggalSelesai: new Date() } : {})
+      }
+    });
+
+    logActivity(
+      req.headers['x-employee-id'],
+      'UPDATE_LAUNDRY_STATUS',
+      `Mengubah status pesanan laundry ${order.receiptNumber} menjadi: ${status}`
+    );
+
+    res.json(order);
+  } catch (error) {
+    res.status(400).json({ error: 'Gagal mengubah status pesanan laundry' });
+  }
+});
+
+app.put('/api/laundry/orders/pay/:id', requireNotDemo, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const order = await (prisma as any).laundryOrder.findUnique({ where: { id: Number(id) } });
+    if (!order) return res.status(404).json({ error: 'Pesanan laundry tidak ditemukan' });
+
+    const statusLama = order.statusBayar || 'Belum Lunas';
+    const statusBaru = statusLama === 'Lunas' ? 'Belum Lunas' : 'Lunas';
+
+    const updated = await (prisma as any).laundryOrder.update({
+      where: { id: Number(id) },
+      data: { statusBayar: statusBaru }
+    });
+
+    logActivity(
+      req.headers['x-employee-id'],
+      'UPDATE_LAUNDRY_PAYMENT',
+      `Mengubah pembayaran pesanan laundry ${order.receiptNumber} menjadi: ${statusBaru}`
+    );
+
+    res.json(updated);
+  } catch (error) {
+    res.status(400).json({ error: 'Gagal mengubah status pembayaran laundry' });
+  }
+});
+
+app.delete('/api/laundry/orders/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const order = await (prisma as any).laundryOrder.delete({
+      where: { id: Number(id) }
+    });
+
+    logActivity(
+      req.headers['x-employee-id'],
+      'DELETE_LAUNDRY_ORDER',
+      `Menghapus pesanan laundry ${order.receiptNumber}`
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(400).json({ error: 'Gagal menghapus pesanan laundry' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Laundry Expenses - (READ: ADMIN+ | WRITE: ADMIN+)
+// ─────────────────────────────────────────────────────────────
+app.get('/api/laundry/expenses', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const expenses = await (prisma as any).laundryExpense.findMany({
+      orderBy: { tanggal: 'desc' }
+    });
+    res.json(expenses);
+  } catch (error) {
+    res.status(400).json({ error: 'Gagal mengambil data pengeluaran laundry' });
+  }
+});
+
+app.post('/api/laundry/expenses', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { kategori, nominal, keterangan, tanggal } = req.body;
+    const expense = await (prisma as any).laundryExpense.create({
+      data: {
+        kategori,
+        nominal: Number(nominal),
+        keterangan: keterangan || null,
+        tanggal: tanggal ? new Date(tanggal) : new Date()
+      }
+    });
+
+    logActivity(
+      req.headers['x-employee-id'],
+      'CREATE_LAUNDRY_EXPENSE',
+      `Mencatat pengeluaran laundry baru: ${expense.kategori} senilai Rp ${expense.nominal.toLocaleString('id-ID')}`
+    );
+
+    res.json(expense);
+  } catch (error) {
+    res.status(400).json({ error: 'Gagal mencatat pengeluaran laundry' });
+  }
+});
+
+app.put('/api/laundry/expenses/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { kategori, nominal, keterangan, tanggal } = req.body;
+    const expense = await (prisma as any).laundryExpense.update({
+      where: { id: Number(id) },
+      data: {
+        kategori,
+        nominal: Number(nominal),
+        keterangan: keterangan || null,
+        tanggal: tanggal ? new Date(tanggal) : undefined
+      }
+    });
+
+    logActivity(
+      req.headers['x-employee-id'],
+      'UPDATE_LAUNDRY_EXPENSE',
+      `Mengubah pengeluaran laundry ID ${expense.id}`
+    );
+
+    res.json(expense);
+  } catch (error) {
+    res.status(400).json({ error: 'Gagal mengubah pengeluaran laundry' });
+  }
+});
+
+app.delete('/api/laundry/expenses/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const expense = await (prisma as any).laundryExpense.delete({
+      where: { id: Number(id) }
+    });
+
+    logActivity(
+      req.headers['x-employee-id'],
+      'DELETE_LAUNDRY_EXPENSE',
+      `Menghapus pengeluaran laundry: ${expense.kategori} senilai Rp ${expense.nominal.toLocaleString('id-ID')}`
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(400).json({ error: 'Gagal menghapus pengeluaran laundry' });
   }
 });
 
@@ -939,6 +1274,73 @@ app.get('/api/reports', requireAdmin, async (req, res) => {
     const { from, to } = req.query;
     const appMode = req.headers['x-app-mode'] as string;
 
+    const dateFilter: any = {};
+    let dateFilterActive = false;
+    const isValidDateStr = (val: any) => val && val !== 'undefined' && val !== 'null' && String(val).trim() !== '';
+
+    if (isValidDateStr(from) || isValidDateStr(to)) {
+      if (isValidDateStr(from)) dateFilter.gte = new Date(from as string);
+      if (isValidDateStr(to)) {
+        const toDate = new Date(to as string);
+        toDate.setHours(23, 59, 59, 999);
+        dateFilter.lte = toDate;
+      }
+      dateFilterActive = true;
+    }
+
+    const tzOffset = 7 * 60 * 60 * 1000;
+    const localNow = new Date(Date.now() + tzOffset);
+    const startOfToday = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate(), 0, 0, 0, 0) - tzOffset);
+    const endOfToday = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate(), 23, 59, 59, 999) - tzOffset);
+
+    if (appMode === 'LAUNDRY') {
+      const orderWhere: any = { statusBayar: 'Lunas' };
+      const pendingWhere: any = { statusBayar: 'Belum Lunas' };
+      const expenseWhere: any = {};
+
+      if (dateFilterActive) {
+        orderWhere.tanggalMasuk = dateFilter;
+        pendingWhere.tanggalMasuk = dateFilter;
+        expenseWhere.tanggal = dateFilter;
+      }
+
+      const totalSales = await (prisma as any).laundryOrder.aggregate({
+        where: orderWhere,
+        _sum: { totalHarga: true }
+      });
+      const totalSalesVal = totalSales._sum.totalHarga || 0;
+
+      const todaySales = await (prisma as any).laundryOrder.aggregate({
+        where: {
+          statusBayar: 'Lunas',
+          tanggalMasuk: { gte: startOfToday, lte: endOfToday }
+        },
+        _sum: { totalHarga: true }
+      });
+      const todaySalesVal = todaySales._sum.totalHarga || 0;
+
+      const expenses = await (prisma as any).laundryExpense.aggregate({
+        where: expenseWhere,
+        _sum: { nominal: true }
+      });
+      const totalExpensesVal = expenses._sum.nominal || 0;
+
+      const receivables = await (prisma as any).laundryOrder.aggregate({
+        where: pendingWhere,
+        _sum: { totalHarga: true }
+      });
+      const pendingReceivablesVal = receivables._sum.totalHarga || 0;
+
+      return res.json({
+        totalSales: totalSalesVal,
+        todaySales: todaySalesVal,
+        totalExpenses: totalExpensesVal,
+        pendingReceivables: pendingReceivablesVal,
+        pendingPayables: 0,
+        netIncome: totalSalesVal - totalExpensesVal
+      });
+    }
+
     const financeBaseWhere = appMode === 'RENTAL' ? {
       OR: [
         { description: { startsWith: '[RENTAL]' } },
@@ -957,18 +1359,7 @@ app.get('/api/reports', requireAdmin, async (req, res) => {
     const receivableWhere: any = { type: 'RECEIVABLE', status: 'PENDING', ...financeBaseWhere };
     const payableWhere: any = { type: 'PAYABLE', status: 'PENDING', ...financeBaseWhere };
 
-    const dateFilter: any = {};
-    let dateFilterActive = false;
-    const isValidDateStr = (val: any) => val && val !== 'undefined' && val !== 'null' && String(val).trim() !== '';
-
-    if (isValidDateStr(from) || isValidDateStr(to)) {
-      if (isValidDateStr(from)) dateFilter.gte = new Date(from as string);
-      if (isValidDateStr(to)) {
-        const toDate = new Date(to as string);
-        toDate.setHours(23, 59, 59, 999);
-        dateFilter.lte = toDate;
-      }
-      dateFilterActive = true;
+    if (dateFilterActive) {
       expenseWhere.date = dateFilter;
       receivableWhere.date = dateFilter;
       payableWhere.date = dateFilter;
@@ -976,11 +1367,6 @@ app.get('/api/reports', requireAdmin, async (req, res) => {
 
     let totalSalesVal = 0;
     let todaySalesVal = 0;
-
-    const tzOffset = 7 * 60 * 60 * 1000;
-    const localNow = new Date(Date.now() + tzOffset);
-    const startOfToday = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate(), 0, 0, 0, 0) - tzOffset);
-    const endOfToday = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate(), 23, 59, 59, 999) - tzOffset);
 
     if (appMode === 'RENTAL') {
       const rentalWhere: any = {};

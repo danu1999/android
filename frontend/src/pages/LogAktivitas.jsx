@@ -72,6 +72,16 @@ export default function LogAktivitas() {
     else if (act === 'RECEIVE_PO') label = 'Terima PO';
     else if (act === 'DELETE_PO') label = 'Hapus PO';
     else if (act === 'PAYMENT_CALLBACK') label = 'Midtrans Pay';
+    else if (act === 'CREATE_LAUNDRY_ORDER') label = 'Order Laundry Baru';
+    else if (act === 'UPDATE_LAUNDRY_STATUS') label = 'Update Status Cucian';
+    else if (act === 'UPDATE_LAUNDRY_PAYMENT') label = 'Update Bayar Laundry';
+    else if (act === 'DELETE_LAUNDRY_ORDER') label = 'Hapus Order Laundry';
+    else if (act === 'CREATE_LAUNDRY_SERVICE') label = 'Tambah Layanan Laundry';
+    else if (act === 'UPDATE_LAUNDRY_SERVICE') label = 'Edit Layanan Laundry';
+    else if (act === 'DELETE_LAUNDRY_SERVICE') label = 'Hapus Layanan Laundry';
+    else if (act === 'CREATE_LAUNDRY_EXPENSE') label = 'Tambah Pengeluaran Laundry';
+    else if (act === 'UPDATE_LAUNDRY_EXPENSE') label = 'Edit Pengeluaran Laundry';
+    else if (act === 'DELETE_LAUNDRY_EXPENSE') label = 'Hapus Pengeluaran Laundry';
 
     const colors = getLogColorClass(action);
 
@@ -117,7 +127,16 @@ export default function LogAktivitas() {
     return matchesSearch && matchesAction && matchesRole;
   });
 
-  const uniqueActions = ['CREATE_TRANSACTION', 'UPDATE_TRANSACTION', 'DELETE_TRANSACTION', 'CREATE_PRODUCT', 'UPDATE_PRODUCT', 'DELETE_PRODUCT', 'CREATE_FINANCE', 'UPDATE_FINANCE', 'DELETE_FINANCE', 'PAY_SALARY', 'RECEIVE_PO', 'PAYMENT_CALLBACK', 'RESET_FINANCE'];
+  const uniqueActions = [
+    'CREATE_TRANSACTION', 'UPDATE_TRANSACTION', 'DELETE_TRANSACTION', 
+    'CREATE_PRODUCT', 'UPDATE_PRODUCT', 'DELETE_PRODUCT', 
+    'CREATE_FINANCE', 'UPDATE_FINANCE', 'DELETE_FINANCE', 
+    'PAY_SALARY', 'RECEIVE_PO', 'PAYMENT_CALLBACK', 'RESET_FINANCE',
+    'CREATE_LAUNDRY_ORDER', 'UPDATE_LAUNDRY_STATUS', 'UPDATE_LAUNDRY_PAYMENT',
+    'DELETE_LAUNDRY_ORDER', 'CREATE_LAUNDRY_SERVICE', 'UPDATE_LAUNDRY_SERVICE',
+    'DELETE_LAUNDRY_SERVICE', 'CREATE_LAUNDRY_EXPENSE', 'UPDATE_LAUNDRY_EXPENSE',
+    'DELETE_LAUNDRY_EXPENSE'
+  ];
 
   return (
     <div className="page-container">

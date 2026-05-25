@@ -16,20 +16,25 @@ import Supplier from './pages/Supplier';
 import Login from './pages/Login';
 import LogAktivitas from './pages/LogAktivitas';
 import RentalMobil from './pages/RentalMobil';
+import KasirLaundry from './pages/KasirLaundry';
+import LayananLaundry from './pages/LayananLaundry';
+import OrderLaundry from './pages/OrderLaundry';
+import StrukLaundry from './pages/StrukLaundry';
 import { AuthContext, DemoContext, hasRole, DEMO_LIMITS, useAuth } from './AuthContext';
 import { syncOfflineWrites } from './api';
 import './index.css';
 
 // ─── Role-based page access ────────────────────────────────────
 const ROLE_ACCESS = {
-  KASIR: ['/', '/katalog'],
-  CASHIER: ['/', '/katalog'],
-  ADMIN: ['/', '/katalog', '/dashboard', '/keuangan', '/pelanggan', '/karyawan', '/pesanan', '/supplier'],
-  OWNER: ['/', '/katalog', '/dashboard', '/keuangan', '/pelanggan', '/karyawan', '/pesanan', '/supplier', '/activity-logs'],
+  KASIR: ['/', '/katalog', '/orders-laundry'],
+  CASHIER: ['/', '/katalog', '/orders-laundry'],
+  ADMIN: ['/', '/katalog', '/dashboard', '/keuangan', '/pelanggan', '/karyawan', '/pesanan', '/supplier', '/orders-laundry', '/layanan-laundry'],
+  OWNER: ['/', '/katalog', '/dashboard', '/keuangan', '/pelanggan', '/karyawan', '/pesanan', '/supplier', '/activity-logs', '/orders-laundry', '/layanan-laundry'],
 };
 
 const canAccess = (role, path) => {
   const allowed = ROLE_ACCESS[role] || ROLE_ACCESS['KASIR'];
+  if (path.startsWith('/struk-laundry/')) return true;
   return allowed.includes(path);
 };
 
@@ -124,6 +129,15 @@ const Navigation = ({ user, onLogout, appMode, setAppMode }) => {
     { path: '/pelanggan', label: 'Pelanggan', icon: <Users size={20} />, minRole: 'ADMIN', showInNav: false },
     { path: '/karyawan', label: 'Karyawan', icon: <UserCog size={20} />, minRole: 'ADMIN', showInNav: false },
     { path: '/activity-logs', label: 'Log Aktivitas', icon: <History size={20} />, minRole: 'ADMIN', showInNav: false },
+  ] : appMode === 'LAUNDRY' ? [
+    { path: '/', label: 'Kasir Laundry', icon: <Calculator size={20} />, minRole: 'KASIR', showInNav: true },
+    { path: '/orders-laundry', label: 'Riwayat Order', icon: <Clock size={20} />, minRole: 'KASIR', showInNav: true },
+    { path: '/layanan-laundry', label: 'Tarif Layanan', icon: <Package size={20} />, minRole: 'ADMIN', showInNav: true },
+    { path: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} />, minRole: 'ADMIN', showInNav: true },
+    { path: '/keuangan', label: 'Keuangan', icon: <DollarSign size={20} />, minRole: 'ADMIN', showInNav: false },
+    { path: '/pelanggan', label: 'Pelanggan', icon: <Users size={20} />, minRole: 'ADMIN', showInNav: false },
+    { path: '/karyawan', label: 'Karyawan', icon: <UserCog size={20} />, minRole: 'ADMIN', showInNav: false },
+    { path: '/activity-logs', label: 'Log Aktivitas', icon: <History size={20} />, minRole: 'ADMIN', showInNav: false },
   ] : [
     { path: '/', label: 'Kasir', icon: <Calculator size={20} />, minRole: 'KASIR', showInNav: true },
     { path: '/katalog', label: 'Katalog', icon: <Package size={20} />, minRole: 'KASIR', showInNav: true },
@@ -206,6 +220,7 @@ const Navigation = ({ user, onLogout, appMode, setAppMode }) => {
               >
                 <option value="FNB">🍹 UMKM & Jus</option>
                 <option value="RENTAL">🚗 Rental Mobil</option>
+                <option value="LAUNDRY">🧺 POS Laundry</option>
               </select>
             </div>
           )}
@@ -253,8 +268,11 @@ function AppContent({ user, onLogout, appMode, setAppMode }) {
       <Navigation user={user} onLogout={onLogout} appMode={appMode} setAppMode={setAppMode} />
       <main className="main-content">
         <Routes>
-          <Route path="/" element={appMode === 'RENTAL' ? <RentalMobil /> : <Kasir />} />
+          <Route path="/" element={appMode === 'RENTAL' ? <RentalMobil /> : appMode === 'LAUNDRY' ? <KasirLaundry /> : <Kasir />} />
           <Route path="/katalog" element={<Katalog />} />
+          <Route path="/orders-laundry" element={<OrderLaundry />} />
+          <Route path="/layanan-laundry" element={<LayananLaundry />} />
+          <Route path="/struk-laundry/:id" element={<StrukLaundry />} />
           {canAccess(effectiveRole, '/dashboard') && <Route path="/dashboard" element={<Dashboard appMode={appMode} />} />}
           {canAccess(effectiveRole, '/keuangan') && <Route path="/keuangan" element={<Keuangan appMode={appMode} />} />}
           {canAccess(effectiveRole, '/pelanggan') && <Route path="/pelanggan" element={<Pelanggan />} />}
@@ -311,7 +329,7 @@ function BusinessModeModal({ onSelectMode }) {
           Silakan pilih jenis sistem POS yang ingin kamu gunakan untuk memulai operasional:
         </p>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '1.5rem' }}>
           {/* Card 1: UMKM F&B */}
           <div
             onClick={() => onSelectMode('FNB')}
@@ -344,7 +362,25 @@ function BusinessModeModal({ onSelectMode }) {
             <div style={{ fontSize: '2.5rem' }}>🚗</div>
             <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#111827' }}>POS Rental Mobil</div>
             <div style={{ fontSize: '0.75rem', color: '#6B7280', lineHeight: 1.4 }}>
-              Kelola kendaraan, status penyewaan, kalkulator tarif, pengembalian, biaya benkel dan margin.
+              Kelola kendaraan, status penyewaan, kalkulator tarif, pengembalian, biaya bengkel dan margin.
+            </div>
+          </div>
+
+          {/* Card 3: POS Laundry */}
+          <div
+            onClick={() => onSelectMode('LAUNDRY')}
+            style={{
+              border: '2px solid #E5E7EB', borderRadius: '18px', padding: '1.5rem 1rem',
+              cursor: 'pointer', transition: 'all 0.2s', display: 'flex', flexDirection: 'column',
+              alignItems: 'center', gap: '10px'
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#3B82F6'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#E5E7EB'; e.currentTarget.style.transform = ''; }}
+          >
+            <div style={{ fontSize: '2.5rem' }}>🧺</div>
+            <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#111827' }}>POS Laundry</div>
+            <div style={{ fontSize: '0.75rem', color: '#6B7280', lineHeight: 1.4 }}>
+              Kelola cucian kiloan & satuan, status proses, timbangan, pembayaran lunas/belum lunas, & notifikasi WA.
             </div>
           </div>
         </div>

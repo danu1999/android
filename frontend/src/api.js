@@ -128,6 +128,46 @@ const initDemoData = () => {
         { id: 13, action: 'RETURN_CAR', description: 'Pengembalian mobil Mitsubishi Xpander oleh Rian Hidayat', createdAt: new Date().toISOString(), employee: { name: 'Admin Gudang', role: 'ADMIN' } }
       ]));
     }
+  } else if (mode === 'LAUNDRY') {
+    if (!localStorage.getItem(getDemoKey('posbah_demo_customers'))) {
+      localStorage.setItem(getDemoKey('posbah_demo_customers'), JSON.stringify([
+        { id: 501, name: 'Budi Santoso', phone: '08123456789', address: 'Jl. Merdeka No. 10, Bandung' },
+        { id: 502, name: 'Siti Rahma', phone: '08567890123', address: 'Jl. Mawar No. 4, Cimahi' },
+        { id: 503, name: 'Andi Wijaya', phone: '08789012345', address: 'Jl. Melati No. 15, Bandung' },
+        { id: 504, name: 'Dewi Lestari', phone: '08991234567', address: 'Komp. Buah Batu Indah Reg-3' },
+        { id: 505, name: 'Rian Hidayat', phone: '08215432765', address: 'Jl. Cihampelas No. 102' }
+      ]));
+    }
+    if (!localStorage.getItem(getDemoKey('posbah_demo_employees'))) {
+      localStorage.setItem(getDemoKey('posbah_demo_employees'), JSON.stringify([
+        { id: 1, name: 'Kasir Utama', role: 'KASIR', pin: '111111', salary: 2500000 },
+        { id: 2, name: 'Admin Gudang', role: 'ADMIN', pin: '222222', salary: 3000000 },
+      ]));
+    }
+    if (!localStorage.getItem(getDemoKey('posbah_demo_laundry_services'))) {
+      localStorage.setItem(getDemoKey('posbah_demo_laundry_services'), JSON.stringify([
+        { id: 1, kategori: 'Kiloan Setrika', proses: 'Cuci >> Kering >> Setrika', nama: 'Reguler', harga: 8000, satuan: 'Kg', waktu: '3 Hari', icon: '🧺' },
+        { id: 2, kategori: 'Kiloan Setrika', proses: 'Cuci >> Kering >> Setrika', nama: 'Ekspress', harga: 12000, satuan: 'Kg', waktu: '24 Jam', icon: '⚡' },
+        { id: 3, kategori: 'Kiloan Setrika', proses: 'Cuci >> Kering >> Setrika', nama: 'Kilat', harga: 16000, satuan: 'Kg', waktu: '6 Jam', icon: '🚀' },
+        { id: 4, kategori: 'Cuci Selimut', proses: 'Cuci >> Kering >> Lipat', nama: 'Selimut Besar', harga: 15000, satuan: 'Pcs', waktu: '3 Hari', icon: '🛌' },
+        { id: 5, kategori: 'Cuci Sprei', proses: 'Cuci >> Kering >> Lipat', nama: 'Sprei Double', harga: 12000, satuan: 'Pcs', waktu: '3 Hari', icon: '🛏️' },
+        { id: 6, kategori: 'Barang Pendukung', proses: 'Pembelian Langsung', nama: 'Deterjen Wangi 50ml', harga: 3000, satuan: 'Pcs', waktu: 'Instan', icon: '🧴' },
+        { id: 7, kategori: 'Barang Pendukung', proses: 'Pembelian Langsung', nama: 'Plastik Besar Ekstra', harga: 2000, satuan: 'Pcs', waktu: 'Instan', icon: '🛍️' }
+      ]));
+    }
+    if (!localStorage.getItem(getDemoKey('posbah_demo_laundry_orders'))) {
+      localStorage.setItem(getDemoKey('posbah_demo_laundry_orders'), JSON.stringify([
+        { id: 2001, receiptNumber: 'INV-LND-1716645600000', namaPelanggan: 'Budi Santoso', noHp: '08123456789', jenisLayanan: 'Kiloan Setrika', jenisLaundry: '- Kiloan Setrika - Reguler : 5 Kg (Rp 40.000)\n', totalHarga: 40000, statusBayar: 'Lunas', status: 'Diambil', tanggalMasuk: new Date(Date.now() - 4 * 86400000).toISOString(), selimut: 0, sprei: 0, boneka: 0, korden: 0, lokasi: 'Bandung', employeeId: 1, customerId: 501 },
+        { id: 2002, receiptNumber: 'INV-LND-1716732000000', namaPelanggan: 'Siti Rahma', noHp: '08567890123', jenisLayanan: 'Cuci Selimut', jenisLaundry: '- Selimut Besar : 2 Pcs (Rp 30.000)\n', totalHarga: 30000, statusBayar: 'Belum Lunas', status: 'Proses', tanggalMasuk: new Date(Date.now() - 2 * 86400000).toISOString(), selimut: 2, sprei: 0, boneka: 0, korden: 0, lokasi: 'Cimahi', employeeId: 1, customerId: 502 },
+        { id: 2003, receiptNumber: 'INV-LND-1716818400000', namaPelanggan: 'Dewi Lestari', noHp: '08991234567', jenisLayanan: 'Kiloan Setrika, Barang Pendukung', jenisLaundry: '- Kiloan Setrika - Ekspress : 3 Kg (Rp 36.000)\n- Deterjen Wangi 50ml : 2 Pcs (Rp 6.000)\n', totalHarga: 42000, statusBayar: 'Lunas', status: 'Menunggu', tanggalMasuk: new Date(Date.now() - 1 * 86400000).toISOString(), selimut: 0, sprei: 0, boneka: 0, korden: 0, lokasi: 'Komp. Buah Batu', employeeId: 2, customerId: 504 }
+      ]));
+    }
+    if (!localStorage.getItem(getDemoKey('posbah_demo_laundry_expenses'))) {
+      localStorage.setItem(getDemoKey('posbah_demo_laundry_expenses'), JSON.stringify([
+        { id: 3001, kategori: 'Beli Deterjen', nominal: 150000, keterangan: 'Beli deterjen liquid 5 liter (Demo)', tanggal: new Date(Date.now() - 5 * 86400000).toISOString() },
+        { id: 3002, kategori: 'Listrik', nominal: 350000, keterangan: 'Listrik ruko laundry bulan ini (Demo)', tanggal: new Date(Date.now() - 1 * 86400000).toISOString() }
+      ]));
+    }
   } else {
     if (!localStorage.getItem(getDemoKey('posbah_demo_products'))) {
       localStorage.setItem(getDemoKey('posbah_demo_products'), JSON.stringify([
@@ -540,6 +580,33 @@ api.defaults.adapter = async function (config) {
       data = { transaction_status: 'settlement', payment_type: 'qris' };
     } else if (route === 'payroll/history') {
       data = [];
+    } else if (route === 'laundry/services') {
+      data = getTable('posbah_demo_laundry_services');
+    } else if (route === 'laundry/orders') {
+      let orders = getTable('posbah_demo_laundry_orders');
+      try {
+        const fullUrl = new URL(config.url, config.baseURL || window.location.origin);
+        const cari = fullUrl.searchParams.get('cari');
+        const filterBayar = fullUrl.searchParams.get('filterBayar');
+        const filterTipe = fullUrl.searchParams.get('filterTipe');
+        if (cari) {
+          orders = orders.filter(o => o.namaPelanggan.toLowerCase().includes(cari.toLowerCase()));
+        }
+        if (filterBayar && filterBayar !== 'Semua') {
+          orders = orders.filter(o => o.statusBayar === filterBayar);
+        }
+        if (filterTipe === 'Plastik') {
+          orders = orders.filter(o => o.jenisLayanan.toLowerCase().includes('barang'));
+        } else if (filterTipe === 'Laundry') {
+          orders = orders.filter(o => !o.jenisLayanan.toLowerCase().includes('barang'));
+        }
+      } catch (_) {}
+      data = orders;
+    } else if (route.startsWith('laundry/orders/')) {
+      const orderId = Number(parts[2]);
+      data = getTable('posbah_demo_laundry_orders').find(o => o.id === orderId) || null;
+    } else if (route === 'laundry/expenses') {
+      data = getTable('posbah_demo_laundry_expenses');
     } else if (route === 'reports') {
       const mode = localStorage.getItem('posbah_app_mode') || 'FNB';
       // Parse date filters from query params
@@ -563,9 +630,17 @@ api.defaults.adapter = async function (config) {
 
       const fins = getTable('posbah_demo_finances');
       const filteredFins = fins.filter(f => inRange(f.date || f.createdAt));
-      const totalExpenses = filteredFins.filter(f => f.type === 'EXPENSE' && f.status === 'PAID').reduce((sum, f) => sum + f.amount, 0);
-      const pendingReceivables = filteredFins.filter(f => f.type === 'RECEIVABLE' && f.status === 'PENDING').reduce((sum, f) => sum + f.amount, 0);
-      const totalPayable = filteredFins.filter(f => f.type === 'PAYABLE' && f.status === 'PENDING').reduce((sum, f) => sum + f.amount, 0);
+      let totalExpenses = filteredFins.filter(f => f.type === 'EXPENSE' && f.status === 'PAID').reduce((sum, f) => sum + f.amount, 0);
+      let pendingReceivables = filteredFins.filter(f => f.type === 'RECEIVABLE' && f.status === 'PENDING').reduce((sum, f) => sum + f.amount, 0);
+      let totalPayable = filteredFins.filter(f => f.type === 'PAYABLE' && f.status === 'PENDING').reduce((sum, f) => sum + f.amount, 0);
+
+      if (mode === 'LAUNDRY') {
+        const exps = getTable('posbah_demo_laundry_expenses').filter(e => inRange(e.tanggal || e.createdAt));
+        totalExpenses = exps.reduce((sum, e) => sum + (e.nominal || 0), 0);
+        const orders = getTable('posbah_demo_laundry_orders').filter(o => inRange(o.tanggalMasuk || o.createdAt));
+        pendingReceivables = orders.filter(o => o.statusBayar === 'Belum Lunas').reduce((sum, o) => sum + (o.totalHarga || 0), 0);
+        totalPayable = 0;
+      }
 
       let totalSales = 0;
       let todaySales = 0;
@@ -577,6 +652,12 @@ api.defaults.adapter = async function (config) {
         totalSales = rentals.reduce((sum, r) => sum + (r.totalPrice || 0), 0);
         todaySales = rentals.filter(r => new Date(r.createdAt || r.startDate).toDateString() === new Date().toDateString()).reduce((sum, r) => sum + (r.totalPrice || 0), 0);
         count = rentals.length;
+        grossProfit = totalSales;
+      } else if (mode === 'LAUNDRY') {
+        const orders = getTable('posbah_demo_laundry_orders').filter(o => inRange(o.tanggalMasuk || o.createdAt));
+        totalSales = orders.filter(o => o.statusBayar === 'Lunas').reduce((sum, o) => sum + (o.totalHarga || 0), 0);
+        todaySales = orders.filter(o => o.statusBayar === 'Lunas' && new Date(o.tanggalMasuk || o.createdAt).toDateString() === new Date().toDateString()).reduce((sum, o) => sum + (o.totalHarga || 0), 0);
+        count = orders.length;
         grossProfit = totalSales;
       } else {
         const txs = getTable('posbah_demo_transactions').filter(t => t.status === 'COMPLETED' && inRange(t.date));
@@ -606,7 +687,29 @@ api.defaults.adapter = async function (config) {
     const newId = Date.now();
     payload.id = newId;
 
-    if (route === 'products') {
+    if (route === 'laundry/services') {
+      const table = getTable('posbah_demo_laundry_services');
+      table.push(payload);
+      saveTable('posbah_demo_laundry_services', table);
+      data = payload;
+      logDemoActivity('CREATE_LAUNDRY_SERVICE', `Menambahkan layanan laundry baru ${payload.kategori} - ${payload.nama}`);
+    } else if (route === 'laundry/orders') {
+      const table = getTable('posbah_demo_laundry_orders');
+      payload.receiptNumber = `INV-LND-${Date.now()}`;
+      payload.tanggalMasuk = new Date().toISOString();
+      payload.status = 'Menunggu';
+      table.push(payload);
+      saveTable('posbah_demo_laundry_orders', table);
+      data = payload;
+      logDemoActivity('CREATE_LAUNDRY_ORDER', `Membuat pesanan laundry baru ${payload.receiptNumber} senilai Rp ${payload.totalHarga.toLocaleString('id-ID')}`);
+    } else if (route === 'laundry/expenses') {
+      const table = getTable('posbah_demo_laundry_expenses');
+      payload.tanggal = payload.tanggal || new Date().toISOString();
+      table.push(payload);
+      saveTable('posbah_demo_laundry_expenses', table);
+      data = payload;
+      logDemoActivity('CREATE_LAUNDRY_EXPENSE', `Mencatat pengeluaran laundry baru: ${payload.kategori} senilai Rp ${payload.nominal.toLocaleString('id-ID')}`);
+    } else if (route === 'products') {
       const table = getTable('posbah_demo_products');
       table.push(payload);
       saveTable('posbah_demo_products', table);
@@ -842,10 +945,67 @@ api.defaults.adapter = async function (config) {
     }
   } else if (method === 'PUT') {
     const payload = JSON.parse(config.data || '{}');
-    const id = Number(parts[1]);
-
-    if (parts[0] === 'products') {
+    if (parts[0] === 'laundry') {
+      if (parts[1] === 'services') {
+        const id = Number(parts[2]);
+        const table = getTable('posbah_demo_laundry_services');
+        const idx = table.findIndex(s => s.id === id);
+        if (idx !== -1) {
+          table[idx] = { ...table[idx], ...payload };
+          saveTable('posbah_demo_laundry_services', table);
+          data = table[idx];
+          logDemoActivity('UPDATE_LAUNDRY_SERVICE', `Memperbarui layanan laundry ${table[idx]?.kategori} - ${table[idx]?.nama}`);
+        }
+      } else if (parts[1] === 'orders') {
+        if (parts[2] === 'status') {
+          const id = Number(parts[3]);
+          const table = getTable('posbah_demo_laundry_orders');
+          const idx = table.findIndex(o => o.id === id);
+          if (idx !== -1) {
+            table[idx].status = payload.status;
+            if (payload.status === 'Selesai' || payload.status === 'Diambil') {
+              table[idx].tanggalSelesai = new Date().toISOString();
+            }
+            saveTable('posbah_demo_laundry_orders', table);
+            data = table[idx];
+            logDemoActivity('UPDATE_LAUNDRY_STATUS', `Mengubah status pesanan laundry ${table[idx].receiptNumber} menjadi ${payload.status}`);
+          }
+        } else if (parts[2] === 'pay') {
+          const id = Number(parts[3]);
+          const table = getTable('posbah_demo_laundry_orders');
+          const idx = table.findIndex(o => o.id === id);
+          if (idx !== -1) {
+            const statusLama = table[idx].statusBayar || 'Belum Lunas';
+            const statusBaru = statusLama === 'Lunas' ? 'Belum Lunas' : 'Lunas';
+            table[idx].statusBayar = statusBaru;
+            saveTable('posbah_demo_laundry_orders', table);
+            data = table[idx];
+            logDemoActivity('UPDATE_LAUNDRY_PAYMENT', `Mengubah status pembayaran pesanan laundry ${table[idx].receiptNumber} menjadi ${statusBaru}`);
+          }
+        } else {
+          const id = Number(parts[2]);
+          const table = getTable('posbah_demo_laundry_orders');
+          const idx = table.findIndex(o => o.id === id);
+          if (idx !== -1) {
+            table[idx] = { ...table[idx], ...payload };
+            saveTable('posbah_demo_laundry_orders', table);
+            data = table[idx];
+          }
+        }
+      } else if (parts[1] === 'expenses') {
+        const id = Number(parts[2]);
+        const table = getTable('posbah_demo_laundry_expenses');
+        const idx = table.findIndex(e => e.id === id);
+        if (idx !== -1) {
+          table[idx] = { ...table[idx], ...payload };
+          saveTable('posbah_demo_laundry_expenses', table);
+          data = table[idx];
+          logDemoActivity('UPDATE_LAUNDRY_EXPENSE', `Mengubah pengeluaran laundry ID ${id}`);
+        }
+      }
+    } else if (parts[0] === 'products') {
       const table = getTable('posbah_demo_products');
+      const id = Number(parts[1]);
       const idx = table.findIndex(p => p.id === id);
       if (idx !== -1) {
         table[idx] = { ...table[idx], ...payload };
@@ -855,6 +1015,7 @@ api.defaults.adapter = async function (config) {
       logDemoActivity('UPDATE_PRODUCT', `Memperbarui data produk ${table[idx]?.name}`);
     } else if (parts[0] === 'customers') {
       const table = getTable('posbah_demo_customers');
+      const id = Number(parts[1]);
       const idx = table.findIndex(c => c.id === id);
       if (idx !== -1) {
         table[idx] = { ...table[idx], ...payload };
@@ -863,6 +1024,7 @@ api.defaults.adapter = async function (config) {
       data = table[idx];
     } else if (parts[0] === 'employees') {
       const table = getTable('posbah_demo_employees');
+      const id = Number(parts[1]);
       const idx = table.findIndex(e => e.id === id);
       if (idx !== -1) {
         table[idx] = { ...table[idx], ...payload };
@@ -872,6 +1034,7 @@ api.defaults.adapter = async function (config) {
       logDemoActivity('UPDATE_EMPLOYEE', `Memperbarui data karyawan ${table[idx]?.name}`);
     } else if (parts[0] === 'suppliers') {
       const table = getTable('posbah_demo_suppliers');
+      const id = Number(parts[1]);
       const idx = table.findIndex(s => s.id === id);
       if (idx !== -1) {
         table[idx] = { ...table[idx], ...payload };
@@ -880,6 +1043,7 @@ api.defaults.adapter = async function (config) {
       data = table[idx];
     } else if (parts[0] === 'finances') {
       const table = getTable('posbah_demo_finances');
+      const id = Number(parts[1]);
       const idx = table.findIndex(f => f.id === id);
       if (idx !== -1) {
         table[idx] = { ...table[idx], ...payload };
@@ -889,6 +1053,7 @@ api.defaults.adapter = async function (config) {
       logDemoActivity('UPDATE_FINANCE', `Mengubah catatan keuangan: ${table[idx]?.description}`);
     } else if (parts[0] === 'cars') {
       const table = getTable('posbah_demo_cars');
+      const id = Number(parts[1]);
       const idx = table.findIndex(c => c.id === id);
       if (idx !== -1) {
         table[idx] = { ...table[idx], ...payload };
@@ -898,6 +1063,7 @@ api.defaults.adapter = async function (config) {
       logDemoActivity('UPDATE_CAR', `Mengubah data mobil ${table[idx]?.name}`);
     } else if (parts[0] === 'transactions') {
       const table = getTable('posbah_demo_transactions');
+      const id = Number(parts[1]);
       const idx = table.findIndex(t => t.id === id);
       if (idx !== -1) {
         table[idx] = { ...table[idx], ...payload };
@@ -920,7 +1086,29 @@ api.defaults.adapter = async function (config) {
   } else if (method === 'DELETE') {
     const id = Number(parts[1]);
 
-    if (parts[0] === 'products') {
+    if (parts[0] === 'laundry') {
+      const type = parts[1];
+      const laundryId = Number(parts[2]);
+      if (type === 'services') {
+        const table = getTable('posbah_demo_laundry_services');
+        const filtered = table.filter(s => s.id !== laundryId);
+        saveTable('posbah_demo_laundry_services', filtered);
+        data = { success: true };
+        logDemoActivity('DELETE_LAUNDRY_SERVICE', `Menghapus layanan laundry`);
+      } else if (type === 'orders') {
+        const table = getTable('posbah_demo_laundry_orders');
+        const filtered = table.filter(o => o.id !== laundryId);
+        saveTable('posbah_demo_laundry_orders', filtered);
+        data = { success: true };
+        logDemoActivity('DELETE_LAUNDRY_ORDER', `Menghapus pesanan laundry`);
+      } else if (type === 'expenses') {
+        const table = getTable('posbah_demo_laundry_expenses');
+        const filtered = table.filter(e => e.id !== laundryId);
+        saveTable('posbah_demo_laundry_expenses', filtered);
+        data = { success: true };
+        logDemoActivity('DELETE_LAUNDRY_EXPENSE', `Menghapus pengeluaran laundry`);
+      }
+    } else if (parts[0] === 'products') {
       const table = getTable('posbah_demo_products');
       const item = table.find(p => p.id === id);
       const filtered = table.filter(p => p.id !== id);
