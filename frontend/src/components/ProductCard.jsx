@@ -24,7 +24,22 @@ export default function ProductCard({ product, onAdd, onVariant, quantity = 0 })
 
   const variants = parseVariants(product);
   const hasVariants = variants.length > 0;
-  const isOut = !hasVariants && product.stock < 1;
+
+  // Safe stock parsing supporting both stock and stok properties, with string & NaN handling
+  const getStockValue = () => {
+    let s = undefined;
+    if (product.stock !== undefined && product.stock !== null) {
+      s = product.stock;
+    } else if (product.stok !== undefined && product.stok !== null) {
+      s = product.stok;
+    }
+    if (s === undefined || s === null) return 0;
+    const num = Number(s);
+    return isNaN(num) ? 0 : num;
+  };
+  const stockVal = getStockValue();
+
+  const isOut = !hasVariants && stockVal < 1;
 
   const hasImage =
     product.image &&
@@ -45,9 +60,9 @@ export default function ProductCard({ product, onAdd, onVariant, quantity = 0 })
   // ── Label stok / varian ────────────────────────────────────────
   const stockBadge = (() => {
     if (hasVariants) return { label: `🎨 ${variants.length} Varian`, bg: '#EEF2FF', color: '#4F46E5' };
-    if (product.stock === 0) return { label: '🚫 Stok Habis', bg: '#FEE2E2', color: '#DC2626' };
-    if (product.stock <= 5) return { label: `⚠️ Sisa ${product.stock} ${product.unit || 'pcs'}`, bg: '#FEF3C7', color: '#D97706' };
-    return { label: `✓ Tersedia ${product.stock} ${product.unit || 'pcs'}`, bg: '#DCFCE7', color: '#16A34A' };
+    if (stockVal <= 0) return { label: '🚫 Stok Habis', bg: '#FEE2E2', color: '#DC2626' };
+    if (stockVal <= 5) return { label: `⚠️ Sisa ${stockVal} ${product.unit || 'pcs'}`, bg: '#FEF3C7', color: '#D97706' };
+    return { label: `✓ Tersedia ${stockVal} ${product.unit || 'pcs'}`, bg: '#DCFCE7', color: '#16A34A' };
   })();
 
   const btnDisabled = isOut;
@@ -101,7 +116,7 @@ export default function ProductCard({ product, onAdd, onVariant, quantity = 0 })
         )}
 
         {/* Badge Habis — pojok kanan atas */}
-        {product.stock < 1 && !hasVariants && (
+        {stockVal < 1 && !hasVariants && (
           <div style={{
             position: 'absolute', top: 8, right: 8,
             background: '#EF4444', color: '#fff',
@@ -151,17 +166,26 @@ export default function ProductCard({ product, onAdd, onVariant, quantity = 0 })
         </div>
 
         {/* Badge stok / varian */}
-        <div style={{ marginBottom: 8 }}>
-          <span style={{
-            fontSize: 11, fontWeight: 700,
-            background: stockBadge.bg,
-            color: stockBadge.color,
-            padding: '2px 8px', borderRadius: 99,
-            display: 'inline-block',
-          }}>
-            {stockBadge.label}
-          </span>
-        </div>
+        {stockBadge && (
+          <div style={{ marginBottom: 8, flexShrink: 0, display: 'block' }}>
+            <span style={{
+              fontSize: 11,
+              fontWeight: 700,
+              background: stockBadge.bg || '#F3F4F6',
+              color: stockBadge.color || '#374151',
+              padding: '2.5px 8px',
+              borderRadius: 99,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              whiteSpace: 'nowrap',
+              lineHeight: '1.2',
+              flexShrink: 0,
+            }}>
+              {stockBadge.label}
+            </span>
+          </div>
+        )}
 
       </div>
     </div>

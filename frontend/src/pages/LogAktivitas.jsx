@@ -71,7 +71,7 @@ export default function LogAktivitas() {
     else if (act === 'RESET_FINANCE') label = 'Reset Keuangan';
     else if (act === 'RECEIVE_PO') label = 'Terima PO';
     else if (act === 'DELETE_PO') label = 'Hapus PO';
-    else if (act === 'PAYMENT_CALLBACK') label = 'Midtrans Pay';
+    else if (act === 'PAYMENT_CALLBACK') label = 'Pembayaran Online';
     else if (act === 'CREATE_LAUNDRY_ORDER') label = 'Order Laundry Baru';
     else if (act === 'UPDATE_LAUNDRY_STATUS') label = 'Update Status Cucian';
     else if (act === 'UPDATE_LAUNDRY_PAYMENT') label = 'Update Bayar Laundry';

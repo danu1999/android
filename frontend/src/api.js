@@ -574,10 +574,7 @@ api.defaults.adapter = async function (config) {
       data = getTable('posbah_demo_logs');
     } else if (route === 'queues/active' || route === 'queues/pending') {
       data = getTable('posbah_demo_transactions').filter(t => t.status === 'PENDING' && t.queueNumber !== null);
-    } else if (route === 'midtrans/config') {
-      data = { clientKey: 'SB-Mid-client-demo', isProduction: false };
-    } else if (route.startsWith('midtrans/status/')) {
-      data = { transaction_status: 'settlement', payment_type: 'qris' };
+
     } else if (route === 'payroll/history') {
       data = [];
     } else if (route === 'laundry/services') {
@@ -913,8 +910,7 @@ api.defaults.adapter = async function (config) {
       
       logDemoActivity('CREATE_TRANSACTION', `Membuat transaksi baru ${payload.receiptNumber} senilai Rp ${payload.total.toLocaleString('id-ID')}`);
       data = payload;
-    } else if (route === 'midtrans/charge' || route === 'midtrans/snap-token') {
-      data = { qrUrl: 'https://demo.midtrans.com/qr', token: 'demo-snap-token', redirectUrl: 'https://demo.midtrans.com/snap' };
+
     } else if (parts[0] === 'payroll' && parts[1] === 'pay') {
       // Catat pembayaran gaji sebagai pengeluaran
       const payrollPayload = JSON.parse(config.data || '{}');
@@ -1453,7 +1449,7 @@ api.interceptors.response.use(
         } catch (_) {}
       }
       
-      if (!isDemo && route !== 'auth/login' && !route.startsWith('midtrans/')) {
+      if (!isDemo && route !== 'auth/login') {
         const parts = route.split('/');
         if (parts.length === 1) {
           localStorage.setItem(`posbah_cache_${route}`, JSON.stringify(response.data));
