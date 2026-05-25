@@ -276,7 +276,7 @@ export default function Supplier() {
                   </div>
                 </div>
               ))}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 50px 80px auto', gap: 6, marginTop: 8 }}>
+              <div className="po-item-grid">
                 <select value={newPOItem.productId} onChange={e => { const p = products.find(pr => pr.id === Number(e.target.value)); setNewPOItem(ni => ({ ...ni, productId: e.target.value, costPrice: p?.costPrice || '' })); }} style={{ padding: '8px', borderRadius: 8, border: '1.5px solid #E5E7EB', fontSize: 12, outline: 'none' }}>
                   <option value="">Produk...</option>
                   {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}

@@ -385,7 +385,7 @@ export default function Katalog() {
           <div style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>Silakan tambah produk baru atau ubah kata kunci pencarian.</div>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(clamp(130px, 42vw, 240px), 1fr))', gap: 14 }}>
           {filteredProducts.map((product) => {
             const margin = getMargin(product.price, product.costPrice);
             const isLowStock = product.stock > 0 && product.stock <= LOW_STOCK_THRESHOLD;

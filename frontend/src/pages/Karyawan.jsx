@@ -175,7 +175,7 @@ export default function Karyawan() {
       {tab === 'karyawan' && (
         <>
           {/* Summary bar */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(clamp(90px, 28vw, 150px), 1fr))', gap: 10, marginBottom: 16 }}>
             {['OWNER', 'ADMIN', 'KASIR'].map(role => {
               const c = cfg(role); const count = employees.filter(e => e.role === role).length;
               return (
@@ -275,7 +275,7 @@ export default function Karyawan() {
           </div>
 
           {/* Summary */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(clamp(90px, 28vw, 150px), 1fr))', gap: 10, marginBottom: 14 }}>
             {[
               { label: 'Total Gaji', val: `Rp ${fmt(totalGaji)}`, bg: 'linear-gradient(135deg,#EFF6FF,#DBEAFE)', border: '#93C5FD', color: '#1E3A8A', icon: <Banknote size={16} /> },
               { label: 'Sudah Dibayar', val: `${sudahBayar}/${employees.length} org`, bg: 'linear-gradient(135deg,#ECFDF5,#D1FAE5)', border: '#6EE7B7', color: '#065F46', icon: <CheckCircle size={16} /> },

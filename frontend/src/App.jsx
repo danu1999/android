@@ -329,7 +329,7 @@ function BusinessModeModal({ onSelectMode }) {
           Silakan pilih jenis sistem POS yang ingin kamu gunakan untuk memulai operasional:
         </p>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))', gap: '16px', marginBottom: '1.5rem' }}>
           {/* Card 1: UMKM F&B */}
           <div
             onClick={() => onSelectMode('FNB')}

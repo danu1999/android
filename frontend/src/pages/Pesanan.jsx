@@ -185,7 +185,7 @@ export default function Pesanan() {
                 {order.items?.length > 2 && <div style={{ fontSize: 11, color: '#94A3B8' }}>+{order.items.length - 2} item lagi...</div>}
 
                 {/* Keuangan */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 12, padding: '10px 0', borderTop: '1px solid #F1F5F9' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(clamp(80px, 25vw, 150px), 1fr))', gap: 8, marginTop: 12, padding: '10px 0', borderTop: '1px solid #F1F5F9' }}>
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: 10, color: '#94A3B8', fontWeight: 600 }}>TOTAL</div>
                     <div style={{ fontSize: 13, fontWeight: 800, color: '#111827' }}>Rp {fmt(order.total)}</div>

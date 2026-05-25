@@ -151,7 +151,7 @@ export default function KasirLaundry() {
   const cartTotal = getCartTotal();
 
   return (
-    <div style={{ padding: '1rem', maxWidth: '800px', margin: '0 auto', fontFamily: "'Inter', sans-serif", paddingBottom: '120px' }}>
+    <div style={{ padding: '1rem', maxWidth: '800px', margin: '0 auto', fontFamily: "'Inter', sans-serif", paddingBottom: '1.5rem' }}>
       
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.5rem' }}>
@@ -354,10 +354,10 @@ export default function KasirLaundry() {
 
         {/* Bottom Cart Bar */}
         <div style={{
-          position: 'fixed', bottom: 0, left: 0, right: 0,
+          position: 'sticky', bottom: 0,
           background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(10px)',
           borderTop: '1px solid #E5E7EB', padding: '12px 16px', zIndex: 1000,
-          boxShadow: '0 -4px 20px rgba(0,0,0,0.06)'
+          boxShadow: '0 -4px 20px rgba(0,0,0,0.06)', marginTop: '2rem'
         }}>
           <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
             <div>

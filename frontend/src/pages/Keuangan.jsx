@@ -365,7 +365,7 @@ export default function Keuangan({ appMode: propAppMode }) {
         )}
 
         {/* ── Summary Cards ─────────────────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 14, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(clamp(130px, 45vw, 260px), 1fr))', gap: 14, marginBottom: 24 }}>
 
           {/* Rata-rata Margin (Weighted) */}
           <div style={{
@@ -493,7 +493,7 @@ export default function Keuangan({ appMode: propAppMode }) {
     return (
       <div>
         {/* Kartu Utama 2×2 */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(clamp(130px, 45vw, 240px), 1fr))', gap: 12, marginBottom: 12 }}>
           {mainCards.map(s => (
             <div key={s.label} style={{ background: s.bg, border: `1.5px solid ${s.border}`, borderRadius: 16, padding: '14px 14px' }}>
               <div style={{ fontSize: 20, marginBottom: 4 }}>{s.icon}</div>
