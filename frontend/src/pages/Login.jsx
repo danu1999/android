@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import api from '../api';
 
 export default function Login({ onLogin }) {
@@ -30,10 +30,61 @@ export default function Login({ onLogin }) {
     }
   };
 
-  const handleDemo = () => {
-    const expiresAt = Date.now() + 3 * 24 * 60 * 60 * 1000; // 3 days
-    onLogin({ id: 0, name: 'Demo User', role: 'OWNER', isDemo: true, expiresAt });
+  const parseJwt = (token) => {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      return JSON.parse(jsonPayload);
+    } catch (e) {
+      return null;
+    }
   };
+
+  const handleGoogleLoginResponse = (response) => {
+    const payload = parseJwt(response.credential);
+    if (payload) {
+      const expiresAt = Date.now() + 3 * 24 * 60 * 60 * 1000; // 3 days
+      onLogin({
+        id: payload.sub,
+        name: payload.name || payload.email.split('@')[0],
+        email: payload.email,
+        picture: payload.picture,
+        role: 'OWNER',
+        isDemo: true,
+        expiresAt
+      });
+    } else {
+      setError('Gagal membaca profil Google');
+    }
+  };
+
+  useEffect(() => {
+    /* global google */
+    const initGoogleGSI = () => {
+      if (window.google) {
+        google.accounts.id.initialize({
+          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID_PLACEHOLDER.apps.googleusercontent.com",
+          callback: handleGoogleLoginResponse
+        });
+        google.accounts.id.renderButton(
+          document.getElementById("google-signin-btn"),
+          { 
+            theme: "outline", 
+            size: "large", 
+            width: "316", 
+            text: "continue_with",
+            shape: "pill"
+          }
+        );
+      }
+    };
+
+    const timer = setTimeout(initGoogleGSI, 500);
+    return () => clearTimeout(timer);
+  }, []);
 
   const numpad = ['1','2','3','4','5','6','7','8','9','','0','⌫'];
 
@@ -200,28 +251,13 @@ export default function Login({ onLogin }) {
           <div style={{ flex:1, height:'1px', background:'rgba(255,255,255,0.15)' }} />
         </div>
 
-        {/* Demo Button */}
-        <button
-          onClick={handleDemo}
-          style={{
-            width: '100%',
-            padding: '14px',
-            borderRadius: '14px',
-            border: '1.5px solid rgba(255,255,255,0.2)',
-            background: 'rgba(255,255,255,0.06)',
-            color: 'rgba(255,255,255,0.7)',
-            fontSize: '0.9rem',
-            fontWeight: 600,
-            cursor: 'pointer',
-            marginTop: '10px',
-            transition: 'all 0.2s',
-            letterSpacing: '0.01em',
-          }}
-          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}
-          onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
-        >
-          🎯 Coba Demo Gratis (3 Hari)
-        </button>
+        {/* Google Sign-In for Demo */}
+        <div style={{ textAlign: 'center', marginTop: '14px' }}>
+          <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: '0.75rem', marginBottom: '10px' }}>
+            Masuk dengan Google untuk mencoba Demo:
+          </div>
+          <div id="google-signin-btn" style={{ display: 'flex', justifyContent: 'center' }} />
+        </div>
 
         <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem', marginTop: '1.5rem', marginBottom: 0 }}>
           Hubungi admin jika lupa PIN
