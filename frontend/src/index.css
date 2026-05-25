@@ -180,7 +180,7 @@ nav a.active {
 .kasir-page ~ * { display: none; } /* unused but safe */ 
 .main-content:has(.kasir-page) {
   padding: 0 !important;
-  overflow: hidden !important;
+  overflow-y: auto !important;
   padding-bottom: 0 !important;
 }
 
@@ -197,7 +197,7 @@ nav a.active {
 }
 
 .page-container {
-  padding: 1rem;
+  padding: 0.75rem;
   min-height: 100%;
   width: 100%;
 }
@@ -226,7 +226,9 @@ h1 {
 .table-container {
   width: 100%;
   overflow-x: auto;
+  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  max-height: clamp(250px, 60dvh, 700px);
 }
 
 .search-bar {
@@ -246,9 +248,7 @@ h1 {
   color: var(--text-main);
 }
 
-.table-container {
-  overflow-x: auto;
-}
+/* .table-container responsive layout settings */
 
 .data-table {
   width: 100%;
@@ -277,6 +277,10 @@ h1 {
 .data-table th {
   font-weight: 600;
   color: #4B5563;
+  position: sticky;
+  top: 0;
+  background: #ffffff;
+  z-index: 10;
 }
 
 /* Clickable table rows */
@@ -355,9 +359,11 @@ h1 {
   background: rgba(0, 0, 0, 0.4);
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
+  overflow-y: auto;
   z-index: 50;
   backdrop-filter: blur(4px);
+  padding: 1rem 0;
 }
 
 .modal-content {
@@ -367,6 +373,8 @@ h1 {
   background: rgba(255, 255, 255, 0.9) !important;
   border-radius: 20px;
   box-sizing: border-box;
+  margin-top: auto;
+  margin-bottom: auto;
 }
 
 @media (min-width: 768px) {

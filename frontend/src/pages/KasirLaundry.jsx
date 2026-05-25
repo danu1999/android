@@ -168,7 +168,7 @@ export default function KasirLaundry() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
           {/* Customer Card */}
-          <div className="glass-panel" style={{ background: 'white', borderRadius: '18px', padding: '1.25rem', border: '1px solid #E5E7EB' }}>
+          <div className="glass-panel" style={{ background: 'white', borderRadius: '18px', padding: '1rem', border: '1px solid #E5E7EB' }}>
             <h3 style={{ fontSize: '0.9rem', fontWeight: 800, color: '#374151', margin: '0 0 1rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Data Pelanggan
             </h3>
@@ -272,7 +272,7 @@ export default function KasirLaundry() {
             {loading ? (
               <div style={{ textAlign: 'center', padding: '2rem', color: '#9CA3AF' }}>Memuat paket layanan...</div>
             ) : activeServices.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: 'clamp(200px, 45dvh, 500px)', overflowY: 'auto', paddingRight: '4px' }}>
                 {activeServices.map(item => {
                   const qty = cart[item.id] || 0;
                   return (
@@ -333,7 +333,7 @@ export default function KasirLaundry() {
           </div>
 
           {/* Payment Card */}
-          <div className="glass-panel" style={{ background: 'white', borderRadius: '18px', padding: '1.25rem', border: '1px solid #E5E7EB' }}>
+          <div className="glass-panel" style={{ background: 'white', borderRadius: '18px', padding: '1rem', border: '1px solid #E5E7EB' }}>
             <h3 style={{ fontSize: '0.9rem', fontWeight: 800, color: '#374151', margin: '0 0 1rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Pembayaran
             </h3>

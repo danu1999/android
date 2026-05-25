@@ -606,11 +606,12 @@ export default function Kasir() {
     cardName: { fontWeight: 700, fontSize: '0.8rem', color: '#1E293B', lineHeight: 1.3, marginBottom: 3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' },
     cardPrice: { fontWeight: 800, fontSize: '0.85rem', color: '#4F46E5' },
     cardStock: { fontWeight: 600, fontSize: '0.7rem', color: '#9CA3AF', marginTop: 2 },
-    bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 55 },
+    bottomBar: { position: 'sticky', bottom: 0, left: 0, right: 0, zIndex: 55, marginTop: 'auto' },
     backdrop: { position: 'fixed', inset: 0, background: 'rgba(15,10,60,0.45)', backdropFilter: 'blur(4px)', zIndex: -1 },
-    sheet: (open) => ({ background: 'white', borderRadius: open ? '22px 22px 0 0' : '18px 18px 0 0', boxShadow: '0 -8px 40px rgba(79,70,229,0.15)', transition: 'max-height 0.4s cubic-bezier(0.4,0,0.2,1)', maxHeight: open ? '65dvh' : '58px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }),
+    sheet: (open) => ({ background: 'white', borderRadius: open ? '22px 22px 0 0' : '18px 18px 0 0', boxShadow: '0 -8px 40px rgba(79,70,229,0.15)', transition: 'max-height 0.4s cubic-bezier(0.4,0,0.2,1)', maxHeight: open ? '70dvh' : '58px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }),
     sheetHandle: { padding: '0 16px', borderBottom: cartOpen ? '1px solid #F0F4FF' : 'none', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: '58px', background: 'white' },
     sheetBody: { overflowY: 'auto', flex: 1, padding: '0 16px 8px' },
+    sheetFooter: { padding: '10px 16px 16px', borderTop: '1px solid #F3F4F6', background: 'white', flexShrink: 0 },
     input: { width: '100%', padding: '11px 14px', borderRadius: '10px', border: '1.5px solid #E5E7EB', outline: 'none', fontSize: '0.9rem', boxSizing: 'border-box', background: '#FAFAFA' },
     pill: (active) => ({ padding: '12px 24px', borderRadius: '12px', border: 'none', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', background: active ? '#4F46E5' : '#EEF2FF', color: active ? 'white' : '#4F46E5', transition: 'all 0.2s' }),
     btnPrimary: { width: '100%', padding: '15px', borderRadius: '14px', border: 'none', background: 'linear-gradient(135deg,#6366F1,#4F46E5)', color: 'white', fontWeight: 800, fontSize: '1rem', cursor: 'pointer', boxShadow: '0 4px 14px rgba(99,102,241,0.4)' },
@@ -936,7 +937,10 @@ export default function Kasir() {
                   <div style={{ marginTop: 6, fontSize: 12, color: '#10B981', fontWeight: 600 }}>✓ Hemat Rp {discountAmt.toLocaleString('id-ID')}</div>
                 )}
               </div>
+            </div>
 
+            {/* Sticky Sheet Footer */}
+            <div style={S.sheetFooter}>
               {/* Ringkasan Harga */}
               <div style={{ background: '#F8F9FF', borderRadius: 12, padding: '10px 14px', marginBottom: 14 }}>
                 {discountAmt > 0 && (
