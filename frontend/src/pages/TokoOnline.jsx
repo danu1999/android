@@ -299,6 +299,7 @@ export default function TokoOnline() {
                     <img
                       src={product.image}
                       alt={product.name}
+                      draggable="false"
                       style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 8 }}
                     />
                     {/* Zoom hint overlay */}
@@ -390,6 +391,7 @@ export default function TokoOnline() {
           <img
             src={selectedImage}
             alt="Zoom"
+            draggable="false"
             onClick={(e) => e.stopPropagation()}
             style={{
               maxWidth: '90vw',
@@ -465,7 +467,7 @@ export default function TokoOnline() {
                     borderBottom: '1px solid #F1F5F9', paddingBottom: 16, marginBottom: 16,
                   }}>
                     {item.product.image
-                      ? <img src={item.product.image} style={{ width: 52, height: 52, objectFit: 'contain', borderRadius: 10, border: '1px solid #E2E8F0' }} alt={item.product.name} />
+                      ? <img src={item.product.image} draggable="false" style={{ width: 52, height: 52, objectFit: 'contain', borderRadius: 10, border: '1px solid #E2E8F0' }} alt={item.product.name} />
                       : <div style={{ width: 52, height: 52, background: '#F1F5F9', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ShoppingBag size={18} color="#CBD5E1" /></div>
                     }
                     <div style={{ flex: 1 }}>

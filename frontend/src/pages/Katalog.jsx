@@ -404,7 +404,7 @@ export default function Katalog() {
                 {/* Image */}
                 <div className="katalog-card-img-container">
                   {product.image ? (
-                    <img src={product.image} alt={product.name} className="katalog-card-img" />
+                    <img src={product.image} alt={product.name} className="katalog-card-img" draggable="false" />
                   ) : (
                     <div style={{ fontSize: 36, opacity: 0.25 }}>📦</div>
                   )}
@@ -483,7 +483,7 @@ export default function Katalog() {
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, background: '#F8FAFC', borderRadius: 16, padding: '16px 12px', border: '1px solid #E2E8F0' }}>
                 {formData.image ? (
                   <div style={{ position: 'relative', width: 110, height: 110, background: '#ffffff', borderRadius: 14, overflow: 'hidden', border: '1.5px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <img src={formData.image} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 4 }} />
+                    <img src={formData.image} alt="Preview" draggable="false" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 4 }} />
                     {!isViewOnly && (
                       <button type="button" onClick={() => setFormData({ ...formData, image: '' })} style={{ position: 'absolute', top: 4, right: 4, background: '#EF4444', color: 'white', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 900 }}>✕</button>
                     )}

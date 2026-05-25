@@ -662,7 +662,7 @@ export default function RentalMobil() {
                 
                 {identityText && (
                   <div className="mt-3 border border-emerald-100 rounded-2xl p-3 bg-emerald-50/40 flex items-center gap-3">
-                    <img src={identityText} alt="Dokumen Preview" className="w-16 h-12 object-cover rounded-xl shadow-sm border border-emerald-100" />
+                    <img src={identityText} alt="Dokumen Preview" draggable="false" className="w-16 h-12 object-cover rounded-xl shadow-sm border border-emerald-100" />
                     <div className="flex-1 min-w-0">
                       <div className="text-xs font-black text-emerald-800">Sukses Diunggah!</div>
                       <div className="text-[10px] text-emerald-600 font-bold mt-0.5">{Math.round(identityText.length / 1024)} KB</div>
@@ -1179,7 +1179,7 @@ export default function RentalMobil() {
               <p className="text-xs text-gray-400 mt-1 font-semibold">Pastikan kesesuaian dokumen sebelum menyerahkan kunci</p>
             </div>
             
-            <img src={viewIdentity} alt="Bukti Identitas" className="w-full max-h-[350px] object-contain rounded-2xl border border-gray-100 shadow-inner bg-gray-50/50" />
+            <img src={viewIdentity} alt="Bukti Identitas" draggable="false" className="w-full max-h-[350px] object-contain rounded-2xl border border-gray-100 shadow-inner bg-gray-50/50" />
             
             <button
               type="button"

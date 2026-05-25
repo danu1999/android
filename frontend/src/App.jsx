@@ -264,7 +264,7 @@ function AppContent({ user, onLogout, appMode, setAppMode }) {
   }
 
   return (
-    <div className="app-layout">
+    <div className="app-layout select-none">
       <Navigation user={user} onLogout={onLogout} appMode={appMode} setAppMode={setAppMode} />
       <main className="main-content">
         <Routes>
@@ -495,6 +495,53 @@ function App() {
     localStorage.removeItem('posbah_app_mode');
     setUser(null);
   };
+
+  useEffect(() => {
+    // Disable right click (context menu)
+    const handleContextMenu = (e) => {
+      e.preventDefault();
+    };
+
+    // Disable keyboard shortcuts (F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C, Ctrl+U)
+    const handleKeyDown = (e) => {
+      if (
+        e.keyCode === 123 || // F12
+        e.key === 'F12' ||
+        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.keyCode === 73)) || // Ctrl+Shift+I
+        (e.ctrlKey && e.shiftKey && (e.key === 'J' || e.key === 'j' || e.keyCode === 74)) || // Ctrl+Shift+J
+        (e.ctrlKey && e.shiftKey && (e.key === 'C' || e.key === 'c' || e.keyCode === 67)) || // Ctrl+Shift+C
+        (e.ctrlKey && (e.key === 'U' || e.key === 'u' || e.keyCode === 85)) // Ctrl+U
+      ) {
+        e.preventDefault();
+        return false;
+      }
+    };
+
+    window.addEventListener('contextmenu', handleContextMenu);
+    window.addEventListener('keydown', handleKeyDown);
+
+    // DevTools Detection & Auto-Defense Loop
+    const devToolsInterval = setInterval(() => {
+      const startTime = performance.now();
+      debugger;
+      const endTime = performance.now();
+
+      // If DevTools is open, the pause on debugger statement will cause a significant delay
+      if (endTime - startTime > 100) {
+        if (user?.isDemo) {
+          // Force logout for demo accounts
+          handleLogout();
+          window.location.href = 'about:blank';
+        }
+      }
+    }, 500);
+
+    return () => {
+      window.removeEventListener('contextmenu', handleContextMenu);
+      window.removeEventListener('keydown', handleKeyDown);
+      clearInterval(devToolsInterval);
+    };
+  }, [user]);
 
   if (!user) return <Login onLogin={handleLogin} />;
 

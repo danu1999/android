@@ -102,6 +102,7 @@ export default function ProductCard({ product, onAdd, onVariant, quantity = 0 })
           <img
             src={product.image}
             alt={product.name}
+            draggable="false"
             style={{
               width: '100%',
               height: '100%',
