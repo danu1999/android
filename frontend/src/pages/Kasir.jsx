@@ -623,29 +623,124 @@ export default function Kasir() {
 
   return (
     <div style={S.wrap} className="kasir-page">
-      {/* Top Bar */}
-      <div style={S.topbar}>
-        <div style={S.searchBox}>
-          <Search size={16} color="rgba(255,255,255,0.7)" />
-          <input style={{ ...S.searchInput, '::placeholder': { color: 'rgba(255,255,255,0.6)' } }} placeholder="Cari produk..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-          {searchQuery && <button onClick={() => setSearchQuery('')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'rgba(255,255,255,0.7)' }}><X size={15} /></button>}
+      {/* Top Bar — Fluid responsive, no horizontal overflow on any screen */}
+      <div
+        className="flex items-center gap-1.5 w-full box-border"
+        style={{
+          padding: '8px 10px',
+          background: 'linear-gradient(135deg,#4F46E5,#6366F1)',
+          flexShrink: 0,
+          minWidth: 0,
+          overflow: 'hidden',
+        }}
+      >
+        {/* Search box — flex:1 + min-w-0 allows it to shrink on narrow screens */}
+        <div
+          className="flex items-center gap-1.5 min-w-0"
+          style={{
+            flex: 1,
+            minWidth: 0,
+            background: 'rgba(255,255,255,0.18)',
+            borderRadius: 10,
+            padding: '7px 10px',
+            border: '1px solid rgba(255,255,255,0.25)',
+          }}
+        >
+          <Search size={15} color="rgba(255,255,255,0.7)" style={{ flexShrink: 0 }} />
+          <input
+            className="kasir-search"
+            style={{
+              border: 'none',
+              background: 'transparent',
+              outline: 'none',
+              fontSize: '0.82rem',
+              width: '100%',
+              minWidth: 0,
+              color: 'white',
+            }}
+            placeholder="Cari produk..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'rgba(255,255,255,0.7)', flexShrink: 0, display: 'flex', alignItems: 'center' }}
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
+
+        {/* Scan button — icon-only on very small screens, icon+label on larger */}
         {canScan && (
           <button
             onClick={() => { setBarcodeInputOpen(o => !o); setBarcodeInputVal(''); setTimeout(() => barcodeInputRef.current?.focus(), 80); }}
-            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '9px 10px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.25)', cursor: 'pointer', background: barcodeFlash === 'found' ? '#10B981' : barcodeFlash === 'notfound' ? '#EF4444' : 'rgba(255,255,255,0.18)', color: 'white', fontSize: 11, fontWeight: 700, transition: 'all 0.2s', flexShrink: 0 }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 3,
+              padding: '7px 9px',
+              borderRadius: 9,
+              border: '1px solid rgba(255,255,255,0.25)',
+              cursor: 'pointer',
+              background: barcodeFlash === 'found' ? '#10B981' : barcodeFlash === 'notfound' ? '#EF4444' : 'rgba(255,255,255,0.18)',
+              color: 'white',
+              fontSize: 11,
+              fontWeight: 700,
+              transition: 'background 0.2s',
+              flexShrink: 0,
+              whiteSpace: 'nowrap',
+              maxWidth: '72px',
+            }}
           >
-            <Barcode size={15} />
-            {barcodeFlash === 'found' ? '✓' : barcodeFlash === 'notfound' ? '✗' : 'Scan'}
+            <Barcode size={15} style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: 10 }}>
+              {barcodeFlash === 'found' ? '✓' : barcodeFlash === 'notfound' ? '✗' : 'Scan'}
+            </span>
           </button>
         )}
-        <button style={S.queueBtn} onClick={fetchQueue}><ClipboardList size={15} /></button>
+
+        {/* Queue / Antrian button — icon only, fixed compact size */}
+        <button
+          onClick={fetchQueue}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '7px 9px',
+            borderRadius: 9,
+            border: '1px solid rgba(255,255,255,0.25)',
+            background: 'rgba(255,255,255,0.18)',
+            color: 'white',
+            cursor: 'pointer',
+            flexShrink: 0,
+          }}
+        >
+          <ClipboardList size={16} />
+        </button>
       </div>
 
       {/* Barcode Input Panel — hanya tampil jika canScan */}
       {canScan && barcodeInputOpen && (
-        <div style={{ background: '#EEF2FF', padding: '10px 16px', display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, borderBottom: '2px solid #C7D2FE', animation: 'slideDown 0.15s ease' }}>
-          <Barcode size={18} color="#4F46E5" style={{ flexShrink: 0 }} />
+        <div
+          style={{
+            background: '#EEF2FF',
+            padding: '8px 10px',
+            display: 'flex',
+            flexWrap: 'wrap',      /* wrap agar tidak overflow di HP sempit */
+            gap: 6,
+            alignItems: 'center',
+            flexShrink: 0,
+            borderBottom: '2px solid #C7D2FE',
+            animation: 'slideDown 0.15s ease',
+            width: '100%',
+            boxSizing: 'border-box',
+          }}
+        >
+          <Barcode size={16} color="#4F46E5" style={{ flexShrink: 0 }} />
+
+          {/* Input barcode — flex:1 + min-width:0 bisa shrink */}
           <input
             ref={barcodeInputRef}
             value={barcodeInputVal}
@@ -656,30 +751,47 @@ export default function Kasir() {
                 setBarcodeInputVal('');
               }
             }}
-            placeholder="Scan atau ketik barcode, tekan Enter..."
-            style={{ flex: 1, border: '1.5px solid #C7D2FE', borderRadius: 10, padding: '9px 12px', fontSize: 14, outline: 'none', background: 'white', fontFamily: 'monospace', letterSpacing: 1 }}
+            placeholder="Ketik / scan barcode, Enter..."
+            style={{
+              flex: 1,
+              minWidth: 80,       /* min agar tidak gepeng di HP sangat kecil */
+              border: '1.5px solid #C7D2FE',
+              borderRadius: 8,
+              padding: '7px 10px',
+              fontSize: 13,
+              outline: 'none',
+              background: 'white',
+              fontFamily: 'monospace',
+              letterSpacing: 1,
+              boxSizing: 'border-box',
+            }}
             autoComplete="off"
           />
-          <button
-            onClick={() => { if (barcodeInputVal.trim()) { handleBarcodeScan(barcodeInputVal.trim()); setBarcodeInputVal(''); } }}
-            style={{ padding: '9px 14px', borderRadius: 10, border: 'none', background: '#4F46E5', color: 'white', fontWeight: 700, fontSize: 13, cursor: 'pointer', flexShrink: 0 }}
-          >
-            Cari
-          </button>
-          {/* Tombol Kamera — Android & iPhone */}
-          <button
-            onClick={startCamera}
-            title="Scan barcode menggunakan kamera HP"
-            style={{ padding: '9px 12px', borderRadius: 10, border: 'none', background: '#10B981', color: 'white', fontWeight: 700, fontSize: 13, cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5 }}
-          >
-            <Camera size={16} /> Kamera
-          </button>
-          <button
-            onClick={() => { setBarcodeInputOpen(false); setBarcodeInputVal(''); }}
-            style={{ padding: '9px', borderRadius: 10, border: 'none', background: 'white', color: '#9CA3AF', cursor: 'pointer', flexShrink: 0 }}
-          >
-            <X size={16} />
-          </button>
+
+          {/* Action buttons — compact, flexShrink:0 agar tidak mengecil */}
+          <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+            <button
+              onClick={() => { if (barcodeInputVal.trim()) { handleBarcodeScan(barcodeInputVal.trim()); setBarcodeInputVal(''); } }}
+              style={{ padding: '7px 12px', borderRadius: 8, border: 'none', background: '#4F46E5', color: 'white', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}
+            >
+              Cari
+            </button>
+            {/* Tombol Kamera — Android & iPhone */}
+            <button
+              onClick={startCamera}
+              title="Scan barcode menggunakan kamera HP"
+              style={{ padding: '7px 10px', borderRadius: 8, border: 'none', background: '#10B981', color: 'white', fontWeight: 700, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+            >
+              <Camera size={14} />
+              <span>Kamera</span>
+            </button>
+            <button
+              onClick={() => { setBarcodeInputOpen(false); setBarcodeInputVal(''); }}
+              style={{ padding: '7px 8px', borderRadius: 8, border: 'none', background: 'white', color: '#9CA3AF', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+            >
+              <X size={15} />
+            </button>
+          </div>
         </div>
       )}
 
