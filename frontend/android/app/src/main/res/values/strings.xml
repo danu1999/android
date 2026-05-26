@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">POSBah</string>
+    <string name="title_activity_main">POSBah</string>
+    <string name="package_name">com.posbah.app</string>
+    <string name="custom_url_scheme">com.posbah.app</string>
+</resources>

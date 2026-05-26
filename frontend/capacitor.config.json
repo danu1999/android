@@ -1,0 +1,6 @@
+{
+  "appId": "com.posbah.app",
+  "appName": "POSBah",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}

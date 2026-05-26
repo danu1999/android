@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import {
   Calculator, Package, LayoutDashboard, LogOut, Clock,
-  DollarSign, Users, UserCog, Crown, ShieldCheck, Lock, X, Sparkles, History, Car
+  DollarSign, Users, UserCog, Crown, ShieldCheck, Lock, X, Sparkles, History, Car, WifiOff
 } from 'lucide-react';
 import Kasir from './pages/Kasir';
 import Katalog from './pages/Katalog';
@@ -408,17 +408,91 @@ function OfflineBanner() {
   );
 }
 
+function OfflineOverlay({ onRetry, onContinueOffline }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 99999,
+      background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #1e152a 100%)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem',
+      fontFamily: "'Inter', sans-serif"
+    }}>
+      <div style={{
+        background: 'rgba(255, 255, 255, 0.03)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: '28px',
+        padding: '2.5rem 2rem',
+        maxWidth: '400px',
+        width: '100%',
+        textAlign: 'center',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+        animation: 'slideUp 0.3s ease'
+      }}>
+        <div style={{
+          width: '72px', height: '72px', borderRadius: '50%',
+          background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(239, 68, 68, 0.05))',
+          border: '1.5px solid rgba(239, 68, 68, 0.25)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          margin: '0 auto 1.25rem',
+          boxShadow: '0 8px 32px rgba(239, 68, 68, 0.1)'
+        }}>
+          <WifiOff size={32} color="#f87171" />
+        </div>
+
+        <h2 style={{ margin: '0 0 10px', fontSize: '1.35rem', fontWeight: 900, color: '#f8fafc', letterSpacing: '-0.025em' }}>
+          Koneksi Terputus
+        </h2>
+        
+        <p style={{ margin: '0 0 1.75rem', color: '#94a3b8', fontSize: '0.85rem', lineHeight: 1.6 }}>
+          Koneksi internet Anda terputus. Anda tetap dapat menggunakan fitur Kasir dalam Mode Offline secara terbatas.
+        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <button
+            onClick={onRetry}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+              width: '100%', padding: '14px', borderRadius: '14px', border: 'none',
+              background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+              color: 'white', fontWeight: 800, fontSize: '0.9rem', cursor: 'pointer',
+              boxShadow: '0 4px 18px rgba(99, 102, 241, 0.3)'
+            }}
+          >
+            Coba Hubungkan Kembali
+          </button>
+          
+          <button
+            onClick={onContinueOffline}
+            style={{
+              width: '100%', padding: '12px', borderRadius: '14px',
+              border: '1.5px solid rgba(255, 255, 255, 0.08)',
+              background: 'rgba(255, 255, 255, 0.02)',
+              color: '#94a3b8', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer'
+            }}
+          >
+            Lanjutkan Mode Offline
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Root App ──────────────────────────────────────────────────
 function App() {
   const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
+  const [dismissOffline, setDismissOffline] = useState(false);
 
   useEffect(() => {
     const handleOnline = () => {
       setIsOffline(false);
+      setDismissOffline(false);
       syncOfflineWrites();
     };
     const handleOffline = () => {
       setIsOffline(true);
+      setDismissOffline(false);
     };
 
     window.addEventListener('online', handleOnline);
@@ -616,6 +690,20 @@ function App() {
         <BrowserRouter>
           {/* Offline/Demo Banner */}
           {isOffline ? <OfflineBanner /> : (user?.isDemo && <DemoBanner />)}
+
+          {isOffline && !dismissOffline && (
+            <OfflineOverlay
+              onRetry={() => {
+                if (navigator.onLine) {
+                  setIsOffline(false);
+                  setDismissOffline(false);
+                } else {
+                  alert('Koneksi internet masih belum tersedia.');
+                }
+              }}
+              onContinueOffline={() => setDismissOffline(true)}
+            />
+          )}
 
           <div style={{ paddingTop: (isOffline || user?.isDemo) ? '36px' : 0, height: '100dvh', boxSizing: 'border-box' }}>
             <AppContent user={user} onLogout={handleLogout} appMode={appMode} setAppMode={setAppMode} />
