@@ -1,6 +1,7 @@
 import axios, { getAdapter } from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const isLocalDev = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '';
+const API_URL = import.meta.env.VITE_API_URL || (isLocalDev ? 'http://localhost:3001/api' : 'https://bah.up.railway.app/api');
 
 const api = axios.create({
   baseURL: API_URL,
