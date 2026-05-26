@@ -52,7 +52,15 @@ const logActivity = async (employeeId: any, action: string, description: string)
   }
 };
 
-app.use(cors());
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow all origins dynamically
+    callback(null, true);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-employee-id', 'x-employee-role', 'x-app-mode', 'x-offline-sync']
+}));
 app.use(express.json());
 
 // Middleware to store x-app-mode header in execution context
