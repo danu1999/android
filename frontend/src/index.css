@@ -46,13 +46,14 @@ input, textarea {
 .app-layout {
   display: flex;
   height: 100vh;
-  /* Fallback for older browsers */
   height: 100dvh;
-  /* Dynamic viewport height fixes mobile browser address bar issues */
   overflow: hidden;
+  /* Hard lock: no horizontal scroll on any device */
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
   background-color: var(--bg-color);
   flex-direction: column;
-  /* Default for mobile */
 }
 
 @media (min-width: 768px) {
@@ -176,12 +177,16 @@ nav a.active {
   order: 2;
 }
 
-/* Kasir: full-screen layout, no padding, no scroll on main-content */
-.kasir-page ~ * { display: none; } /* unused but safe */ 
+/* Kasir: full-screen layout — main-content TIDAK boleh scroll;
+   hanya product grid & bottom sheet yg scroll secara mandiri */
+.kasir-page ~ * { display: none; } /* unused but safe */
 .main-content:has(.kasir-page) {
   padding: 0 !important;
-  overflow-y: auto !important;
+  overflow: hidden !important;
+  height: 100%;
   padding-bottom: 0 !important;
+  display: flex;
+  flex-direction: column;
 }
 
 @media (min-width: 768px) {
@@ -193,6 +198,7 @@ nav a.active {
   /* Kasir di desktop: tetap zero-padding, full height */
   .main-content:has(.kasir-page) {
     padding: 0 !important;
+    overflow: hidden !important;
   }
 }
 
@@ -200,11 +206,14 @@ nav a.active {
   padding: 0.75rem;
   min-height: 100%;
   width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 @media (min-width: 768px) {
   .page-container {
-    padding: 2rem;
+    padding: 1.5rem;
   }
 }
 
@@ -225,10 +234,12 @@ h1 {
 
 .table-container {
   width: 100%;
+  max-width: 100%;
   overflow-x: auto;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   max-height: clamp(250px, 60dvh, 700px);
+  box-sizing: border-box;
 }
 
 .search-bar {
@@ -444,10 +455,13 @@ h1 {
 
 .product-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 1rem;
+  /* Safe column min: works on 320px screens without overflow */
+  grid-template-columns: repeat(auto-fill, minmax(clamp(120px, 38vw, 180px), 1fr));
+  gap: 0.75rem;
   overflow-y: auto;
+  overflow-x: hidden;
   padding-bottom: 2rem;
+  -webkit-overflow-scrolling: touch;
 }
 
 .product-card {
@@ -1079,12 +1093,12 @@ h1 {
   --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); 
 
   width: 100%;
-  height: max-content; /* INI KUNCINYA: Tinggi box hanya akan mengikuti isi konten */
+  height: max-content;
   border-radius: 12px; 
   background: var(--card-bg);
   box-shadow: var(--card-shadow);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  overflow: hidden; 
+  /* NOTE: overflow:hidden removed — it was clipping stock badges on Safari iOS */
   display: flex;
   flex-direction: column;
   cursor: pointer;
@@ -1163,11 +1177,14 @@ h1 {
 /* Dashboard Responsive Redesign */
 .db-container {
   min-height: 100%;
+  width: 100%;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   gap: 14px;
   padding: 1rem;
   box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .db-middle {
