@@ -20,7 +20,7 @@ export default function Keuangan({ appMode: propAppMode }) {
   const isGajiRecord = (item) => item?.description?.startsWith('[Gaji]');
   const canEdit = (item) => !isOwner || isGajiRecord(item);
 
-  const [isPremium, setIsPremium] = useState(localStorage.getItem('posbah_premium') === 'true' || isDemo);
+  const [isPremium, setIsPremium] = useState(true);
 
   useEffect(() => {
     if (isDemo) {

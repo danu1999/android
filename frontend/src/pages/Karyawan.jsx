@@ -40,10 +40,7 @@ export default function Karyawan() {
 
   // ── Mode Ultra ──────────────────────────────────────────────
   const ultraKey = `posbah_ultra_${user?.id}`;
-  const [isUltra, setIsUltra] = useState(() => {
-    if (user?.isDemo) return true;
-    return localStorage.getItem(`posbah_ultra_${user?.id}`) === 'true';
-  });
+  const [isUltra, setIsUltra] = useState(true);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [masterPin, setMasterPin] = useState('');
   const [masterOk, setMasterOk] = useState(false);
@@ -165,7 +162,7 @@ export default function Karyawan() {
       </div>
 
       {/* ── Tabs ── */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginBottom: 16, scrollbarWidth: 'none' }}>
         {[{ id: 'karyawan', label: '👥 Daftar Karyawan' }, ...(isOwner ? [{ id: 'penggajian', label: isUltra ? '💰 Penggajian ⚡Ultra' : '💰 Penggajian 🔒' }] : [])].map(t => (
           <button key={t.id} onClick={() => handleTabClick(t.id)} style={{ padding: '9px 18px', borderRadius: 12, border: 'none', fontWeight: 700, fontSize: 13, cursor: 'pointer', background: tab === t.id ? 'linear-gradient(135deg,#4F46E5,#7C3AED)' : 'white', color: tab === t.id ? 'white' : '#6B7280', boxShadow: tab === t.id ? '0 4px 12px rgba(79,70,229,0.3)' : '0 1px 4px rgba(0,0,0,0.08)', transition: 'all 0.2s' }}>{t.label}</button>
         ))}

@@ -144,7 +144,7 @@ export default function Supplier() {
       )}
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginBottom: 20, scrollbarWidth: 'none' }}>
         {[{ id: 'supplier', label: '🏭 Supplier' }, { id: 'po', label: '📦 Purchase Order' }].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{ padding: '9px 18px', borderRadius: 99, border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, background: tab === t.id ? 'linear-gradient(135deg,#6366F1,#4F46E5)' : '#F1F5F9', color: tab === t.id ? 'white' : '#64748B', boxShadow: tab === t.id ? '0 4px 12px rgba(99,102,241,0.3)' : 'none' }}>
             {t.label}
