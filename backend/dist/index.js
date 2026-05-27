@@ -233,6 +233,85 @@ app.post('/api/auth/google-register', (req, res) => __awaiter(void 0, void 0, vo
     }
 }));
 // ─────────────────────────────────────────────────────────────
+// Auth - Premium Email Registration
+// ─────────────────────────────────────────────────────────────
+app.post('/api/auth/register-email', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { email, password, name, role } = req.body;
+        if (!email || !password)
+            return res.status(400).json({ error: 'Email dan password wajib diisi' });
+        const filePath = path_1.default.join(process.cwd(), 'premium_users.json');
+        let users = {};
+        if (fs_1.default.existsSync(filePath)) {
+            try {
+                const fileContent = fs_1.default.readFileSync(filePath, 'utf-8');
+                users = JSON.parse(fileContent);
+            }
+            catch (err) {
+                console.error('Error reading premium_users.json:', err);
+            }
+        }
+        const crypto = require('crypto');
+        const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
+        users[email.toLowerCase().trim()] = {
+            password: hashedPassword,
+            name: name || email.split('@')[0],
+            role: role || 'OWNER',
+            registeredAt: new Date().toISOString()
+        };
+        fs_1.default.writeFileSync(filePath, JSON.stringify(users, null, 2), 'utf-8');
+        res.json({ success: true, email, name: users[email.toLowerCase().trim()].name });
+    }
+    catch (error) {
+        console.error('Failed in register-email:', error);
+        res.status(500).json({ error: 'Gagal mendaftarkan akun email premium' });
+    }
+}));
+// ─────────────────────────────────────────────────────────────
+// Auth - Premium Email Login
+// ─────────────────────────────────────────────────────────────
+app.post('/api/auth/login-email', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { email, password } = req.body;
+        if (!email || !password)
+            return res.status(400).json({ error: 'Email dan password wajib diisi' });
+        const filePath = path_1.default.join(process.cwd(), 'premium_users.json');
+        if (!fs_1.default.existsSync(filePath)) {
+            return res.status(401).json({ error: 'Email atau password salah' });
+        }
+        let users = {};
+        try {
+            const fileContent = fs_1.default.readFileSync(filePath, 'utf-8');
+            users = JSON.parse(fileContent);
+        }
+        catch (err) {
+            console.error('Error reading premium_users.json:', err);
+            return res.status(500).json({ error: 'Gagal membaca data premium' });
+        }
+        const userEmail = email.toLowerCase().trim();
+        const user = users[userEmail];
+        if (!user)
+            return res.status(401).json({ error: 'Email atau password salah' });
+        const crypto = require('crypto');
+        const inputHash = crypto.createHash('sha256').update(password).digest('hex');
+        const isMatch = user.password === inputHash || user.password === password;
+        if (!isMatch)
+            return res.status(401).json({ error: 'Email atau password salah' });
+        res.json({
+            id: userEmail,
+            name: user.name,
+            email: userEmail,
+            role: user.role || 'OWNER',
+            isDemo: false,
+            registeredAt: user.registeredAt
+        });
+    }
+    catch (error) {
+        console.error('Failed in login-email:', error);
+        res.status(500).json({ error: 'Gagal melakukan login email' });
+    }
+}));
+// ─────────────────────────────────────────────────────────────
 // Queue endpoints — Bisa diakses KASIR (semua role)
 // ─────────────────────────────────────────────────────────────
 // Antrian aktif (PENDING + ada queueNumber) — untuk cek slot yang terpakai
