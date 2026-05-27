@@ -116,7 +116,7 @@ export default function Login({ onLogin }) {
   };
 
   useEffect(() => {
-    if (loginMethod === 'GOOGLE') {
+    if (loginMethod === null) {
       /* global google */
       const initGoogleGSI = () => {
         if (window.google) {
@@ -250,42 +250,19 @@ export default function Login({ onLogin }) {
                   <div style={{ fontSize: '0.75rem', color: '#a7f3d0', fontWeight: 600 }}>⭐ Akun Premium / Aktif</div>
                 </div>
               </button>
-
-              <button
-                onClick={() => { setLoginMethod('GOOGLE'); setError(''); }}
-                style={{
-                  width: '100%',
-                  padding: '16px',
-                  borderRadius: '16px',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  background: 'rgba(255,255,255,0.06)',
-                  color: 'white',
-                  fontSize: '0.95rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  transition: 'all 0.2s',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.12)';
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
-                  e.currentTarget.style.transform = 'translateY(0)';
-                }}
-              >
-                <span style={{ fontSize: '1.3rem' }}>⚡</span>
-                <div style={{ textAlign: 'left' }}>
-                  <div style={{ fontWeight: 800 }}>Masuk dengan Google (Demo)</div>
-                  <div style={{ fontSize: '0.75rem', color: '#c7d2fe', fontWeight: 600 }}>Coba Gratis Mode Simulasi</div>
-                </div>
-              </button>
             </div>
-            <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem', marginTop: '2rem', marginBottom: 0 }}>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '24px 0 16px' }}>
+              <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.15)' }} />
+              <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem', fontWeight: 600 }}>ATAU COBA DEMO</span>
+              <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.15)' }} />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px' }}>
+              <div id="google-signin-btn" />
+            </div>
+
+            <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem', marginTop: '1.5rem', marginBottom: 0 }}>
               Hubungi admin jika Anda mengalami kendala masuk
             </p>
           </div>
@@ -432,7 +409,7 @@ export default function Login({ onLogin }) {
               ← Kembali ke Pilihan
             </button>
           </div>
-        ) : loginMethod === 'EMAIL' ? (
+        ) : (
           <div>
             {/* Email Input */}
             <div style={{ marginBottom: '1.25rem' }}>
@@ -521,59 +498,6 @@ export default function Login({ onLogin }) {
             >
               {loading ? 'Memproses...' : 'Masuk Akun Premium'}
             </button>
-
-            <button
-              onClick={() => { setLoginMethod(null); setError(''); }}
-              style={{
-                width: '100%',
-                padding: '12px',
-                borderRadius: '14px',
-                border: '1.5px solid rgba(255, 255, 255, 0.15)',
-                background: 'transparent',
-                color: 'rgba(255,255,255,0.7)',
-                fontSize: '0.875rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                marginTop: '12px',
-                transition: 'all 0.2s',
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
-                e.currentTarget.style.color = 'white';
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.background = 'transparent';
-                e.currentTarget.style.color = 'rgba(255,255,255,0.7)';
-              }}
-            >
-              ← Kembali ke Pilihan
-            </button>
-          </div>
-        ) : (
-          <div>
-            {/* Google Sign-In for Demo */}
-            <div style={{ textAlign: 'center', marginTop: '14px', marginBottom: '20px' }}>
-              <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: '0.85rem', lineHeight: 1.5, marginBottom: '20px' }}>
-                Gunakan akun Google Anda untuk mencoba demo gratis selama 3 hari. Semua fitur simulasi langsung aktif!
-              </div>
-              <div id="google-signin-btn" style={{ display: 'flex', justifyContent: 'center' }} />
-            </div>
-
-            {/* Error */}
-            {error && (
-              <div style={{
-                background: 'rgba(239,68,68,0.15)',
-                border: '1px solid rgba(239,68,68,0.3)',
-                borderRadius: '10px',
-                padding: '10px 14px',
-                color: '#fca5a5',
-                fontSize: '0.85rem',
-                marginBottom: '1rem',
-                textAlign: 'center',
-              }}>
-                {error}
-              </div>
-            )}
 
             <button
               onClick={() => { setLoginMethod(null); setError(''); }}
