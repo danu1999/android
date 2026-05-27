@@ -185,7 +185,10 @@ const Navigation = ({ user, onLogout, appMode, setAppMode }) => {
     <>
       {/* Mobile Top Header */}
       <div className="mobile-header glass-panel md-hidden" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div className="brand" style={{ fontSize: '1.1rem' }}>POSBah</div>
+        <div className="brand" style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <img src="/logo.jpg" alt="Logo" style={{ width: '24px', height: '24px', borderRadius: '6px', objectFit: 'cover' }} />
+          POSBah
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {user?.name?.toLowerCase() !== 'muizz' && (
             <>
@@ -201,7 +204,10 @@ const Navigation = ({ user, onLogout, appMode, setAppMode }) => {
 
       {/* Sidebar (Desktop) */}
       <aside className="sidebar glass-panel">
-        <div className="brand hidden md-block">POSBah</div>
+        <div className="brand hidden md-block" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <img src="/logo.jpg" alt="Logo" style={{ width: '32px', height: '32px', borderRadius: '8px', objectFit: 'cover' }} />
+          POSBah
+        </div>
         <nav>
           {navItems.map(item => (
             <Link key={item.path} to={item.path} className={location.pathname === item.path ? 'active' : ''}>

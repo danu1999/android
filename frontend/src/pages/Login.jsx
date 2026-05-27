@@ -147,17 +147,14 @@ export default function Login({ onLogin }) {
       }}>
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div style={{
+          <img src="/logo.jpg" alt="Logo" style={{
             width: '64px', height: '64px',
-            background: 'linear-gradient(135deg, #818cf8, #6366f1)',
+            objectFit: 'cover',
             borderRadius: '16px',
             display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '28px',
             marginBottom: '1rem',
             boxShadow: '0 8px 24px rgba(99,102,241,0.4)'
-          }}>🏪</div>
+          }} />
           <h1 style={{ color: 'white', fontWeight: 800, fontSize: '1.75rem', margin: 0 }}>POSBah</h1>
           <p style={{ color: 'rgba(255,255,255,0.55)', margin: '4px 0 0', fontSize: '0.875rem' }}>Masuk ke akun Anda</p>
         </div>
