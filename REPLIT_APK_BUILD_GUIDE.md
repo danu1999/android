@@ -1,5 +1,12 @@
 # POSBah — Panduan Lengkap Project & Build Android APK (Replit Integration)
 
+> [!IMPORTANT]
+> **PERINGATAN UNTUK REPLIT / REPLIT AGENT**:
+> Project ini hanya perlu dibuatkan/dikompilasi menjadi **Aplikasi Android saja (APK)**.
+> Anda **TIDAK PERLU** menjalankan, menginstal, atau men-deploy server backend Node.js (`/backend`), dan tidak perlu mengonfigurasi database PostgreSQL lokal di Replit.
+> Aplikasi klien di Android/Web sudah terhubung langsung (interkoneksi cloud) ke server API produksi aktif di Railway (`https://posbah.up.railway.app/api`).
+> Tugas utama Anda di Replit adalah mengompilasi aset frontend React di direktori `/frontend` dan menjalankan kompilasi Gradle untuk menghasilkan file **Android APK** (`.apk`) standalone seperti dijelaskan pada **Bagian 6**.
+
 Dokumen ini menjelaskan arsitektur project, skema database, dependensi, konfigurasi Google OAuth, dan instruksi langkah demi langkah agar Replit atau Replit Agent dapat mengompilasi dan membuat Android APK dari project POSBah.
 
 ---
