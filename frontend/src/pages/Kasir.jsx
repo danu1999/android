@@ -611,7 +611,7 @@ export default function Kasir() {
     // bottomBar: sticky means it stays at the bottom of the flex column (doesn't need position:fixed)
     bottomBar: { flexShrink: 0, width: '100%', zIndex: 55 },
     backdrop: { position: 'fixed', inset: 0, background: 'rgba(15,10,60,0.45)', backdropFilter: 'blur(4px)', zIndex: -1 },
-    sheet: (open) => ({ background: 'white', borderRadius: open ? '22px 22px 0 0' : '18px 18px 0 0', boxShadow: '0 -8px 40px rgba(79,70,229,0.15)', transition: 'max-height 0.4s cubic-bezier(0.4,0,0.2,1)', maxHeight: open ? '70dvh' : '58px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }),
+    sheet: (open) => ({ background: 'white', borderRadius: open ? '22px 22px 0 0' : '18px 18px 0 0', boxShadow: '0 -8px 40px rgba(79,70,229,0.15)', transition: 'max-height 0.4s cubic-bezier(0.4,0,0.2,1)', maxHeight: open ? 'calc(100dvh - 80px)' : '58px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }),
     sheetHandle: { padding: '0 16px', borderBottom: cartOpen ? '1px solid #F0F4FF' : 'none', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: '58px', background: 'white' },
     sheetBody: { overflowY: 'auto', overflowX: 'hidden', flex: 1, padding: '0 16px 8px' },
     sheetFooter: { padding: '10px 16px 16px', borderTop: '1px solid #F3F4F6', background: 'white', flexShrink: 0 },
@@ -1053,11 +1053,13 @@ export default function Kasir() {
                 )}
               </div>
             </div>
+          </div>
 
-            {/* Sticky Sheet Footer */}
+          {/* Sticky Sheet Footer */}
+          {cartOpen && (
             <div style={S.sheetFooter}>
               {/* Ringkasan Harga */}
-              <div style={{ background: '#F8F9FF', borderRadius: 12, padding: '10px 14px', marginBottom: 14 }}>
+              <div style={{ background: '#F8F9FF', borderRadius: 12, padding: '10px 14px', marginBottom: 12 }}>
                 {discountAmt > 0 && (
                   <>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#6B7280', marginBottom: 4 }}>
@@ -1074,16 +1076,16 @@ export default function Kasir() {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', paddingBottom: '16px' }}>
-                <button style={{ ...S.btnSecondary, opacity: cart.length ? 1 : 0.5 }} disabled={!cart.length} onClick={() => checkout(true)}>
-                  🕐 Simpan sebagai Antrian
+              <div style={{ display: 'flex', gap: '8px', paddingBottom: '16px' }}>
+                <button style={{ ...S.btnSecondary, flex: 1, opacity: cart.length ? 1 : 0.5, padding: '12px 8px', fontSize: '0.85rem' }} disabled={!cart.length} onClick={() => checkout(true)}>
+                  🕐 Simpan Antrian
                 </button>
-                <button style={{ ...S.btnPrimary, opacity: cart.length ? 1 : 0.5 }} disabled={!cart.length} onClick={() => setPayModal(true)}>
+                <button style={{ ...S.btnPrimary, flex: 1, opacity: cart.length ? 1 : 0.5, padding: '12px 8px', fontSize: '0.85rem', boxShadow: 'none' }} disabled={!cart.length} onClick={() => setPayModal(true)}>
                   Bayar Sekarang →
                 </button>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
