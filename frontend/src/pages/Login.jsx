@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
+import { SocialLogin } from '@capgo/capacitor-social-login';
 
 export default function Login({ onLogin }) {
   const [loginMethod, setLoginMethod] = useState(null); // 'PIN' | 'EMAIL' | 'GOOGLE'
@@ -49,23 +50,49 @@ export default function Login({ onLogin }) {
     }
   };
 
-  const handleNativeDemoLogin = async () => {
+  const handleNativeGoogleLogin = async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await api.post('/auth/login', { name: 'userdemo', pin: '000000' });
-      onLogin(res.data);
-    } catch (err) {
-      onLogin({
-        id: 9999,
-        name: 'userdemo',
-        role: 'OWNER',
-        isDemo: true
+      // Inisialisasi plugin dengan webClientId
+      await SocialLogin.initialize({
+        google: {
+          webClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '276837280353-d83c8eo0nfo5v1ij1dr4okjjt443mbn0.apps.googleusercontent.com',
+        }
       });
+
+      const result = await SocialLogin.login({
+        provider: 'google',
+        options: {
+          scopes: ['profile', 'email'],
+        }
+      });
+
+      if (result?.result?.profile) {
+        const profile = result.result.profile;
+        // Buat payload mirip dengan Google GSI agar bisa reuse handleGoogleLoginResponse
+        const fakeCredential = {
+          credential: null,
+          _profile: profile,
+          _idToken: result.result.idToken,
+        };
+        await handleGoogleLoginResponse(null, profile);
+      } else {
+        setError('Login Google gagal, coba lagi');
+      }
+    } catch (err) {
+      console.warn('Native Google login error:', err);
+      // Fallback: jika user cancel atau error, tampilkan pesan
+      if (err?.message?.includes('cancel') || err?.code === 'CANCELED') {
+        setError('Login Google dibatalkan');
+      } else {
+        setError('Login Google gagal: ' + (err?.message || 'Coba lagi'));
+      }
     } finally {
       setLoading(false);
     }
   };
+
 
   const parseJwt = (token) => {
     try {
@@ -80,20 +107,40 @@ export default function Login({ onLogin }) {
     }
   };
 
-  const handleGoogleLoginResponse = async (response) => {
-    const payload = parseJwt(response.credential);
-    if (payload && payload.email) {
+  const handleGoogleLoginResponse = async (response, nativeProfile = null) => {
+    // Ambil payload dari GSI credential (web) atau dari native profile (APK)
+    let email, name, picture, sub;
+    if (nativeProfile) {
+      // Native Android Sign-In via @capgo/capacitor-social-login
+      email = nativeProfile.email;
+      name = nativeProfile.name || nativeProfile.givenName;
+      picture = nativeProfile.imageUrl || nativeProfile.picture;
+      sub = nativeProfile.id || nativeProfile.sub;
+    } else {
+      // Web GSI - decode JWT
+      const payload = parseJwt(response.credential);
+      if (!payload || !payload.email) {
+        setError('Gagal membaca profil Google');
+        return;
+      }
+      email = payload.email;
+      name = payload.name;
+      picture = payload.picture;
+      sub = payload.sub;
+    }
+
+    if (email) {
       try {
-        const regRes = await api.post('/auth/google-register', { email: payload.email });
+        const regRes = await api.post('/auth/google-register', { email: email });
         const { registeredAt } = regRes.data;
         const regTime = new Date(registeredAt).getTime();
         const expiresAt = regTime + 3 * 24 * 60 * 60 * 1000; // 3 days since registration
 
         onLogin({
-          id: payload.sub,
-          name: payload.name || payload.email.split('@')[0],
-          email: payload.email,
-          picture: payload.picture,
+          id: sub,
+          name: name || email.split('@')[0],
+          email: email,
+          picture: picture,
           role: 'OWNER',
           isDemo: true,
           registeredAt,
@@ -107,10 +154,10 @@ export default function Login({ onLogin }) {
           localUsers = JSON.parse(localStorage.getItem('posbah_google_users') || '{}');
         } catch (_) {}
         
-        let registeredAt = localUsers[payload.email];
+        let registeredAt = localUsers[email];
         if (!registeredAt) {
           registeredAt = new Date().toISOString();
-          localUsers[payload.email] = registeredAt;
+          localUsers[email] = registeredAt;
           localStorage.setItem('posbah_google_users', JSON.stringify(localUsers));
         }
 
@@ -118,10 +165,10 @@ export default function Login({ onLogin }) {
         const expiresAt = regTime + 3 * 24 * 60 * 60 * 1000; // 3 days since registration
 
         onLogin({
-          id: payload.sub,
-          name: payload.name || payload.email.split('@')[0],
-          email: payload.email,
-          picture: payload.picture,
+          id: sub,
+          name: name || email.split('@')[0],
+          email: email,
+          picture: picture,
           role: 'OWNER',
           isDemo: true,
           registeredAt,
@@ -279,7 +326,7 @@ export default function Login({ onLogin }) {
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px', width: '100%' }}>
               {window.Capacitor || !window.google ? (
                 <button
-                  onClick={handleNativeDemoLogin}
+                  onClick={handleNativeGoogleLogin}
                   disabled={loading}
                   style={{
                     width: '316px',
