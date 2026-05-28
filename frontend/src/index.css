@@ -1247,3 +1247,221 @@ h1 {
     grid-template-columns: 1fr 50px 80px auto;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   PREMIUM DARK MODE AUTO-DETECTION & SUPPORT
+   ───────────────────────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-color: #0b0f19;
+    --text-main: #f1f5f9;
+    --glass-bg: rgba(19, 27, 46, 0.85);
+    --glass-border: rgba(255, 255, 255, 0.08);
+  }
+  
+  body {
+    background-color: #0b0f19;
+    color: #f1f5f9;
+  }
+
+  /* General backgrounds */
+  .bg-white, 
+  [style*="background: white"], 
+  [style*="background: #ffffff"],
+  [style*="background-color: #ffffff"],
+  [style*="background-color: white"] {
+    background-color: #131b2e !important;
+    background: #131b2e !important;
+  }
+  
+  .bg-gray-50, 
+  [style*="background: #F8FAFC"],
+  [style*="background: #f9fafb"],
+  [style*="background-color: #f9fafb"] {
+    background-color: #0b0f19 !important;
+    background: #0b0f19 !important;
+  }
+
+  .bg-gray-100, 
+  [style*="background: #F3F4F6"],
+  [style*="background: #f3f4f6"],
+  [style*="background-color: #f3f4f6"] {
+    background-color: #1e293b !important;
+    background: #1e293b !important;
+  }
+  
+  /* Text colors */
+  .text-gray-900, 
+  .text-gray-800, 
+  [style*="color: #1F2937"], 
+  [style*="color: #111827"] {
+    color: #f1f5f9 !important;
+  }
+  
+  .text-gray-700, 
+  .text-gray-600, 
+  [style*="color: #374151"], 
+  [style*="color: #4B5563"] {
+    color: #cbd5e1 !important;
+  }
+  
+  .text-gray-500, 
+  .text-gray-400, 
+  [style*="color: #6B7280"], 
+  [style*="color: #9CA3AF"] {
+    color: #94a3b8 !important;
+  }
+  
+  /* Borders */
+  .border-gray-100, 
+  .border-gray-200, 
+  [style*="border-color: #E5E7EB"], 
+  [style*="border: 1.5px solid #E5E7EB"] {
+    border-color: rgba(255, 255, 255, 0.08) !important;
+  }
+  
+  /* Table specific styling */
+  .data-table th {
+    background: #131b2e !important;
+    color: #cbd5e1 !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  }
+  .data-table td {
+    color: #e2e8f0 !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  }
+  .data-table tr.hover-row:hover {
+    background: rgba(99, 102, 241, 0.08) !important;
+  }
+  
+  /* Forms, Inputs, Selects */
+  input, 
+  select, 
+  textarea, 
+  .form-group input, 
+  .form-group select {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    color: #ffffff !important;
+  }
+  input::placeholder, 
+  textarea::placeholder {
+    color: #64748b !important;
+  }
+  
+  /* Modals overrides */
+  .modal-content {
+    background-color: #131b2e !important;
+    background: #131b2e !important;
+    color: #f1f5f9 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4) !important;
+  }
+  
+  /* Secondary Buttons */
+  .btn-secondary {
+    background: #1e293b !important;
+    color: #f1f5f9 !important;
+  }
+  .btn-secondary:hover {
+    background: #334155 !important;
+  }
+  
+  /* Kasir bottom sheet drawer override */
+  .cart-bottom-sheet {
+    background: #131b2e !important;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5) !important;
+  }
+  .cart-bottom-sheet.is-open {
+    background: #131b2e !important;
+  }
+  .cart-sheet-footer {
+    background: #131b2e !important;
+    border-top: 1.5px solid rgba(255, 255, 255, 0.08) !important;
+  }
+  .cart-summary-box {
+    background: linear-gradient(135deg, #1e293b, #131b2e) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.08) !important;
+  }
+  .cart-summary-total-label {
+    color: #ffffff !important;
+  }
+  .cart-summary-total-value {
+    color: #818cf8 !important;
+  }
+  .cart-item-card {
+    background: #1e293b !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+  }
+  .cart-item-card:hover {
+    background: #243249 !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+  }
+  
+  /* Sidebar panel */
+  .sidebar {
+    background: #131b2e !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+  }
+  
+  /* App header */
+  .mobile-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  }
+  
+  /* Product card overrides */
+  .product-card {
+    border-color: rgba(255, 255, 255, 0.05) !important;
+  }
+  .product-card:hover {
+    border-color: var(--primary) !important;
+  }
+  .product-image {
+    background: #1e293b !important;
+  }
+  
+  /* Kasir specific search input override */
+  .kasir-search {
+    color: white !important;
+  }
+  .kasir-search::placeholder {
+    color: rgba(255, 255, 255, 0.6) !important;
+  }
+  
+  /* Toko Online / General lists */
+  .bg-indigo-50 {
+    background-color: #1a1b35 !important;
+  }
+  .bg-indigo-100 {
+    background-color: #20224a !important;
+  }
+  .bg-white {
+    background-color: #131b2e !important;
+  }
+  .bg-gray-50 {
+    background-color: #0b0f19 !important;
+  }
+  .bg-gray-100 {
+    background-color: #1e293b !important;
+  }
+  
+  /* Glass panels in dark theme */
+  .glass-panel {
+    background: rgba(19, 27, 46, 0.85) !important;
+    border-color: rgba(255, 255, 255, 0.05) !important;
+  }
+  
+  /* Search Box */
+  .search-bar {
+    background: #131b2e !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  }
+  .search-bar input {
+    color: #ffffff !important;
+  }
+
+  /* Force dark color scheme on system picker widgets */
+  input, select, textarea {
+    color-scheme: dark !important;
+  }
+}
