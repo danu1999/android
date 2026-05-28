@@ -1374,13 +1374,21 @@ h1 {
   select, 
   textarea, 
   .form-group input, 
-  .form-group select {
+  .form-group select,
+  .cart-input-field,
+  .cart-discount-row input,
+  .katalog-input,
+  .qty-input {
     background-color: #1e293b !important;
+    background: #1e293b !important;
     border-color: #334155 !important;
     color: #ffffff !important;
   }
   input::placeholder, 
-  textarea::placeholder {
+  textarea::placeholder,
+  .cart-input-field::placeholder,
+  .cart-discount-row input::placeholder,
+  .katalog-input::placeholder {
     color: #64748b !important;
   }
   
