@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import {
   Calculator, Package, LayoutDashboard, LogOut, Clock,
-  DollarSign, Users, UserCog, Crown, ShieldCheck, Lock, X, Sparkles, History, Car, WifiOff
+  DollarSign, Users, UserCog, Crown, ShieldCheck, Lock, X, Sparkles, History, Car, WifiOff,
+  Sun, Moon
 } from 'lucide-react';
 import Kasir from './pages/Kasir';
 import Katalog from './pages/Katalog';
@@ -113,8 +114,38 @@ const ROLE_STYLE = {
   OWNER: { bg: '#FEF3C7', color: '#D97706', icon: <Crown size={10} /> },
 };
 
+const ThemeToggle = ({ theme, toggleTheme }) => {
+  return (
+    <button
+      onClick={toggleTheme}
+      style={{
+        background: 'none',
+        border: 'none',
+        cursor: 'pointer',
+        padding: '6px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: '50%',
+        color: theme === 'dark' ? '#F59E0B' : '#4F46E5',
+        transition: 'all 0.2s ease',
+      }}
+      className="theme-toggle-btn"
+      title={theme === 'dark' ? 'Mode Terang' : 'Mode Gelap'}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.transform = 'scale(1.1) rotate(15deg)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = 'scale(1) rotate(0deg)';
+      }}
+    >
+      {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+    </button>
+  );
+};
+
 // ─── Navigation ────────────────────────────────────────────────
-const Navigation = ({ user, onLogout, appMode, setAppMode }) => {
+const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme }) => {
   const location = useLocation();
   const roleStyle = ROLE_STYLE[user?.role] || ROLE_STYLE['KASIR'];
 
@@ -189,6 +220,7 @@ const Navigation = ({ user, onLogout, appMode, setAppMode }) => {
         <div className="brand" style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <img src="/logo.jpg" alt="Logo" style={{ width: '24px', height: '24px', borderRadius: '6px', objectFit: 'cover' }} />
           POSBah
+          <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {user?.name?.toLowerCase() !== 'muizz' && (
@@ -205,9 +237,12 @@ const Navigation = ({ user, onLogout, appMode, setAppMode }) => {
 
       {/* Sidebar (Desktop) */}
       <aside className="sidebar glass-panel">
-        <div className="brand hidden md-block" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <img src="/logo.jpg" alt="Logo" style={{ width: '32px', height: '32px', borderRadius: '8px', objectFit: 'cover' }} />
-          POSBah
+        <div className="brand hidden md-block" style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'space-between', width: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <img src="/logo.jpg" alt="Logo" style={{ width: '32px', height: '32px', borderRadius: '8px', objectFit: 'cover' }} />
+            POSBah
+          </div>
+          <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
         </div>
         <nav>
           {navItems.map(item => (
@@ -257,7 +292,7 @@ const Navigation = ({ user, onLogout, appMode, setAppMode }) => {
 };
 
 // ─── App Content ───────────────────────────────────────────────
-function AppContent({ user, onLogout, appMode, setAppMode }) {
+function AppContent({ user, onLogout, appMode, setAppMode, theme, toggleTheme }) {
   const location = useLocation();
   const isPublicStore = location.pathname === '/toko-online';
 
@@ -272,7 +307,7 @@ function AppContent({ user, onLogout, appMode, setAppMode }) {
 
   return (
     <div className="app-layout select-none">
-      <Navigation user={user} onLogout={onLogout} appMode={appMode} setAppMode={setAppMode} />
+      <Navigation user={user} onLogout={onLogout} appMode={appMode} setAppMode={setAppMode} theme={theme} toggleTheme={toggleTheme} />
       <main className="main-content">
         <Routes>
           <Route path="/" element={appMode === 'RENTAL' ? <RentalMobil /> : appMode === 'LAUNDRY' ? <KasirLaundry /> : <Kasir />} />
@@ -549,6 +584,29 @@ function App() {
   const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
   const [dismissOffline, setDismissOffline] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
+  
+  const [theme, setTheme] = useState(() => {
+    try {
+      const stored = localStorage.getItem('posbah_theme');
+      if (stored) return stored;
+    } catch (e) {}
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
+
+  const toggleTheme = () => {
+    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
+  };
+
+  useEffect(() => {
+    try {
+      if (theme === 'dark') {
+        document.body.classList.add('dark-theme');
+      } else {
+        document.body.classList.remove('dark-theme');
+      }
+      localStorage.setItem('posbah_theme', theme);
+    } catch (e) {}
+  }, [theme]);
 
   useEffect(() => {
     let handler;
@@ -799,7 +857,7 @@ function App() {
           )}
 
           <div style={{ paddingTop: (isOffline || user?.isDemo) ? '36px' : 0, height: '100vh', boxSizing: 'border-box' }}>
-            <AppContent user={user} onLogout={handleLogout} appMode={appMode} setAppMode={setAppMode} />
+            <AppContent user={user} onLogout={handleLogout} appMode={appMode} setAppMode={setAppMode} theme={theme} toggleTheme={toggleTheme} />
           </div>
 
           {/* Onboarding Mode Selection Modal */}
