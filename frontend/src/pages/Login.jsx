@@ -367,6 +367,21 @@ export default function Login({ onLogin }) {
               )}
             </div>
 
+            {error && (
+              <div style={{
+                background: 'rgba(239,68,68,0.15)',
+                border: '1px solid rgba(239,68,68,0.3)',
+                borderRadius: '10px',
+                padding: '10px 14px',
+                color: '#fca5a5',
+                fontSize: '0.85rem',
+                marginTop: '12px',
+                textAlign: 'center',
+              }}>
+                {error}
+              </div>
+            )}
+
             <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem', marginTop: '1.5rem', marginBottom: 0 }}>
               Hubungi admin jika Anda mengalami kendala masuk
             </p>
