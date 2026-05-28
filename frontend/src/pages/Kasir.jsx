@@ -611,9 +611,9 @@ export default function Kasir() {
     // bottomBar: sticky means it stays at the bottom of the flex column (doesn't need position:fixed)
     bottomBar: { flexShrink: 0, width: '100%', zIndex: 55 },
     backdrop: { position: 'fixed', inset: 0, background: 'rgba(15,10,60,0.45)', backdropFilter: 'blur(4px)', zIndex: -1 },
-    sheet: (open) => ({ background: 'white', borderRadius: open ? '22px 22px 0 0' : '18px 18px 0 0', boxShadow: '0 -8px 40px rgba(79,70,229,0.15)', transition: 'max-height 0.4s cubic-bezier(0.4,0,0.2,1)', maxHeight: open ? 'calc(100vh - 80px)' : '58px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }),
+    sheet: (open) => ({ background: 'white', borderRadius: open ? '22px 22px 0 0' : '18px 18px 0 0', boxShadow: '0 -8px 40px rgba(79,70,229,0.15)', transition: 'max-height 0.4s cubic-bezier(0.4,0,0.2,1)', maxHeight: open ? 'calc(100vh - 130px)' : '58px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }),
     sheetHandle: { padding: '0 16px', borderBottom: cartOpen ? '1px solid #F0F4FF' : 'none', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: '58px', background: 'white' },
-    sheetBody: { overflowY: 'auto', overflowX: 'hidden', flex: 1, padding: '0 16px 8px' },
+    sheetBody: { overflowY: 'auto', overflowX: 'hidden', flex: 1, minHeight: 0, padding: '0 16px 8px' },
     sheetFooter: { padding: '10px 16px 16px', borderTop: '1px solid #F3F4F6', background: 'white', flexShrink: 0 },
     input: { width: '100%', padding: '11px 14px', borderRadius: '10px', border: '1.5px solid #E5E7EB', outline: 'none', fontSize: '0.9rem', boxSizing: 'border-box', background: '#FAFAFA' },
     pill: (active) => ({ padding: '12px 24px', borderRadius: '12px', border: 'none', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', background: active ? '#4F46E5' : '#EEF2FF', color: active ? 'white' : '#4F46E5', transition: 'all 0.2s' }),
@@ -873,13 +873,19 @@ export default function Kasir() {
         }
         
         .cart-bottom-sheet.is-open {
-          max-height: calc(100vh - 80px) !important;
+          max-height: calc(100vh - 130px) !important;
+        }
+
+        .cart-body-scroll {
+          min-height: 0 !important;
+          flex: 1 !important;
+          overflow-y: auto !important;
         }
 
         /* Responsive styling for small screens / keyboards open */
         @media (max-height: 600px) {
           .cart-bottom-sheet.is-open {
-            max-height: calc(100vh - 50px) !important;
+            max-height: calc(100vh - 120px) !important;
           }
           
           /* Compact cart items to save vertical space */
