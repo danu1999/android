@@ -1264,10 +1264,19 @@ h1 {
     color: #f1f5f9;
   }
 
-  /* General backgrounds */
+  /* Force headers and labels to be bright/readable */
+  h1, h2, h3, h4, h5, h6 {
+    color: #f1f5f9 !important;
+  }
+  label {
+    color: #cbd5e1 !important;
+  }
+
+  /* General backgrounds and container mappings */
   .bg-white, 
   [style*="background: white"], 
   [style*="background: #ffffff"],
+  [style*="background: rgb(255, 255, 255)"],
   [style*="background-color: #ffffff"],
   [style*="background-color: white"] {
     background-color: #131b2e !important;
@@ -1276,8 +1285,13 @@ h1 {
   
   .bg-gray-50, 
   [style*="background: #F8FAFC"],
+  [style*="background: #f8fafc"],
+  [style*="background: #F9FAFB"],
   [style*="background: #f9fafb"],
-  [style*="background-color: #f9fafb"] {
+  [style*="background: #FAFAFA"],
+  [style*="background: #fafafa"],
+  [style*="background-color: #f9fafb"],
+  [style*="background-color: #f8fafc"] {
     background-color: #0b0f19 !important;
     background: #0b0f19 !important;
   }
@@ -1290,33 +1304,54 @@ h1 {
     background: #1e293b !important;
   }
   
-  /* Text colors */
+  /* Text colors mapping (very dark to Slate 100) */
   .text-gray-900, 
-  .text-gray-800, 
+  .text-gray-800,
+  [style*="color: #0F172A"],
+  [style*="color: #0f172a"],
+  [style*="color: #1E293B"],
+  [style*="color: #1e293b"], 
   [style*="color: #1F2937"], 
+  [style*="color: #1f2937"], 
   [style*="color: #111827"] {
     color: #f1f5f9 !important;
   }
   
+  /* Text colors mapping (medium to Slate 300) */
   .text-gray-700, 
   .text-gray-600, 
+  [style*="color: #334155"],
   [style*="color: #374151"], 
-  [style*="color: #4B5563"] {
+  [style*="color: #4B5563"],
+  [style*="color: #4b5563"],
+  [style*="color: #475569"] {
     color: #cbd5e1 !important;
   }
   
+  /* Text colors mapping (light to Slate 400) */
   .text-gray-500, 
   .text-gray-400, 
   [style*="color: #6B7280"], 
-  [style*="color: #9CA3AF"] {
+  [style*="color: #6b7280"],
+  [style*="color: #64748B"],
+  [style*="color: #64748b"],
+  [style*="color: #9CA3AF"],
+  [style*="color: #9ca3af"],
+  [style*="color: #94A3B8"],
+  [style*="color: #94a3b8"] {
     color: #94a3b8 !important;
   }
   
   /* Borders */
   .border-gray-100, 
   .border-gray-200, 
+  [style*="border-color: #E2E8F0"],
+  [style*="border-color: #e2e8f0"],
   [style*="border-color: #E5E7EB"], 
-  [style*="border: 1.5px solid #E5E7EB"] {
+  [style*="border: 1.5px solid #E2E8F0"],
+  [style*="border: 1.5px solid #e2e8f0"],
+  [style*="border: 1.5px solid #E5E7EB"],
+  [style*="border: 1.5px solid #e5e7eb"] {
     border-color: rgba(255, 255, 255, 0.08) !important;
   }
   
@@ -1435,15 +1470,6 @@ h1 {
   .bg-indigo-100 {
     background-color: #20224a !important;
   }
-  .bg-white {
-    background-color: #131b2e !important;
-  }
-  .bg-gray-50 {
-    background-color: #0b0f19 !important;
-  }
-  .bg-gray-100 {
-    background-color: #1e293b !important;
-  }
   
   /* Glass panels in dark theme */
   .glass-panel {
@@ -1458,6 +1484,39 @@ h1 {
   }
   .search-bar input {
     color: #ffffff !important;
+  }
+
+  /* Katalog page specific overrides */
+  .katalog-card {
+    background: #131b2e !important;
+    border-color: rgba(255, 255, 255, 0.05) !important;
+  }
+  .katalog-card-img-container {
+    background: linear-gradient(135deg, #1e293b 0%, #131b2e 100%) !important;
+  }
+  .katalog-search-container {
+    background: #131b2e !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+  }
+  .katalog-search-container input {
+    color: #ffffff !important;
+  }
+  .katalog-modal-content {
+    background: #131b2e !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    color: #f1f5f9 !important;
+  }
+  .katalog-modal-content label {
+    color: #cbd5e1 !important;
+  }
+  .katalog-modal-content input,
+  .katalog-modal-content select {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #ffffff !important;
+  }
+  .katalog-modal-overlay {
+    background: rgba(15, 23, 42, 0.6) !important;
   }
 
   /* Force dark color scheme on system picker widgets */
