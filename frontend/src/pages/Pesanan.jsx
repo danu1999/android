@@ -242,7 +242,7 @@ export default function Pesanan() {
       {/* Create Modal */}
       {modal === 'create' && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div style={{ background: 'white', borderRadius: 20, padding: '24px 20px', width: '100%', maxWidth: 440, maxHeight: '90dvh', overflowY: 'auto' }}>
+          <div style={{ background: 'white', borderRadius: 20, padding: '24px 20px', width: '100%', maxWidth: 440, maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
               <div style={{ fontWeight: 900, fontSize: '1.1rem' }}>📋 Pesanan Baru</div>
               <button onClick={() => setModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8' }}><X size={20} /></button>

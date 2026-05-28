@@ -211,7 +211,7 @@ export default function Login({ onLogin }) {
 
   return (
     <div style={{
-      minHeight: '100dvh',
+      minHeight: '100vh',
       background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%)',
       display: 'flex',
       alignItems: 'center',

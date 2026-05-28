@@ -611,7 +611,7 @@ export default function Kasir() {
     // bottomBar: sticky means it stays at the bottom of the flex column (doesn't need position:fixed)
     bottomBar: { flexShrink: 0, width: '100%', zIndex: 55 },
     backdrop: { position: 'fixed', inset: 0, background: 'rgba(15,10,60,0.45)', backdropFilter: 'blur(4px)', zIndex: -1 },
-    sheet: (open) => ({ background: 'white', borderRadius: open ? '22px 22px 0 0' : '18px 18px 0 0', boxShadow: '0 -8px 40px rgba(79,70,229,0.15)', transition: 'max-height 0.4s cubic-bezier(0.4,0,0.2,1)', maxHeight: open ? 'calc(100dvh - 80px)' : '58px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }),
+    sheet: (open) => ({ background: 'white', borderRadius: open ? '22px 22px 0 0' : '18px 18px 0 0', boxShadow: '0 -8px 40px rgba(79,70,229,0.15)', transition: 'max-height 0.4s cubic-bezier(0.4,0,0.2,1)', maxHeight: open ? 'calc(100vh - 80px)' : '58px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }),
     sheetHandle: { padding: '0 16px', borderBottom: cartOpen ? '1px solid #F0F4FF' : 'none', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: '58px', background: 'white' },
     sheetBody: { overflowY: 'auto', overflowX: 'hidden', flex: 1, padding: '0 16px 8px' },
     sheetFooter: { padding: '10px 16px 16px', borderTop: '1px solid #F3F4F6', background: 'white', flexShrink: 0 },
@@ -866,6 +866,78 @@ export default function Kasir() {
         input[placeholder] { color: rgba(255,255,255,0.6) !important; }
         ::placeholder { color: rgba(255,255,255,0.6) !important; }
         .kasir-search::placeholder { color: rgba(255,255,255,0.7) !important; }
+        
+        /* Custom Bottom Sheet styles */
+        .cart-bottom-sheet {
+          transition: max-height 0.4s cubic-bezier(0.4,0,0.2,1) !important;
+        }
+        
+        .cart-bottom-sheet.is-open {
+          max-height: calc(100vh - 80px) !important;
+        }
+
+        /* Responsive styling for small screens / keyboards open */
+        @media (max-height: 600px) {
+          .cart-bottom-sheet.is-open {
+            max-height: calc(100vh - 50px) !important;
+          }
+          
+          /* Compact cart items to save vertical space */
+          .cart-item-row {
+            padding: 6px 0 !important;
+            gap: 4px !important;
+          }
+          
+          /* Compact inputs/selectors */
+          .cart-input-field {
+            padding: 6px 10px !important;
+            font-size: 0.8rem !important;
+          }
+          
+          /* Compact queue buttons */
+          .queue-btn-grid {
+            gap: 2px !important;
+          }
+          .queue-btn-item {
+            font-size: 0.75rem !important;
+            border-radius: 4px !important;
+          }
+          
+          /* Compact discount section */
+          .cart-discount-box {
+            padding: 6px 10px !important;
+            margin-bottom: 6px !important;
+          }
+          .cart-discount-title {
+            font-size: 11px !important;
+            margin-bottom: 4px !important;
+          }
+          .cart-discount-tabs button {
+            padding: 4px 0 !important;
+            font-size: 11px !important;
+            border-radius: 6px !important;
+          }
+          
+          /* Compact summary */
+          .cart-summary-box {
+            padding: 6px 10px !important;
+            margin-bottom: 6px !important;
+          }
+          .cart-summary-total-label {
+            font-size: 0.85rem !important;
+          }
+          .cart-summary-total-value {
+            font-size: 1rem !important;
+          }
+          
+          /* Reduce spacing around payment buttons */
+          .cart-footer-buttons {
+            padding-bottom: 0px !important;
+          }
+          .cart-sheet-footer {
+            padding: 6px 12px 10px !important;
+          }
+        }
       `}</style>
 
       {/* Low stock warning */}
@@ -908,7 +980,7 @@ export default function Kasir() {
       {/* Bottom Sheet Cart */}
       <div style={S.bottomBar}>
         {cartOpen && <div style={S.backdrop} onClick={() => setCartOpen(false)} />}
-        <div style={S.sheet(cartOpen)}>
+        <div style={S.sheet(cartOpen)} className={`cart-bottom-sheet ${cartOpen ? 'is-open' : ''}`}>
           {/* Handle */}
           <div style={S.sheetHandle} onClick={() => setCartOpen(o => !o)}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -929,14 +1001,14 @@ export default function Kasir() {
           </div>
 
           {/* Cart Body */}
-          <div style={S.sheetBody}>
+          <div style={S.sheetBody} className="cart-body-scroll">
             {cart.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '24px 0', color: '#9CA3AF', fontSize: '0.9rem' }}>Belum ada item 🛒</div>
             ) : (
               cart.map(item => {
                 const ep = getItemPrice(item);
                 return (
-                  <div key={item.cartKey} style={{ borderBottom: '1px solid #F3F4F6', padding: '12px 0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div key={item.cartKey} className="cart-item-row" style={{ borderBottom: '1px solid #F3F4F6', padding: '12px 0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#1F2937' }}>
@@ -985,7 +1057,7 @@ export default function Kasir() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '12px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4b5563' }}>Pelanggan</label>
-                  <select style={S.input} value={customerId} onChange={e => setCustomerId(e.target.value)}>
+                  <select style={S.input} className="cart-input-field" value={customerId} onChange={e => setCustomerId(e.target.value)}>
                     <option value="">-- Pelanggan Umum / Walk-in --</option>
                     {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
@@ -996,7 +1068,7 @@ export default function Kasir() {
                     <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4b5563' }}>No. Antrian</label>
                     <button onClick={resetAllQueues} style={{ background: '#FEE2E2', color: '#EF4444', border: 'none', borderRadius: '6px', padding: '4px 8px', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer' }}>Reset Antrian</button>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '4px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '4px' }} className="queue-btn-grid">
                     {Array.from({ length: 20 }, (_, i) => i + 1).map(num => {
                       const isUsed = activeQueues.includes(num);
                       const isSelected = queueNumber === num;
@@ -1009,6 +1081,7 @@ export default function Kasir() {
                             else if (!isUsed) setQueueNumber(num);
                           }}
                           disabled={isUsed}
+                          className="queue-btn-item"
                           style={{
                             aspectRatio: '1/1', borderRadius: '6px', border: 'none',
                             background: isSelected ? '#4F46E5' : isUsed ? '#FEE2E2' : '#F3F4F6',
@@ -1027,14 +1100,14 @@ export default function Kasir() {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4b5563' }}>Catatan Pesanan</label>
-                  <textarea style={{ ...S.input, resize: 'none', fontFamily: 'inherit' }} rows={2} placeholder="Masukkan catatan (opsional)" value={notes} onChange={e => setNotes(e.target.value)} />
+                  <textarea style={{ ...S.input, resize: 'none', fontFamily: 'inherit' }} className="cart-input-field" rows={2} placeholder="Masukkan catatan (opsional)" value={notes} onChange={e => setNotes(e.target.value)} />
                 </div>
               </div>
 
               {/* Smart Discount */}
-              <div style={{ background: '#F8F9FF', borderRadius: 12, padding: '12px 14px', marginBottom: 10, border: '1px solid #E8ECFF' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 8 }}>🏷️ Diskon</div>
-                <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+              <div style={{ background: '#F8F9FF', borderRadius: 12, padding: '12px 14px', marginBottom: 10, border: '1px solid #E8ECFF' }} className="cart-discount-box">
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 8 }} className="cart-discount-title">🏷️ Diskon</div>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 8 }} className="cart-discount-tabs">
                   <button onClick={() => { setDiscountType('percent'); setDiscountInput(''); }}
                     style={{ flex: 1, padding: '7px 0', borderRadius: 8, border: 'none', fontWeight: 700, fontSize: 12, cursor: 'pointer', background: discountType === 'percent' ? '#4F46E5' : '#EEF2FF', color: discountType === 'percent' ? 'white' : '#4F46E5' }}>
                     % Persen
@@ -1047,6 +1120,7 @@ export default function Kasir() {
                 <input type="number" value={discountInput} min={0} max={discountType === 'percent' ? 100 : subtotal}
                   onChange={e => setDiscountInput(e.target.value)}
                   placeholder={discountType === 'percent' ? 'Contoh: 10 (untuk 10%)' : 'Contoh: 5000'}
+                  className="cart-input-field"
                   style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #C7D2FE', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box', background: 'white' }} />
                 {discountAmt > 0 && (
                   <div style={{ marginTop: 6, fontSize: 12, color: '#10B981', fontWeight: 600 }}>✓ Hemat Rp {discountAmt.toLocaleString('id-ID')}</div>
@@ -1057,9 +1131,9 @@ export default function Kasir() {
 
           {/* Sticky Sheet Footer */}
           {cartOpen && (
-            <div style={S.sheetFooter}>
+            <div style={S.sheetFooter} className="cart-sheet-footer">
               {/* Ringkasan Harga */}
-              <div style={{ background: '#F8F9FF', borderRadius: 12, padding: '10px 14px', marginBottom: 12 }}>
+              <div style={{ background: '#F8F9FF', borderRadius: 12, padding: '10px 14px', marginBottom: 12 }} className="cart-summary-box">
                 {discountAmt > 0 && (
                   <>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#6B7280', marginBottom: 4 }}>
@@ -1071,12 +1145,12 @@ export default function Kasir() {
                   </>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: discountAmt > 0 ? 8 : 0, borderTop: discountAmt > 0 ? '1px dashed #C7D2FE' : 'none' }}>
-                  <span style={{ fontWeight: 800, color: '#1F2937', fontSize: '1rem' }}>Total</span>
-                  <span style={{ fontWeight: 800, color: '#4F46E5', fontSize: '1.2rem' }}>Rp {Math.max(0, total).toLocaleString('id-ID')}</span>
+                  <span style={{ fontWeight: 800, color: '#1F2937', fontSize: '1rem' }} className="cart-summary-total-label">Total</span>
+                  <span style={{ fontWeight: 800, color: '#4F46E5', fontSize: '1.2rem' }} className="cart-summary-total-value">Rp {Math.max(0, total).toLocaleString('id-ID')}</span>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '8px', paddingBottom: '16px' }}>
+              <div style={{ display: 'flex', gap: '8px', paddingBottom: '16px' }} className="cart-footer-buttons">
                 <button style={{ ...S.btnSecondary, flex: 1, opacity: cart.length ? 1 : 0.5, padding: '12px 8px', fontSize: '0.85rem' }} disabled={!cart.length} onClick={() => checkout(true)}>
                   🕐 Simpan Antrian
                 </button>

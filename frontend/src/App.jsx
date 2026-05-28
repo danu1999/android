@@ -711,7 +711,7 @@ function App() {
             />
           )}
 
-          <div style={{ paddingTop: (isOffline || user?.isDemo) ? '36px' : 0, height: '100dvh', boxSizing: 'border-box' }}>
+          <div style={{ paddingTop: (isOffline || user?.isDemo) ? '36px' : 0, height: '100vh', boxSizing: 'border-box' }}>
             <AppContent user={user} onLogout={handleLogout} appMode={appMode} setAppMode={setAppMode} />
           </div>
 

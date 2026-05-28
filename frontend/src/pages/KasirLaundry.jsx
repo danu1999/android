@@ -272,7 +272,7 @@ export default function KasirLaundry() {
             {loading ? (
               <div style={{ textAlign: 'center', padding: '2rem', color: '#9CA3AF' }}>Memuat paket layanan...</div>
             ) : activeServices.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: 'clamp(200px, 45dvh, 500px)', overflowY: 'auto', paddingRight: '4px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: 'clamp(200px, 45vh, 500px)', overflowY: 'auto', paddingRight: '4px' }}>
                 {activeServices.map(item => {
                   const qty = cart[item.id] || 0;
                   return (
