@@ -183,7 +183,8 @@ nav a.active {
 .main-content:has(.kasir-page) {
   padding: 0 !important;
   overflow: hidden !important;
-  height: 100%;
+  height: auto;
+  min-height: 0;
   padding-bottom: 0 !important;
   display: flex;
   flex-direction: column;

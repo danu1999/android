@@ -196,6 +196,17 @@ export default function Kasir() {
     }
   }, []);
 
+  useEffect(() => {
+    if (cartOpen) {
+      document.body.classList.add('cart-open-active');
+    } else {
+      document.body.classList.remove('cart-open-active');
+    }
+    return () => document.body.classList.remove('cart-open-active');
+  }, [cartOpen]);
+
+
+
 
 
   const fetchCustomers = async () => {
@@ -867,6 +878,10 @@ export default function Kasir() {
         ::placeholder { color: rgba(255,255,255,0.6) !important; }
         .kasir-search::placeholder { color: rgba(255,255,255,0.7) !important; }
         
+        body.cart-open-active .mobile-bottom-nav {
+          display: none !important;
+        }
+
         /* Custom Bottom Sheet styles */
         .cart-bottom-sheet {
           transition: max-height 0.4s cubic-bezier(0.4,0,0.2,1) !important;
