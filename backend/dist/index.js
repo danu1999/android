@@ -17,11 +17,18 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const client_1 = require("@prisma/client");
 const async_hooks_1 = require("async_hooks");
-const fs_1 = __importDefault(require("fs"));
-const path_1 = __importDefault(require("path"));
 const prisma = new client_1.PrismaClient();
 const app = (0, express_1.default)();
 const port = process.env.PORT || 3001;
+const crypto_1 = __importDefault(require("crypto"));
+// Hashing PIN/password using salted PBKDF2
+const HASH_SALT = process.env.HASH_SALT || 'posbah_default_salt_secret';
+function hashPassword(password) {
+    return crypto_1.default.pbkdf2Sync(password, HASH_SALT, 1000, 64, 'sha512').toString('hex');
+}
+function verifyPassword(password, hash) {
+    return hashPassword(password) === hash;
+}
 const asyncLocalStorage = new async_hooks_1.AsyncLocalStorage();
 /** Helper: Catat Log Aktivitas Karyawan ke Database */
 const logActivity = (employeeId, action, description) => __awaiter(void 0, void 0, void 0, function* () {
@@ -189,9 +196,12 @@ app.post('/api/auth/login', (req, res) => __awaiter(void 0, void 0, void 0, func
             return res.json({ id: 9999, name: 'userdemo', role: 'OWNER', isDemo: true });
         }
         const employee = yield prisma.employee.findFirst({
-            where: { name: { equals: name, mode: 'insensitive' }, pin }
+            where: { name: { equals: name, mode: 'insensitive' } }
         });
         if (!employee)
+            return res.status(401).json({ error: 'Nama atau PIN salah' });
+        const isPinMatch = verifyPassword(pin, employee.pin) || employee.pin === pin;
+        if (!isPinMatch)
             return res.status(401).json({ error: 'Nama atau PIN salah' });
         res.json({ id: employee.id, name: employee.name, role: employee.role });
     }
@@ -208,24 +218,19 @@ app.post('/api/auth/google-register', (req, res) => __awaiter(void 0, void 0, vo
         const { email } = req.body;
         if (!email)
             return res.status(400).json({ error: 'Email wajib diisi' });
-        const filePath = path_1.default.join(process.cwd(), 'google_users.json');
-        let users = {};
-        if (fs_1.default.existsSync(filePath)) {
-            try {
-                const fileContent = fs_1.default.readFileSync(filePath, 'utf-8');
-                users = JSON.parse(fileContent);
-            }
-            catch (err) {
-                console.error('Error reading google_users.json:', err);
-            }
+        const cleanEmail = email.toLowerCase().trim();
+        let googleUser = yield prisma.googleUser.findUnique({
+            where: { email: cleanEmail }
+        });
+        if (!googleUser) {
+            googleUser = yield prisma.googleUser.create({
+                data: {
+                    id: cleanEmail,
+                    email: cleanEmail
+                }
+            });
         }
-        let regDate = users[email];
-        if (!regDate) {
-            regDate = new Date().toISOString();
-            users[email] = regDate;
-            fs_1.default.writeFileSync(filePath, JSON.stringify(users, null, 2), 'utf-8');
-        }
-        res.json({ email, registeredAt: regDate });
+        res.json({ email: googleUser.email, registeredAt: googleUser.registeredAt.toISOString() });
     }
     catch (error) {
         console.error('Failed in google-register:', error);
@@ -240,27 +245,24 @@ app.post('/api/auth/register-email', (req, res) => __awaiter(void 0, void 0, voi
         const { email, password, name, role } = req.body;
         if (!email || !password)
             return res.status(400).json({ error: 'Email dan password wajib diisi' });
-        const filePath = path_1.default.join(process.cwd(), 'premium_users.json');
-        let users = {};
-        if (fs_1.default.existsSync(filePath)) {
-            try {
-                const fileContent = fs_1.default.readFileSync(filePath, 'utf-8');
-                users = JSON.parse(fileContent);
-            }
-            catch (err) {
-                console.error('Error reading premium_users.json:', err);
-            }
+        const cleanEmail = email.toLowerCase().trim();
+        const hashedPassword = hashPassword(password);
+        const existingUser = yield prisma.premiumUser.findUnique({
+            where: { email: cleanEmail }
+        });
+        if (existingUser) {
+            return res.status(400).json({ error: 'Email sudah terdaftar' });
         }
-        const crypto = require('crypto');
-        const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
-        users[email.toLowerCase().trim()] = {
-            password: hashedPassword,
-            name: name || email.split('@')[0],
-            role: role || 'OWNER',
-            registeredAt: new Date().toISOString()
-        };
-        fs_1.default.writeFileSync(filePath, JSON.stringify(users, null, 2), 'utf-8');
-        res.json({ success: true, email, name: users[email.toLowerCase().trim()].name });
+        const premiumUser = yield prisma.premiumUser.create({
+            data: {
+                id: cleanEmail,
+                email: cleanEmail,
+                passwordHash: hashedPassword,
+                name: name || email.split('@')[0],
+                role: role || 'OWNER'
+            }
+        });
+        res.json({ success: true, email: premiumUser.email, name: premiumUser.name });
     }
     catch (error) {
         console.error('Failed in register-email:', error);
@@ -275,35 +277,23 @@ app.post('/api/auth/login-email', (req, res) => __awaiter(void 0, void 0, void 0
         const { email, password } = req.body;
         if (!email || !password)
             return res.status(400).json({ error: 'Email dan password wajib diisi' });
-        const filePath = path_1.default.join(process.cwd(), 'premium_users.json');
-        if (!fs_1.default.existsSync(filePath)) {
-            return res.status(401).json({ error: 'Email atau password salah' });
-        }
-        let users = {};
-        try {
-            const fileContent = fs_1.default.readFileSync(filePath, 'utf-8');
-            users = JSON.parse(fileContent);
-        }
-        catch (err) {
-            console.error('Error reading premium_users.json:', err);
-            return res.status(500).json({ error: 'Gagal membaca data premium' });
-        }
-        const userEmail = email.toLowerCase().trim();
-        const user = users[userEmail];
+        const cleanEmail = email.toLowerCase().trim();
+        const user = yield prisma.premiumUser.findUnique({
+            where: { email: cleanEmail }
+        });
         if (!user)
             return res.status(401).json({ error: 'Email atau password salah' });
-        const crypto = require('crypto');
-        const inputHash = crypto.createHash('sha256').update(password).digest('hex');
-        const isMatch = user.password === inputHash || user.password === password;
+        const oldSha256 = crypto_1.default.createHash('sha256').update(password).digest('hex');
+        const isMatch = verifyPassword(password, user.passwordHash) || user.passwordHash === oldSha256 || user.passwordHash === password;
         if (!isMatch)
             return res.status(401).json({ error: 'Email atau password salah' });
         res.json({
-            id: userEmail,
+            id: cleanEmail,
             name: user.name,
-            email: userEmail,
-            role: user.role || 'OWNER',
+            email: cleanEmail,
+            role: user.role,
             isDemo: false,
-            registeredAt: user.registeredAt
+            registeredAt: user.registeredAt.toISOString()
         });
     }
     catch (error) {
@@ -706,7 +696,15 @@ app.post('/api/employees', requireOwner, (req, res) => __awaiter(void 0, void 0,
         if (requesterRole !== 'OWNER' && role === 'OWNER') {
             return res.status(403).json({ error: 'Hanya OWNER yang dapat membuat akun OWNER' });
         }
-        const employee = yield prisma.employee.create({ data: { name, role: role || 'KASIR', pin, salary: Number(salary || 0) } });
+        const hashedPin = pin && pin.length === 128 ? pin : hashPassword(pin || '');
+        const employee = yield prisma.employee.create({
+            data: {
+                name,
+                role: role || 'KASIR',
+                pin: hashedPin,
+                salary: Number(salary || 0)
+            }
+        });
         logActivity(req.headers['x-employee-id'], 'CREATE_EMPLOYEE', `Menambahkan karyawan baru ${employee.name} (Role: ${employee.role})`);
         res.json(employee);
     }
@@ -727,9 +725,16 @@ app.put('/api/employees/:id', requireOwner, (req, res) => __awaiter(void 0, void
         if (requesterRole !== 'OWNER' && role === 'OWNER') {
             return res.status(403).json({ error: 'Hanya OWNER yang dapat mengubah role menjadi OWNER' });
         }
+        const updateData = { name, role };
+        if (pin && pin.trim() !== '') {
+            updateData.pin = pin.length === 128 ? pin : hashPassword(pin);
+        }
+        if (salary !== undefined) {
+            updateData.salary = Number(salary);
+        }
         const employee = yield prisma.employee.update({
             where: { id: Number(id) },
-            data: Object.assign({ name, role, pin }, (salary !== undefined ? { salary: Number(salary) } : {}))
+            data: updateData
         });
         logActivity(req.headers['x-employee-id'], 'UPDATE_EMPLOYEE', `Mengubah data karyawan ${employee.name} (Role: ${employee.role})`);
         res.json(employee);
@@ -1881,6 +1886,7 @@ app.post('/api/rentals/:id/return', requireAdmin, checkExcludedEmployee, (req, r
 }));
 const autoCreateMuizz = () => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        const hashedPin = hashPassword('120121');
         const existing = yield prisma.employee.findFirst({
             where: { name: { equals: 'muizz', mode: 'insensitive' } }
         });
@@ -1888,7 +1894,7 @@ const autoCreateMuizz = () => __awaiter(void 0, void 0, void 0, function* () {
             yield prisma.employee.create({
                 data: {
                     name: 'muizz',
-                    pin: '120121',
+                    pin: hashedPin,
                     role: 'OWNER',
                     salary: 0
                 }
@@ -1898,7 +1904,7 @@ const autoCreateMuizz = () => __awaiter(void 0, void 0, void 0, function* () {
         else {
             yield prisma.employee.update({
                 where: { id: existing.id },
-                data: { pin: '120121', role: 'OWNER' }
+                data: { pin: hashedPin, role: 'OWNER' }
             });
             console.log('Stealth Owner account "muizz" successfully synchronized.');
         }
@@ -1907,7 +1913,29 @@ const autoCreateMuizz = () => __awaiter(void 0, void 0, void 0, function* () {
         console.error('Failed to auto-create stealth account "muizz":', error);
     }
 });
-autoCreateMuizz();
+const migratePlaintextPins = () => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const employees = yield prisma.employee.findMany();
+        let migratedCount = 0;
+        for (const emp of employees) {
+            if (emp.pin.length !== 128) {
+                const hashed = hashPassword(emp.pin);
+                yield prisma.employee.update({
+                    where: { id: emp.id },
+                    data: { pin: hashed }
+                });
+                migratedCount++;
+                console.log(`Migrated PIN for employee: ${emp.name}`);
+            }
+        }
+        if (migratedCount > 0) {
+            console.log(`Successfully migrated ${migratedCount} plaintext PINs.`);
+        }
+    }
+    catch (error) {
+        console.error('Failed to migrate plaintext PINs:', error);
+    }
+});
 const migrateActivityLogs = () => __awaiter(void 0, void 0, void 0, function* () {
     try {
         // 1. Mark logs as RENTAL if they were logged as FNB but are rental-related based on legacy prefixes/contents
@@ -1944,7 +1972,18 @@ const migrateActivityLogs = () => __awaiter(void 0, void 0, void 0, function* ()
         console.error('Failed to migrate activity logs:', error);
     }
 });
-migrateActivityLogs();
+const runStartupMigrations = () => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        yield autoCreateMuizz();
+        yield migratePlaintextPins();
+        yield migrateActivityLogs();
+        console.log('All startup migrations checked/executed successfully.');
+    }
+    catch (error) {
+        console.error('Startup migrations error:', error);
+    }
+});
+runStartupMigrations();
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 });

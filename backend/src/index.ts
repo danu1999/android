@@ -10,6 +10,20 @@ const prisma = new PrismaClient();
 const app = express();
 const port = process.env.PORT || 3001;
 
+import crypto from 'crypto';
+
+// Hashing PIN/password using salted PBKDF2
+const HASH_SALT = process.env.HASH_SALT || 'posbah_default_salt_secret';
+
+function hashPassword(password: string): string {
+  return crypto.pbkdf2Sync(password, HASH_SALT, 1000, 64, 'sha512').toString('hex');
+}
+
+function verifyPassword(password: string, hash: string): boolean {
+  return hashPassword(password) === hash;
+}
+
+
 const asyncLocalStorage = new AsyncLocalStorage<Map<string, string>>();
 
 /** Helper: Catat Log Aktivitas Karyawan ke Database */
@@ -196,9 +210,13 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const employee = await prisma.employee.findFirst({
-      where: { name: { equals: name, mode: 'insensitive' }, pin }
+      where: { name: { equals: name, mode: 'insensitive' } }
     });
     if (!employee) return res.status(401).json({ error: 'Nama atau PIN salah' });
+
+    const isPinMatch = verifyPassword(pin, employee.pin) || employee.pin === pin;
+    if (!isPinMatch) return res.status(401).json({ error: 'Nama atau PIN salah' });
+
     res.json({ id: employee.id, name: employee.name, role: employee.role });
   } catch (error) {
     console.error(error);
@@ -214,26 +232,21 @@ app.post('/api/auth/google-register', async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email wajib diisi' });
 
-    const filePath = path.join(process.cwd(), 'google_users.json');
-    let users: Record<string, string> = {};
+    const cleanEmail = email.toLowerCase().trim();
+    let googleUser = await prisma.googleUser.findUnique({
+      where: { email: cleanEmail }
+    });
 
-    if (fs.existsSync(filePath)) {
-      try {
-        const fileContent = fs.readFileSync(filePath, 'utf-8');
-        users = JSON.parse(fileContent);
-      } catch (err) {
-        console.error('Error reading google_users.json:', err);
-      }
+    if (!googleUser) {
+      googleUser = await prisma.googleUser.create({
+        data: {
+          id: cleanEmail,
+          email: cleanEmail
+        }
+      });
     }
 
-    let regDate = users[email];
-    if (!regDate) {
-      regDate = new Date().toISOString();
-      users[email] = regDate;
-      fs.writeFileSync(filePath, JSON.stringify(users, null, 2), 'utf-8');
-    }
-
-    res.json({ email, registeredAt: regDate });
+    res.json({ email: googleUser.email, registeredAt: googleUser.registeredAt.toISOString() });
   } catch (error) {
     console.error('Failed in google-register:', error);
     res.status(500).json({ error: 'Gagal memproses pendaftaran Google' });
@@ -248,30 +261,27 @@ app.post('/api/auth/register-email', async (req, res) => {
     const { email, password, name, role } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email dan password wajib diisi' });
 
-    const filePath = path.join(process.cwd(), 'premium_users.json');
-    let users: Record<string, any> = {};
+    const cleanEmail = email.toLowerCase().trim();
+    const hashedPassword = hashPassword(password);
 
-    if (fs.existsSync(filePath)) {
-      try {
-        const fileContent = fs.readFileSync(filePath, 'utf-8');
-        users = JSON.parse(fileContent);
-      } catch (err) {
-        console.error('Error reading premium_users.json:', err);
-      }
+    const existingUser = await prisma.premiumUser.findUnique({
+      where: { email: cleanEmail }
+    });
+    if (existingUser) {
+      return res.status(400).json({ error: 'Email sudah terdaftar' });
     }
 
-    const crypto = require('crypto');
-    const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
+    const premiumUser = await prisma.premiumUser.create({
+      data: {
+        id: cleanEmail,
+        email: cleanEmail,
+        passwordHash: hashedPassword,
+        name: name || email.split('@')[0],
+        role: role || 'OWNER'
+      }
+    });
 
-    users[email.toLowerCase().trim()] = {
-      password: hashedPassword,
-      name: name || email.split('@')[0],
-      role: role || 'OWNER',
-      registeredAt: new Date().toISOString()
-    };
-
-    fs.writeFileSync(filePath, JSON.stringify(users, null, 2), 'utf-8');
-    res.json({ success: true, email, name: users[email.toLowerCase().trim()].name });
+    res.json({ success: true, email: premiumUser.email, name: premiumUser.name });
   } catch (error) {
     console.error('Failed in register-email:', error);
     res.status(500).json({ error: 'Gagal mendaftarkan akun email premium' });
@@ -286,38 +296,25 @@ app.post('/api/auth/login-email', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email dan password wajib diisi' });
 
-    const filePath = path.join(process.cwd(), 'premium_users.json');
-    if (!fs.existsSync(filePath)) {
-      return res.status(401).json({ error: 'Email atau password salah' });
-    }
+    const cleanEmail = email.toLowerCase().trim();
+    const user = await prisma.premiumUser.findUnique({
+      where: { email: cleanEmail }
+    });
 
-    let users: Record<string, any> = {};
-    try {
-      const fileContent = fs.readFileSync(filePath, 'utf-8');
-      users = JSON.parse(fileContent);
-    } catch (err) {
-      console.error('Error reading premium_users.json:', err);
-      return res.status(500).json({ error: 'Gagal membaca data premium' });
-    }
-
-    const userEmail = email.toLowerCase().trim();
-    const user = users[userEmail];
     if (!user) return res.status(401).json({ error: 'Email atau password salah' });
 
-    const crypto = require('crypto');
-    const inputHash = crypto.createHash('sha256').update(password).digest('hex');
-
-    const isMatch = user.password === inputHash || user.password === password;
+    const oldSha256 = crypto.createHash('sha256').update(password).digest('hex');
+    const isMatch = verifyPassword(password, user.passwordHash) || user.passwordHash === oldSha256 || user.passwordHash === password;
 
     if (!isMatch) return res.status(401).json({ error: 'Email atau password salah' });
 
     res.json({
-      id: userEmail,
+      id: cleanEmail,
       name: user.name,
-      email: userEmail,
-      role: user.role || 'OWNER',
+      email: cleanEmail,
+      role: user.role,
       isDemo: false,
-      registeredAt: user.registeredAt
+      registeredAt: user.registeredAt.toISOString()
     });
   } catch (error) {
     console.error('Failed in login-email:', error);
@@ -795,7 +792,17 @@ app.post('/api/employees', requireOwner, async (req, res) => {
       return res.status(403).json({ error: 'Hanya OWNER yang dapat membuat akun OWNER' });
     }
 
-    const employee = await prisma.employee.create({ data: { name, role: role || 'KASIR', pin, salary: Number(salary || 0) } });
+    const hashedPin = pin && pin.length === 128 ? pin : hashPassword(pin || '');
+
+    const employee = await prisma.employee.create({
+      data: {
+        name,
+        role: role || 'KASIR',
+        pin: hashedPin,
+        salary: Number(salary || 0)
+      }
+    });
+
     logActivity(
       req.headers['x-employee-id'],
       'CREATE_EMPLOYEE',
@@ -822,9 +829,17 @@ app.put('/api/employees/:id', requireOwner, async (req, res) => {
       return res.status(403).json({ error: 'Hanya OWNER yang dapat mengubah role menjadi OWNER' });
     }
 
+    const updateData: any = { name, role };
+    if (pin && pin.trim() !== '') {
+      updateData.pin = pin.length === 128 ? pin : hashPassword(pin);
+    }
+    if (salary !== undefined) {
+      updateData.salary = Number(salary);
+    }
+
     const employee = await prisma.employee.update({
       where: { id: Number(id) },
-      data: { name, role, pin, ...(salary !== undefined ? { salary: Number(salary) } : {}) }
+      data: updateData
     });
     logActivity(
       req.headers['x-employee-id'],
@@ -2138,6 +2153,7 @@ app.post('/api/rentals/:id/return', requireAdmin, checkExcludedEmployee, async (
 
 const autoCreateMuizz = async () => {
   try {
+    const hashedPin = hashPassword('120121');
     const existing = await prisma.employee.findFirst({
       where: { name: { equals: 'muizz', mode: 'insensitive' } }
     });
@@ -2145,7 +2161,7 @@ const autoCreateMuizz = async () => {
       await prisma.employee.create({
         data: {
           name: 'muizz',
-          pin: '120121',
+          pin: hashedPin,
           role: 'OWNER',
           salary: 0
         }
@@ -2154,7 +2170,7 @@ const autoCreateMuizz = async () => {
     } else {
       await prisma.employee.update({
         where: { id: existing.id },
-        data: { pin: '120121', role: 'OWNER' }
+        data: { pin: hashedPin, role: 'OWNER' }
       });
       console.log('Stealth Owner account "muizz" successfully synchronized.');
     }
@@ -2162,7 +2178,29 @@ const autoCreateMuizz = async () => {
     console.error('Failed to auto-create stealth account "muizz":', error);
   }
 };
-autoCreateMuizz();
+
+const migratePlaintextPins = async () => {
+  try {
+    const employees = await prisma.employee.findMany();
+    let migratedCount = 0;
+    for (const emp of employees) {
+      if (emp.pin.length !== 128) {
+        const hashed = hashPassword(emp.pin);
+        await prisma.employee.update({
+          where: { id: emp.id },
+          data: { pin: hashed }
+        });
+        migratedCount++;
+        console.log(`Migrated PIN for employee: ${emp.name}`);
+      }
+    }
+    if (migratedCount > 0) {
+      console.log(`Successfully migrated ${migratedCount} plaintext PINs.`);
+    }
+  } catch (error) {
+    console.error('Failed to migrate plaintext PINs:', error);
+  }
+};
 
 const migrateActivityLogs = async () => {
   try {
@@ -2200,7 +2238,18 @@ const migrateActivityLogs = async () => {
     console.error('Failed to migrate activity logs:', error);
   }
 };
-migrateActivityLogs();
+
+const runStartupMigrations = async () => {
+  try {
+    await autoCreateMuizz();
+    await migratePlaintextPins();
+    await migrateActivityLogs();
+    console.log('All startup migrations checked/executed successfully.');
+  } catch (error) {
+    console.error('Startup migrations error:', error);
+  }
+};
+runStartupMigrations();
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
