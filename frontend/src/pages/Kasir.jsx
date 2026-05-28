@@ -876,10 +876,163 @@ export default function Kasir() {
           max-height: calc(100vh - 130px) !important;
         }
 
+        /* Custom Scrollbar for Cart Body */
         .cart-body-scroll {
           min-height: 0 !important;
           flex: 1 !important;
           overflow-y: auto !important;
+        }
+        .cart-body-scroll::-webkit-scrollbar {
+          width: 5px;
+        }
+        .cart-body-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .cart-body-scroll::-webkit-scrollbar-thumb {
+          background: #D1D5DB;
+          border-radius: 99px;
+        }
+        .cart-body-scroll::-webkit-scrollbar-thumb:hover {
+          background: #9CA3AF;
+        }
+
+        /* Premium Cart Item Card */
+        .cart-item-card {
+          background: #F9FAFB;
+          border: 1.5px solid #EEF2FF;
+          border-radius: 12px;
+          padding: 12px;
+          margin-bottom: 8px;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .cart-item-card:hover {
+          background: #F4F6FF;
+          border-color: #E0E7FF;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(79, 70, 229, 0.04);
+        }
+
+        /* Input transitions */
+        .cart-input-field {
+          transition: all 0.2s ease !important;
+        }
+        .cart-input-field:focus {
+          border-color: #818CF8 !important;
+          background: white !important;
+          box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.15) !important;
+        }
+
+        /* Ticket Coupon Design for Discount Section */
+        .cart-discount-box {
+          background: linear-gradient(135deg, #F8F9FF, #F5F7FF) !important;
+          border: 1.5px dashed #C7D2FE !important;
+          border-radius: 14px !important;
+          padding: 12px 14px !important;
+          margin-bottom: 12px !important;
+          position: relative;
+          overflow: hidden;
+        }
+        .cart-discount-box::before, .cart-discount-box::after {
+          content: '';
+          position: absolute;
+          width: 12px;
+          height: 12px;
+          background: white;
+          border-radius: 99px;
+          top: 50%;
+          transform: translateY(-50%);
+          border: 1.5px solid #EEF2FF;
+          z-index: 2;
+        }
+        .cart-discount-box::before { left: -7px; }
+        .cart-discount-box::after { right: -7px; }
+
+        /* Discount Tab buttons */
+        .discount-tab-btn {
+          flex: 1;
+          padding: 7px 0;
+          border-radius: 8px;
+          border: none;
+          font-weight: 700;
+          font-size: 12px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          background: #EEF2FF;
+          color: #4F46E5;
+        }
+        .discount-tab-btn.active {
+          background: #4F46E5 !important;
+          color: white !important;
+          box-shadow: 0 4px 10px rgba(79, 70, 229, 0.2);
+        }
+
+        /* Queue Selector Buttons styling */
+        .queue-btn-grid {
+          display: grid;
+          grid-template-columns: repeat(10, 1fr);
+          gap: 4px;
+        }
+        .queue-btn-item {
+          aspect-ratio: 1/1;
+          border-radius: 6px;
+          border: none;
+          background: #F3F4F6;
+          color: #374151;
+          font-weight: 700;
+          font-size: 0.85rem;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .queue-btn-item:hover:not(:disabled) {
+          background: #EEF2FF;
+          color: #4F46E5;
+          transform: scale(1.08);
+        }
+        .queue-btn-item.is-selected {
+          background: linear-gradient(135deg, #6366F1, #4F46E5) !important;
+          color: white !important;
+          box-shadow: 0 4px 10px rgba(79, 70, 229, 0.25);
+        }
+        .queue-btn-item:disabled {
+          background: #FEE2E2 !important;
+          color: #EF4444 !important;
+          cursor: not-allowed;
+          opacity: 0.5;
+        }
+
+        /* Button Hover scaling & Shadow effects */
+        .checkout-btn-primary {
+          background: linear-gradient(135deg, #6366F1, #4F46E5) !important;
+          color: white !important;
+          box-shadow: 0 4px 14px rgba(79, 70, 229, 0.3) !important;
+          transition: all 0.2s ease !important;
+        }
+        .checkout-btn-primary:hover:not(:disabled) {
+          transform: translateY(-1px) scale(1.02) !important;
+          box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4) !important;
+        }
+        .checkout-btn-primary:active:not(:disabled) {
+          transform: translateY(1px) !important;
+        }
+        .checkout-btn-secondary {
+          background: white !important;
+          color: #374151 !important;
+          border: 1.5px solid #E5E7EB !important;
+          transition: all 0.2s ease !important;
+        }
+        .checkout-btn-secondary:hover:not(:disabled) {
+          background: #F9FAFB !important;
+          border-color: #9CA3AF !important;
+          transform: translateY(-1px) scale(1.02) !important;
+        }
+        .checkout-btn-secondary:active:not(:disabled) {
+          transform: translateY(1px) !important;
         }
 
         /* Responsive styling for small screens / keyboards open */
@@ -889,9 +1042,10 @@ export default function Kasir() {
           }
           
           /* Compact cart items to save vertical space */
-          .cart-item-row {
-            padding: 6px 0 !important;
-            gap: 4px !important;
+          .cart-item-card {
+            padding: 8px 10px !important;
+            gap: 6px !important;
+            margin-bottom: 6px !important;
           }
           
           /* Compact inputs/selectors */
@@ -988,7 +1142,12 @@ export default function Kasir() {
         {cartOpen && <div style={S.backdrop} onClick={() => setCartOpen(false)} />}
         <div style={S.sheet(cartOpen)} className={`cart-bottom-sheet ${cartOpen ? 'is-open' : ''}`}>
           {/* Handle */}
-          <div style={S.sheetHandle} onClick={() => setCartOpen(o => !o)}>
+          <div style={{ ...S.sheetHandle, position: 'relative', paddingTop: '10px' }} onClick={() => setCartOpen(o => !o)}>
+            {/* iOS style drag handle indicator */}
+            <div style={{ display: 'flex', justifyContent: 'center', width: '100%', position: 'absolute', top: '6px', left: 0 }}>
+              <div style={{ width: '40px', height: '4px', background: '#E5E7EB', borderRadius: '99px' }} />
+            </div>
+            
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{ position: 'relative' }}>
                 <ShoppingCart size={22} color="#4F46E5" />
@@ -996,12 +1155,12 @@ export default function Kasir() {
                   <span style={{ position: 'absolute', top: '-8px', right: '-8px', background: '#EF4444', color: 'white', borderRadius: '99px', fontSize: '0.65rem', fontWeight: 800, padding: '1px 5px', minWidth: '16px', textAlign: 'center' }}>{totalItems}</span>
                 )}
               </div>
-              <span style={{ fontWeight: 700, fontSize: '1rem', color: '#1F2937' }}>
+              <span style={{ fontWeight: 800, fontSize: '1rem', color: '#1F2937' }}>
                 {totalItems > 0 ? `${totalItems} item` : 'Buka Keranjang'}
               </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              {total > 0 && <span style={{ fontWeight: 800, color: '#4F46E5', fontSize: '1rem' }}>Rp {total.toLocaleString('id-ID')}</span>}
+              {total > 0 && <span style={{ fontWeight: 900, color: '#4F46E5', fontSize: '1.05rem' }}>Rp {total.toLocaleString('id-ID')}</span>}
               <ChevronUp size={22} color="#9CA3AF" style={{ transform: cartOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }} />
             </div>
           </div>
@@ -1009,35 +1168,43 @@ export default function Kasir() {
           {/* Cart Body */}
           <div style={S.sheetBody} className="cart-body-scroll">
             {cart.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '24px 0', color: '#9CA3AF', fontSize: '0.9rem' }}>Belum ada item 🛒</div>
+              <div style={{ textAlign: 'center', padding: '36px 0', color: '#9CA3AF', fontSize: '0.95rem', fontWeight: 600 }}>Belum ada item di keranjang 🛒</div>
             ) : (
               cart.map(item => {
                 const ep = getItemPrice(item);
                 return (
-                  <div key={item.cartKey} className="cart-item-row" style={{ borderBottom: '1px solid #F3F4F6', padding: '12px 0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div key={item.cartKey} className="cart-item-card">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#1F2937' }}>
-                          {item.product.name}
-                          {item.variantName && <span style={{ marginLeft: 6, fontSize: '0.75rem', background: '#EEF2FF', color: '#4F46E5', padding: '1px 7px', borderRadius: 99, fontWeight: 700 }}>{item.variantName}</span>}
+                      <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1F2937', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{item.product.name}</span>
+                          {item.variantName && <span style={{ fontSize: '0.72rem', background: 'linear-gradient(135deg, #EEF2FF, #E0E7FF)', color: '#4F46E5', padding: '2px 8px', borderRadius: 99, fontWeight: 800 }}>{item.variantName}</span>}
                         </div>
-                        <div style={{ fontSize: '0.8rem', color: '#4F46E5', fontWeight: 700 }}>Rp {ep.toLocaleString('id-ID')}{item.discount > 0 && <span style={{ color: '#EF4444' }}> -Rp {item.discount.toLocaleString('id-ID')}</span>}</div>
+                        <div style={{ fontSize: '0.85rem', color: '#4F46E5', fontWeight: 800, marginTop: 2 }}>
+                          Rp {ep.toLocaleString('id-ID')}
+                          {item.discount > 0 && <span style={{ color: '#EF4444', textDecoration: 'line-through', fontSize: '0.78rem', marginLeft: 6, fontWeight: 500 }}>Rp {(ep + item.discount).toLocaleString('id-ID')}</span>}
+                        </div>
                       </div>
-                      <button onClick={() => removeItem(item.cartKey)} style={{ background: '#FEE2E2', border: 'none', borderRadius: '8px', padding: '6px', cursor: 'pointer', color: '#EF4444', display: 'flex', alignItems: 'center' }}>
-                        <Trash2 size={23} />
+                      <button onClick={() => removeItem(item.cartKey)} style={{ background: '#FEE2E2', border: 'none', borderRadius: '10px', padding: '8px', cursor: 'pointer', color: '#EF4444', display: 'flex', alignItems: 'center', transition: 'all 0.2s', alignSelf: 'center' }} onMouseEnter={e => e.currentTarget.style.background = '#FCA5A5'} onMouseLeave={e => e.currentTarget.style.background = '#FEE2E2'}>
+                        <Trash2 size={16} />
                       </button>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span style={{ fontSize: '0.72rem', color: '#9CA3AF' }}>Diskon:</span>
-                        <input type="number" value={item.discount} min={0}
-                          onChange={e => setCart(prev => prev.map(i => i.cartKey === item.cartKey ? { ...i, discount: Number(e.target.value) || 0 } : i))}
-                          style={{ width: '60px', padding: '4px 6px', border: '1px solid #E5E7EB', borderRadius: '7px', fontSize: '0.8rem', outline: 'none', textAlign: 'right' }} />
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px dashed #EEF2FF', paddingTop: '8px', marginTop: '2px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '0.75rem', color: '#6B7280', fontWeight: 600 }}>Diskon:</span>
+                        <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+                          <span style={{ position: 'absolute', left: '8px', fontSize: '0.75rem', color: '#9CA3AF', fontWeight: 700 }}>Rp</span>
+                          <input type="number" value={item.discount} min={0}
+                            onChange={e => setCart(prev => prev.map(i => i.cartKey === item.cartKey ? { ...i, discount: Number(e.target.value) || 0 } : i))}
+                            className="cart-input-field"
+                            style={{ width: '80px', padding: '5px 8px 5px 24px', border: '1.5px solid #E5E7EB', borderRadius: '8px', fontSize: '0.8rem', outline: 'none', textAlign: 'right', fontWeight: 700, background: 'white' }} />
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0', border: '1.5px solid #E5E7EB', borderRadius: '10px', overflow: 'hidden' }}>
-                        <button onClick={() => updateQty(item.cartKey, -1)} style={{ padding: '6px 12px', border: 'none', background: '#F9FAFB', cursor: 'pointer', fontWeight: 800, color: '#374151', fontSize: '1rem' }}>−</button>
+                      <div className="qty-selector">
+                        <button onClick={() => updateQty(item.cartKey, -1)} className="qty-btn">−</button>
                         <input
                           type="number" min={1} value={item.quantity}
+                          className="qty-input"
                           onClick={e => e.target.select()}
                           onChange={e => {
                             const val = parseInt(e.target.value, 10);
@@ -1048,9 +1215,8 @@ export default function Kasir() {
                             const qty = Math.min(val, maxStock);
                             setCart(prev => prev.map(i => i.cartKey === item.cartKey ? { ...i, quantity: qty } : i));
                           }}
-                          style={{ width: '44px', padding: '4px 2px', fontWeight: 700, fontSize: '0.95rem', color: '#1F2937', textAlign: 'center', border: 'none', background: 'transparent', outline: 'none', MozAppearance: 'textfield' }}
                         />
-                        <button onClick={() => updateQty(item.cartKey, 1)} style={{ padding: '6px 12px', border: 'none', background: '#F9FAFB', cursor: 'pointer', fontWeight: 800, color: '#4F46E5', fontSize: '1rem' }}>+</button>
+                        <button onClick={() => updateQty(item.cartKey, 1)} className="qty-btn">+</button>
                       </div>
                     </div>
                   </div>
@@ -1060,9 +1226,9 @@ export default function Kasir() {
 
             {/* Summary section */}
             <div style={{ paddingTop: '12px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '12px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4b5563' }}>Pelanggan</label>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#374151', display: 'flex', alignItems: 'center', gap: '4px' }}>👤 Pelanggan</label>
                   <select style={S.input} className="cart-input-field" value={customerId} onChange={e => setCustomerId(e.target.value)}>
                     <option value="">-- Pelanggan Umum / Walk-in --</option>
                     {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -1071,10 +1237,10 @@ export default function Kasir() {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4b5563' }}>No. Antrian</label>
-                    <button onClick={resetAllQueues} style={{ background: '#FEE2E2', color: '#EF4444', border: 'none', borderRadius: '6px', padding: '4px 8px', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer' }}>Reset Antrian</button>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#374151', display: 'flex', alignItems: 'center', gap: '4px' }}>🔢 No. Antrian</label>
+                    <button onClick={resetAllQueues} style={{ background: '#FEE2E2', color: '#EF4444', border: 'none', borderRadius: '6px', padding: '4px 8px', fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#FCA5A5'} onMouseLeave={e => e.currentTarget.style.background = '#FEE2E2'}>Reset Antrian</button>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)', gap: '4px' }} className="queue-btn-grid">
+                  <div className="queue-btn-grid">
                     {Array.from({ length: 20 }, (_, i) => i + 1).map(num => {
                       const isUsed = activeQueues.includes(num);
                       const isSelected = queueNumber === num;
@@ -1087,15 +1253,7 @@ export default function Kasir() {
                             else if (!isUsed) setQueueNumber(num);
                           }}
                           disabled={isUsed}
-                          className="queue-btn-item"
-                          style={{
-                            aspectRatio: '1/1', borderRadius: '6px', border: 'none',
-                            background: isSelected ? '#4F46E5' : isUsed ? '#FEE2E2' : '#F3F4F6',
-                            color: isSelected ? 'white' : isUsed ? '#EF4444' : '#374151',
-                            fontWeight: 700, fontSize: '0.85rem',
-                            cursor: isUsed ? 'not-allowed' : 'pointer',
-                            opacity: isUsed ? 0.5 : 1, padding: 0
-                          }}
+                          className={`queue-btn-item ${isSelected ? 'is-selected' : ''}`}
                         >
                           {num}
                         </button>
@@ -1105,31 +1263,34 @@ export default function Kasir() {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#4b5563' }}>Catatan Pesanan</label>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 700, color: '#374151', display: 'flex', alignItems: 'center', gap: '4px' }}>📝 Catatan Pesanan</label>
                   <textarea style={{ ...S.input, resize: 'none', fontFamily: 'inherit' }} className="cart-input-field" rows={2} placeholder="Masukkan catatan (opsional)" value={notes} onChange={e => setNotes(e.target.value)} />
                 </div>
               </div>
 
               {/* Smart Discount */}
-              <div style={{ background: '#F8F9FF', borderRadius: 12, padding: '12px 14px', marginBottom: 10, border: '1px solid #E8ECFF' }} className="cart-discount-box">
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 8 }} className="cart-discount-title">🏷️ Diskon</div>
+              <div className="cart-discount-box">
+                <div style={{ fontSize: 13, fontWeight: 800, color: '#4F46E5', marginBottom: 8, display: 'flex', alignItems: 'center', gap: '6px' }} className="cart-discount-title">🏷️ Kupon Diskon</div>
                 <div style={{ display: 'flex', gap: 6, marginBottom: 8 }} className="cart-discount-tabs">
                   <button onClick={() => { setDiscountType('percent'); setDiscountInput(''); }}
-                    style={{ flex: 1, padding: '7px 0', borderRadius: 8, border: 'none', fontWeight: 700, fontSize: 12, cursor: 'pointer', background: discountType === 'percent' ? '#4F46E5' : '#EEF2FF', color: discountType === 'percent' ? 'white' : '#4F46E5' }}>
+                    className={`discount-tab-btn ${discountType === 'percent' ? 'active' : ''}`}>
                     % Persen
                   </button>
                   <button onClick={() => { setDiscountType('nominal'); setDiscountInput(''); }}
-                    style={{ flex: 1, padding: '7px 0', borderRadius: 8, border: 'none', fontWeight: 700, fontSize: 12, cursor: 'pointer', background: discountType === 'nominal' ? '#4F46E5' : '#EEF2FF', color: discountType === 'nominal' ? 'white' : '#4F46E5' }}>
+                    className={`discount-tab-btn ${discountType === 'nominal' ? 'active' : ''}`}>
                     Rp Nominal
                   </button>
                 </div>
-                <input type="number" value={discountInput} min={0} max={discountType === 'percent' ? 100 : subtotal}
-                  onChange={e => setDiscountInput(e.target.value)}
-                  placeholder={discountType === 'percent' ? 'Contoh: 10 (untuk 10%)' : 'Contoh: 5000'}
-                  className="cart-input-field"
-                  style={{ width: '100%', padding: '8px 12px', border: '1.5px solid #C7D2FE', borderRadius: 8, fontSize: 13, outline: 'none', boxSizing: 'border-box', background: 'white' }} />
+                <div style={{ position: 'relative' }}>
+                  {discountType === 'nominal' && <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.85rem', fontWeight: 700, color: '#4F46E5' }}>Rp</span>}
+                  <input type="number" value={discountInput} min={0} max={discountType === 'percent' ? 100 : subtotal}
+                    onChange={e => setDiscountInput(e.target.value)}
+                    placeholder={discountType === 'percent' ? 'Masukkan persentase diskon (misal: 10)' : 'Masukkan nominal diskon (misal: 5000)'}
+                    className="cart-input-field"
+                    style={{ width: '100%', padding: discountType === 'nominal' ? '10px 12px 10px 32px' : '10px 12px', border: '1.5px solid #C7D2FE', borderRadius: 10, fontSize: 13, outline: 'none', boxSizing: 'border-box', background: 'white', fontWeight: 700, color: '#1F2937' }} />
+                </div>
                 {discountAmt > 0 && (
-                  <div style={{ marginTop: 6, fontSize: 12, color: '#10B981', fontWeight: 600 }}>✓ Hemat Rp {discountAmt.toLocaleString('id-ID')}</div>
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#10B981', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>✓ Kupon dipasang: Hemat Rp {discountAmt.toLocaleString('id-ID')}</div>
                 )}
               </div>
             </div>
@@ -1137,30 +1298,40 @@ export default function Kasir() {
 
           {/* Sticky Sheet Footer */}
           {cartOpen && (
-            <div style={S.sheetFooter} className="cart-sheet-footer">
+            <div className="cart-sheet-footer" style={{ ...S.sheetFooter, borderTop: '1.5px solid #EEF2FF', background: 'white', padding: '12px 16px 16px' }}>
               {/* Ringkasan Harga */}
-              <div style={{ background: '#F8F9FF', borderRadius: 12, padding: '10px 14px', marginBottom: 12 }} className="cart-summary-box">
+              <div style={{ background: 'linear-gradient(135deg, #F8F9FF, #F5F7FF)', borderRadius: 14, padding: '12px 14px', marginBottom: 12, border: '1.5px solid #EEF2FF' }} className="cart-summary-box">
                 {discountAmt > 0 && (
                   <>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#6B7280', marginBottom: 4 }}>
-                      <span>Subtotal</span><span>Rp {subtotal.toLocaleString('id-ID')}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#6B7280', marginBottom: 4, fontWeight: 500 }}>
+                      <span>Subtotal</span><span style={{ fontWeight: 700 }}>Rp {subtotal.toLocaleString('id-ID')}</span>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#EF4444', marginBottom: 4 }}>
-                      <span>{discountLabel}</span><span>-Rp {discountAmt.toLocaleString('id-ID')}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#EF4444', marginBottom: 4, fontWeight: 500 }}>
+                      <span>{discountLabel}</span><span style={{ fontWeight: 700 }}>-Rp {discountAmt.toLocaleString('id-ID')}</span>
                     </div>
                   </>
                 )}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: discountAmt > 0 ? 8 : 0, borderTop: discountAmt > 0 ? '1px dashed #C7D2FE' : 'none' }}>
-                  <span style={{ fontWeight: 800, color: '#1F2937', fontSize: '1rem' }} className="cart-summary-total-label">Total</span>
-                  <span style={{ fontWeight: 800, color: '#4F46E5', fontSize: '1.2rem' }} className="cart-summary-total-value">Rp {Math.max(0, total).toLocaleString('id-ID')}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: discountAmt > 0 ? 10 : 0, borderTop: discountAmt > 0 ? '1.5px dashed #C7D2FE' : 'none' }}>
+                  <span style={{ fontWeight: 800, color: '#1F2937', fontSize: '1rem' }} className="cart-summary-total-label">Total Pembayaran</span>
+                  <span style={{ fontWeight: 900, color: '#4F46E5', fontSize: '1.35rem' }} className="cart-summary-total-value">Rp {Math.max(0, total).toLocaleString('id-ID')}</span>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '8px', paddingBottom: '16px' }} className="cart-footer-buttons">
-                <button style={{ ...S.btnSecondary, flex: 1, opacity: cart.length ? 1 : 0.5, padding: '12px 8px', fontSize: '0.85rem' }} disabled={!cart.length} onClick={() => checkout(true)}>
+              <div style={{ display: 'flex', gap: '10px', paddingBottom: '8px' }} className="cart-footer-buttons">
+                <button 
+                  className="checkout-btn-secondary"
+                  style={{ ...S.btnSecondary, flex: 1, opacity: cart.length ? 1 : 0.5, padding: '14px 8px', fontSize: '0.9rem', borderRadius: '12px', border: '1.5px solid #E5E7EB', fontWeight: 800 }} 
+                  disabled={!cart.length} 
+                  onClick={() => checkout(true)}
+                >
                   🕐 Simpan Antrian
                 </button>
-                <button style={{ ...S.btnPrimary, flex: 1, opacity: cart.length ? 1 : 0.5, padding: '12px 8px', fontSize: '0.85rem', boxShadow: 'none' }} disabled={!cart.length} onClick={() => setPayModal(true)}>
+                <button 
+                  className="checkout-btn-primary"
+                  style={{ ...S.btnPrimary, flex: 1, opacity: cart.length ? 1 : 0.5, padding: '14px 8px', fontSize: '0.9rem', borderRadius: '12px', fontWeight: 800, boxShadow: 'none' }} 
+                  disabled={!cart.length} 
+                  onClick={() => setPayModal(true)}
+                >
                   Bayar Sekarang →
                 </button>
               </div>
