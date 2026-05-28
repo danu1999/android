@@ -877,6 +877,16 @@ export default function Kasir() {
         input[placeholder] { color: rgba(255,255,255,0.6) !important; }
         ::placeholder { color: rgba(255,255,255,0.6) !important; }
         .kasir-search::placeholder { color: rgba(255,255,255,0.7) !important; }
+
+        /* Ensure inputs on light backgrounds in the cart and modals have dark text and readable placeholders */
+        .cart-input-field,
+        .cart-discount-row input {
+          color: #000000 !important;
+        }
+        .cart-input-field::placeholder,
+        .cart-discount-row input::placeholder {
+          color: #9CA3AF !important;
+        }
         
         body.cart-open-active .mobile-bottom-nav {
           display: none !important;
@@ -1386,6 +1396,7 @@ export default function Kasir() {
                 <label style={{ fontSize: 13, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4 }}>Uang Dibayar</label>
                 <input type="number" value={amountPaid} onChange={e => setAmountPaid(e.target.value)}
                   placeholder={`Min. Rp ${total.toLocaleString('id-ID')}`}
+                  className="cart-input-field"
                   style={{ ...S.input, textAlign: 'right' }} />
                 {parseFloat(amountPaid) >= total && amountPaid && (
                   <div style={{ marginTop: 6, fontSize: 13, fontWeight: 700, color: '#10B981' }}>Kembalian: Rp {change.toLocaleString('id-ID')}</div>
