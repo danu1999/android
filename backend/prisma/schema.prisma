@@ -46,6 +46,7 @@ model Product {
   stock            Int      @default(0)
   unit             String   @default("pcs")
   barcode          String?  @unique               // Barcode EAN-13 / QR
+  category         String   @default("Umum")      // Kategori: Minuman, Makanan, Laundry, Umum
   wholesaleEnabled Boolean  @default(false)
   wholesalePrices  String?                        // JSON: [{minQty, price}, ...]
   variants         String?                        // JSON: [{name, stock?, price?, attrs?}, ...]
