@@ -232,7 +232,7 @@ export default function Login({ onLogin }) {
       }}>
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <img src="/logo.jpg" alt="Logo" style={{
+          <img src="/logo.png" alt="Logo" style={{
             width: '64px', height: '64px',
             objectFit: 'cover',
             borderRadius: '16px',

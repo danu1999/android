@@ -218,7 +218,7 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
       {/* Mobile Top Header */}
       <div className="mobile-header glass-panel md-hidden" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div className="brand" style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <img src="/logo.jpg" alt="Logo" style={{ width: '24px', height: '24px', borderRadius: '6px', objectFit: 'cover' }} />
+          <img src="/logo.png" alt="Logo" style={{ width: '24px', height: '24px', borderRadius: '6px', objectFit: 'cover' }} />
           POSBah
           <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
         </div>
@@ -239,7 +239,7 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
       <aside className="sidebar glass-panel">
         <div className="brand hidden md-block" style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'space-between', width: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <img src="/logo.jpg" alt="Logo" style={{ width: '32px', height: '32px', borderRadius: '8px', objectFit: 'cover' }} />
+            <img src="/logo.png" alt="Logo" style={{ width: '32px', height: '32px', borderRadius: '8px', objectFit: 'cover' }} />
             POSBah
           </div>
           <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
