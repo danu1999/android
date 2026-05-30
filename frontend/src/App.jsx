@@ -305,10 +305,49 @@ function AppContent({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
     return <Navigate to="/" replace />;
   }
 
+  const isTargetUser = user?.name && ['hanafi', 'fed', 'fahri'].includes(user.name.toLowerCase().trim());
+
   return (
     <div className="app-layout select-none">
       <Navigation user={user} onLogout={onLogout} appMode={appMode} setAppMode={setAppMode} theme={theme} toggleTheme={toggleTheme} />
       <main className="main-content">
+        {isTargetUser && (
+          <div style={{
+            background: theme === 'dark' ? 'linear-gradient(90deg, #78350F 0%, #92400E 100%)' : 'linear-gradient(90deg, #FEF3C7 0%, #FDE68A 100%)',
+            border: '1.5px solid #F59E0B',
+            borderRadius: '12px',
+            padding: '12px 16px',
+            marginBottom: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            boxShadow: '0 4px 12px rgba(245,158,11,0.08)',
+            fontFamily: "'Inter', sans-serif"
+          }} className="trial-warning-banner">
+            <span style={{ fontSize: '1.4rem' }}>⚠️</span>
+            <div style={{ flex: 1, fontSize: '0.82rem', color: theme === 'dark' ? '#FEE2E2' : '#78350F', fontWeight: 600, lineHeight: 1.4 }}>
+              <strong>Pemberitahuan Uji Coba:</strong> Masa trial Anda berakhir pada <strong>1 Juni 2026</strong>. Lakukan pembayaran segera agar tetap dapat mengakses Web & APK POSBah.
+            </div>
+            <a
+              href={`https://wa.me/6282245077959?text=Halo%20Admin%20POSBah%2C%20saya%20(${encodeURIComponent(user.name)})%20ingin%20melakukan%20pembayaran%20langganan%20POSBah`}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                background: '#D97706',
+                color: 'white',
+                padding: '6px 12px',
+                borderRadius: '8px',
+                fontSize: '0.78rem',
+                fontWeight: 800,
+                textDecoration: 'none',
+                boxShadow: '0 2px 8px rgba(217,119,6,0.25)',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              Bayar Sekarang
+            </a>
+          </div>
+        )}
         <Routes>
           <Route path="/" element={appMode === 'RENTAL' ? <RentalMobil /> : appMode === 'LAUNDRY' ? <KasirLaundry /> : <Kasir />} />
           <Route path="/katalog" element={<Katalog />} />
