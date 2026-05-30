@@ -10,6 +10,13 @@ const prisma = new PrismaClient();
 const app = express();
 const port = process.env.PORT || 3001;
 
+// ─── DAFTAR BLOKIR LANGGANAN (BLOCKED USERS) ────────────────────────
+// Tambahkan nama karyawan (case-insensitive) ke dalam array ini untuk memblokir akses
+// mereka dari APK secara real-time. Jika diblokir, mereka tidak akan bisa login
+// dan tidak bisa mengakses data/fitur apa pun di dalam aplikasi.
+const BLOCKED_USERS: string[] = []; 
+// Contoh pemblokiran: const BLOCKED_USERS: string[] = ['hanafi', 'fed', 'fahri'];
+
 import crypto from 'crypto';
 
 // Hashing PIN/password using salted PBKDF2
@@ -103,6 +110,36 @@ app.use((req: Request, res: Response, next: NextFunction) => {
       code: 'DEMO_ACCESS_DENIED',
       isDemo: true
     });
+  }
+  next();
+});
+
+// ─── MIDDLEWARE PEMBLOKIRAN LANGGANAN ───────────────────────────────
+app.use(async (req: Request, res: Response, next: NextFunction) => {
+  const employeeId = req.headers['x-employee-id'] as string;
+
+  // Cek jika sedang melakukan login POST /api/auth/login
+  if (req.path === '/api/auth/login' && req.method === 'POST') {
+    const { name } = req.body;
+    if (name && BLOCKED_USERS.includes(name.toLowerCase().trim())) {
+      return res.status(403).json({
+        error: 'Masa langganan Anda telah berakhir. Silakan hubungi Admin POSBah untuk perpanjangan.'
+      });
+    }
+  }
+
+  // Cek untuk semua request API lainnya berdasarkan ID karyawan yang terkirim di header
+  if (employeeId && employeeId !== '0' && employeeId !== '9999') {
+    try {
+      const emp = await prisma.employee.findUnique({ where: { id: Number(employeeId) } });
+      if (emp && BLOCKED_USERS.includes(emp.name.toLowerCase().trim())) {
+        return res.status(403).json({
+          error: 'Masa langganan Anda telah berakhir. Silakan hubungi Admin POSBah untuk perpanjangan.'
+        });
+      }
+    } catch (e) {
+      console.error('Error checking blocked status in middleware:', e);
+    }
   }
   next();
 });

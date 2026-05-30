@@ -20,6 +20,12 @@ const async_hooks_1 = require("async_hooks");
 const prisma = new client_1.PrismaClient();
 const app = (0, express_1.default)();
 const port = process.env.PORT || 3001;
+// ─── DAFTAR BLOKIR LANGGANAN (BLOCKED USERS) ────────────────────────
+// Tambahkan nama karyawan (case-insensitive) ke dalam array ini untuk memblokir akses
+// mereka dari APK secara real-time. Jika diblokir, mereka tidak akan bisa login
+// dan tidak bisa mengakses data/fitur apa pun di dalam aplikasi.
+const BLOCKED_USERS = [];
+// Contoh pemblokiran: const BLOCKED_USERS: string[] = ['hanafi', 'fed', 'fahri'];
 const crypto_1 = __importDefault(require("crypto"));
 // Hashing PIN/password using salted PBKDF2
 const HASH_SALT = process.env.HASH_SALT || 'posbah_default_salt_secret';
@@ -106,6 +112,34 @@ app.use((req, res, next) => {
     }
     next();
 });
+// ─── MIDDLEWARE PEMBLOKIRAN LANGGANAN ───────────────────────────────
+app.use((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    const employeeId = req.headers['x-employee-id'];
+    // Cek jika sedang melakukan login POST /api/auth/login
+    if (req.path === '/api/auth/login' && req.method === 'POST') {
+        const { name } = req.body;
+        if (name && BLOCKED_USERS.includes(name.toLowerCase().trim())) {
+            return res.status(403).json({
+                error: 'Masa langganan Anda telah berakhir. Silakan hubungi Admin POSBah untuk perpanjangan.'
+            });
+        }
+    }
+    // Cek untuk semua request API lainnya berdasarkan ID karyawan yang terkirim di header
+    if (employeeId && employeeId !== '0' && employeeId !== '9999') {
+        try {
+            const emp = yield prisma.employee.findUnique({ where: { id: Number(employeeId) } });
+            if (emp && BLOCKED_USERS.includes(emp.name.toLowerCase().trim())) {
+                return res.status(403).json({
+                    error: 'Masa langganan Anda telah berakhir. Silakan hubungi Admin POSBah untuk perpanjangan.'
+                });
+            }
+        }
+        catch (e) {
+            console.error('Error checking blocked status in middleware:', e);
+        }
+    }
+    next();
+}));
 // ─────────────────────────────────────────────────────────────
 // Role hierarchy helpers
 // ─────────────────────────────────────────────────────────────
@@ -354,9 +388,9 @@ app.get('/api/products/barcode/:code', (req, res) => __awaiter(void 0, void 0, v
 }));
 app.post('/api/products', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { name, price, costPrice, stock, unit, barcode, wholesaleEnabled, wholesalePrices, variants, image } = req.body;
+        const { name, price, costPrice, stock, unit, barcode, category, wholesaleEnabled, wholesalePrices, variants, image } = req.body;
         const product = yield prisma.product.create({
-            data: Object.assign({ name, price: Number(price), costPrice: Number(costPrice || 0), stock: Number(stock), unit: unit || 'pcs', wholesaleEnabled: Boolean(wholesaleEnabled), wholesalePrices: wholesalePrices ? JSON.stringify(wholesalePrices) : null, variants: variants && variants.length > 0 ? JSON.stringify(variants) : null, image }, (barcode ? { barcode } : {}))
+            data: Object.assign({ name, price: Number(price), costPrice: Number(costPrice || 0), stock: Number(stock), unit: unit || 'pcs', category: category || 'Umum', wholesaleEnabled: Boolean(wholesaleEnabled), wholesalePrices: wholesalePrices ? JSON.stringify(wholesalePrices) : null, variants: variants && variants.length > 0 ? JSON.stringify(variants) : null, image }, (barcode ? { barcode } : {}))
         });
         logActivity(req.headers['x-employee-id'], 'CREATE_PRODUCT', `Membuat produk baru ${product.name} (Stok: ${product.stock} ${product.unit}, Harga: Rp ${product.price.toLocaleString('id-ID')})`);
         res.json(product);
@@ -369,10 +403,10 @@ app.post('/api/products', requireAdmin, (req, res) => __awaiter(void 0, void 0, 
 app.put('/api/products/:id', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { id } = req.params;
-        const { name, price, costPrice, stock, unit, barcode, wholesaleEnabled, wholesalePrices, variants, image } = req.body;
+        const { name, price, costPrice, stock, unit, barcode, category, wholesaleEnabled, wholesalePrices, variants, image } = req.body;
         const product = yield prisma.product.update({
             where: { id: Number(id) },
-            data: Object.assign({ name, price: Number(price), costPrice: Number(costPrice || 0), stock: Number(stock), unit: unit || 'pcs', wholesaleEnabled: Boolean(wholesaleEnabled), wholesalePrices: wholesalePrices ? JSON.stringify(wholesalePrices) : null, variants: variants && variants.length > 0 ? JSON.stringify(variants) : null, image }, (barcode !== undefined ? { barcode: barcode || null } : {}))
+            data: Object.assign({ name, price: Number(price), costPrice: Number(costPrice || 0), stock: Number(stock), unit: unit || 'pcs', category: category || 'Umum', wholesaleEnabled: Boolean(wholesaleEnabled), wholesalePrices: wholesalePrices ? JSON.stringify(wholesalePrices) : null, variants: variants && variants.length > 0 ? JSON.stringify(variants) : null, image }, (barcode !== undefined ? { barcode: barcode || null } : {}))
         });
         logActivity(req.headers['x-employee-id'], 'UPDATE_PRODUCT', `Mengubah data produk ${product.name} (Stok: ${product.stock} ${product.unit}, Harga: Rp ${product.price.toLocaleString('id-ID')})`);
         res.json(product);
