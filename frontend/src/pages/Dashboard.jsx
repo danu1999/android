@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   Wallet, Contact, Users, Globe,
   TrendingUp, ShoppingBag, Package, AlertTriangle,
-  ArrowRight, BarChart2, Clock, History
+  ArrowRight, BarChart2, Clock, History, Download
 } from 'lucide-react';
 import api from '../api';
 import { useAuth, useIsAdmin, useIsOwner } from '../AuthContext';
@@ -118,6 +118,67 @@ export default function Dashboard({ appMode }) {
             padding: '4px 12px', fontSize: 12, fontWeight: 800, letterSpacing: 1
           }}>{user?.role}</div>
         </div>
+      </div>
+
+      {/* ── APK Update Reminder Banner ─────────────────────────── */}
+      <div style={{
+        background: 'linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%)',
+        border: '1.5px solid #C7D2FE',
+        borderRadius: 18,
+        padding: '16px 20px',
+        marginTop: 16,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 16,
+        flexWrap: 'wrap',
+        boxShadow: '0 10px 25px -5px rgba(79, 70, 229, 0.1)',
+        fontFamily: "'Inter', sans-serif"
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: '240px' }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #6366F1, #4F46E5)',
+            borderRadius: 12,
+            padding: 10,
+            display: 'flex',
+            color: 'white',
+            boxShadow: '0 4px 14px rgba(99, 102, 241, 0.3)'
+          }}>
+            <Download size={20} />
+          </div>
+          <div>
+            <h4 style={{ margin: '0 0 2px', fontSize: '0.9rem', fontWeight: 800, color: '#312E81' }}>
+              Update APK POSBah v1.0.1 Tersedia! 🚀
+            </h4>
+            <p style={{ margin: 0, fontSize: '0.78rem', color: '#4F46E5', fontWeight: 600, lineHeight: 1.4 }}>
+              Unduh versi terbaru untuk mengaktifkan fitur tombol back fisik HP, logo baru, dan perbaikan performa.
+            </p>
+          </div>
+        </div>
+        <a
+          href={`${api.defaults.baseURL}/download-apk`}
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            background: 'linear-gradient(135deg, #4F46E5, #4338CA)',
+            color: 'white',
+            padding: '10px 20px',
+            borderRadius: '12px',
+            fontSize: '0.82rem',
+            fontWeight: 800,
+            textDecoration: 'none',
+            boxShadow: '0 4px 14px rgba(79, 70, 229, 0.35)',
+            whiteSpace: 'nowrap',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            transition: 'transform 0.15s'
+          }}
+          onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; }}
+          onMouseLeave={e => { e.currentTarget.style.transform = ''; }}
+        >
+          <Download size={14} /> Unduh APK Sekarang
+        </a>
       </div>
 
       {/* ── Middle: stats + alerts ─────────────────────────────── */}

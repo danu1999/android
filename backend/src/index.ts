@@ -233,6 +233,28 @@ app.get('/', (req, res) => {
   res.send('POSBah API is running');
 });
 
+// Route to download the latest APK
+app.get('/api/download-apk', (req, res) => {
+  // Check common paths for app-debug.apk
+  const paths = [
+    path.join(__dirname, '../app-debug.apk'),
+    path.join(__dirname, '../../app-debug.apk'),
+    path.join(__dirname, '../../../app-debug.apk'),
+    path.join(__dirname, '../public/app-debug.apk'),
+    path.join(__dirname, '../../frontend/android/app/build/outputs/apk/debug/app-debug.apk'),
+    path.join(__dirname, '../../../frontend/android/app/build/outputs/apk/debug/app-debug.apk')
+  ];
+
+  for (const p of paths) {
+    if (fs.existsSync(p)) {
+      return res.download(p, 'POSBah.apk');
+    }
+  }
+
+  // Fallback redirect to GitHub raw file (if they commit it)
+  res.redirect('https://github.com/danu1999/POSBah/raw/main/frontend/android/app/build/outputs/apk/debug/app-debug.apk');
+});
+
 // ─────────────────────────────────────────────────────────────
 // Auth - Login with name + PIN
 // ─────────────────────────────────────────────────────────────

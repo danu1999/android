@@ -17,6 +17,8 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const client_1 = require("@prisma/client");
 const async_hooks_1 = require("async_hooks");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 const prisma = new client_1.PrismaClient();
 const app = (0, express_1.default)();
 const port = process.env.PORT || 3001;
@@ -216,6 +218,25 @@ const checkExcludedEmployee = (req, res, next) => __awaiter(void 0, void 0, void
 // ─────────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
     res.send('POSBah API is running');
+});
+// Route to download the latest APK
+app.get('/api/download-apk', (req, res) => {
+    // Check common paths for app-debug.apk
+    const paths = [
+        path_1.default.join(__dirname, '../app-debug.apk'),
+        path_1.default.join(__dirname, '../../app-debug.apk'),
+        path_1.default.join(__dirname, '../../../app-debug.apk'),
+        path_1.default.join(__dirname, '../public/app-debug.apk'),
+        path_1.default.join(__dirname, '../../frontend/android/app/build/outputs/apk/debug/app-debug.apk'),
+        path_1.default.join(__dirname, '../../../frontend/android/app/build/outputs/apk/debug/app-debug.apk')
+    ];
+    for (const p of paths) {
+        if (fs_1.default.existsSync(p)) {
+            return res.download(p, 'POSBah.apk');
+        }
+    }
+    // Fallback redirect to GitHub raw file (if they commit it)
+    res.redirect('https://github.com/danu1999/POSBah/raw/main/frontend/android/app/build/outputs/apk/debug/app-debug.apk');
 });
 // ─────────────────────────────────────────────────────────────
 // Auth - Login with name + PIN
