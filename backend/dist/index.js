@@ -235,8 +235,8 @@ app.get('/api/download-apk', (req, res) => {
             return res.download(p, 'POSBah.apk');
         }
     }
-    // Fallback redirect to GitHub raw file (if they commit it)
-    res.redirect('https://github.com/danu1999/POSBah/raw/main/frontend/android/app/build/outputs/apk/debug/app-debug.apk');
+    // Fallback redirect to Google Drive file
+    res.redirect('https://drive.google.com/uc?export=download&id=1grCDSGp1qacBES1hcO29d_03HNPstdbM');
 });
 // ─────────────────────────────────────────────────────────────
 // Auth - Login with name + PIN
