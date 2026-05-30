@@ -313,34 +313,30 @@ function AppContent({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
       <main className="main-content">
         {isTargetUser && (
           <div style={{
-            background: theme === 'dark' ? 'linear-gradient(90deg, #78350F 0%, #92400E 100%)' : 'linear-gradient(90deg, #FEF3C7 0%, #FDE68A 100%)',
-            border: '1.5px solid #F59E0B',
-            borderRadius: '12px',
-            padding: '12px 16px',
-            marginBottom: '16px',
+            background: theme === 'dark' ? '#7c2d12' : '#fef3c7',
+            border: theme === 'dark' ? '1px solid #9a3412' : '1px solid #fde68a',
+            borderRadius: '8px',
+            padding: '8px 12px',
+            marginBottom: '12px',
             display: 'flex',
             alignItems: 'center',
-            gap: '12px',
-            boxShadow: '0 4px 12px rgba(245,158,11,0.08)',
+            justifyContent: 'space-between',
+            gap: '8px',
+            fontSize: '0.75rem',
             fontFamily: "'Inter', sans-serif"
           }} className="trial-warning-banner">
-            <span style={{ fontSize: '1.4rem' }}>⚠️</span>
-            <div style={{ flex: 1, fontSize: '0.82rem', color: theme === 'dark' ? '#FEE2E2' : '#78350F', fontWeight: 600, lineHeight: 1.4 }}>
-              <strong>Pemberitahuan Uji Coba:</strong> Masa trial Anda berakhir pada <strong>1 Juni 2026</strong>. Lakukan pembayaran segera agar tetap dapat mengakses Web & APK POSBah.
+            <div style={{ color: theme === 'dark' ? '#ffedd5' : '#78350f', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '1rem' }}>⚠️</span>
+              <span>Trial berakhir 1 Juni. Segera bayar agar akses Web & APK tidak terputus.</span>
             </div>
             <a
               href={`https://wa.me/6282245077959?text=Halo%20Admin%20POSBah%2C%20saya%20(${encodeURIComponent(user.name)})%20ingin%20melakukan%20pembayaran%20langganan%20POSBah`}
               target="_blank"
               rel="noreferrer"
               style={{
-                background: '#D97706',
-                color: 'white',
-                padding: '6px 12px',
-                borderRadius: '8px',
-                fontSize: '0.78rem',
+                color: theme === 'dark' ? '#fdba74' : '#b45309',
                 fontWeight: 800,
-                textDecoration: 'none',
-                boxShadow: '0 2px 8px rgba(217,119,6,0.25)',
+                textDecoration: 'underline',
                 whiteSpace: 'nowrap'
               }}
             >
