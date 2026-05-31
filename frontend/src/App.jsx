@@ -864,6 +864,7 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('posbah_user');
     localStorage.removeItem('posbah_app_mode');
+    localStorage.removeItem('token');
     setUser(null);
   };
 
@@ -956,11 +957,39 @@ function MainRouterContent({
   demoBlockMsg, setDemoBlockMsg,
   isOffline, dismissOffline, setIsOffline, setDismissOffline
 }) {
-  const { token: bmpToken } = React.useContext(BmpAuthContext);
+  const { token: bmpToken, login: bmpLogin } = React.useContext(BmpAuthContext);
   const location = useLocation();
 
   const isBmpMode = appMode === 'BMP';
   const isAuthenticated = !!user || (!!bmpToken && isBmpMode);
+
+  // Auto-login to BMP if in BMP mode, POSBah user is logged in, but BMP token is missing
+  React.useEffect(() => {
+    if (appMode === 'BMP' && user && !bmpToken) {
+      if (user.isDemo) {
+        // Auto demo login
+        const autoDemoLogin = async () => {
+          try {
+            const isLocalDev = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+            const bmpApiUrl = import.meta.env.VITE_API_URL_BMP || (isLocalDev ? 'http://localhost:8080/api' : 'http://103.93.163.227/api-bmp');
+            
+            const response = await fetch(`${bmpApiUrl}/login`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username: 'demouser', password: 'demouser123' })
+            });
+            const data = await response.json();
+            if (data.success && data.token) {
+              bmpLogin(data.token);
+            }
+          } catch (e) {
+            console.warn('Auto demo login for BMP failed:', e);
+          }
+        };
+        autoDemoLogin();
+      }
+    }
+  }, [appMode, user, bmpToken, bmpLogin]);
 
   // Exclude public paths from login check
   const isPublicRoute = location.pathname === '/bmp-login' || location.pathname === '/bonus' || location.pathname === '/toko-online';
