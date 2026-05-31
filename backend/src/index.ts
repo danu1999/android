@@ -5,8 +5,113 @@ import { PrismaClient } from '@prisma/client';
 import { AsyncLocalStorage } from 'async_hooks';
 import fs from 'fs';
 import path from 'path';
+import { exec } from 'child_process';
 
-const prisma = new PrismaClient();
+const mainPrisma = new PrismaClient();
+const prismaContext = new AsyncLocalStorage<PrismaClient>();
+const tenantClients = new Map<string, PrismaClient>();
+
+function getCleanTenantDbName(tenantId: string): string {
+  const cleanId = tenantId.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase().trim();
+  return `posbah_tenant_${cleanId}`;
+}
+
+const getTenantPrisma = (tenantId: string): PrismaClient => {
+  const dbName = getCleanTenantDbName(tenantId);
+  if (!tenantClients.has(dbName)) {
+    const originalUrl = process.env.DATABASE_URL || '';
+    let tenantDbUrl = originalUrl;
+    if (originalUrl.includes('?')) {
+      const parts = originalUrl.split('?');
+      const base = parts[0];
+      const query = parts[1];
+      const lastSlash = base.lastIndexOf('/');
+      tenantDbUrl = base.substring(0, lastSlash + 1) + dbName + '?' + query;
+    } else {
+      const lastSlash = originalUrl.lastIndexOf('/');
+      tenantDbUrl = originalUrl.substring(0, lastSlash + 1) + dbName;
+    }
+
+    console.log(`Initializing new PrismaClient for tenant ${tenantId} (${dbName})`);
+    const client = new PrismaClient({
+      datasources: {
+        db: { url: tenantDbUrl }
+      }
+    });
+    tenantClients.set(dbName, client);
+  }
+  return tenantClients.get(dbName)!;
+};
+
+// Global proxy to dynamically swap prisma connection on runtime based on AsyncLocalStorage context
+const prisma = new Proxy(mainPrisma, {
+  get(target, prop, receiver) {
+    const activePrisma = prismaContext.getStore();
+    if (activePrisma) {
+      return Reflect.get(activePrisma, prop, receiver);
+    }
+    return Reflect.get(target, prop, receiver);
+  }
+});
+
+const createTenantDatabase = async (tenantId: string): Promise<string> => {
+  const dbName = getCleanTenantDbName(tenantId);
+  try {
+    const result = await mainPrisma.$queryRawUnsafe<any[]>(
+      `SELECT 1 FROM pg_database WHERE datname = $1`,
+      dbName
+    );
+    if (result && result.length > 0) {
+      console.log(`Database ${dbName} already exists.`);
+      return dbName;
+    }
+  } catch (err) {
+    console.warn(`Query check database failed for ${dbName}, trying CREATE anyway:`, err);
+  }
+
+  await mainPrisma.$executeRawUnsafe(`CREATE DATABASE ${dbName}`);
+  console.log(`Database ${dbName} created successfully.`);
+  return dbName;
+};
+
+const runTenantMigration = (dbName: string): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const originalUrl = process.env.DATABASE_URL || '';
+    let tenantDbUrl = originalUrl;
+    if (originalUrl.includes('?')) {
+      const parts = originalUrl.split('?');
+      const base = parts[0];
+      const query = parts[1];
+      const lastSlash = base.lastIndexOf('/');
+      tenantDbUrl = base.substring(0, lastSlash + 1) + dbName + '?' + query;
+    } else {
+      const lastSlash = originalUrl.lastIndexOf('/');
+      tenantDbUrl = originalUrl.substring(0, lastSlash + 1) + dbName;
+    }
+
+    console.log(`Running Prisma migration (db push) for ${dbName}...`);
+    const cmd = process.platform === 'win32'
+      ? `npx.cmd prisma db push --accept-data-loss`
+      : `npx prisma db push --accept-data-loss`;
+
+    exec(cmd, {
+      env: {
+        ...process.env,
+        DATABASE_URL: tenantDbUrl
+      }
+    }, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`Prisma migration failed for ${dbName}:`, error);
+        console.error(`Stderr:`, stderr);
+        reject(error);
+      } else {
+        console.log(`Prisma migration successful for ${dbName}.`);
+        resolve(stdout);
+      }
+    });
+  });
+};
+
 const app = express();
 const port = process.env.PORT || 3001;
 
@@ -80,9 +185,47 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-employee-id', 'x-employee-role', 'x-app-mode', 'x-offline-sync']
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-employee-id', 'x-employee-role', 'x-app-mode', 'x-offline-sync', 'x-tenant-id']
 }));
 app.use(express.json());
+
+// Multi-tenant database routing middleware
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const tenantId = req.headers['x-tenant-id'] as string;
+  
+  // Rute global yang tidak menggunakan tenant database (menggunakan main/global database)
+  const isGlobalPath = [
+    '/',
+    '/api/download-apk',
+    '/api/auth/register-email',
+    '/api/auth/login-email',
+    '/api/auth/google-register'
+  ].includes(req.path);
+
+  if (isGlobalPath) {
+    return prismaContext.run(mainPrisma, () => {
+      next();
+    });
+  }
+
+  if (!tenantId) {
+    // Sebagai fallback agar sistem lama atau request tanpa header tetap bisa jalan ke main database
+    console.warn(`Warning: Missing x-tenant-id header for path: ${req.path}`);
+    return prismaContext.run(mainPrisma, () => {
+      next();
+    });
+  }
+
+  try {
+    const tenantPrisma = getTenantPrisma(tenantId);
+    prismaContext.run(tenantPrisma, () => {
+      next();
+    });
+  } catch (err) {
+    console.error(`Failed to route database for tenant: ${tenantId}`, err);
+    res.status(500).json({ error: 'Gagal mengarahkan koneksi database penyewa' });
+  }
+});
 
 // Middleware to store x-app-mode header in execution context
 app.use((req: Request, res: Response, next: NextFunction) => {
@@ -303,6 +446,17 @@ app.post('/api/auth/google-register', async (req, res) => {
           email: cleanEmail
         }
       });
+
+      // Provision tenant database
+      try {
+        const dbName = await createTenantDatabase(cleanEmail);
+        await runTenantMigration(dbName);
+      } catch (err) {
+        console.error(`Failed to initialize database for google user ${cleanEmail}:`, err);
+        // Rollback creation in main db
+        await prisma.googleUser.delete({ where: { email: cleanEmail } });
+        return res.status(500).json({ error: 'Gagal menginisialisasi database penyewa baru' });
+      }
     }
 
     res.json({ email: googleUser.email, registeredAt: googleUser.registeredAt.toISOString() });
@@ -339,6 +493,17 @@ app.post('/api/auth/register-email', async (req, res) => {
         role: role || 'OWNER'
       }
     });
+
+    // Provision tenant database
+    try {
+      const dbName = await createTenantDatabase(cleanEmail);
+      await runTenantMigration(dbName);
+    } catch (err) {
+      console.error(`Failed to initialize database for premium user ${cleanEmail}:`, err);
+      // Rollback creation in main db
+      await prisma.premiumUser.delete({ where: { email: cleanEmail } });
+      return res.status(500).json({ error: 'Gagal menginisialisasi database penyewa baru' });
+    }
 
     res.json({ success: true, email: premiumUser.email, name: premiumUser.name });
   } catch (error) {

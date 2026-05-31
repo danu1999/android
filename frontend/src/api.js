@@ -22,6 +22,11 @@ api.interceptors.request.use((config) => {
     }
     const appMode = localStorage.getItem('posbah_app_mode') || 'FNB';
     config.headers['x-app-mode'] = appMode;
+
+    const tenantId = localStorage.getItem('posbah_tenant_id');
+    if (tenantId) {
+      config.headers['x-tenant-id'] = tenantId;
+    }
   } catch (_) {}
   return config;
 });

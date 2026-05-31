@@ -247,6 +247,47 @@ export default function Login({ onLogin }) {
         {/* Konten Form Dinamis */}
         {loginMethod === null ? (
           <div>
+            {localStorage.getItem('posbah_tenant_id') && (
+              <div style={{
+                background: 'rgba(16,185,129,0.1)',
+                border: '1px solid rgba(16,185,129,0.2)',
+                borderRadius: '12px',
+                padding: '10px 12px',
+                color: '#a7f3d0',
+                fontSize: '0.8rem',
+                marginBottom: '1.25rem',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                <div style={{ wordBreak: 'break-all' }}>Toko Aktif: <strong>{localStorage.getItem('posbah_tenant_id')}</strong></div>
+                <button
+                  onClick={() => {
+                    if (window.confirm("Yakin ingin ganti akun toko / Owner? Data lokal pada perangkat ini akan dialihkan.")) {
+                      localStorage.removeItem('posbah_tenant_id');
+                      localStorage.removeItem('posbah_user');
+                      window.location.reload();
+                    }
+                  }}
+                  style={{
+                    background: 'rgba(239,68,68,0.2)',
+                    border: '1px solid rgba(239,68,68,0.3)',
+                    borderRadius: '6px',
+                    padding: '4px 8px',
+                    color: '#fca5a5',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    outline: 'none',
+                    borderStyle: 'solid'
+                  }}
+                >
+                  Ganti Toko / Owner
+                </button>
+              </div>
+            )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <button
                 onClick={() => { setLoginMethod('PIN'); setError(''); }}

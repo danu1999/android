@@ -856,6 +856,9 @@ function App() {
   const handleLogin = (userData) => {
     localStorage.setItem('posbah_user', JSON.stringify(userData));
     setUser(userData);
+    if (userData?.email) {
+      localStorage.setItem('posbah_tenant_id', userData.email);
+    }
   };
 
   const handleLogout = () => {

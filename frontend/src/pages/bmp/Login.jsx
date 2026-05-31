@@ -133,6 +133,25 @@ const Login = () => {
 
             )
           )
+          , React.createElement('div', { style: { marginTop: '15px' } }
+            , React.createElement('button', { 
+              type: "button",
+              onClick: () => {
+                localStorage.setItem('posbah_app_mode', 'FNB');
+                window.location.href = '/';
+              }, 
+              style: { 
+                background: 'none', 
+                border: 'none', 
+                color: '#f43f5e', 
+                cursor: 'pointer', 
+                fontSize: '13px',
+                textDecoration: 'underline',
+                fontWeight: 'bold'
+              } }
+              , "← Kembali ke Portal POSBah"
+            )
+          )
         )
       ) : (
         React.createElement('form', { onSubmit: handleLogin, style: { 
@@ -239,6 +258,25 @@ const Login = () => {
               }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 229}}
 , "Kembali ke Login Demo"
 
+            )
+          )
+          , React.createElement('div', { style: { marginTop: '15px', textAlign: 'center' } }
+            , React.createElement('button', { 
+              type: "button",
+              onClick: () => {
+                localStorage.setItem('posbah_app_mode', 'FNB');
+                window.location.href = '/';
+              }, 
+              style: { 
+                background: 'none', 
+                border: 'none', 
+                color: '#f43f5e', 
+                cursor: 'pointer', 
+                fontSize: '13px',
+                textDecoration: 'underline',
+                fontWeight: 'bold'
+              } }
+              , "← Kembali ke Portal POSBah"
             )
           )
         )
