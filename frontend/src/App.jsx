@@ -856,8 +856,9 @@ function App() {
   const handleLogin = (userData) => {
     localStorage.setItem('posbah_user', JSON.stringify(userData));
     setUser(userData);
-    if (userData?.email) {
-      localStorage.setItem('posbah_tenant_id', userData.email);
+    const tenant = userData?.tenantId || userData?.email;
+    if (tenant) {
+      localStorage.setItem('posbah_tenant_id', tenant);
     }
   };
 
@@ -865,6 +866,7 @@ function App() {
     localStorage.removeItem('posbah_user');
     localStorage.removeItem('posbah_app_mode');
     localStorage.removeItem('token');
+    localStorage.removeItem('posbah_tenant_id');
     setUser(null);
   };
 

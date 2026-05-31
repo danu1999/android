@@ -271,6 +271,7 @@ model PremiumUser {
   passwordHash String
   name         String
   role         String   @default("OWNER")
+  tenantId     String?  // Map ke database tenant owner
   registeredAt DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }

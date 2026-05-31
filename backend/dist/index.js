@@ -497,6 +497,7 @@ app.post('/api/auth/login-email', (req, res) => __awaiter(void 0, void 0, void 0
             email: cleanEmail,
             role: user.role,
             isDemo: false,
+            tenantId: user.tenantId || cleanEmail,
             registeredAt: user.registeredAt.toISOString()
         });
     }

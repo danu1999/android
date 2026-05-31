@@ -538,6 +538,7 @@ app.post('/api/auth/login-email', async (req, res) => {
       email: cleanEmail,
       role: user.role,
       isDemo: false,
+      tenantId: user.tenantId || cleanEmail,
       registeredAt: user.registeredAt.toISOString()
     });
   } catch (error) {
