@@ -1,7 +1,8 @@
 import axios, { getAdapter } from 'axios';
 
-const isLocalDev = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '';
-const API_URL = import.meta.env.VITE_API_URL || (isLocalDev ? 'http://localhost:3001/api' : 'https://posbah.up.railway.app/api');
+const isCapacitor = !!window.Capacitor || window.location.protocol === 'capacitor:';
+const isLocalDev = !isCapacitor && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '';
+const API_URL = import.meta.env.VITE_API_URL || (isLocalDev ? 'http://localhost:3001/api' : 'http://103.93.163.227/api');
 
 const api = axios.create({
   baseURL: API_URL,

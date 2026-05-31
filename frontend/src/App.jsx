@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Link, useLocation, Navigate, useNavigate 
 import {
   Calculator, Package, LayoutDashboard, LogOut, Clock,
   DollarSign, Users, UserCog, Crown, ShieldCheck, Lock, X, Sparkles, History, Car, WifiOff,
-  Sun, Moon
+  Sun, Moon, FileText, RefreshCw, List, Cpu, Settings as SettingsIcon
 } from 'lucide-react';
 import Kasir from './pages/Kasir';
 import Katalog from './pages/Katalog';
@@ -24,6 +24,25 @@ import StrukLaundry from './pages/StrukLaundry';
 import { AuthContext, DemoContext, hasRole, DEMO_LIMITS, useAuth } from './AuthContext';
 import { syncOfflineWrites } from './api';
 import { App as CapApp } from '@capacitor/app';
+
+// BMP Imports
+import BmpDashboard from './pages/bmp/Dashboard';
+import BmpClients from './pages/bmp/Clients';
+import BmpProducts from './pages/bmp/Products';
+import BmpSettings from './pages/bmp/Settings';
+import BmpCashFlow from './pages/bmp/CashFlow';
+import BmpInvoices from './pages/bmp/Invoices';
+import BmpCreateInvoice from './pages/bmp/CreateInvoice';
+import BmpBahanNono from './pages/bmp/BahanNono';
+import BmpHppCalculator from './pages/bmp/HppCalculator';
+import BmpPricelist from './pages/bmp/Pricelist';
+import BmpEmployees from './pages/bmp/Employees';
+import BmpPayroll from './pages/bmp/Payroll';
+import BmpAccessDenied from './pages/bmp/AccessDenied';
+import BmpLogin from './pages/bmp/Login';
+import BmpBonusClaim from './pages/bmp/BonusClaim';
+import { AuthProvider as BmpAuthProvider, AuthContext as BmpAuthContext } from './contexts/BmpAuthContext';
+
 import './index.css';
 
 // ─── Role-based page access ────────────────────────────────────
@@ -38,6 +57,14 @@ const canAccess = (role, path) => {
   const allowed = ROLE_ACCESS[role] || ROLE_ACCESS['KASIR'];
   if (path.startsWith('/struk-laundry/')) return true;
   return allowed.includes(path);
+};
+
+const BmpProtectedRoute = ({ children }) => {
+  const { token } = React.useContext(BmpAuthContext);
+  if (!token) {
+    return <Navigate to="/bmp-login" replace />;
+  }
+  return children;
 };
 
 // ─── Demo Upgrade Modal ────────────────────────────────────────
@@ -148,6 +175,7 @@ const ThemeToggle = ({ theme, toggleTheme }) => {
 const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme }) => {
   const location = useLocation();
   const roleStyle = ROLE_STYLE[user?.role] || ROLE_STYLE['KASIR'];
+  const { logout: bmpLogout } = React.useContext(BmpAuthContext);
 
   const isExcludedName = (name) => {
     if (!name) return false;
@@ -170,6 +198,18 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
     { path: '/pelanggan', label: 'Pelanggan', icon: <Users size={20} />, minRole: 'ADMIN', showInNav: false },
     { path: '/karyawan', label: 'Karyawan', icon: <UserCog size={20} />, minRole: 'ADMIN', showInNav: false },
     { path: '/activity-logs', label: 'Log Aktivitas', icon: <History size={20} />, minRole: 'ADMIN', showInNav: false },
+  ] : appMode === 'BMP' ? [
+    { path: '/', label: 'Panel Utama', icon: <LayoutDashboard size={20} />, minRole: 'KASIR', showInNav: true },
+    { path: '/invoices', label: 'Daftar Faktur', icon: <FileText size={20} />, minRole: 'KASIR', showInNav: true },
+    { path: '/products', label: 'Master Barang', icon: <Package size={20} />, minRole: 'KASIR', showInNav: true },
+    { path: '/clients', label: 'Data Pelanggan', icon: <Users size={20} />, minRole: 'KASIR', showInNav: true },
+    { path: '/bahan-nono', label: 'Bahan Mas Nono', icon: <Package size={20} />, minRole: 'KASIR', showInNav: true },
+    { path: '/kas', label: 'Kas Keuangan', icon: <RefreshCw size={20} />, minRole: 'KASIR', showInNav: true },
+    { path: '/pricelist', label: 'Pricelist Harga', icon: <List size={20} />, minRole: 'KASIR', showInNav: true },
+    { path: '/hpp-calculator', label: 'Kalkulator HPP', icon: <Cpu size={20} />, minRole: 'KASIR', showInNav: true },
+    { path: '/employees', label: 'Data Karyawan', icon: <Users size={20} />, minRole: 'KASIR', showInNav: true },
+    { path: '/payroll', label: 'Sistem Penggajian', icon: <DollarSign size={20} />, minRole: 'KASIR', showInNav: true },
+    { path: '/settings', label: 'Pengaturan', icon: <SettingsIcon size={20} />, minRole: 'KASIR', showInNav: true },
   ] : [
     { path: '/', label: 'Kasir', icon: <Calculator size={20} />, minRole: 'KASIR', showInNav: true },
     { path: '/katalog', label: 'Katalog', icon: <Package size={20} />, minRole: 'KASIR', showInNav: true },
@@ -184,11 +224,11 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
 
   // Demo user diperlakukan sebagai OWNER untuk navigasi (akses semua halaman)
   const effectiveRole = user?.isDemo ? 'OWNER' : user?.role;
-  const navItems = allNavItems.filter(item =>
-    hasRole(effectiveRole, item.minRole) && item.showInNav
-  );
+  const navItems = appMode === 'BMP'
+    ? allNavItems.filter(item => item.showInNav)
+    : allNavItems.filter(item => hasRole(effectiveRole, item.minRole) && item.showInNav);
 
-  const showModeSwitcher = hasRole(user?.role, 'ADMIN') && !isExcludedName(user?.name) && !user?.isDemo;
+  const showModeSwitcher = !!user && hasRole(user?.role, 'ADMIN') && !isExcludedName(user?.name) && !user?.isDemo;
 
   const handleModeChange = (newMode) => {
     localStorage.setItem('posbah_app_mode', newMode);
@@ -213,23 +253,33 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
     );
   };
 
+  const handleLogoutClick = () => {
+    if (appMode === 'BMP') {
+      bmpLogout();
+    }
+    onLogout();
+  };
+
   return (
     <>
       {/* Mobile Top Header */}
       <div className="mobile-header glass-panel md-hidden" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div className="brand" style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <img src="/logo.png" alt="Logo" style={{ width: '24px', height: '24px', borderRadius: '6px', objectFit: 'cover' }} />
-          POSBah
+          {appMode === 'BMP' ? 'BAHTERA MULYA' : 'POSBah'}
           <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {user?.name?.toLowerCase() !== 'muizz' && (
+          {user?.name?.toLowerCase() !== 'muizz' && user?.name && (
             <>
               <span style={{ fontSize: '0.75rem', color: '#1F2937', fontWeight: 600 }}>{user?.name}</span>
               <RoleBadge />
             </>
           )}
-          <button onClick={onLogout} title="Keluar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280', padding: '4px' }}>
+          {appMode === 'BMP' && !user && (
+            <span style={{ fontSize: '0.75rem', color: '#1F2937', fontWeight: 600 }}>BMP Admin</span>
+          )}
+          <button onClick={handleLogoutClick} title="Keluar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B7280', padding: '4px' }}>
             <LogOut size={16} />
           </button>
         </div>
@@ -240,7 +290,7 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
         <div className="brand hidden md-block" style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'space-between', width: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <img src="/logo.png" alt="Logo" style={{ width: '32px', height: '32px', borderRadius: '8px', objectFit: 'cover' }} />
-            POSBah
+            {appMode === 'BMP' ? 'BAHTERA MULYA' : 'POSBah'}
           </div>
           <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
         </div>
@@ -263,16 +313,20 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
                 <option value="FNB">🍹 UMKM & Jus</option>
                 <option value="RENTAL">🚗 Rental Mobil</option>
                 <option value="LAUNDRY">🧺 POS Laundry</option>
+                <option value="BMP">🏭 Invoice &amp; Manufaktur</option>
               </select>
             </div>
           )}
-          {user?.name?.toLowerCase() !== 'muizz' && (
+          {user?.name?.toLowerCase() !== 'muizz' && user?.name && (
             <>
               <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1F2937', marginBottom: '4px' }}>{user?.name}</div>
               <RoleBadge />
             </>
           )}
-          <button onClick={onLogout} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', padding: '8px 0 0', fontWeight: 600 }}>
+          {appMode === 'BMP' && !user && (
+            <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1F2937', marginBottom: '4px' }}>BMP Admin</div>
+          )}
+          <button onClick={handleLogoutClick} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', padding: '8px 0 0', fontWeight: 600 }}>
             <LogOut size={14} /> Keluar
           </button>
         </div>
@@ -301,7 +355,14 @@ function AppContent({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
   // Demo: akses semua halaman (OWNER level)
   const effectiveRole = user?.isDemo ? 'OWNER' : user?.role;
   const currentPath = location.pathname;
-  if (!canAccess(effectiveRole, currentPath) && currentPath !== '/toko-online') {
+
+  const isBmpPath = [
+    '/invoices', '/invoices/create', '/products', '/clients', '/bahan-nono',
+    '/kas', '/pricelist', '/hpp-calculator', '/employees', '/payroll',
+    '/settings', '/bonus', '/bmp-login'
+  ].some(p => location.pathname === p || location.pathname.startsWith(p + '/'));
+
+  if (!isBmpPath && !canAccess(effectiveRole, currentPath) && currentPath !== '/toko-online') {
     return <Navigate to="/" replace />;
   }
 
@@ -345,7 +406,12 @@ function AppContent({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
           </div>
         )}
         <Routes>
-          <Route path="/" element={appMode === 'RENTAL' ? <RentalMobil /> : appMode === 'LAUNDRY' ? <KasirLaundry /> : <Kasir />} />
+          <Route path="/" element={
+            appMode === 'RENTAL' ? <RentalMobil /> :
+              appMode === 'LAUNDRY' ? <KasirLaundry /> :
+                appMode === 'BMP' ? <BmpProtectedRoute><BmpDashboard /></BmpProtectedRoute> :
+                  <Kasir />
+          } />
           <Route path="/katalog" element={<Katalog />} />
           <Route path="/orders-laundry" element={<OrderLaundry />} />
           <Route path="/layanan-laundry" element={<LayananLaundry />} />
@@ -357,6 +423,22 @@ function AppContent({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
           {canAccess(effectiveRole, '/pesanan') && <Route path="/pesanan" element={<Pesanan />} />}
           {canAccess(effectiveRole, '/supplier') && <Route path="/supplier" element={<Supplier />} />}
           {canAccess(effectiveRole, '/activity-logs') && <Route path="/activity-logs" element={<LogAktivitas />} />}
+
+          {/* BMP Routes */}
+          <Route path="/bmp-login" element={<BmpLogin />} />
+          <Route path="/bonus" element={<BmpBonusClaim />} />
+          <Route path="/invoices" element={<BmpProtectedRoute><BmpInvoices /></BmpProtectedRoute>} />
+          <Route path="/invoices/create" element={<BmpProtectedRoute><BmpCreateInvoice /></BmpProtectedRoute>} />
+          <Route path="/products" element={<BmpProtectedRoute><BmpProducts /></BmpProtectedRoute>} />
+          <Route path="/clients" element={<BmpProtectedRoute><BmpClients /></BmpProtectedRoute>} />
+          <Route path="/bahan-nono" element={<BmpProtectedRoute><BmpBahanNono /></BmpProtectedRoute>} />
+          <Route path="/kas" element={<BmpProtectedRoute><BmpCashFlow /></BmpProtectedRoute>} />
+          <Route path="/pricelist" element={<BmpProtectedRoute><BmpPricelist /></BmpProtectedRoute>} />
+          <Route path="/hpp-calculator" element={<BmpProtectedRoute><BmpHppCalculator /></BmpProtectedRoute>} />
+          <Route path="/employees" element={<BmpProtectedRoute><BmpEmployees /></BmpProtectedRoute>} />
+          <Route path="/payroll" element={<BmpProtectedRoute><BmpPayroll /></BmpProtectedRoute>} />
+          <Route path="/settings" element={<BmpProtectedRoute><BmpSettings /></BmpProtectedRoute>} />
+          <Route path="/access-denied" element={<BmpProtectedRoute><BmpAccessDenied /></BmpProtectedRoute>} />
         </Routes>
       </main>
     </div>
@@ -395,7 +477,7 @@ function BusinessModeModal({ onSelectMode }) {
     }}>
       <div style={{
         background: 'white', borderRadius: '24px', padding: '2rem',
-        maxWidth: '520px', width: '100%', textAlign: 'center',
+        maxWidth: '680px', width: '100%', textAlign: 'center',
         boxShadow: '0 25px 50px rgba(0,0,0,0.3)',
         animation: 'slideUp 0.3s ease'
       }}>
@@ -460,6 +542,24 @@ function BusinessModeModal({ onSelectMode }) {
               Kelola cucian kiloan & satuan, status proses, timbangan, pembayaran lunas/belum lunas, & notifikasi WA.
             </div>
           </div>
+
+          {/* Card 4: Invoice & Manufaktur (BMP) */}
+          <div
+            onClick={() => onSelectMode('BMP')}
+            style={{
+              border: '2px solid #E5E7EB', borderRadius: '18px', padding: '1.5rem 1rem',
+              cursor: 'pointer', transition: 'all 0.2s', display: 'flex', flexDirection: 'column',
+              alignItems: 'center', gap: '10px'
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = '#3B82F6'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#E5E7EB'; e.currentTarget.style.transform = ''; }}
+          >
+            <div style={{ fontSize: '2.5rem' }}>🏭</div>
+            <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#111827' }}>Invoice &amp; Manufaktur</div>
+            <div style={{ fontSize: '0.75rem', color: '#6B7280', lineHeight: 1.4 }}>
+              Kelola faktur, master barang, data pelanggan, bahan Baku, kas keuangan, kalkulator HPP Plastik, &amp; payroll karyawan pabrik.
+            </div>
+          </div>
         </div>
 
         <p style={{ fontSize: '0.75rem', color: '#9CA3AF', margin: 0 }}>
@@ -520,7 +620,7 @@ function OfflineOverlay({ onRetry, onContinueOffline }) {
         <h2 style={{ margin: '0 0 10px', fontSize: '1.35rem', fontWeight: 900, color: '#f8fafc', letterSpacing: '-0.025em' }}>
           Koneksi Terputus
         </h2>
-        
+
         <p style={{ margin: '0 0 1.75rem', color: '#94a3b8', fontSize: '0.85rem', lineHeight: 1.6 }}>
           Koneksi internet Anda terputus. Anda tetap dapat menggunakan fitur Kasir dalam Mode Offline secara terbatas.
         </p>
@@ -538,7 +638,7 @@ function OfflineOverlay({ onRetry, onContinueOffline }) {
           >
             Coba Hubungkan Kembali
           </button>
-          
+
           <button
             onClick={onContinueOffline}
             style={{
@@ -618,6 +718,7 @@ function ExitModal({ onClose }) {
 function BackButtonHandler({ setShowExitModal, user }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { token: bmpToken } = React.useContext(BmpAuthContext);
 
   useEffect(() => {
     let handler;
@@ -625,7 +726,8 @@ function BackButtonHandler({ setShowExitModal, user }) {
       try {
         handler = await CapApp.addListener('backButton', () => {
           // Jika di home page, login page, atau tidak terautentikasi, tampilkan exit modal
-          if (location.pathname === '/' || location.pathname === '/login' || !user) {
+          const isAuthenticated = !!user || !!bmpToken;
+          if (location.pathname === '/' || location.pathname === '/login' || location.pathname === '/bmp-login' || !isAuthenticated) {
             setShowExitModal(true);
           } else {
             // Kembali ke halaman sebelumnya di history
@@ -642,7 +744,7 @@ function BackButtonHandler({ setShowExitModal, user }) {
         handler.remove();
       }
     };
-  }, [location.pathname, navigate, setShowExitModal, user]);
+  }, [location.pathname, navigate, setShowExitModal, user, bmpToken]);
 
   return null;
 }
@@ -652,12 +754,12 @@ function App() {
   const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
   const [dismissOffline, setDismissOffline] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
-  
+
   const [theme, setTheme] = useState(() => {
     try {
       const stored = localStorage.getItem('posbah_theme');
       if (stored) return stored;
-    } catch (e) {}
+    } catch (e) { }
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
 
@@ -673,7 +775,7 @@ function App() {
         document.body.classList.remove('dark-theme');
       }
       localStorage.setItem('posbah_theme', theme);
-    } catch (e) {}
+    } catch (e) { }
   }, [theme]);
 
   useEffect(() => {
@@ -809,125 +911,195 @@ function App() {
     };
   }, [user]);
 
-  const isTrialExpired = user?.isDemo && user?.expiresAt && Date.now() > user?.expiresAt;
-
   return (
     <AuthContext.Provider value={{ user }}>
-      <DemoContext.Provider value={{ showDemoBlock, isDemo: user?.isDemo === true }}>
-        <BrowserRouter>
-          <BackButtonHandler setShowExitModal={setShowExitModal} user={user} />
-          {!user ? (
-            <>
-              <Login onLogin={handleLogin} />
-              {showExitModal && <ExitModal onClose={() => setShowExitModal(false)} />}
-            </>
-          ) : isTrialExpired ? (
-            <>
-              <div style={{
-                position: 'fixed', inset: 0, zIndex: 99999,
-                background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem',
-                fontFamily: "'Inter', sans-serif"
-              }}>
-                <div style={{
-                  background: 'white', borderRadius: '24px', padding: '2.5rem 2rem',
-                  maxWidth: '400px', width: '100%', textAlign: 'center',
-                  boxShadow: '0 25px 50px rgba(0,0,0,0.3)',
-                  animation: 'slideUp 0.25s ease'
-                }}>
-                  {/* Icon */}
-                  <div style={{
-                    width: '72px', height: '72px', borderRadius: '50%',
-                    background: 'linear-gradient(135deg, #EF4444, #B91C1C)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    margin: '0 auto 1.25rem', boxShadow: '0 8px 24px rgba(239,68,68,0.35)'
-                  }}>
-                    <Lock size={32} color="white" />
-                  </div>
-
-                  <h2 style={{ margin: '0 0 10px', fontSize: '1.4rem', fontWeight: 900, color: '#111827' }}>
-                    Masa Percobaan Habis ⏳
-                  </h2>
-                  <p style={{ margin: '0 0 1.5rem', color: '#4B5563', fontSize: '0.9rem', lineHeight: 1.6 }}>
-                    Masa percobaan 3 hari untuk akun Google <strong style={{ color: '#4F46E5' }}>{user.email}</strong> telah berakhir. Silakan hubungi kami untuk berlangganan POSBah agar dapat melanjutkan akses penuh.
-                  </p>
-
-                  {/* CTA */}
-                  <a
-                    href={`https://wa.me/6282245077959?text=Halo%2C%20saya%20ingin%20berlangganan%20POSBah%20setelah%20menggunakan%20trial%20Google%20dengan%20email%20${encodeURIComponent(user.email)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                      width: '100%', padding: '14px', borderRadius: '14px', border: 'none',
-                      background: 'linear-gradient(135deg, #10B981, #059669)',
-                      color: 'white', fontWeight: 800, fontSize: '0.95rem', cursor: 'pointer',
-                      textDecoration: 'none', marginBottom: '12px', boxSizing: 'border-box',
-                      boxShadow: '0 4px 14px rgba(16,185,129,0.4)'
-                    }}
-                  >
-                    <Sparkles size={18} /> Hubungi WhatsApp (Berlangganan)
-                  </a>
-                  
-                  <button
-                    onClick={handleLogout}
-                    style={{
-                      width: '100%', padding: '12px', borderRadius: '14px',
-                      border: '1.5px solid #E5E7EB', background: 'white',
-                      color: '#6B7280', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer'
-                    }}
-                  >
-                    Keluar / Ganti Akun
-                  </button>
-                </div>
-              </div>
-              {showExitModal && <ExitModal onClose={() => setShowExitModal(false)} />}
-            </>
-          ) : (
-            <>
-              {/* Offline/Demo Banner */}
-              {isOffline ? <OfflineBanner /> : (user?.isDemo && <DemoBanner />)}
-
-              {isOffline && !dismissOffline && (
-                <OfflineOverlay
-                  onRetry={() => {
-                    if (navigator.onLine) {
-                      setIsOffline(false);
-                      setDismissOffline(false);
-                    } else {
-                      alert('Koneksi internet masih belum tersedia.');
-                    }
-                  }}
-                  onContinueOffline={() => setDismissOffline(true)}
-                />
-              )}
-
-              <div style={{ paddingTop: (isOffline || user?.isDemo) ? '36px' : 0, height: '100vh', boxSizing: 'border-box' }}>
-                <AppContent user={user} onLogout={handleLogout} appMode={appMode} setAppMode={setAppMode} theme={theme} toggleTheme={toggleTheme} />
-              </div>
-
-              {/* Onboarding Mode Selection Modal */}
-              {showModePrompt && (
-                <BusinessModeModal onSelectMode={handleSelectMode} />
-              )}
-
-              {/* Demo Block Modal */}
-              {demoBlockMsg && (
-                <DemoBlockModal
-                  message={typeof demoBlockMsg === 'string' ? demoBlockMsg : undefined}
-                  onClose={() => setDemoBlockMsg(null)}
-                />
-              )}
-
-              {/* Exit Modal */}
-              {showExitModal && (
-                <ExitModal onClose={() => setShowExitModal(false)} />
-              )}
-            </>
-          )}
-        </BrowserRouter>
-      </DemoContext.Provider>
+      <BmpAuthProvider>
+        <DemoContext.Provider value={{ showDemoBlock, isDemo: user?.isDemo === true }}>
+          <BrowserRouter>
+            <BackButtonHandler setShowExitModal={setShowExitModal} user={user} />
+            <MainRouterContent
+              user={user}
+              handleLogin={handleLogin}
+              handleLogout={handleLogout}
+              appMode={appMode}
+              setAppMode={setAppMode}
+              theme={theme}
+              toggleTheme={toggleTheme}
+              showExitModal={showExitModal}
+              setShowExitModal={setShowExitModal}
+              showModePrompt={showModePrompt}
+              handleSelectMode={handleSelectMode}
+              demoBlockMsg={demoBlockMsg}
+              setDemoBlockMsg={setDemoBlockMsg}
+              isOffline={isOffline}
+              dismissOffline={dismissOffline}
+              setIsOffline={setIsOffline}
+              setDismissOffline={setDismissOffline}
+            />
+          </BrowserRouter>
+        </DemoContext.Provider>
+      </BmpAuthProvider>
     </AuthContext.Provider>
+  );
+}
+
+// ─── Main Router Content Component ─────────────────────────────
+function MainRouterContent({
+  user, handleLogin, handleLogout,
+  appMode, setAppMode,
+  theme, toggleTheme,
+  showExitModal, setShowExitModal,
+  showModePrompt, handleSelectMode,
+  demoBlockMsg, setDemoBlockMsg,
+  isOffline, dismissOffline, setIsOffline, setDismissOffline
+}) {
+  const { token: bmpToken } = React.useContext(BmpAuthContext);
+  const location = useLocation();
+
+  const isBmpMode = appMode === 'BMP';
+  const isAuthenticated = !!user || (!!bmpToken && isBmpMode);
+
+  // Exclude public paths from login check
+  const isPublicRoute = location.pathname === '/bmp-login' || location.pathname === '/bonus' || location.pathname === '/toko-online';
+
+  const isTrialExpired = user?.isDemo && user?.expiresAt && Date.now() > user?.expiresAt;
+
+  if (isPublicRoute) {
+    return (
+      <Routes>
+        <Route path="/bmp-login" element={<BmpLogin />} />
+        <Route path="/bonus" element={<BmpBonusClaim />} />
+        <Route path="/toko-online" element={<TokoOnline />} />
+        <Route path="*" element={<Navigate to="/bmp-login" replace />} />
+      </Routes>
+    );
+  }
+
+  if (!isAuthenticated) {
+    if (isBmpMode) {
+      return (
+        <Routes>
+          <Route path="/bmp-login" element={<BmpLogin />} />
+          <Route path="*" element={<Navigate to="/bmp-login" replace />} />
+        </Routes>
+      );
+    } else {
+      return (
+        <>
+          <Login onLogin={handleLogin} />
+          {showExitModal && <ExitModal onClose={() => setShowExitModal(false)} />}
+        </>
+      );
+    }
+  }
+
+  if (isTrialExpired) {
+    return (
+      <>
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 99999,
+          background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem',
+          fontFamily: "'Inter', sans-serif"
+        }}>
+          <div style={{
+            background: 'white', borderRadius: '24px', padding: '2.5rem 2rem',
+            maxWidth: '400px', width: '100%', textAlign: 'center',
+            boxShadow: '0 25px 50px rgba(0,0,0,0.3)',
+            animation: 'slideUp 0.25s ease'
+          }}>
+            {/* Icon */}
+            <div style={{
+              width: '72px', height: '72px', borderRadius: '50%',
+              background: 'linear-gradient(135deg, #EF4444, #B91C1C)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              margin: '0 auto 1.25rem', boxShadow: '0 8px 24px rgba(239,68,68,0.35)'
+            }}>
+              <Lock size={32} color="white" />
+            </div>
+
+            <h2 style={{ margin: '0 0 10px', fontSize: '1.4rem', fontWeight: 900, color: '#111827' }}>
+              Masa Percobaan Habis ⏳
+            </h2>
+            <p style={{ margin: '0 0 1.5rem', color: '#4B5563', fontSize: '0.9rem', lineHeight: 1.6 }}>
+              Masa percobaan 3 hari untuk akun Google <strong style={{ color: '#4F46E5' }}>{user.email}</strong> telah berakhir. Silakan hubungi kami untuk berlangganan POSBah agar dapat melanjutkan akses penuh.
+            </p>
+
+            {/* CTA */}
+            <a
+              href={`https://wa.me/6282245077959?text=Halo%2C%20saya%20ingin%20berlangganan%20POSBah%20setelah%20menggunakan%20trial%20Google%20dengan%20email%20${encodeURIComponent(user.email)}`}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                width: '100%', padding: '14px', borderRadius: '14px', border: 'none',
+                background: 'linear-gradient(135deg, #10B981, #059669)',
+                color: 'white', fontWeight: 800, fontSize: '0.95rem', cursor: 'pointer',
+                textDecoration: 'none', marginBottom: '12px', boxSizing: 'border-box',
+                boxShadow: '0 4px 14px rgba(16,185,129,0.4)'
+              }}
+            >
+              <Sparkles size={18} /> Hubungi WhatsApp (Berlangganan)
+            </a>
+
+            <button
+              onClick={handleLogout}
+              style={{
+                width: '100%', padding: '12px', borderRadius: '14px',
+                border: '1.5px solid #E5E7EB', background: 'white',
+                color: '#6B7280', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer'
+              }}
+            >
+              Keluar / Ganti Akun
+            </button>
+          </div>
+        </div>
+        {showExitModal && <ExitModal onClose={() => setShowExitModal(false)} />}
+      </>
+    );
+  }
+
+  return (
+    <>
+      {/* Offline/Demo Banner */}
+      {isOffline ? <OfflineBanner /> : (user?.isDemo && <DemoBanner />)}
+
+      {isOffline && !dismissOffline && (
+        <OfflineOverlay
+          onRetry={() => {
+            if (navigator.onLine) {
+              setIsOffline(false);
+              setDismissOffline(false);
+            } else {
+              alert('Koneksi internet masih belum tersedia.');
+            }
+          }}
+          onContinueOffline={() => setDismissOffline(true)}
+        />
+      )}
+
+      <div style={{ paddingTop: (isOffline || user?.isDemo) ? '36px' : 0, height: '100vh', boxSizing: 'border-box' }}>
+        <AppContent user={user} onLogout={handleLogout} appMode={appMode} setAppMode={setAppMode} theme={theme} toggleTheme={toggleTheme} />
+      </div>
+
+      {/* Onboarding Mode Selection Modal */}
+      {showModePrompt && (
+        <BusinessModeModal onSelectMode={handleSelectMode} />
+      )}
+
+      {/* Demo Block Modal */}
+      {demoBlockMsg && (
+        <DemoBlockModal
+          message={typeof demoBlockMsg === 'string' ? demoBlockMsg : undefined}
+          onClose={() => setDemoBlockMsg(null)}
+        />
+      )}
+
+      {/* Exit Modal */}
+      {showExitModal && (
+        <ExitModal onClose={() => setShowExitModal(false)} />
+      )}
+    </>
   );
 }
 

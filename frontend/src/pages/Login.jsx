@@ -319,6 +319,50 @@ export default function Login({ onLogin }) {
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '24px 0 16px' }}>
               <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.15)' }} />
+              <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem', fontWeight: 600 }}>SISTEM LAIN</span>
+              <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.15)' }} />
+            </div>
+
+            <button
+              onClick={() => {
+                localStorage.setItem('posbah_app_mode', 'BMP');
+                window.location.reload();
+              }}
+              style={{
+                width: '100%',
+                padding: '16px',
+                borderRadius: '16px',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                background: 'rgba(59, 130, 246, 0.1)',
+                color: '#93c5fd',
+                fontSize: '0.95rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '12px',
+                transition: 'all 0.2s',
+                boxShadow: '0 4px 12px rgba(59,130,246,0.1)'
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)';
+                e.currentTarget.style.transform = 'translateY(-2px)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+            >
+              <span style={{ fontSize: '1.3rem' }}>🏭</span>
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ fontWeight: 800 }}>Masuk ke Invoice & Manufaktur (BMP)</div>
+                <div style={{ fontSize: '0.75rem', color: 'rgba(147,197,253,0.7)', fontWeight: 500 }}>Sistem Pabrik Bahtera Mulya</div>
+              </div>
+            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '24px 0 16px' }}>
+              <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.15)' }} />
               <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem', fontWeight: 600 }}>ATAU COBA DEMO</span>
               <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.15)' }} />
             </div>
