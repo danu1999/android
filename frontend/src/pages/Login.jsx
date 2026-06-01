@@ -19,7 +19,7 @@ export default function Login({ onLogin }) {
       // Auto login to BMP in background
       try {
         const isLocalDev = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-        const bmpApiUrl = import.meta.env.VITE_API_URL_BMP || (isLocalDev ? 'http://localhost:8080/api' : 'http://103.93.163.227/api-bmp');
+        const bmpApiUrl = import.meta.env.VITE_API_URL_BMP || (isLocalDev ? 'http://localhost:8080/api' : '/api-bmp');
         
         const bmpRes = await api.post(`${bmpApiUrl}/login`, {
           username: email.trim(),

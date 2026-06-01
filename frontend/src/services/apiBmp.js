@@ -3,7 +3,7 @@ import axios from 'axios';
 const isCapacitor = !!window.Capacitor || window.location.protocol === 'capacitor:';
 const isLocalDev = !isCapacitor && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '';
 
-export const API_URL = import.meta.env.VITE_API_URL_BMP || (isLocalDev ? 'http://localhost:8080/api' : 'http://103.93.163.227/api-bmp');
+export const API_URL = import.meta.env.VITE_API_URL_BMP || (isLocalDev ? 'http://localhost:8080/api' : '/api-bmp');
 
 const api = axios.create({
   baseURL: API_URL,
