@@ -232,7 +232,8 @@ const Invoices = () => {
                     html2canvas(element, {
                         scale: 2,
                         useCORS: true,
-                        backgroundColor: "#ffffff"
+                        backgroundColor: "#ffffff",
+                        logging: false
                     }).then(canvas => {
                         element.style.display = 'none';
                         element.style.top = '-9999px';
