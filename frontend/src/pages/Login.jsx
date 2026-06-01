@@ -166,27 +166,33 @@ export default function Login({ onLogin }) {
 
   useEffect(() => {
     /* global google */
+    let retryCount = 0;
     const initGoogleGSI = () => {
       if (window.google) {
         google.accounts.id.initialize({
-          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID_PLACEHOLDER.apps.googleusercontent.com",
+          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || "276837280353-d83c8eo0nfo5v1ij1dr4okjjt443mbn0.apps.googleusercontent.com",
           callback: handleGoogleLoginResponse
         });
-        google.accounts.id.renderButton(
-          document.getElementById("google-signin-btn"),
-          { 
-            theme: "outline", 
-            size: "large", 
-            width: "316", 
-            text: "continue_with",
-            shape: "pill"
-          }
-        );
+        const btnElem = document.getElementById("google-signin-btn");
+        if (btnElem) {
+          google.accounts.id.renderButton(
+            btnElem,
+            { 
+              theme: "outline", 
+              size: "large", 
+              width: "316", 
+              text: "continue_with",
+              shape: "pill"
+            }
+          );
+        }
+      } else if (retryCount < 20) {
+        retryCount++;
+        setTimeout(initGoogleGSI, 200);
       }
     };
 
-    const timer = setTimeout(initGoogleGSI, 300);
-    return () => clearTimeout(timer);
+    initGoogleGSI();
   }, []);
 
   return (
@@ -364,7 +370,7 @@ export default function Login({ onLogin }) {
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px', width: '100%' }}>
-            {window.Capacitor || !window.google ? (
+            {window.Capacitor ? (
               <button
                 onClick={handleNativeGoogleLogin}
                 disabled={loading}
