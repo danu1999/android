@@ -973,7 +973,7 @@ function MainRouterContent({
         const autoDemoLogin = async () => {
           try {
             const isLocalDev = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-            const bmpApiUrl = import.meta.env.VITE_API_URL_BMP || (isLocalDev ? 'http://localhost:8080/api' : '/api-bmp');
+            const bmpApiUrl = import.meta.env.VITE_API_URL_BMP || (isLocalDev ? 'http://localhost:8080/api' : '/api-bmp-demo');
             
             const response = await fetch(`${bmpApiUrl}/login`, {
               method: 'POST',
