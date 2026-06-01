@@ -10,6 +10,7 @@ generator client {
 model Employee {
   id        Int      @id @default(autoincrement())
   name      String
+  email     String?  // Map to email-based login
   /// Valid values: KASIR | ADMIN | OWNER
   /// KASIR  - transaksi & lihat katalog saja
   /// ADMIN  - kelola produk, pelanggan, keuangan

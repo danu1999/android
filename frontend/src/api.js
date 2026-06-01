@@ -19,6 +19,7 @@ api.interceptors.request.use((config) => {
       const user = JSON.parse(stored);
       if (user?.id !== undefined && user?.id !== null) config.headers['x-employee-id'] = String(user.id);
       if (user?.role) config.headers['x-employee-role'] = user.role;
+      if (user?.name) config.headers['x-employee-name'] = encodeURIComponent(user.name);
     }
     const appMode = localStorage.getItem('posbah_app_mode') || 'FNB';
     config.headers['x-app-mode'] = appMode;

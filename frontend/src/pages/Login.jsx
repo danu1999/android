@@ -222,14 +222,14 @@ export default function Login({ onLogin }) {
         </div>
         {/* Konten Form Dinamis */}
         <div>
-          {/* Email / Username Input */}
+          {/* Email Input */}
           <div style={{ marginBottom: '1.25rem' }}>
             <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '0.8rem', fontWeight: 600, marginBottom: '8px', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-              Email / Username
+              Email
             </label>
             <input
               type="text"
-              placeholder="Masukkan email atau username Anda"
+              placeholder="Masukkan email Anda"
               value={email}
               onChange={e => { setEmail(e.target.value); setError(''); }}
               style={{

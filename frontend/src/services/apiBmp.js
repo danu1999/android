@@ -25,7 +25,7 @@ api.interceptors.response.use(
     if (error.response) {
       if (error.response.status === 401) {
         localStorage.removeItem('token');
-        window.location.href = '/bmp-login';
+        window.location.href = '/';
       } else if (error.response.status === 403) {
         window.location.href = '/';
       }

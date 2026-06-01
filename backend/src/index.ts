@@ -153,7 +153,14 @@ const logActivity = async (employeeId: any, action: string, description: string)
       appMode = 'LAUNDRY';
     }
 
-    const empId = Number(employeeId);
+    let empId: number;
+    if (typeof employeeId === 'string' && employeeId.includes('@')) {
+      const emp = await prisma.employee.findFirst({ where: { email: employeeId } });
+      if (!emp) return;
+      empId = emp.id;
+    } else {
+      empId = Number(employeeId);
+    }
     if (!empId || isNaN(empId)) return;
 
     // Skip logging if employee name is "muizz"
@@ -344,6 +351,65 @@ const requireOwner = async (req: Request, res: Response, next: NextFunction) => 
 };
 
 
+/** Helper to resolve numeric Employee ID from x-employee-id header (which can be email) */
+async function resolveEmployeeId(req: Request): Promise<number> {
+  const employeeIdHeader = req.headers['x-employee-id'] as string;
+  const employeeRoleHeader = req.headers['x-employee-role'] as string || 'KASIR';
+  const rawName = req.headers['x-employee-name'] as string;
+  const employeeNameHeader = rawName ? decodeURIComponent(rawName) : 'User';
+
+  if (!employeeIdHeader || employeeIdHeader === '0' || employeeIdHeader === '9999') {
+    let employee = await prisma.employee.findFirst({
+      where: { name: 'Sistem' }
+    });
+    if (!employee) {
+      employee = await prisma.employee.create({
+        data: { name: 'Sistem', role: 'OWNER', pin: '', email: 'sistem@posbah.com' }
+      });
+    }
+    return employee.id;
+  }
+
+  if (employeeIdHeader.includes('@')) {
+    let employee = await prisma.employee.findFirst({
+      where: { email: employeeIdHeader }
+    });
+
+    if (!employee) {
+      employee = await prisma.employee.create({
+        data: {
+          name: employeeNameHeader,
+          role: employeeRoleHeader,
+          pin: '',
+          email: employeeIdHeader
+        }
+      });
+    } else {
+      if (employee.name !== employeeNameHeader || employee.role !== employeeRoleHeader) {
+        employee = await prisma.employee.update({
+          where: { id: employee.id },
+          data: { name: employeeNameHeader, role: employeeRoleHeader }
+        });
+      }
+    }
+    return employee.id;
+  }
+
+  const numericId = Number(employeeIdHeader);
+  if (!isNaN(numericId)) {
+    return numericId;
+  }
+
+  // Fallback
+  let employee = await prisma.employee.findFirst();
+  if (!employee) {
+    employee = await prisma.employee.create({
+      data: { name: 'Sistem', role: 'OWNER', pin: '', email: 'sistem@posbah.com' }
+    });
+  }
+  return employee.id;
+}
+
 /** Middleware: blokir akun demo (id=0 atau id=9999) atau tanpa ID dari semua operasi tulis */
 const requireNotDemo = (req: Request, res: Response, next: NextFunction) => {
   const employeeId = req.headers['x-employee-id'] as string;
@@ -358,8 +424,15 @@ const checkExcludedEmployee = async (req: Request, res: Response, next: NextFunc
   const employeeId = req.headers['x-employee-id'] as string;
   if (employeeId && employeeId !== '0' && employeeId !== '9999') {
     try {
-      const emp = await prisma.employee.findUnique({ where: { id: Number(employeeId) } });
-      if (emp && ['hanafi', 'fed', 'fahri'].includes(emp.name.toLowerCase())) {
+      let empName = '';
+      if (employeeId.includes('@')) {
+        const emp = await prisma.employee.findFirst({ where: { email: employeeId } });
+        if (emp) empName = emp.name;
+      } else {
+        const emp = await prisma.employee.findUnique({ where: { id: Number(employeeId) } });
+        if (emp) empName = emp.name;
+      }
+      if (empName && ['hanafi', 'fed', 'fahri'].includes(empName.toLowerCase())) {
         return res.status(403).json({ error: 'Akses ditolak. Fitur rental tidak aktif untuk akun Anda.' });
       }
     } catch (e) {
@@ -402,28 +475,9 @@ app.get('/api/download-apk', (req, res) => {
 // Auth - Login with name + PIN
 // ─────────────────────────────────────────────────────────────
 app.post('/api/auth/login', async (req, res) => {
-  try {
-    const { name, pin } = req.body;
-    if (!name || !pin) return res.status(400).json({ error: 'Nama dan PIN wajib diisi' });
-
-    // Bypass untuk userdemo
-    if (name.toLowerCase() === 'userdemo') {
-      return res.json({ id: 9999, name: 'userdemo', role: 'OWNER', isDemo: true });
-    }
-
-    const employee = await prisma.employee.findFirst({
-      where: { name: { equals: name, mode: 'insensitive' } }
-    });
-    if (!employee) return res.status(401).json({ error: 'Nama atau PIN salah' });
-
-    const isPinMatch = verifyPassword(pin, employee.pin) || employee.pin === pin;
-    if (!isPinMatch) return res.status(401).json({ error: 'Nama atau PIN salah' });
-
-    res.json({ id: employee.id, name: employee.name, role: employee.role });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Login gagal' });
-  }
+  res.status(400).json({
+    error: 'Metode login menggunakan Nama & PIN sudah dinonaktifkan karena telah digabungkan ke Email & Password. Silakan gunakan versi terbaru.'
+  });
 });
 
 // ─────────────────────────────────────────────────────────────
@@ -719,20 +773,7 @@ app.post('/api/transactions', requireNotDemo, async (req, res) => {
       notes, customerName, queueNumber
     } = req.body;
 
-    const employeeIdHeader = req.headers['x-employee-id'] as string;
-    let employeeId: number;
-
-    if (employeeIdHeader && employeeIdHeader !== '0') {
-      employeeId = Number(employeeIdHeader);
-    } else {
-      let employee = await prisma.employee.findFirst();
-      if (!employee) {
-        employee = await prisma.employee.create({
-          data: { name: 'Admin Default', role: 'ADMIN', pin: '1234' }
-        });
-      }
-      employeeId = employee.id;
-    }
+    const employeeId = await resolveEmployeeId(req);
 
     // Hitung subtotal dari items jika tidak dikirim
     const computedSubtotal = subtotal ?? items.reduce((sum: number, i: any) => sum + (i.price * i.quantity), 0);
@@ -1004,7 +1045,7 @@ app.post('/api/employees', requireOwner, async (req, res) => {
   try {
     const employeeIdHeader = req.headers['x-employee-id'] as string;
     // Blokir demo user (id = 0 atau id = 9999)
-    if (Number(employeeIdHeader) === 0 || Number(employeeIdHeader) === 9999) {
+    if (employeeIdHeader === '0' || employeeIdHeader === '9999') {
       return res.status(403).json({ error: 'Akun demo tidak dapat menambah karyawan' });
     }
     const count = await prisma.employee.count();
@@ -1046,7 +1087,7 @@ app.put('/api/employees/:id', requireOwner, async (req, res) => {
     const { id } = req.params;
     const employeeIdHeader = req.headers['x-employee-id'] as string;
     // Blokir demo user (id = 0 atau id = 9999)
-    if (Number(employeeIdHeader) === 0 || Number(employeeIdHeader) === 9999) {
+    if (employeeIdHeader === '0' || employeeIdHeader === '9999') {
       return res.status(403).json({ error: 'Akun demo tidak dapat mengubah karyawan' });
     }
     const { name, role, pin, salary } = req.body;
@@ -1084,10 +1125,11 @@ app.delete('/api/employees/:id', requireOwner, async (req, res) => {
     const { id } = req.params;
     const employeeIdHeader = req.headers['x-employee-id'] as string;
     // Blokir demo user (id = 0 atau id = 9999)
-    if (Number(employeeIdHeader) === 0 || Number(employeeIdHeader) === 9999) {
+    if (employeeIdHeader === '0' || employeeIdHeader === '9999') {
       return res.status(403).json({ error: 'Akun demo tidak dapat menghapus karyawan' });
     }
-    if (Number(id) === Number(employeeIdHeader)) {
+    const currentEmployeeId = await resolveEmployeeId(req);
+    if (Number(id) === currentEmployeeId) {
       return res.status(400).json({ error: 'Tidak dapat menghapus akun sendiri' });
     }
 
@@ -1281,11 +1323,7 @@ app.post('/api/laundry/orders', requireNotDemo, async (req: Request, res: Respon
       selimut, sprei, boneka, korden, lokasi, customerId
     } = req.body;
 
-    const employeeIdHeader = req.headers['x-employee-id'] as string;
-    let employeeId: number | null = null;
-    if (employeeIdHeader && employeeIdHeader !== '0') {
-      employeeId = Number(employeeIdHeader);
-    }
+    const employeeId = await resolveEmployeeId(req);
 
     const receiptNumber = `INV-LND-${Date.now()}`;
 
@@ -1310,7 +1348,7 @@ app.post('/api/laundry/orders', requireNotDemo, async (req: Request, res: Respon
     });
 
     logActivity(
-      employeeIdHeader,
+      req.headers['x-employee-id'],
       'CREATE_LAUNDRY_ORDER',
       `Membuat pesanan laundry baru ${receiptNumber} untuk ${namaPelanggan} senilai Rp ${order.totalHarga.toLocaleString('id-ID')}`
     );
@@ -2223,8 +2261,7 @@ app.get('/api/rentals', requireAdmin, checkExcludedEmployee, async (req, res) =>
 app.post('/api/rentals', requireAdmin, checkExcludedEmployee, async (req, res) => {
   try {
     const { carId, customerId, customerName, startDate, endDate, totalPrice, paymentMethod, identityText } = req.body;
-    const employeeIdHeader = req.headers['x-employee-id'] as string;
-    const empId = Number(employeeIdHeader) || 1;
+    const empId = await resolveEmployeeId(req);
 
     if (!carId || !customerName || !startDate || !endDate || !totalPrice || !paymentMethod) {
       return res.status(400).json({ error: 'Semua data penyewaan wajib diisi' });
@@ -2317,8 +2354,7 @@ app.post('/api/rentals/:id/return', requireAdmin, checkExcludedEmployee, async (
   try {
     const { id } = req.params;
     const { actualReturnDate, lateFee, paymentMethod } = req.body;
-    const employeeIdHeader = req.headers['x-employee-id'] as string;
-    const empId = Number(employeeIdHeader) || 1;
+    const empId = await resolveEmployeeId(req);
 
     const rentalId = Number(id);
 

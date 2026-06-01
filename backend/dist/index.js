@@ -146,7 +146,16 @@ const logActivity = (employeeId, action, description) => __awaiter(void 0, void 
         else if (['CREATE_LAUNDRY_SERVICE', 'UPDATE_LAUNDRY_SERVICE', 'DELETE_LAUNDRY_SERVICE', 'CREATE_LAUNDRY_ORDER', 'UPDATE_LAUNDRY_STATUS', 'UPDATE_LAUNDRY_PAYMENT', 'DELETE_LAUNDRY_ORDER', 'CREATE_LAUNDRY_EXPENSE', 'UPDATE_LAUNDRY_EXPENSE', 'DELETE_LAUNDRY_EXPENSE'].includes(action)) {
             appMode = 'LAUNDRY';
         }
-        const empId = Number(employeeId);
+        let empId;
+        if (typeof employeeId === 'string' && employeeId.includes('@')) {
+            const emp = yield prisma.employee.findFirst({ where: { email: employeeId } });
+            if (!emp)
+                return;
+            empId = emp.id;
+        }
+        else {
+            empId = Number(employeeId);
+        }
         if (!empId || isNaN(empId))
             return;
         // Skip logging if employee name is "muizz"
@@ -316,6 +325,62 @@ const requireOwner = (req, res, next) => __awaiter(void 0, void 0, void 0, funct
     }
     next();
 });
+/** Helper to resolve numeric Employee ID from x-employee-id header (which can be email) */
+function resolveEmployeeId(req) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const employeeIdHeader = req.headers['x-employee-id'];
+        const employeeRoleHeader = req.headers['x-employee-role'] || 'KASIR';
+        const rawName = req.headers['x-employee-name'];
+        const employeeNameHeader = rawName ? decodeURIComponent(rawName) : 'User';
+        if (!employeeIdHeader || employeeIdHeader === '0' || employeeIdHeader === '9999') {
+            let employee = yield prisma.employee.findFirst({
+                where: { name: 'Sistem' }
+            });
+            if (!employee) {
+                employee = yield prisma.employee.create({
+                    data: { name: 'Sistem', role: 'OWNER', pin: '', email: 'sistem@posbah.com' }
+                });
+            }
+            return employee.id;
+        }
+        if (employeeIdHeader.includes('@')) {
+            let employee = yield prisma.employee.findFirst({
+                where: { email: employeeIdHeader }
+            });
+            if (!employee) {
+                employee = yield prisma.employee.create({
+                    data: {
+                        name: employeeNameHeader,
+                        role: employeeRoleHeader,
+                        pin: '',
+                        email: employeeIdHeader
+                    }
+                });
+            }
+            else {
+                if (employee.name !== employeeNameHeader || employee.role !== employeeRoleHeader) {
+                    employee = yield prisma.employee.update({
+                        where: { id: employee.id },
+                        data: { name: employeeNameHeader, role: employeeRoleHeader }
+                    });
+                }
+            }
+            return employee.id;
+        }
+        const numericId = Number(employeeIdHeader);
+        if (!isNaN(numericId)) {
+            return numericId;
+        }
+        // Fallback
+        let employee = yield prisma.employee.findFirst();
+        if (!employee) {
+            employee = yield prisma.employee.create({
+                data: { name: 'Sistem', role: 'OWNER', pin: '', email: 'sistem@posbah.com' }
+            });
+        }
+        return employee.id;
+    });
+}
 /** Middleware: blokir akun demo (id=0 atau id=9999) atau tanpa ID dari semua operasi tulis */
 const requireNotDemo = (req, res, next) => {
     const employeeId = req.headers['x-employee-id'];
@@ -329,8 +394,18 @@ const checkExcludedEmployee = (req, res, next) => __awaiter(void 0, void 0, void
     const employeeId = req.headers['x-employee-id'];
     if (employeeId && employeeId !== '0' && employeeId !== '9999') {
         try {
-            const emp = yield prisma.employee.findUnique({ where: { id: Number(employeeId) } });
-            if (emp && ['hanafi', 'fed', 'fahri'].includes(emp.name.toLowerCase())) {
+            let empName = '';
+            if (employeeId.includes('@')) {
+                const emp = yield prisma.employee.findFirst({ where: { email: employeeId } });
+                if (emp)
+                    empName = emp.name;
+            }
+            else {
+                const emp = yield prisma.employee.findUnique({ where: { id: Number(employeeId) } });
+                if (emp)
+                    empName = emp.name;
+            }
+            if (empName && ['hanafi', 'fed', 'fahri'].includes(empName.toLowerCase())) {
                 return res.status(403).json({ error: 'Akses ditolak. Fitur rental tidak aktif untuk akun Anda.' });
             }
         }
@@ -369,28 +444,9 @@ app.get('/api/download-apk', (req, res) => {
 // Auth - Login with name + PIN
 // ─────────────────────────────────────────────────────────────
 app.post('/api/auth/login', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const { name, pin } = req.body;
-        if (!name || !pin)
-            return res.status(400).json({ error: 'Nama dan PIN wajib diisi' });
-        // Bypass untuk userdemo
-        if (name.toLowerCase() === 'userdemo') {
-            return res.json({ id: 9999, name: 'userdemo', role: 'OWNER', isDemo: true });
-        }
-        const employee = yield prisma.employee.findFirst({
-            where: { name: { equals: name, mode: 'insensitive' } }
-        });
-        if (!employee)
-            return res.status(401).json({ error: 'Nama atau PIN salah' });
-        const isPinMatch = verifyPassword(pin, employee.pin) || employee.pin === pin;
-        if (!isPinMatch)
-            return res.status(401).json({ error: 'Nama atau PIN salah' });
-        res.json({ id: employee.id, name: employee.name, role: employee.role });
-    }
-    catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Login gagal' });
-    }
+    res.status(400).json({
+        error: 'Metode login menggunakan Nama & PIN sudah dinonaktifkan karena telah digabungkan ke Email & Password. Silakan gunakan versi terbaru.'
+    });
 }));
 // ─────────────────────────────────────────────────────────────
 // Auth - Google Login Registration for Demo Trial (3-Day Limit)
@@ -631,20 +687,7 @@ app.get('/api/transactions', requireAdmin, (req, res) => __awaiter(void 0, void 
 app.post('/api/transactions', requireNotDemo, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { items, total, subtotal, discount, discountType, discountInput, discountAmt, paymentMethod, amountPaid, change, type, customerId, date, status, notes, customerName, queueNumber } = req.body;
-        const employeeIdHeader = req.headers['x-employee-id'];
-        let employeeId;
-        if (employeeIdHeader && employeeIdHeader !== '0') {
-            employeeId = Number(employeeIdHeader);
-        }
-        else {
-            let employee = yield prisma.employee.findFirst();
-            if (!employee) {
-                employee = yield prisma.employee.create({
-                    data: { name: 'Admin Default', role: 'ADMIN', pin: '1234' }
-                });
-            }
-            employeeId = employee.id;
-        }
+        const employeeId = yield resolveEmployeeId(req);
         // Hitung subtotal dari items jika tidak dikirim
         const computedSubtotal = subtotal !== null && subtotal !== void 0 ? subtotal : items.reduce((sum, i) => sum + (i.price * i.quantity), 0);
         const computedDiscountAmt = discountAmt !== null && discountAmt !== void 0 ? discountAmt : Number(discount || 0);
@@ -888,7 +931,7 @@ app.post('/api/employees', requireOwner, (req, res) => __awaiter(void 0, void 0,
     try {
         const employeeIdHeader = req.headers['x-employee-id'];
         // Blokir demo user (id = 0 atau id = 9999)
-        if (Number(employeeIdHeader) === 0 || Number(employeeIdHeader) === 9999) {
+        if (employeeIdHeader === '0' || employeeIdHeader === '9999') {
             return res.status(403).json({ error: 'Akun demo tidak dapat menambah karyawan' });
         }
         const count = yield prisma.employee.count();
@@ -922,7 +965,7 @@ app.put('/api/employees/:id', requireOwner, (req, res) => __awaiter(void 0, void
         const { id } = req.params;
         const employeeIdHeader = req.headers['x-employee-id'];
         // Blokir demo user (id = 0 atau id = 9999)
-        if (Number(employeeIdHeader) === 0 || Number(employeeIdHeader) === 9999) {
+        if (employeeIdHeader === '0' || employeeIdHeader === '9999') {
             return res.status(403).json({ error: 'Akun demo tidak dapat mengubah karyawan' });
         }
         const { name, role, pin, salary } = req.body;
@@ -953,10 +996,11 @@ app.delete('/api/employees/:id', requireOwner, (req, res) => __awaiter(void 0, v
         const { id } = req.params;
         const employeeIdHeader = req.headers['x-employee-id'];
         // Blokir demo user (id = 0 atau id = 9999)
-        if (Number(employeeIdHeader) === 0 || Number(employeeIdHeader) === 9999) {
+        if (employeeIdHeader === '0' || employeeIdHeader === '9999') {
             return res.status(403).json({ error: 'Akun demo tidak dapat menghapus karyawan' });
         }
-        if (Number(id) === Number(employeeIdHeader)) {
+        const currentEmployeeId = yield resolveEmployeeId(req);
+        if (Number(id) === currentEmployeeId) {
             return res.status(400).json({ error: 'Tidak dapat menghapus akun sendiri' });
         }
         // Cek apakah karyawan masih punya transaksi
@@ -1126,11 +1170,7 @@ app.get('/api/laundry/orders/:id', (req, res) => __awaiter(void 0, void 0, void 
 app.post('/api/laundry/orders', requireNotDemo, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { namaPelanggan, noHp, jenisLayanan, jenisLaundry, totalHarga, statusBayar, selimut, sprei, boneka, korden, lokasi, customerId } = req.body;
-        const employeeIdHeader = req.headers['x-employee-id'];
-        let employeeId = null;
-        if (employeeIdHeader && employeeIdHeader !== '0') {
-            employeeId = Number(employeeIdHeader);
-        }
+        const employeeId = yield resolveEmployeeId(req);
         const receiptNumber = `INV-LND-${Date.now()}`;
         const order = yield prisma.laundryOrder.create({
             data: {
@@ -1151,7 +1191,7 @@ app.post('/api/laundry/orders', requireNotDemo, (req, res) => __awaiter(void 0, 
                 customerId: customerId ? Number(customerId) : null
             }
         });
-        logActivity(employeeIdHeader, 'CREATE_LAUNDRY_ORDER', `Membuat pesanan laundry baru ${receiptNumber} untuk ${namaPelanggan} senilai Rp ${order.totalHarga.toLocaleString('id-ID')}`);
+        logActivity(req.headers['x-employee-id'], 'CREATE_LAUNDRY_ORDER', `Membuat pesanan laundry baru ${receiptNumber} untuk ${namaPelanggan} senilai Rp ${order.totalHarga.toLocaleString('id-ID')}`);
         res.json(order);
     }
     catch (error) {
@@ -1956,8 +1996,7 @@ app.get('/api/rentals', requireAdmin, checkExcludedEmployee, (req, res) => __awa
 app.post('/api/rentals', requireAdmin, checkExcludedEmployee, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { carId, customerId, customerName, startDate, endDate, totalPrice, paymentMethod, identityText } = req.body;
-        const employeeIdHeader = req.headers['x-employee-id'];
-        const empId = Number(employeeIdHeader) || 1;
+        const empId = yield resolveEmployeeId(req);
         if (!carId || !customerName || !startDate || !endDate || !totalPrice || !paymentMethod) {
             return res.status(400).json({ error: 'Semua data penyewaan wajib diisi' });
         }
@@ -2038,8 +2077,7 @@ app.post('/api/rentals/:id/return', requireAdmin, checkExcludedEmployee, (req, r
     try {
         const { id } = req.params;
         const { actualReturnDate, lateFee, paymentMethod } = req.body;
-        const employeeIdHeader = req.headers['x-employee-id'];
-        const empId = Number(employeeIdHeader) || 1;
+        const empId = yield resolveEmployeeId(req);
         const rentalId = Number(id);
         const rental = yield prisma.$transaction((tx) => __awaiter(void 0, void 0, void 0, function* () {
             const current = yield tx.rental.findUnique({

@@ -39,7 +39,6 @@ import BmpPricelist from './pages/bmp/Pricelist';
 import BmpEmployees from './pages/bmp/Employees';
 import BmpPayroll from './pages/bmp/Payroll';
 import BmpAccessDenied from './pages/bmp/AccessDenied';
-import BmpLogin from './pages/bmp/Login';
 import BmpBonusClaim from './pages/bmp/BonusClaim';
 import { AuthProvider as BmpAuthProvider, AuthContext as BmpAuthContext } from './contexts/BmpAuthContext';
 
@@ -62,7 +61,7 @@ const canAccess = (role, path) => {
 const BmpProtectedRoute = ({ children }) => {
   const { token } = React.useContext(BmpAuthContext);
   if (!token) {
-    return <Navigate to="/bmp-login" replace />;
+    return <Navigate to="/" replace />;
   }
   return children;
 };
@@ -359,7 +358,7 @@ function AppContent({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
   const isBmpPath = [
     '/invoices', '/invoices/create', '/products', '/clients', '/bahan-nono',
     '/kas', '/pricelist', '/hpp-calculator', '/employees', '/payroll',
-    '/settings', '/bonus', '/bmp-login'
+    '/settings', '/bonus'
   ].some(p => location.pathname === p || location.pathname.startsWith(p + '/'));
 
   if (!isBmpPath && !canAccess(effectiveRole, currentPath) && currentPath !== '/toko-online') {
@@ -425,7 +424,6 @@ function AppContent({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
           {canAccess(effectiveRole, '/activity-logs') && <Route path="/activity-logs" element={<LogAktivitas />} />}
 
           {/* BMP Routes */}
-          <Route path="/bmp-login" element={<BmpLogin />} />
           <Route path="/bonus" element={<BmpBonusClaim />} />
           <Route path="/invoices" element={<BmpProtectedRoute><BmpInvoices /></BmpProtectedRoute>} />
           <Route path="/invoices/create" element={<BmpProtectedRoute><BmpCreateInvoice /></BmpProtectedRoute>} />
@@ -727,7 +725,7 @@ function BackButtonHandler({ setShowExitModal, user }) {
         handler = await CapApp.addListener('backButton', () => {
           // Jika di home page, login page, atau tidak terautentikasi, tampilkan exit modal
           const isAuthenticated = !!user || !!bmpToken;
-          if (location.pathname === '/' || location.pathname === '/login' || location.pathname === '/bmp-login' || !isAuthenticated) {
+          if (location.pathname === '/' || location.pathname === '/login' || !isAuthenticated) {
             setShowExitModal(true);
           } else {
             // Kembali ke halaman sebelumnya di history
@@ -994,37 +992,27 @@ function MainRouterContent({
   }, [appMode, user, bmpToken, bmpLogin]);
 
   // Exclude public paths from login check
-  const isPublicRoute = location.pathname === '/bmp-login' || location.pathname === '/bonus' || location.pathname === '/toko-online';
+  const isPublicRoute = location.pathname === '/bonus' || location.pathname === '/toko-online';
 
   const isTrialExpired = user?.isDemo && user?.expiresAt && Date.now() > user?.expiresAt;
 
   if (isPublicRoute) {
     return (
       <Routes>
-        <Route path="/bmp-login" element={<BmpLogin />} />
         <Route path="/bonus" element={<BmpBonusClaim />} />
         <Route path="/toko-online" element={<TokoOnline />} />
-        <Route path="*" element={<Navigate to="/bmp-login" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     );
   }
 
   if (!isAuthenticated) {
-    if (isBmpMode) {
-      return (
-        <Routes>
-          <Route path="/bmp-login" element={<BmpLogin />} />
-          <Route path="*" element={<Navigate to="/bmp-login" replace />} />
-        </Routes>
-      );
-    } else {
-      return (
-        <>
-          <Login onLogin={handleLogin} />
-          {showExitModal && <ExitModal onClose={() => setShowExitModal(false)} />}
-        </>
-      );
-    }
+    return (
+      <>
+        <Login onLogin={handleLogin} />
+        {showExitModal && <ExitModal onClose={() => setShowExitModal(false)} />}
+      </>
+    );
   }
 
   if (isTrialExpired) {
