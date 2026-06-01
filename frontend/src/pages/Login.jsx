@@ -16,18 +16,21 @@ export default function Login({ onLogin }) {
     try {
       const res = await api.post('/auth/login-email', { email: email.trim(), password });
       
-      // Auto login to BMP in background
+      // Auto login to BMP in background (use fetch directly to avoid baseURL concatenation)
       try {
         const isLocalDev = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-        const bmpApiUrl = import.meta.env.VITE_API_URL_BMP || (isLocalDev ? 'http://localhost:8080/api' : '/api-bmp');
-        
-        const bmpRes = await api.post(`${bmpApiUrl}/login`, {
-          username: email.trim(),
-          password
+        const bmpLoginUrl = import.meta.env.VITE_API_URL_BMP
+          ? `${import.meta.env.VITE_API_URL_BMP}/login`
+          : (isLocalDev ? 'http://localhost:8080/api/login' : '/api-bmp/login');
+
+        const bmpRes = await fetch(bmpLoginUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: email.trim(), password })
         });
-        
-        if (bmpRes.data && bmpRes.data.success && bmpRes.data.token) {
-          localStorage.setItem('token', bmpRes.data.token);
+        const bmpData = await bmpRes.json();
+        if (bmpData && bmpData.success && bmpData.token) {
+          localStorage.setItem('token', bmpData.token);
         }
       } catch (bmpErr) {
         console.warn('Background BMP login failed:', bmpErr);
