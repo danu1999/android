@@ -437,6 +437,8 @@ function AppContent({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
           <Route path="/payroll" element={<BmpProtectedRoute><BmpPayroll /></BmpProtectedRoute>} />
           <Route path="/settings" element={<BmpProtectedRoute><BmpSettings /></BmpProtectedRoute>} />
           <Route path="/access-denied" element={<BmpProtectedRoute><BmpAccessDenied /></BmpProtectedRoute>} />
+          {/* Redirect legacy BMP login URL to main login */}
+          <Route path="/bmp-login" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
     </div>
@@ -1001,6 +1003,7 @@ function MainRouterContent({
       <Routes>
         <Route path="/bonus" element={<BmpBonusClaim />} />
         <Route path="/toko-online" element={<TokoOnline />} />
+        <Route path="/bmp-login" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     );
