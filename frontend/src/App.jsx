@@ -1231,7 +1231,11 @@ function App() {
                   const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
                   const base = isCapacitor ? 'https://www.zedmz.cloud' : '';
                   const downloadUrl = `${base}/api/download-apk`;
-                  window.open(downloadUrl, '_blank');
+                  if (isCapacitor) {
+                    window.open(downloadUrl, '_system');
+                  } else {
+                    window.open(downloadUrl, '_blank');
+                  }
                 }}
               />
             )}
