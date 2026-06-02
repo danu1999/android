@@ -4,3 +4,4 @@ POSBah-v1.0.1.apk
 frontend/dist/
 backend/dist/
 .env
+.idea/
