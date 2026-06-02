@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient({
+const prisma: any = new PrismaClient({
   datasources: {
     db: {
       url: "postgresql://postgres:Bahtera1!@localhost:5432/posbah"
