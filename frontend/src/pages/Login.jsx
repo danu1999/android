@@ -1,12 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
 import { SocialLogin } from '@capgo/capacitor-social-login';
+import { Download } from 'lucide-react';
 
 export default function Login({ onLogin }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [latestVer, setLatestVer] = useState("1.0.2");
+
+  const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
+
+  useEffect(() => {
+    const fetchVer = async () => {
+      try {
+        const res = await api.get('/apk-version');
+        if (res.data && res.data.version) {
+          setLatestVer(res.data.version);
+        }
+      } catch (err) {
+        console.warn("Gagal mengambil versi APK di Login page:", err);
+      }
+    };
+    fetchVer();
+  }, []);
 
   const handleEmailLogin = async () => {
     if (!email.trim()) { setError('Masukkan email Anda'); return; }
@@ -18,10 +36,18 @@ export default function Login({ onLogin }) {
       
       // Auto login to BMP in background (use fetch directly to avoid baseURL concatenation)
       try {
-        const isLocalDev = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-        const bmpLoginUrl = import.meta.env.VITE_API_URL_BMP
-          ? `${import.meta.env.VITE_API_URL_BMP}/login`
-          : (isLocalDev ? 'http://localhost:8080/api/login' : '/api-bmp/login');
+        const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
+        const isLocalDev = !isCapacitor && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '';
+        
+        let bmpLoginUrl = '';
+        if (import.meta.env.VITE_API_URL_BMP) {
+          bmpLoginUrl = `${import.meta.env.VITE_API_URL_BMP}/login`;
+        } else if (isLocalDev) {
+          bmpLoginUrl = 'http://localhost:8080/api/login';
+        } else {
+          const base = isCapacitor ? 'https://www.zedmz.cloud' : '';
+          bmpLoginUrl = `${base}/api-bmp/login`;
+        }
 
         const bmpRes = await fetch(bmpLoginUrl, {
           method: 'POST',
@@ -200,10 +226,12 @@ export default function Login({ onLogin }) {
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%)',
       display: 'flex',
+      flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '1rem',
-      fontFamily: "'Inter', sans-serif"
+      padding: '2rem 1rem',
+      fontFamily: "'Inter', sans-serif",
+      gap: '20px'
     }}>
       <div style={{
         background: 'rgba(255,255,255,0.08)',
@@ -321,103 +349,115 @@ export default function Login({ onLogin }) {
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '24px 0 16px' }}>
             <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.15)' }} />
-            <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem', fontWeight: 600 }}>SISTEM LAIN</span>
+            <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem', fontWeight: 600 }}>ATAU COBA DEMO</span>
             <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.15)' }} />
           </div>
 
           <button
-            onClick={() => {
-              localStorage.setItem('posbah_app_mode', 'BMP');
-              window.location.reload();
-            }}
+            onClick={() => window.location.href = '/daftar'}
             style={{
               width: '100%',
-              padding: '16px',
-              borderRadius: '16px',
-              border: '1px solid rgba(59, 130, 246, 0.3)',
-              background: 'rgba(59, 130, 246, 0.1)',
-              color: '#93c5fd',
+              padding: '14px',
+              borderRadius: '14px',
+              border: '1px solid rgba(99,102,241,0.3)',
+              background: 'rgba(99,102,241,0.1)',
+              color: '#a5b4fc',
               fontSize: '0.95rem',
               fontWeight: 700,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '12px',
+              gap: '10px',
               transition: 'all 0.2s',
-              boxShadow: '0 4px 12px rgba(59,130,246,0.1)'
             }}
             onMouseEnter={e => {
-              e.currentTarget.style.background = 'rgba(59, 130, 246, 0.2)';
+              e.currentTarget.style.background = 'rgba(99,102,241,0.2)';
               e.currentTarget.style.transform = 'translateY(-2px)';
             }}
             onMouseLeave={e => {
-              e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
+              e.currentTarget.style.background = 'rgba(99,102,241,0.1)';
               e.currentTarget.style.transform = 'translateY(0)';
             }}
           >
-            <span style={{ fontSize: '1.3rem' }}>🏭</span>
+            <span style={{ fontSize: '1.2rem' }}>🚀</span>
             <div style={{ textAlign: 'left' }}>
-              <div style={{ fontWeight: 800 }}>Masuk ke Invoice & Manufaktur (BMP)</div>
-              <div style={{ fontSize: '0.75rem', color: 'rgba(147,197,253,0.7)', fontWeight: 500 }}>Sistem Pabrik Bahtera Mulya</div>
+              <div style={{ fontWeight: 800 }}>Coba Demo Gratis 2 Hari</div>
+              <div style={{ fontSize: '0.72rem', color: 'rgba(165,180,252,0.7)', fontWeight: 500 }}>Pilih paket bisnis Anda terlebih dahulu</div>
             </div>
           </button>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '24px 0 16px' }}>
-            <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.15)' }} />
-            <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.75rem', fontWeight: 600 }}>ATAU COBA DEMO</span>
-            <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.15)' }} />
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px', width: '100%' }}>
-            {window.Capacitor ? (
-              <button
-                onClick={handleNativeGoogleLogin}
-                disabled={loading}
-                style={{
-                  width: '316px',
-                  padding: '12px 16px',
-                  borderRadius: '24px',
-                  border: '1px solid rgba(255,255,255,0.15)',
-                  background: 'white',
-                  color: '#3c4043',
-                  fontSize: '0.875rem',
-                  fontWeight: 700,
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
-                  transition: 'background-color 0.218s, border-color 0.218s, box-shadow 0.218s',
-                  fontFamily: "'Roboto', arial, sans-serif"
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.backgroundColor = '#f8f9fa';
-                  e.currentTarget.style.boxShadow = '0 1px 3px rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15)';
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.backgroundColor = 'white';
-                  e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08)';
-                }}
-              >
-                <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" style={{ width: '18px', height: '18px', marginRight: '10px', display: 'block' }}>
-                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
-                  <path fill="#4285F4" d="M46.5 24c0-1.55-.15-3.24-.47-4.77H24v9.03h12.75c-.55 2.87-2.22 5.37-4.72 7.03l7.3 5.66C43.5 36.63 46.5 30.9 46.5 24z"></path>
-                  <path fill="#FBBC05" d="M10.54 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.98-6.19z"></path>
-                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.3-5.66c-2.03 1.36-4.63 2.17-8.59 2.17-6.26 0-11.57-4.22-13.46-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
-                </svg>
-                Masuk dengan Google (Demo)
-              </button>
-            ) : (
-              <div id="google-signin-btn" />
-            )}
-          </div>
 
           <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem', marginTop: '1.5rem', marginBottom: 0 }}>
             Hubungi admin jika Anda mengalami kendala masuk
           </p>
+
         </div>
       </div>
+
+      {/* Website APK Download Banner */}
+      {!isCapacitor && (
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.08)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
+          borderRadius: '20px',
+          padding: '16px 20px',
+          maxWidth: '380px',
+          width: '100%',
+          boxSizing: 'border-box',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          boxShadow: '0 15px 30px rgba(0, 0, 0, 0.2)',
+          color: 'white',
+          animation: 'fadeIn 0.5s ease'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+            <div style={{
+              background: 'linear-gradient(135deg, #10B981, #059669)',
+              borderRadius: '12px',
+              padding: '10px',
+              display: 'flex',
+              color: 'white',
+              boxShadow: '0 4px 14px rgba(16, 185, 129, 0.3)'
+            }}>
+              <Download size={20} />
+            </div>
+            <div>
+              <h4 style={{ margin: '0 0 2px', fontSize: '0.85rem', fontWeight: 800, color: '#f8fafc' }}>
+                Unduh POSBah Android (v{latestVer}) 📱
+              </h4>
+              <p style={{ margin: 0, fontSize: '0.72rem', color: '#a7f3d0', fontWeight: 500, lineHeight: 1.4 }}>
+                Cetak struk bluetooth &amp; transaksi offline lebih cepat.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('posbah_open_update'))}
+            style={{
+              background: 'linear-gradient(135deg, #10B981, #059669)',
+              color: 'white',
+              padding: '10px 14px',
+              borderRadius: '10px',
+              fontSize: '0.75rem',
+              fontWeight: 800,
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
+              whiteSpace: 'nowrap',
+              display: 'inline-flex',
+              alignItems: 'center',
+              transition: 'transform 0.15s'
+            }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = ''; }}
+          >
+            Unduh APK
+          </button>
+        </div>
+      )}
     </div>
   );
 }

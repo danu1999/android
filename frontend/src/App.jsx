@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Link, useLocation, Navigate, useNavigate 
 import {
   Calculator, Package, LayoutDashboard, LogOut, Clock,
   DollarSign, Users, UserCog, Crown, ShieldCheck, Lock, X, Sparkles, History, Car, WifiOff,
-  Sun, Moon, FileText, RefreshCw, List, Cpu, Settings as SettingsIcon
+  Sun, Moon, FileText, RefreshCw, List, Cpu, Settings as SettingsIcon, Download
 } from 'lucide-react';
 import Kasir from './pages/Kasir';
 import Katalog from './pages/Katalog';
@@ -15,6 +15,7 @@ import Dashboard from './pages/Dashboard';
 import Pesanan from './pages/Pesanan';
 import Supplier from './pages/Supplier';
 import Login from './pages/Login';
+import DaftarPage from './pages/DaftarPage';
 import LogAktivitas from './pages/LogAktivitas';
 import RentalMobil from './pages/RentalMobil';
 import KasirLaundry from './pages/KasirLaundry';
@@ -60,8 +61,23 @@ const canAccess = (role, path) => {
 
 const BmpProtectedRoute = ({ children }) => {
   const { token } = React.useContext(BmpAuthContext);
+  const { user } = React.useContext(AuthContext);
   if (!token) {
-    return <Navigate to="/" replace />;
+    if (user?.isDemo) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '80vh', gap: '16px', color: '#4F46E5', fontFamily: "'Inter', sans-serif" }}>
+          <div style={{ width: '40px', height: '40px', border: '4px solid #E5E7EB', borderTopColor: '#4F46E5', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+          <p style={{ fontWeight: 600, fontSize: '0.9rem' }}>Menghubungkan ke basis data BMP...</p>
+          <style>{`
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `}</style>
+        </div>
+      );
+    }
+    return <Navigate to="/access-denied" replace />;
   }
   return children;
 };
@@ -227,7 +243,7 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
     ? allNavItems.filter(item => item.showInNav)
     : allNavItems.filter(item => hasRole(effectiveRole, item.minRole) && item.showInNav);
 
-  const showModeSwitcher = !!user && hasRole(user?.role, 'ADMIN') && !isExcludedName(user?.name) && !user?.isDemo;
+  const showModeSwitcher = !!user && (user?.email === 'bahteramulyap@gmail.com' || user?.name?.toLowerCase() === 'muizz');
 
   const handleModeChange = (newMode) => {
     localStorage.setItem('posbah_app_mode', newMode);
@@ -346,8 +362,26 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
 
 // ─── App Content ───────────────────────────────────────────────
 function AppContent({ user, onLogout, appMode, setAppMode, theme, toggleTheme }) {
+  const [latestVer, setLatestVer] = useState("1.0.2");
   const location = useLocation();
   const isPublicStore = location.pathname === '/toko-online';
+  const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
+
+  useEffect(() => {
+    const fetchVer = async () => {
+      try {
+        const base = isCapacitor ? 'https://www.zedmz.cloud' : '';
+        const res = await fetch(`${base}/api/apk-version`);
+        const data = await res.json();
+        if (data && data.version) {
+          setLatestVer(data.version);
+        }
+      } catch (err) {
+        console.warn("Gagal mengambil versi APK di AppContent:", err);
+      }
+    };
+    fetchVer();
+  }, []);
 
   if (isPublicStore) return <TokoOnline />;
 
@@ -358,10 +392,10 @@ function AppContent({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
   const isBmpPath = [
     '/invoices', '/invoices/create', '/products', '/clients', '/bahan-nono',
     '/kas', '/pricelist', '/hpp-calculator', '/employees', '/payroll',
-    '/settings', '/bonus'
+    '/settings', '/bonus', '/access-denied'
   ].some(p => location.pathname === p || location.pathname.startsWith(p + '/'));
 
-  if (!isBmpPath && !canAccess(effectiveRole, currentPath) && currentPath !== '/toko-online') {
+  if (!isBmpPath && !canAccess(effectiveRole, currentPath) && currentPath !== '/toko-online' && currentPath !== '/access-denied') {
     return <Navigate to="/" replace />;
   }
 
@@ -371,6 +405,8 @@ function AppContent({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
     <div className="app-layout select-none">
       <Navigation user={user} onLogout={onLogout} appMode={appMode} setAppMode={setAppMode} theme={theme} toggleTheme={toggleTheme} />
       <main className="main-content">
+
+
         {isTargetUser && (
           <div style={{
             background: theme === 'dark' ? '#7c2d12' : '#fef3c7',
@@ -436,7 +472,7 @@ function AppContent({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
           <Route path="/employees" element={<BmpProtectedRoute><BmpEmployees /></BmpProtectedRoute>} />
           <Route path="/payroll" element={<BmpProtectedRoute><BmpPayroll /></BmpProtectedRoute>} />
           <Route path="/settings" element={<BmpProtectedRoute><BmpSettings /></BmpProtectedRoute>} />
-          <Route path="/access-denied" element={<BmpProtectedRoute><BmpAccessDenied /></BmpProtectedRoute>} />
+          <Route path="/access-denied" element={<BmpAccessDenied />} />
           {/* Redirect legacy BMP login URL to main login */}
           <Route path="/bmp-login" element={<Navigate to="/" replace />} />
         </Routes>
@@ -715,7 +751,7 @@ function ExitModal({ onClose }) {
 }
 
 // ─── Back Button Handler Component ─────────────────────────────
-function BackButtonHandler({ setShowExitModal, user }) {
+function BackButtonHandler({ setShowExitModal, user, showUpdateFullscreen, setShowUpdateFullscreen }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { token: bmpToken } = React.useContext(BmpAuthContext);
@@ -725,6 +761,10 @@ function BackButtonHandler({ setShowExitModal, user }) {
     const init = async () => {
       try {
         handler = await CapApp.addListener('backButton', () => {
+          if (showUpdateFullscreen) {
+            setShowUpdateFullscreen(false);
+            return;
+          }
           // Jika di home page, login page, atau tidak terautentikasi, tampilkan exit modal
           const isAuthenticated = !!user || !!bmpToken;
           if (location.pathname === '/' || location.pathname === '/login' || !isAuthenticated) {
@@ -744,9 +784,222 @@ function BackButtonHandler({ setShowExitModal, user }) {
         handler.remove();
       }
     };
-  }, [location.pathname, navigate, setShowExitModal, user, bmpToken]);
+  }, [location.pathname, navigate, setShowExitModal, user, bmpToken, showUpdateFullscreen, setShowUpdateFullscreen]);
 
   return null;
+}
+
+// ─── Fullscreen Update Modal Component ──────────────────────────
+function FullscreenUpdateModal({ onClose, onDownload }) {
+  const [latestVer, setLatestVer] = useState("1.0.2");
+
+  useEffect(() => {
+    const fetchVer = async () => {
+      try {
+        const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
+        const base = isCapacitor ? 'https://www.zedmz.cloud' : '';
+        const response = await fetch(`${base}/api/apk-version`);
+        const data = await response.json();
+        if (data && data.version) {
+          setLatestVer(data.version);
+        }
+      } catch (e) {
+        console.warn("Gagal mengambil versi APK terbaru untuk modal:", e);
+      }
+    };
+    fetchVer();
+  }, []);
+
+  return (
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      zIndex: 9999999,
+      background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 27, 75, 0.98) 100%)',
+      backdropFilter: 'blur(12px)',
+      WebkitBackdropFilter: 'blur(12px)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '1.5rem',
+      fontFamily: "'Inter', sans-serif",
+      color: '#f8fafc',
+      animation: 'fadeIn 0.25s ease'
+    }}>
+      <div style={{
+        background: 'rgba(255, 255, 255, 0.04)',
+        border: '1.5px solid rgba(255, 255, 255, 0.1)',
+        borderRadius: '28px',
+        padding: '2.5rem 2rem',
+        maxWidth: '480px',
+        width: '100%',
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '20px',
+        position: 'relative',
+        animation: 'scaleUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)'
+      }}>
+        {/* Close Button */}
+        <button 
+          onClick={onClose}
+          style={{
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
+            background: 'rgba(255,255,255,0.06)',
+            border: 'none',
+            borderRadius: '50%',
+            width: '36px',
+            height: '36px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            color: '#94a3b8',
+            transition: 'all 0.2s'
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = '#f8fafc'}
+          onMouseLeave={e => e.currentTarget.style.color = '#94a3b8'}
+        >
+          <X size={18} />
+        </button>
+
+        {/* Icon & Version Header */}
+        <div style={{ textAlign: 'center', marginTop: '10px' }}>
+          <div style={{
+            width: '72px',
+            height: '72px',
+            borderRadius: '24px',
+            background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 16px',
+            boxShadow: '0 10px 25px rgba(99,102,241,0.4)',
+            border: '1px solid rgba(255,255,255,0.2)'
+          }}>
+            <Download size={32} color="white" />
+          </div>
+          <h2 style={{ margin: '0 0 4px', fontSize: '1.4rem', fontWeight: 900, letterSpacing: '-0.025em' }}>
+            POSBah Versi Terbaru (v{latestVer})
+          </h2>
+          <span style={{
+            background: 'rgba(99,102,241,0.15)',
+            border: '1px solid rgba(99,102,241,0.3)',
+            borderRadius: '99px',
+            padding: '4px 12px',
+            fontSize: '0.72rem',
+            fontWeight: 800,
+            color: '#a5b4fc',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+            display: 'inline-block'
+          }}>
+            Pembaruan Sangat Penting
+          </span>
+        </div>
+
+        {/* Update Description in Plain Language */}
+        <div style={{
+          background: 'rgba(255,255,255,0.02)',
+          border: '1px solid rgba(255,255,255,0.05)',
+          borderRadius: '20px',
+          padding: '1.25rem 1.5rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px'
+        }}>
+          <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, color: '#e2e8f0' }}>
+            Apa saja yang baru di versi 1.0.2?
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.8rem', color: '#94a3b8', lineHeight: 1.5 }}>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <span style={{ color: '#10b981', fontSize: '1rem' }}>✓</span>
+              <div>
+                <strong style={{ color: '#f1f5f9' }}>Layar Anti Macet (Bebas Layar Putih)</strong>
+                <p style={{ margin: '2px 0 0' }}>Memperbaiki masalah di mana aplikasi tiba-tiba macet atau berubah menjadi layar putih kosong sesaat setelah Anda berhasil login.</p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <span style={{ color: '#10b981', fontSize: '1rem' }}>✓</span>
+              <div>
+                <strong style={{ color: '#f1f5f9' }}>Tombol HP Bekerja Sempurna</strong>
+                <p style={{ margin: '2px 0 0' }}>Tombol kembali (back button) pada HP Android Anda kini berfungsi normal dan lancar untuk menutup jendela atau menu.</p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <span style={{ color: '#10b981', fontSize: '1rem' }}>✓</span>
+              <div>
+                <strong style={{ color: '#f1f5f9' }}>Koneksi Database Lebih Cepat</strong>
+                <p style={{ margin: '2px 0 0' }}>Proses penghubungan data toko Anda ke server pusat kini jauh lebih stabil, aman, dan tidak mudah terputus.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Buttons */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '5px' }}>
+          <button
+            onClick={onDownload}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              width: '100%',
+              padding: '14px',
+              borderRadius: '14px',
+              border: 'none',
+              background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+              color: 'white',
+              fontWeight: 800,
+              fontSize: '0.9rem',
+              cursor: 'pointer',
+              boxShadow: '0 4px 18px rgba(99, 102, 241, 0.35)',
+              transition: 'transform 0.1s'
+            }}
+            onMouseDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
+            onMouseUp={e => e.currentTarget.style.transform = ''}
+          >
+            <Download size={16} /> Unduh &amp; Pasang Sekarang
+          </button>
+          
+          <button
+            onClick={onClose}
+            style={{
+              width: '100%',
+              padding: '12px',
+              borderRadius: '14px',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              background: 'rgba(255, 255, 255, 0.02)',
+              color: '#94a3b8',
+              fontWeight: 700,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)'}
+          >
+            Nanti Saja
+          </button>
+        </div>
+      </div>
+      
+      {/* Dynamic Keyframes injected locally */}
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes scaleUp {
+          from { transform: scale(0.95); opacity: 0; }
+          to { transform: scale(1); opacity: 1; }
+        }
+      `}</style>
+    </div>
+  );
 }
 
 // ─── Root App ──────────────────────────────────────────────────
@@ -754,6 +1007,17 @@ function App() {
   const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
   const [dismissOffline, setDismissOffline] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
+  const [showUpdateFullscreen, setShowUpdateFullscreen] = useState(false);
+
+  useEffect(() => {
+    const handleOpenUpdate = () => {
+      setShowUpdateFullscreen(true);
+    };
+    window.addEventListener('posbah_open_update', handleOpenUpdate);
+    return () => {
+      window.removeEventListener('posbah_open_update', handleOpenUpdate);
+    };
+  }, []);
 
   const [theme, setTheme] = useState(() => {
     try {
@@ -841,6 +1105,10 @@ function App() {
         localStorage.setItem('posbah_app_mode', 'FNB');
         setAppMode('FNB');
         setShowModePrompt(false);
+      } else if (user.businessMode) {
+        localStorage.setItem('posbah_app_mode', user.businessMode);
+        setAppMode(user.businessMode);
+        setShowModePrompt(false);
       } else if (!localStorage.getItem('posbah_app_mode')) {
         setShowModePrompt(true);
       }
@@ -859,6 +1127,11 @@ function App() {
     const tenant = userData?.tenantId || userData?.email;
     if (tenant) {
       localStorage.setItem('posbah_tenant_id', tenant);
+    }
+    if (userData?.businessMode) {
+      localStorage.setItem('posbah_app_mode', userData.businessMode);
+      setAppMode(userData.businessMode);
+      setShowModePrompt(false);
     }
   };
 
@@ -894,26 +1167,30 @@ function App() {
     window.addEventListener('contextmenu', handleContextMenu);
     window.addEventListener('keydown', handleKeyDown);
 
-    // DevTools Detection & Auto-Defense Loop
-    const devToolsInterval = setInterval(() => {
-      const startTime = performance.now();
-      debugger;
-      const endTime = performance.now();
+    // DevTools Detection & Auto-Defense Loop (Only run on desktop browser web app, not Capacitor native shell)
+    const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
+    let devToolsInterval;
+    if (!isCapacitor) {
+      devToolsInterval = setInterval(() => {
+        const startTime = performance.now();
+        debugger;
+        const endTime = performance.now();
 
-      // If DevTools is open, the pause on debugger statement will cause a significant delay
-      if (endTime - startTime > 100) {
-        if (user?.isDemo) {
-          // Force logout for demo accounts
-          handleLogout();
-          window.location.href = 'about:blank';
+        // If DevTools is open, the pause on debugger statement will cause a significant delay
+        if (endTime - startTime > 100) {
+          if (user?.isDemo) {
+            // Force logout for demo accounts
+            handleLogout();
+            window.location.href = 'about:blank';
+          }
         }
-      }
-    }, 500);
+      }, 500);
+    }
 
     return () => {
       window.removeEventListener('contextmenu', handleContextMenu);
       window.removeEventListener('keydown', handleKeyDown);
-      clearInterval(devToolsInterval);
+      if (devToolsInterval) clearInterval(devToolsInterval);
     };
   }, [user]);
 
@@ -922,7 +1199,12 @@ function App() {
       <BmpAuthProvider>
         <DemoContext.Provider value={{ showDemoBlock, isDemo: user?.isDemo === true }}>
           <BrowserRouter>
-            <BackButtonHandler setShowExitModal={setShowExitModal} user={user} />
+            <BackButtonHandler 
+              setShowExitModal={setShowExitModal} 
+              user={user} 
+              showUpdateFullscreen={showUpdateFullscreen}
+              setShowUpdateFullscreen={setShowUpdateFullscreen}
+            />
             <MainRouterContent
               user={user}
               handleLogin={handleLogin}
@@ -942,6 +1224,17 @@ function App() {
               setIsOffline={setIsOffline}
               setDismissOffline={setDismissOffline}
             />
+            {showUpdateFullscreen && (
+              <FullscreenUpdateModal
+                onClose={() => setShowUpdateFullscreen(false)}
+                onDownload={() => {
+                  const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
+                  const base = isCapacitor ? 'https://www.zedmz.cloud' : '';
+                  const downloadUrl = `${base}/api/download-apk`;
+                  window.open(downloadUrl, '_blank');
+                }}
+              />
+            )}
           </BrowserRouter>
         </DemoContext.Provider>
       </BmpAuthProvider>
@@ -963,17 +1256,32 @@ function MainRouterContent({
   const location = useLocation();
 
   const isBmpMode = appMode === 'BMP';
-  const isAuthenticated = !!user || (!!bmpToken && isBmpMode);
+  const isAuthenticated = !!user && (!isBmpMode || !!bmpToken || user.isDemo);
 
   // Auto-login to BMP if in BMP mode, POSBah user is logged in, but BMP token is missing
   React.useEffect(() => {
     if (appMode === 'BMP' && user && !bmpToken) {
+      const localToken = localStorage.getItem('token');
+      if (localToken) {
+        bmpLogin(localToken);
+        return;
+      }
       if (user.isDemo) {
         // Auto demo login
         const autoDemoLogin = async () => {
           try {
-            const isLocalDev = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-            const bmpApiUrl = import.meta.env.VITE_API_URL_BMP || (isLocalDev ? 'http://localhost:8080/api' : '/api-bmp-demo');
+            const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
+            const isLocalDev = !isCapacitor && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '';
+            
+            let bmpApiUrl = '';
+            if (import.meta.env.VITE_API_URL_BMP) {
+              bmpApiUrl = import.meta.env.VITE_API_URL_BMP;
+            } else if (isLocalDev) {
+              bmpApiUrl = 'http://localhost:8080/api';
+            } else {
+              const base = isCapacitor ? 'https://www.zedmz.cloud' : '';
+              bmpApiUrl = `${base}/api-bmp-demo`;
+            }
             
             const response = await fetch(`${bmpApiUrl}/login`, {
               method: 'POST',
@@ -989,12 +1297,17 @@ function MainRouterContent({
           }
         };
         autoDemoLogin();
+      } else {
+        // For premium users, if they have no BMP token and no local token, their session is invalid.
+        // Force logout to let them log in again and acquire a fresh token.
+        console.warn('Premium user has no BMP token on start. Forcing logout to re-authenticate.');
+        handleLogout();
       }
     }
-  }, [appMode, user, bmpToken, bmpLogin]);
+  }, [appMode, user, bmpToken, bmpLogin, handleLogout]);
 
   // Exclude public paths from login check
-  const isPublicRoute = location.pathname === '/bonus' || location.pathname === '/toko-online';
+  const isPublicRoute = location.pathname === '/bonus' || location.pathname === '/toko-online' || location.pathname === '/daftar';
 
   const isTrialExpired = user?.isDemo && user?.expiresAt && Date.now() > user?.expiresAt;
 
@@ -1003,6 +1316,7 @@ function MainRouterContent({
       <Routes>
         <Route path="/bonus" element={<BmpBonusClaim />} />
         <Route path="/toko-online" element={<TokoOnline />} />
+        <Route path="/daftar" element={<DaftarPage onLogin={(userData) => { const localToken = localStorage.getItem('token'); if (localToken) { bmpLogin(localToken); } handleLogin(userData); }} />} />
         <Route path="/bmp-login" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -1012,7 +1326,13 @@ function MainRouterContent({
   if (!isAuthenticated) {
     return (
       <>
-        <Login onLogin={handleLogin} />
+        <Login onLogin={(userData) => {
+          const localToken = localStorage.getItem('token');
+          if (localToken) {
+            bmpLogin(localToken);
+          }
+          handleLogin(userData);
+        }} />
         {showExitModal && <ExitModal onClose={() => setShowExitModal(false)} />}
       </>
     );
@@ -1047,7 +1367,7 @@ function MainRouterContent({
               Masa Percobaan Habis ⏳
             </h2>
             <p style={{ margin: '0 0 1.5rem', color: '#4B5563', fontSize: '0.9rem', lineHeight: 1.6 }}>
-              Masa percobaan 3 hari untuk akun Google <strong style={{ color: '#4F46E5' }}>{user.email}</strong> telah berakhir. Silakan hubungi kami untuk berlangganan POSBah agar dapat melanjutkan akses penuh.
+              Masa percobaan <strong>2 hari</strong> untuk akun Google <strong style={{ color: '#4F46E5' }}>{user.email}</strong> telah berakhir. Admin akan mengaktifkan akun penuh setelah konfirmasi pembayaran.
             </p>
 
             {/* CTA */}

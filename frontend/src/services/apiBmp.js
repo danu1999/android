@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const isCapacitor = !!window.Capacitor || window.location.protocol === 'capacitor:';
+const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
 const isLocalDev = !isCapacitor && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '';
 
 export const getBmpApiUrl = () => {
@@ -8,11 +8,16 @@ export const getBmpApiUrl = () => {
     return import.meta.env.VITE_API_URL_BMP;
   }
   
-  const isCapacitor = !!window.Capacitor || window.location.protocol === 'capacitor:';
+  const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
   const isLocalDev = !isCapacitor && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '';
   
   if (isLocalDev) {
     return 'http://localhost:8080/api';
+  }
+  
+  let base = '';
+  if (isCapacitor) {
+    base = 'https://www.zedmz.cloud';
   }
   
   try {
@@ -20,14 +25,14 @@ export const getBmpApiUrl = () => {
     if (userStr) {
       const user = JSON.parse(userStr);
       if (user && user.isDemo) {
-        return '/api-bmp-demo';
+        return base ? `${base}/api-bmp-demo` : '/api-bmp-demo';
       }
     }
   } catch (e) {
     console.warn('Failed to dynamically check demo mode for BMP URL:', e);
   }
   
-  return '/api-bmp';
+  return base ? `${base}/api-bmp` : '/api-bmp';
 };
 
 export const API_URL = getBmpApiUrl();

@@ -8,6 +8,7 @@ import {
 import api from '../api';
 import { useAuth, useIsAdmin, useIsOwner } from '../AuthContext';
 import { useDemoBlock } from '../AuthContext';
+import { App as CapApp } from '@capacitor/app';
 
 export default function Dashboard({ appMode }) {
   const { user } = useAuth();
@@ -21,6 +22,38 @@ export default function Dashboard({ appMode }) {
   const [rentals, setRentals] = useState([]);
   const [laundryOrders, setLaundryOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [hasUpdate, setHasUpdate] = useState(false);
+  const [latestVer, setLatestVer] = useState("1.0.2");
+
+  useEffect(() => {
+    const checkVersion = async () => {
+      try {
+        let currentVer = "1.0.2";
+        try {
+          const info = await CapApp.getInfo();
+          if (info && info.version) {
+            currentVer = info.version;
+          }
+        } catch (err) {
+          console.warn("CapApp.getInfo tidak tersedia di browser:", err);
+        }
+
+        const res = await api.get('/apk-version');
+        const serverVer = res.data?.version;
+        if (serverVer) {
+          setLatestVer(serverVer);
+          if (currentVer !== serverVer) {
+            setHasUpdate(true);
+          } else {
+            setHasUpdate(false);
+          }
+        }
+      } catch (err) {
+        console.warn("Gagal memproses pengecekan versi APK:", err);
+      }
+    };
+    checkVersion();
+  }, []);
 
   const DEMO_PRODUCTS = [
     { id: 'p301', name: 'Pisang Keju Cokelat', stock: 120, price: 15000 },
@@ -120,66 +153,7 @@ export default function Dashboard({ appMode }) {
         </div>
       </div>
 
-      {/* ── APK Update Reminder Banner ─────────────────────────── */}
-      <div style={{
-        background: 'linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%)',
-        border: '1.5px solid #C7D2FE',
-        borderRadius: 18,
-        padding: '16px 20px',
-        marginTop: 16,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 16,
-        flexWrap: 'wrap',
-        boxShadow: '0 10px 25px -5px rgba(79, 70, 229, 0.1)',
-        fontFamily: "'Inter', sans-serif"
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: '240px' }}>
-          <div style={{
-            background: 'linear-gradient(135deg, #6366F1, #4F46E5)',
-            borderRadius: 12,
-            padding: 10,
-            display: 'flex',
-            color: 'white',
-            boxShadow: '0 4px 14px rgba(99, 102, 241, 0.3)'
-          }}>
-            <Download size={20} />
-          </div>
-          <div>
-            <h4 style={{ margin: '0 0 2px', fontSize: '0.9rem', fontWeight: 800, color: '#312E81' }}>
-              Update APK POSBah v1.0.1 Tersedia! 🚀
-            </h4>
-            <p style={{ margin: 0, fontSize: '0.78rem', color: '#4F46E5', fontWeight: 600, lineHeight: 1.4 }}>
-              Unduh versi terbaru untuk mengaktifkan fitur tombol back fisik HP, logo baru, dan perbaikan performa.
-            </p>
-          </div>
-        </div>
-        <a
-          href={`${api.defaults.baseURL}/download-apk`}
-          target="_blank"
-          rel="noreferrer"
-          style={{
-            background: 'linear-gradient(135deg, #4F46E5, #4338CA)',
-            color: 'white',
-            padding: '10px 20px',
-            borderRadius: '12px',
-            fontSize: '0.82rem',
-            fontWeight: 800,
-            textDecoration: 'none',
-            boxShadow: '0 4px 14px rgba(79, 70, 229, 0.35)',
-            whiteSpace: 'nowrap',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 8,
-            transition: 'transform 0.15s'
-          }}
-          onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; }}
-          onMouseLeave={e => { e.currentTarget.style.transform = ''; }}
-        >
-          <Download size={14} /> Unduh APK Sekarang
-        </a>
-      </div>
+
 
       {/* ── Middle: stats + alerts ─────────────────────────────── */}
       <div className="db-middle">

@@ -1,7 +1,7 @@
 const _jsxFileName = "C:\\Users\\danus\\Documents\\antigravity\\invoice-bmp-go\\golang-frontend\\src\\pages\\Dashboard.tsx";import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/apiBmp';
-import { Zap, Users, Package, DollarSign, Clock, CheckCircle, ArrowRight, ShieldAlert, BookOpen, PlusCircle } from 'lucide-react';
+import { Zap, Users, Package, DollarSign, Clock, CheckCircle, ArrowRight, ShieldAlert, BookOpen, PlusCircle, Download } from 'lucide-react';
 
 
 
@@ -30,7 +30,10 @@ const Dashboard = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [latestVer, setLatestVer] = useState("1.0.2");
   const navigate = useNavigate();
+
+  const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -43,6 +46,20 @@ const Dashboard = () => {
       console.error(err);
       setLoading(false);
     });
+
+    const fetchVer = async () => {
+      try {
+        const base = isCapacitor ? 'https://www.zedmz.cloud' : '';
+        const res = await fetch(`${base}/api/apk-version`);
+        const val = await res.json();
+        if (val && val.version) {
+          setLatestVer(val.version);
+        }
+      } catch (err) {
+        console.warn("Gagal memproses versi APK di BMP Dashboard:", err);
+      }
+    };
+    fetchVer();
 
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -163,6 +180,8 @@ const Dashboard = () => {
           )
         )
       )
+
+
 
       /* Financial Summary Section */
       , React.createElement('div', { className: "financial-grid", __self: this, __source: {fileName: _jsxFileName, lineNumber: 168}}

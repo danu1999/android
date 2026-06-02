@@ -1,0 +1,6 @@
+node_modules/
+*.zip
+POSBah-v1.0.1.apk
+frontend/dist/
+backend/dist/
+.env

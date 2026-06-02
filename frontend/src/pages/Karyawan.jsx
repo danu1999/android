@@ -33,7 +33,7 @@ export default function Karyawan() {
   const [payAmt, setPayAmt] = useState('');
   const [selMonth, setSelMonth] = useState(new Date().getMonth() + 1);
   const [selYear, setSelYear] = useState(new Date().getFullYear());
-  const [formData, setForm] = useState({ id: null, name: '', role: 'KASIR', pin: '', salary: '' });
+  const [formData, setForm] = useState({ id: null, name: '', email: '', role: 'KASIR', pin: '', confirmPin: '', salary: '' });
   // Quick salary editor langsung dari kartu karyawan
   const [salaryEditId, setSalaryEditId] = useState(null);
   const [salaryEditVal, setSalaryEditVal] = useState('');
@@ -45,6 +45,12 @@ export default function Karyawan() {
   const [masterPin, setMasterPin] = useState('');
   const [masterOk, setMasterOk] = useState(false);
   const [pinError, setPinError] = useState(false);
+
+  // ── Dynamic Employee Limit & Expansion ──────────────────────
+  const [maxLimit, setMaxLimit] = useState(4);
+  const [showLimitBanner, setShowLimitBanner] = useState(false);
+  const [requestLoading, setRequestLoading] = useState(false);
+  const [requestSent, setRequestSent] = useState(false);
 
   const MASTER_PIN = '!9jJs./2r0dSfds';
   const MASTER_NAME = 'muizz';
@@ -67,7 +73,59 @@ export default function Karyawan() {
     setTab('penggajian');
   };
 
-  useEffect(() => { fetchEmp(); }, []);
+  const fetchLimit = async () => {
+    try {
+      const r = await api.get('/employees/limit');
+      if (r.data && r.data.limit) {
+        setMaxLimit(r.data.limit);
+      }
+    } catch (_) {}
+  };
+
+  const handleRequestExpansion = async () => {
+    setRequestLoading(true);
+    try {
+      const tenantId = localStorage.getItem('posbah_tenant_id') || user?.email;
+      // 1. Call backend API to send structured email to muhammadmuizz8@gmail.com
+      await api.post('/request-expansion', {
+        ownerName: user?.name || 'Owner POSBah',
+        ownerEmail: user?.email || '',
+      });
+      
+      setRequestSent(true);
+      
+      // 2. Open Gmail composter
+      const subject = encodeURIComponent(`Permintaan Ekspansi Karyawan POSBah - ${user?.name}`);
+      const body = encodeURIComponent(
+        `Halo Admin,\n\nSaya ingin mengajukan ekspansi kapasitas karyawan dari 4 menjadi 7 karyawan untuk toko saya.\n\nData Toko:\nNama Owner: ${user?.name}\nEmail Owner: ${user?.email}\nTenant ID: ${tenantId}\n\nMohon bantuannya untuk memproses.`
+      );
+      const mailtoUrl = `mailto:muhammadmuizz8@gmail.com?subject=${subject}&body=${body}`;
+      const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
+      if (isCapacitor) {
+        window.open(mailtoUrl, '_system');
+      } else {
+        window.location.href = mailtoUrl;
+      }
+    } catch (err) {
+      alert('Gagal mengirim permintaan: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setRequestLoading(false);
+    }
+  };
+
+  const handleAddClick = () => {
+    if (employees.length >= maxLimit) {
+      setShowLimitBanner(true);
+      return;
+    }
+    setShowLimitBanner(false);
+    handleOpenModal();
+  };
+
+  useEffect(() => { 
+    fetchEmp(); 
+    fetchLimit();
+  }, []);
   useEffect(() => { if (tab === 'penggajian') fetchHistory(); }, [tab, selMonth, selYear]);
 
   const fetchEmp = async () => { try { const r = await api.get('/employees'); setEmp(r.data); } catch (_) { } };
@@ -78,8 +136,8 @@ export default function Karyawan() {
   }).filter(Boolean));
 
   const handleOpenModal = (emp = null, viewOnly = false) => {
-    if (employees.length >= 10 && !emp) { alert('Batas 10 karyawan.'); return; }
-    setForm(emp ? { ...emp, salary: emp.salary || '' } : { id: null, name: '', role: 'KASIR', pin: '', salary: '' });
+    if (employees.length >= maxLimit && !emp) { setShowLimitBanner(true); return; }
+    setForm(emp ? { ...emp, email: emp.email || '', pin: '', confirmPin: '', salary: emp.salary || '' } : { id: null, name: '', email: '', role: 'KASIR', pin: '', confirmPin: '', salary: '' });
     setView(viewOnly); setModal(true);
   };
 
@@ -91,6 +149,26 @@ export default function Karyawan() {
       const target = employees.find(em => em.id === formData.id);
       if (isProtected(target)) { alert('Akun ini dikunci dan tidak dapat diubah.'); return; }
     }
+
+    // Validasi password & konfirmasi password
+    if (!formData.id) {
+      if (!formData.pin || !formData.confirmPin) {
+        alert('Password dan Konfirmasi Password wajib diisi.');
+        return;
+      }
+      if (formData.pin !== formData.confirmPin) {
+        alert('Password dan Konfirmasi Password tidak cocok.');
+        return;
+      }
+    } else {
+      if (formData.pin || formData.confirmPin) {
+        if (formData.pin !== formData.confirmPin) {
+          alert('Password dan Konfirmasi Password tidak cocok.');
+          return;
+        }
+      }
+    }
+
     try {
       const payload = { ...formData, salary: Number(formData.salary || 0) };
       if (formData.id) {
@@ -99,7 +177,12 @@ export default function Karyawan() {
         await api.post('/employees', payload);
       }
       setModal(false); fetchEmp();
-    } catch (err) { alert(err.response?.data?.error || 'Gagal menyimpan.'); }
+    } catch (err) { 
+      alert(err.response?.data?.error || 'Gagal menyimpan.'); 
+      if (err.response?.data?.limitReached) {
+        setShowLimitBanner(true);
+      }
+    }
   };
 
   const handleDelete = async (id) => {
@@ -133,9 +216,27 @@ export default function Karyawan() {
     } catch (err) { alert(err.response?.data?.error || 'Gagal bayar gaji.'); }
   };
 
-  const totalGaji = employees.filter(e => e.role !== 'OWNER').reduce((s, e) => s + Number(e.salary || 0), 0);
-  const totalDibayar = payHistory.reduce((s, h) => s + h.amount, 0);
-  const sudahBayar = paidIds.size;
+  const nonOwnerEmployees = employees.filter(e => e.role !== 'OWNER');
+  const totalGaji = nonOwnerEmployees.reduce((s, e) => s + Number(e.salary || 0), 0);
+  const paidNonOwnerIds = new Set(
+    payHistory.map(h => {
+      const m = h.description?.match(/ID:(\d+)/); 
+      return m ? Number(m[1]) : null;
+    })
+    .filter(Boolean)
+    .filter(id => {
+      const emp = employees.find(e => e.id === id);
+      return emp && emp.role !== 'OWNER';
+    })
+  );
+  const sudahBayar = paidNonOwnerIds.size;
+  const totalDibayar = payHistory.reduce((s, h) => {
+    const m = h.description?.match(/ID:(\d+)/);
+    const empId = m ? Number(m[1]) : null;
+    const emp = employees.find(e => e.id === empId);
+    if (emp && emp.role === 'OWNER') return s;
+    return s + h.amount;
+  }, 0);
 
   const changeMonth = (dir) => {
     let m = selMonth + dir, y = selYear;
@@ -155,11 +256,108 @@ export default function Karyawan() {
           </div>
           <div>
             <h1 style={{ margin: 0, color: 'white', fontSize: '1.2rem', fontWeight: 900 }}>Manajemen Karyawan</h1>
-            <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12 }}>{employees.length}/10 karyawan {isOwner && `· Total gaji Rp ${fmt(totalGaji)}/bln`}</div>
+            <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12 }}>{employees.length}/{maxLimit} karyawan {isOwner && `· Total gaji Rp ${fmt(totalGaji)}/bln`}</div>
           </div>
         </div>
-        {isOwner && <button onClick={() => handleOpenModal()} disabled={employees.length >= 10} style={{ display: 'flex', alignItems: 'center', gap: 8, background: employees.length >= 10 ? 'rgba(255,255,255,0.1)' : 'white', color: employees.length >= 10 ? 'rgba(255,255,255,0.4)' : '#4F46E5', border: 'none', borderRadius: 12, padding: '9px 16px', fontWeight: 800, fontSize: 13, cursor: employees.length >= 10 ? 'not-allowed' : 'pointer' }}><Plus size={15} /> Tambah</button>}
+        {isOwner && (
+          <button 
+            onClick={handleAddClick} 
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 8, 
+              background: 'white', 
+              color: '#4F46E5', 
+              border: 'none', 
+              borderRadius: 12, 
+              padding: '9px 16px', 
+              fontWeight: 800, 
+              fontSize: 13, 
+              cursor: 'pointer' 
+            }}
+          >
+            <Plus size={15} /> Tambah
+          </button>
+        )}
       </div>
+
+      {/* Request Limit Expansion Banner */}
+      {showLimitBanner && (
+        <div style={{
+          background: 'linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%)',
+          border: '1.5px solid #FCA5A5',
+          borderRadius: 18,
+          padding: '16px 20px',
+          marginBottom: 16,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 16,
+          flexWrap: 'wrap',
+          boxShadow: '0 10px 25px -5px rgba(239, 68, 68, 0.1)',
+          fontFamily: "'Inter', sans-serif"
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: '240px' }}>
+            <div style={{
+              background: 'linear-gradient(135deg, #EF4444, #DC2626)',
+              borderRadius: 12,
+              padding: 10,
+              display: 'flex',
+              color: 'white',
+              boxShadow: '0 4px 14px rgba(239, 68, 68, 0.3)'
+            }}>
+              <Crown size={20} />
+            </div>
+            <div>
+              <h4 style={{ margin: '0 0 2px', fontSize: '0.9rem', fontWeight: 800, color: '#991B1B' }}>
+                Batas Maksimal Karyawan Tercapai ({maxLimit} Karyawan) 🔒
+              </h4>
+              <p style={{ margin: 0, fontSize: '0.78rem', color: '#B91C1C', fontWeight: 600, lineHeight: 1.4 }}>
+                Anda telah mencapai batas maksimal karyawan. Silakan ajukan ekspansi kapasitas menjadi 7 karyawan.
+              </p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              onClick={handleRequestExpansion}
+              disabled={requestLoading || requestSent}
+              style={{
+                background: requestSent ? '#10B981' : 'linear-gradient(135deg, #EF4444, #DC2626)',
+                color: 'white',
+                padding: '10px 20px',
+                borderRadius: '12px',
+                fontSize: '0.8rem',
+                fontWeight: 800,
+                border: 'none',
+                cursor: (requestLoading || requestSent) ? 'not-allowed' : 'pointer',
+                boxShadow: requestSent ? 'none' : '0 4px 14px rgba(239, 68, 68, 0.35)',
+                whiteSpace: 'nowrap',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                transition: 'all 0.15s'
+              }}
+            >
+              {requestLoading ? 'Mengirim...' : requestSent ? '✓ Terkirim' : 'Kirim Request'}
+            </button>
+            <button
+              onClick={() => setShowLimitBanner(false)}
+              style={{
+                background: 'white',
+                color: '#4B5563',
+                border: '1.5px solid #D1D5DB',
+                padding: '8px 16px',
+                borderRadius: '12px',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              Batal
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Tabs ── */}
       <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginBottom: 16, scrollbarWidth: 'none' }}>
@@ -206,7 +404,7 @@ export default function Karyawan() {
                         <span style={{ display: 'inline-block', marginTop: 3, fontSize: 11, fontWeight: 800, background: c.badge.bg, color: c.badge.color, padding: '2px 10px', borderRadius: 99 }}>{c.label}</span>
                       </div>
                     </div>
-                    {isOwner && (
+                    {isOwner && emp.role !== 'OWNER' && (
                       <div style={{ marginBottom: 10 }}>
                         {salaryEditId === emp.id ? (
                           // Mode edit gaji inline
@@ -275,7 +473,7 @@ export default function Karyawan() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(clamp(90px, 28vw, 150px), 1fr))', gap: 10, marginBottom: 14 }}>
             {[
               { label: 'Total Gaji', val: `Rp ${fmt(totalGaji)}`, bg: 'linear-gradient(135deg,#EFF6FF,#DBEAFE)', border: '#93C5FD', color: '#1E3A8A', icon: <Banknote size={16} /> },
-              { label: 'Sudah Dibayar', val: `${sudahBayar}/${employees.length} org`, bg: 'linear-gradient(135deg,#ECFDF5,#D1FAE5)', border: '#6EE7B7', color: '#065F46', icon: <CheckCircle size={16} /> },
+              { label: 'Sudah Dibayar', val: `${sudahBayar}/${employees.filter(e => e.role !== 'OWNER').length} org`, bg: 'linear-gradient(135deg,#ECFDF5,#D1FAE5)', border: '#6EE7B7', color: '#065F46', icon: <CheckCircle size={16} /> },
               { label: 'Total Dibayar', val: `Rp ${fmt(totalDibayar)}`, bg: 'linear-gradient(135deg,#FEF3C7,#FDE68A)', border: '#FCD34D', color: '#78350F', icon: <Clock size={16} /> },
             ].map((s, i) => (
               <div key={i} style={{ background: s.bg, border: `1.5px solid ${s.border}`, borderRadius: 14, padding: '10px 12px' }}>
@@ -342,6 +540,10 @@ export default function Karyawan() {
                 <input type="text" value={formData.name} onChange={e => setForm({ ...formData, name: e.target.value })} required disabled={isViewOnly} style={{ border: `1.5px solid ${cfg(formData.role).border}` }} />
               </div>
               <div className="form-group">
+                <label style={{ fontWeight: 700 }}>Email</label>
+                <input type="email" value={formData.email || ''} onChange={e => setForm({ ...formData, email: e.target.value })} required disabled={isViewOnly || !!formData.id} placeholder="karyawan@gmail.com" style={{ border: `1.5px solid ${cfg(formData.role).border}` }} />
+              </div>
+              <div className="form-group">
                 <label style={{ fontWeight: 700 }}>Peran (Role)</label>
                 <select value={formData.role} onChange={e => setForm({ ...formData, role: e.target.value })} disabled={isViewOnly} style={{ border: `1.5px solid ${cfg(formData.role).border}` }}>
                   {availableRoles.map(r => (
@@ -356,10 +558,16 @@ export default function Karyawan() {
                 </div>
               )}
               {!isViewOnly && (
-                <div className="form-group">
-                  <label style={{ fontWeight: 700 }}>PIN {formData.id ? '(kosong = tidak diubah)' : '(untuk Login)'}</label>
-                  <input type="text" maxLength="6" value={formData.pin} onChange={e => setForm({ ...formData, pin: e.target.value })} required={!formData.id} placeholder="Contoh: 123456" style={{ border: `1.5px solid ${cfg(formData.role).border}`, letterSpacing: 4, fontWeight: 700 }} />
-                </div>
+                <>
+                  <div className="form-group">
+                    <label style={{ fontWeight: 700 }}>Password {formData.id ? '(kosong = tidak diubah)' : ''}</label>
+                    <input type="password" value={formData.pin || ''} onChange={e => setForm({ ...formData, pin: e.target.value })} required={!formData.id} placeholder="Masukkan password" style={{ border: `1.5px solid ${cfg(formData.role).border}`, fontWeight: 700 }} />
+                  </div>
+                  <div className="form-group">
+                    <label style={{ fontWeight: 700 }}>Konfirmasi Password {formData.id ? '(kosong = tidak diubah)' : ''}</label>
+                    <input type="password" value={formData.confirmPin || ''} onChange={e => setForm({ ...formData, confirmPin: e.target.value })} required={!formData.id} placeholder="Masukkan konfirmasi password" style={{ border: `1.5px solid ${cfg(formData.role).border}`, fontWeight: 700 }} />
+                  </div>
+                </>
               )}
               <div className="modal-actions" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 {isOwner && !isViewOnly && formData.id && (

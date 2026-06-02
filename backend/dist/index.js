@@ -122,6 +122,7 @@ const port = process.env.PORT || 3001;
 const BLOCKED_USERS = [];
 // Contoh pemblokiran: const BLOCKED_USERS: string[] = ['hanafi', 'fed', 'fahri'];
 const crypto_1 = __importDefault(require("crypto"));
+const nodemailer_1 = __importDefault(require("nodemailer"));
 // Hashing PIN/password using salted PBKDF2
 const HASH_SALT = process.env.HASH_SALT || 'posbah_default_salt_secret';
 function hashPassword(password) {
@@ -130,6 +131,43 @@ function hashPassword(password) {
 function verifyPassword(password, hash) {
     return hashPassword(password) === hash;
 }
+// ─────────────────────────────────────────────────────────────
+// Email Notification Helper (Gmail SMTP via Nodemailer)
+// ─────────────────────────────────────────────────────────────
+const createEmailTransporter = () => nodemailer_1.default.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT || '465'),
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: {
+        user: process.env.SMTP_USER || '',
+        pass: process.env.SMTP_PASS || ''
+    }
+});
+const sendEmail = (to, subject, html) => __awaiter(void 0, void 0, void 0, function* () {
+    if (!process.env.SMTP_USER || process.env.SMTP_USER.includes('GANTI')) {
+        console.warn('[EMAIL] SMTP not configured. Skipping email to:', to);
+        console.warn('[EMAIL] Subject:', subject);
+        return;
+    }
+    try {
+        const transporter = createEmailTransporter();
+        yield transporter.sendMail({
+            from: `"POSBah System" <${process.env.SMTP_USER}>`,
+            to,
+            subject,
+            html
+        });
+        console.log(`[EMAIL] Sent to ${to}: ${subject}`);
+    }
+    catch (err) {
+        console.error('[EMAIL] Failed to send email:', err);
+    }
+});
+// Generate random password
+const generatePassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    return Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+};
 const asyncLocalStorage = new async_hooks_1.AsyncLocalStorage();
 /** Helper: Catat Log Aktivitas Karyawan ke Database */
 const logActivity = (employeeId, action, description) => __awaiter(void 0, void 0, void 0, function* () {
@@ -440,6 +478,147 @@ app.get('/api/download-apk', (req, res) => {
     // Fallback redirect to Google Drive file
     res.redirect('https://drive.google.com/uc?export=download&id=1grCDSGp1qacBES1hcO29d_03HNPstdbM');
 });
+// Route to get the latest APK version name
+app.get('/api/apk-version', (req, res) => {
+    res.json({ version: '1.0.2' });
+});
+// Get employee limit for a tenant
+app.get('/api/employees/limit', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const tenantId = req.headers['x-tenant-id'];
+        let limit = 4;
+        if (tenantId) {
+            const tenantLimit = yield mainPrisma.tenantLimit.findUnique({ where: { tenantId } });
+            if (tenantLimit) {
+                limit = tenantLimit.limit;
+            }
+        }
+        res.json({ limit });
+    }
+    catch (error) {
+        res.json({ limit: 4 });
+    }
+}));
+// Request employee limit expansion
+app.post('/api/request-expansion', requireOwner, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const tenantId = req.headers['x-tenant-id'];
+        const { ownerName, ownerEmail } = req.body;
+        if (!tenantId || !ownerEmail) {
+            return res.status(400).json({ error: 'Tenant ID dan email owner wajib dikirim' });
+        }
+        const appBaseUrl = process.env.APP_BASE_URL || 'https://www.zedmz.cloud';
+        const confirmLink = `${appBaseUrl}/api/confirm-expansion?tenantId=${encodeURIComponent(tenantId)}&email=${encodeURIComponent(ownerEmail)}`;
+        const rejectLink = `${appBaseUrl}/api/reject-expansion?tenantId=${encodeURIComponent(tenantId)}&email=${encodeURIComponent(ownerEmail)}`;
+        const subject = `Permintaan Ekspansi Karyawan POSBah - ${ownerName}`;
+        const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #E5E7EB; border-radius: 10px;">
+        <h2 style="color: #4F46E5; margin-top: 0;">Permintaan Ekspansi Kapasitas Karyawan</h2>
+        <p>Owner dengan data berikut meminta peningkatan batas kapasitas karyawan dari 4 menjadi 7:</p>
+        <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+          <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #E5E7EB; font-weight: bold; width: 140px;">Nama Owner:</td>
+            <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;">${ownerName}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #E5E7EB; font-weight: bold;">Email Owner:</td>
+            <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;">${ownerEmail}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #E5E7EB; font-weight: bold;">Tenant ID:</td>
+            <td style="padding: 8px; border-bottom: 1px solid #E5E7EB; color: #4F46E5; font-family: monospace;">${tenantId}</td>
+          </tr>
+        </table>
+        <p>Silakan klik salah satu tombol di bawah untuk memproses:</p>
+        <div style="margin-top: 25px; margin-bottom: 20px;">
+          <a href="${confirmLink}" style="background: linear-gradient(135deg, #10B981, #059669); color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; margin-right: 15px; display: inline-block; box-shadow: 0 4px 10px rgba(16,185,129,0.3);">Konfirmasi (Sudah Bayar)</a>
+          <a href="${rejectLink}" style="background: linear-gradient(135deg, #EF4444, #DC2626); color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; box-shadow: 0 4px 10px rgba(239,68,68,0.3);">Belum (Belum Bayar)</a>
+        </div>
+        <p style="font-size: 11px; color: #6B7280; border-top: 1px solid #E5E7EB; padding-top: 15px; margin-top: 25px;">Sistem Otomatis POSBah</p>
+      </div>
+    `;
+        yield sendEmail('muhammadmuizz8@gmail.com', subject, html);
+        res.json({ success: true, message: 'Permintaan ekspansi telah dikirim melalui email.' });
+    }
+    catch (err) {
+        console.error('Request expansion failed:', err);
+        res.status(500).json({ error: 'Gagal mengirim permintaan ekspansi: ' + err.message });
+    }
+}));
+// Confirm limit expansion to 7
+app.get('/api/confirm-expansion', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const tenantId = req.query.tenantId;
+        const email = req.query.email;
+        if (!tenantId) {
+            return res.status(400).send('Tenant ID tidak valid');
+        }
+        yield mainPrisma.tenantLimit.upsert({
+            where: { tenantId },
+            update: { limit: 7 },
+            create: { tenantId, limit: 7 }
+        });
+        const subject = 'Konfirmasi Ekspansi Karyawan POSBah Berhasil';
+        const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #E5E7EB; border-radius: 10px;">
+        <h2 style="color: #10B981; margin-top: 0;">✅ Ekspansi Karyawan POSBah Aktif!</h2>
+        <p>Halo,</p>
+        <p>Pembayaran Anda telah kami konfirmasi. Batas penambahan karyawan untuk toko Anda telah berhasil ditingkatkan menjadi <b>7 karyawan</b>.</p>
+        <p>Perubahan ini berlaku otomatis di aplikasi web dan APK Anda. Silakan muat ulang (refresh) halaman atau buka kembali aplikasi POSBah Anda untuk mulai menambahkan karyawan baru.</p>
+        <br/>
+        <p>Terima kasih,</p>
+        <p><b>Tim POSBah</b></p>
+      </div>
+    `;
+        if (email) {
+            yield sendEmail(email, subject, html);
+        }
+        res.send(`
+      <div style="font-family: Arial, sans-serif; text-align: center; margin-top: 100px;">
+        <h2 style="color: #10B981;">✅ Konfirmasi Berhasil</h2>
+        <p>Tenant <b>${tenantId}</b> telah berhasil ditingkatkan ke batas <b>7 karyawan</b>.</p>
+        <p>Email pemberitahuan telah dikirimkan ke owner di <b>${email}</b>.</p>
+      </div>
+    `);
+    }
+    catch (err) {
+        console.error('Confirm expansion failed:', err);
+        res.status(500).send('Gagal melakukan konfirmasi: ' + err.message);
+    }
+}));
+// Reject limit expansion (send payment reminder)
+app.get('/api/reject-expansion', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const tenantId = req.query.tenantId;
+        const email = req.query.email;
+        if (!email) {
+            return res.status(400).send('Email owner tidak valid');
+        }
+        const subject = 'Informasi Pembayaran Ekspansi Karyawan POSBah';
+        const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #E5E7EB; border-radius: 10px;">
+        <h2 style="color: #EF4444; margin-top: 0;">Pemberitahuan Pembayaran Ekspansi</h2>
+        <p>Halo,</p>
+        <p>Mohon melakukan pembayaran sebesar <b>Rp 25.000 (25K)</b> untuk melakukan ekspansi cabang (penambahan kapasitas menjadi 7 karyawan).</p>
+        <p>Silakan kirimkan pembayaran Anda ke rekening/QRIS Admin POSBah yang biasa digunakan. Setelah melakukan pembayaran, harap hubungi Admin agar limit penambahan karyawan Anda segera diaktifkan.</p>
+        <br/>
+        <p>Terima kasih,</p>
+        <p><b>Tim POSBah</b></p>
+      </div>
+    `;
+        yield sendEmail(email, subject, html);
+        res.send(`
+      <div style="font-family: Arial, sans-serif; text-align: center; margin-top: 100px;">
+        <h2 style="color: #EF4444;">✉️ Email Pembayaran Terkirim</h2>
+        <p>Email pemberitahuan tagihan 25K telah dikirim ke owner di <b>${email}</b>.</p>
+      </div>
+    `);
+    }
+    catch (err) {
+        console.error('Reject expansion failed:', err);
+        res.status(500).send('Gagal memproses penolakan: ' + err.message);
+    }
+}));
 // ─────────────────────────────────────────────────────────────
 // Auth - Login with name + PIN
 // ─────────────────────────────────────────────────────────────
@@ -449,22 +628,41 @@ app.post('/api/auth/login', (req, res) => __awaiter(void 0, void 0, void 0, func
     });
 }));
 // ─────────────────────────────────────────────────────────────
-// Auth - Google Login Registration for Demo Trial (3-Day Limit)
+// Auth - Google Login Registration for Demo Trial (2-Day Limit)
 // ─────────────────────────────────────────────────────────────
 app.post('/api/auth/google-register', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
     try {
-        const { email } = req.body;
+        const { email, name, businessMode } = req.body;
         if (!email)
             return res.status(400).json({ error: 'Email wajib diisi' });
         const cleanEmail = email.toLowerCase().trim();
+        const cleanName = name || cleanEmail.split('@')[0];
+        const mode = businessMode || 'FNB';
         let googleUser = yield prisma.googleUser.findUnique({
             where: { email: cleanEmail }
         });
+        if (googleUser) {
+            if (!googleUser.isConfirmed && googleUser.demoExpiresAt && new Date() > googleUser.demoExpiresAt) {
+                return res.status(403).json({
+                    error: 'Masa demo gratis 2 hari Anda telah kedaluwarsa dan tidak dibayar. Email ini tidak dapat digunakan untuk demo lagi. Silakan hubungi Admin POSBah untuk peningkatan ke Akun Premium.',
+                    code: 'DEMO_EXPIRED'
+                });
+            }
+        }
+        let isNewUser = false;
         if (!googleUser) {
+            isNewUser = true;
+            const token = crypto_1.default.randomBytes(32).toString('hex');
+            const demoExpiresAt = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000); // 2 hari
             googleUser = yield prisma.googleUser.create({
                 data: {
                     id: cleanEmail,
-                    email: cleanEmail
+                    email: cleanEmail,
+                    userName: cleanName,
+                    businessMode: mode,
+                    confirmToken: token,
+                    demoExpiresAt
                 }
             });
             // Provision tenant database
@@ -474,16 +672,357 @@ app.post('/api/auth/google-register', (req, res) => __awaiter(void 0, void 0, vo
             }
             catch (err) {
                 console.error(`Failed to initialize database for google user ${cleanEmail}:`, err);
-                // Rollback creation in main db
                 yield prisma.googleUser.delete({ where: { email: cleanEmail } });
                 return res.status(500).json({ error: 'Gagal menginisialisasi database penyewa baru' });
             }
+            // Kirim email notifikasi ke owner
+            const baseUrl = process.env.APP_BASE_URL || 'https://103.93.163.227';
+            const confirmUrl = `${baseUrl}/api/admin/confirm-demo?token=${token}`;
+            const modeLabels = {
+                FNB: '🍹 Retail & F&B (Kasir, Stok, Diskon)',
+                RENTAL: '🚗 Rental Mobil',
+                LAUNDRY: '🧺 Laundry',
+                BMP: '🏭 Manufaktur & Invoice (BMP)'
+            };
+            const modeLabel = modeLabels[mode] || mode;
+            const ownerEmail = process.env.OWNER_EMAIL || '';
+            const now = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+            if (ownerEmail) {
+                yield sendEmail(ownerEmail, `🆕 Demo Baru - ${cleanName} memilih paket ${modeLabel}`, `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; background: #f8f9fa; border-radius: 12px;">
+            <div style="background: linear-gradient(135deg, #1e1b4b, #4c1d95); padding: 30px; border-radius: 12px; margin-bottom: 20px; text-align: center;">
+              <h1 style="color: white; margin: 0; font-size: 24px;">🆕 User Demo Baru!</h1>
+            </div>
+            <div style="background: white; padding: 25px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+              <h2 style="color: #1e293b; margin-top: 0;">Detail User</h2>
+              <table style="width: 100%; border-collapse: collapse;">
+                <tr><td style="padding: 8px; color: #64748b; width: 120px;">Nama</td><td style="padding: 8px; font-weight: bold; color: #1e293b;">${cleanName}</td></tr>
+                <tr style="background: #f8fafc;"><td style="padding: 8px; color: #64748b;">Email</td><td style="padding: 8px; font-weight: bold; color: #1e293b;">${cleanEmail}</td></tr>
+                <tr><td style="padding: 8px; color: #64748b;">Paket</td><td style="padding: 8px; font-weight: bold; color: #1e293b;">${modeLabel}</td></tr>
+                <tr style="background: #f8fafc;"><td style="padding: 8px; color: #64748b;">Waktu Daftar</td><td style="padding: 8px; font-weight: bold; color: #1e293b;">${now} WIB</td></tr>
+              </table>
+            </div>
+            <div style="text-align: center; margin-bottom: 20px;">
+              <a href="${confirmUrl}" style="display: inline-block; padding: 16px 32px; background: linear-gradient(135deg, #10b981, #059669); color: white; text-decoration: none; border-radius: 12px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 12px rgba(16,185,129,0.3);">✅ Konfirmasi Pembayaran</a>
+            </div>
+            <p style="color: #94a3b8; font-size: 12px; text-align: center;">Jika tidak dikonfirmasi, demo akan otomatis berakhir dalam 2 hari.</p>
+          </div>
+          `);
+            }
         }
-        res.json({ email: googleUser.email, registeredAt: googleUser.registeredAt.toISOString() });
+        // Hitung expiresAt: jika sudah dikonfirmasi, unlimited (99 tahun); jika belum, dari demoExpiresAt
+        const expiresAt = googleUser.isConfirmed
+            ? new Date(Date.now() + 99 * 365 * 24 * 60 * 60 * 1000).toISOString()
+            : (((_a = googleUser.demoExpiresAt) === null || _a === void 0 ? void 0 : _a.toISOString()) || new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString());
+        res.json({
+            email: googleUser.email,
+            registeredAt: googleUser.registeredAt.toISOString(),
+            expiresAt,
+            isConfirmed: googleUser.isConfirmed,
+            isNewUser
+        });
     }
     catch (error) {
         console.error('Failed in google-register:', error);
         res.status(500).json({ error: 'Gagal memproses pendaftaran Google' });
+    }
+}));
+// ─────────────────────────────────────────────────────────────
+// Auth - Email Trial Registration for Demo (Alternative to Google OAuth)
+// ─────────────────────────────────────────────────────────────
+app.post('/api/auth/email-register-demo', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const { email, name, password, businessMode } = req.body;
+        if (!email || !password)
+            return res.status(400).json({ error: 'Email dan password wajib diisi' });
+        const cleanEmail = email.toLowerCase().trim();
+        const cleanName = name || cleanEmail.split('@')[0];
+        const mode = businessMode || 'FNB';
+        // Cek apakah email sudah terdaftar di PremiumUser atau GoogleUser
+        const existingPremium = yield prisma.premiumUser.findUnique({ where: { email: cleanEmail } });
+        if (existingPremium)
+            return res.status(400).json({ error: 'Email ini sudah terdaftar sebagai akun Premium' });
+        let googleUser = yield prisma.googleUser.findUnique({
+            where: { email: cleanEmail }
+        });
+        if (googleUser) {
+            if (!googleUser.isConfirmed && googleUser.demoExpiresAt && new Date() > googleUser.demoExpiresAt) {
+                return res.status(403).json({
+                    error: 'Masa demo gratis 2 hari Anda telah kedaluwarsa dan tidak dibayar. Email ini tidak dapat digunakan untuk demo lagi. Silakan hubungi Admin POSBah untuk peningkatan ke Akun Premium.',
+                    code: 'DEMO_EXPIRED'
+                });
+            }
+            return res.status(400).json({ error: 'Email ini sudah terdaftar sebagai akun demo' });
+        }
+        const token = crypto_1.default.randomBytes(32).toString('hex');
+        const demoExpiresAt = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000); // 2 hari
+        const hashedPassword = hashPassword(password);
+        googleUser = yield prisma.googleUser.create({
+            data: {
+                id: cleanEmail,
+                email: cleanEmail,
+                userName: cleanName,
+                businessMode: mode,
+                confirmToken: token,
+                demoExpiresAt,
+                passwordHash: hashedPassword
+            }
+        });
+        // Provision tenant database
+        try {
+            const dbName = yield createTenantDatabase(cleanEmail);
+            yield runTenantMigration(dbName);
+        }
+        catch (err) {
+            console.error(`Failed to initialize database for demo email user ${cleanEmail}:`, err);
+            yield prisma.googleUser.delete({ where: { email: cleanEmail } });
+            return res.status(500).json({ error: 'Gagal menginisialisasi database penyewa baru' });
+        }
+        // Kirim email notifikasi ke owner
+        const baseUrl = process.env.APP_BASE_URL || 'https://103.93.163.227';
+        const confirmUrl = `${baseUrl}/api/admin/confirm-demo?token=${token}`;
+        const modeLabels = {
+            FNB: '🍹 Retail & F&B (Kasir, Stok, Diskon)',
+            RENTAL: '🚗 Rental Mobil',
+            LAUNDRY: '🧺 Laundry',
+            BMP: '🏭 Manufaktur & Invoice (BMP)'
+        };
+        const modeLabel = modeLabels[mode] || mode;
+        const ownerEmail = process.env.OWNER_EMAIL || '';
+        const now = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+        if (ownerEmail) {
+            yield sendEmail(ownerEmail, `🆕 Demo Baru (Email) - ${cleanName} memilih paket ${modeLabel}`, `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; background: #f8f9fa; border-radius: 12px;">
+          <div style="background: linear-gradient(135deg, #1e1b4b, #4c1d95); padding: 30px; border-radius: 12px; margin-bottom: 20px; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 24px;">🆕 User Demo Baru (Email)!</h1>
+          </div>
+          <div style="background: white; padding: 25px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+            <h2 style="color: #1e293b; margin-top: 0;">Detail User</h2>
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr><td style="padding: 8px; color: #64748b; width: 120px;">Nama</td><td style="padding: 8px; font-weight: bold; color: #1e293b;">${cleanName}</td></tr>
+              <tr style="background: #f8fafc;"><td style="padding: 8px; color: #64748b;">Email</td><td style="padding: 8px; font-weight: bold; color: #1e293b;">${cleanEmail}</td></tr>
+              <tr><td style="padding: 8px; color: #64748b;">Paket</td><td style="padding: 8px; font-weight: bold; color: #1e293b;">${modeLabel}</td></tr>
+              <tr style="background: #f8fafc;"><td style="padding: 8px; color: #64748b;">Waktu Daftar</td><td style="padding: 8px; font-weight: bold; color: #1e293b;">${now} WIB</td></tr>
+            </table>
+          </div>
+          <div style="text-align: center; margin-bottom: 20px;">
+            <a href="${confirmUrl}" style="display: inline-block; padding: 16px 32px; background: linear-gradient(135deg, #10b981, #059669); color: white; text-decoration: none; border-radius: 12px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 12px rgba(16,185,129,0.3);">✅ Konfirmasi Pembayaran</a>
+          </div>
+          <p style="color: #94a3b8; font-size: 12px; text-align: center;">Jika tidak dikonfirmasi, demo akan otomatis berakhir dalam 2 hari.</p>
+        </div>
+        `);
+        }
+        const expiresAt = ((_a = googleUser.demoExpiresAt) === null || _a === void 0 ? void 0 : _a.toISOString()) || new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+        res.json({
+            email: googleUser.email,
+            registeredAt: googleUser.registeredAt.toISOString(),
+            expiresAt,
+            isConfirmed: false,
+            isNewUser: true
+        });
+    }
+    catch (error) {
+        console.error('Failed in email-register-demo:', error);
+        res.status(500).json({ error: 'Gagal memproses pendaftaran demo' });
+    }
+}));
+// ─────────────────────────────────────────────────────────────
+// Admin - Halaman Konfirmasi Demo (GET: tampilkan form HTML)
+// ─────────────────────────────────────────────────────────────
+app.get('/api/admin/confirm-demo', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const { token } = req.query;
+        if (!token)
+            return res.status(400).send('<h1>Token tidak valid</h1>');
+        const user = yield prisma.googleUser.findUnique({
+            where: { confirmToken: token }
+        });
+        if (!user)
+            return res.status(404).send('<h1 style="font-family:Arial">Link tidak valid atau sudah digunakan.</h1>');
+        const modeLabels = {
+            FNB: '🍹 Retail & F&B',
+            RENTAL: '🚗 Rental Mobil',
+            LAUNDRY: '🧺 Laundry',
+            BMP: '🏭 Manufaktur & Invoice (BMP)'
+        };
+        const modeLabel = modeLabels[user.businessMode] || user.businessMode;
+        const registeredAt = user.registeredAt.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+        if (user.isConfirmed) {
+            return res.send(`
+        <!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Sudah Dikonfirmasi - POSBah</title>
+        <style>body{font-family:Arial,sans-serif;background:#f0fdf4;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}
+        .card{background:white;padding:40px;border-radius:16px;box-shadow:0 4px 24px rgba(0,0,0,0.1);max-width:500px;width:90%;text-align:center;}
+        .icon{font-size:64px;margin-bottom:16px;}.title{font-size:24px;font-weight:bold;color:#15803d;margin:0 0 8px;}.sub{color:#64748b;}</style></head>
+        <body><div class="card"><div class="icon">✅</div>
+        <h1 class="title">Sudah Dikonfirmasi</h1>
+        <p class="sub">User <strong>${user.email}</strong> sudah pernah dikonfirmasi pada ${(_a = user.confirmedAt) === null || _a === void 0 ? void 0 : _a.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB.</p>
+        </div></body></html>
+      `);
+        }
+        res.send(`
+      <!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+      <title>Konfirmasi Demo - POSBah Admin</title>
+      <style>
+        *{box-sizing:border-box;} body{font-family:Arial,sans-serif;background:linear-gradient(135deg,#1e1b4b,#4c1d95);min-height:100vh;display:flex;align-items:center;justify-content:center;margin:0;padding:20px;}
+        .card{background:white;border-radius:20px;padding:40px;max-width:520px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);}
+        h1{color:#1e293b;font-size:22px;margin:0 0 24px;text-align:center;}
+        .info{background:#f8fafc;border-radius:12px;padding:20px;margin-bottom:24px;}
+        .info-row{display:flex;padding:8px 0;border-bottom:1px solid #f1f5f9;}
+        .info-row:last-child{border:none;}
+        .info-label{color:#64748b;width:130px;font-size:14px;}
+        .info-value{font-weight:bold;color:#1e293b;font-size:14px;}
+        .btn{display:block;width:100%;padding:16px;border:none;border-radius:12px;font-size:16px;font-weight:bold;cursor:pointer;margin-bottom:12px;transition:all 0.2s;}
+        .btn-approve{background:linear-gradient(135deg,#10b981,#059669);color:white;box-shadow:0 4px 12px rgba(16,185,129,0.3);}
+        .btn-approve:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(16,185,129,0.4);}
+        .btn-reject{background:#f1f5f9;color:#64748b;}
+        .btn-reject:hover{background:#e2e8f0;}
+        .msg{display:none;padding:12px;border-radius:8px;text-align:center;margin-top:16px;font-weight:bold;}
+        .msg.success{background:#dcfce7;color:#15803d;}
+        .msg.error{background:#fee2e2;color:#dc2626;}
+      </style></head><body>
+      <div class="card">
+        <h1>🔐 Konfirmasi Pembayaran Demo</h1>
+        <div class="info">
+          <div class="info-row"><span class="info-label">Nama</span><span class="info-value">${user.userName || user.email}</span></div>
+          <div class="info-row"><span class="info-label">Email</span><span class="info-value">${user.email}</span></div>
+          <div class="info-row"><span class="info-label">Paket</span><span class="info-value">${modeLabel}</span></div>
+          <div class="info-row"><span class="info-label">Daftar</span><span class="info-value">${registeredAt} WIB</span></div>
+        </div>
+        <button class="btn btn-approve" onclick="doAction('approve')">✅ Konfirmasi — User Ini Sudah Bayar</button>
+        <button class="btn btn-reject" onclick="doAction('reject')">❌ Belum Bayar — Biarkan Demo 2 Hari</button>
+        <div class="msg" id="msg"></div>
+      </div>
+      <script>
+        async function doAction(action) {
+          const msgEl = document.getElementById('msg');
+          msgEl.style.display='none';
+          const res = await fetch('/api/admin/confirm-demo', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ token: '${token}', action })
+          });
+          const data = await res.json();
+          msgEl.style.display='block';
+          if(data.success) {
+            msgEl.className='msg success';
+            msgEl.textContent = action==='approve' ? '✅ Berhasil! Email aktivasi telah dikirim ke user.' : '✅ Oke, demo dibiarkan berjalan 2 hari.';
+          } else {
+            msgEl.className='msg error';
+            msgEl.textContent = data.error || 'Gagal memproses';
+          }
+        }
+      </script></body></html>
+    `);
+    }
+    catch (error) {
+        console.error('Error in confirm-demo GET:', error);
+        res.status(500).send('<h1>Terjadi kesalahan server</h1>');
+    }
+}));
+// ─────────────────────────────────────────────────────────────
+// Admin - Proses Konfirmasi Demo (POST: approve / reject)
+// ─────────────────────────────────────────────────────────────
+app.post('/api/admin/confirm-demo', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { token, action } = req.body;
+        if (!token || !action)
+            return res.status(400).json({ error: 'Token dan action wajib diisi' });
+        const user = yield prisma.googleUser.findUnique({
+            where: { confirmToken: token }
+        });
+        if (!user)
+            return res.status(404).json({ error: 'Token tidak valid atau sudah digunakan' });
+        if (user.isConfirmed)
+            return res.status(400).json({ error: 'User ini sudah pernah dikonfirmasi' });
+        if (action === 'reject') {
+            // Biarkan demo 2 hari berjalan normal, hapus token saja
+            yield prisma.googleUser.update({
+                where: { email: user.email },
+                data: { confirmToken: null }
+            });
+            return res.json({ success: true, message: 'Demo dibiarkan berjalan 2 hari' });
+        }
+        if (action === 'approve') {
+            // 1. Tandai sebagai confirmed
+            yield prisma.googleUser.update({
+                where: { email: user.email },
+                data: {
+                    isConfirmed: true,
+                    confirmedAt: new Date(),
+                    confirmToken: null // Hapus token setelah dipakai
+                }
+            });
+            // 2. Tentukan password hash
+            let hashedPassword = user.passwordHash;
+            let tempPassword = '';
+            if (!hashedPassword) {
+                tempPassword = generatePassword();
+                hashedPassword = hashPassword(tempPassword);
+            }
+            // 3. Buat/update PremiumUser agar bisa login email
+            yield prisma.premiumUser.upsert({
+                where: { email: user.email },
+                update: { passwordHash: hashedPassword },
+                create: {
+                    id: user.email,
+                    email: user.email,
+                    passwordHash: hashedPassword,
+                    name: user.userName || user.email.split('@')[0],
+                    role: 'OWNER',
+                    tenantId: user.email
+                }
+            });
+            // 4. Update user di tenant BMP db (jika ada)
+            try {
+                const tenantPrisma = getTenantPrisma(user.email);
+                const existingBmpUser = yield tenantPrisma.$queryRaw `
+          SELECT id FROM users WHERE username = ${user.email} LIMIT 1
+        `;
+                if (existingBmpUser && existingBmpUser.length > 0) {
+                    // Gunakan bcrypt hash yang kompatibel dengan Go backend
+                    // Go backend menggunakan bcrypt, jadi kita simpan plaintext dan biarkan Go yang hash
+                    // Untuk sederhananya, kita tidak ubah password BMP di sini
+                }
+            }
+            catch (err) {
+                console.warn('Could not update BMP user password:', err);
+            }
+            // 5. Kirim email ke user dengan credentials
+            const baseUrl = process.env.APP_BASE_URL || 'https://103.93.163.227';
+            yield sendEmail(user.email, '✅ Akun POSBah Anda Telah Diaktifkan!', `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; background: #f8f9fa; border-radius: 12px;">
+          <div style="background: linear-gradient(135deg, #1e1b4b, #4c1d95); padding: 30px; border-radius: 12px; margin-bottom: 20px; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 24px;">🎉 Selamat! Akun Anda Aktif</h1>
+          </div>
+          <div style="background: white; padding: 25px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+            <p style="color: #1e293b;">Halo <strong>${user.userName || user.email}</strong>,</p>
+            <p style="color: #475569;">Pembayaran Anda telah dikonfirmasi. Akun POSBah Anda kini aktif dan bisa digunakan tanpa batas waktu.</p>
+            <div style="background: #f8fafc; border-left: 4px solid #10b981; padding: 16px; border-radius: 8px; margin: 20px 0;">
+              <p style="margin: 0 0 8px; color: #64748b; font-size: 13px;">KREDENSIAL LOGIN</p>
+              <p style="margin: 0 0 4px; color: #1e293b;"><strong>Email:</strong> ${user.email}</p>
+              ${tempPassword ? `
+              <p style="margin: 0 0 4px; color: #1e293b;"><strong>Password Sementara:</strong> <code style="background: #e2e8f0; padding: 2px 8px; border-radius: 4px; font-size: 16px;">${tempPassword}</code></p>
+              ` : `
+              <p style="margin: 0 0 4px; color: #1e293b;"><strong>Password:</strong> Gunakan password yang Anda daftarkan saat registrasi demo.</p>
+              `}
+            </div>
+            ${tempPassword ? '<p style="color: #94a3b8; font-size: 13px;">⚠️ Harap simpan password ini. Anda dapat mengganti password setelah login.</p>' : ''}
+          </div>
+          <div style="text-align: center;">
+            <a href="${baseUrl}" style="display: inline-block; padding: 14px 28px; background: linear-gradient(135deg, #10b981, #059669); color: white; text-decoration: none; border-radius: 12px; font-weight: bold;">🔐 Login Sekarang</a>
+          </div>
+        </div>
+        `);
+            return res.json({ success: true, message: 'Akun diaktifkan dan email dikirim ke user' });
+        }
+        res.status(400).json({ error: 'Action tidak valid. Gunakan: approve atau reject' });
+    }
+    catch (error) {
+        console.error('Error in confirm-demo POST:', error);
+        res.status(500).json({ error: 'Terjadi kesalahan server' });
     }
 }));
 // ─────────────────────────────────────────────────────────────
@@ -533,6 +1072,7 @@ app.post('/api/auth/register-email', (req, res) => __awaiter(void 0, void 0, voi
 // Auth - Premium Email Login
 // ─────────────────────────────────────────────────────────────
 app.post('/api/auth/login-email', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
     try {
         const { email, password } = req.body;
         if (!email || !password)
@@ -541,20 +1081,57 @@ app.post('/api/auth/login-email', (req, res) => __awaiter(void 0, void 0, void 0
         const user = yield prisma.premiumUser.findUnique({
             where: { email: cleanEmail }
         });
-        if (!user)
+        if (user) {
+            const oldSha256 = crypto_1.default.createHash('sha256').update(password).digest('hex');
+            const isMatch = verifyPassword(password, user.passwordHash) || user.passwordHash === oldSha256 || user.passwordHash === password;
+            if (!isMatch)
+                return res.status(401).json({ error: 'Email atau password salah' });
+            // Cari businessMode dari GoogleUser (jika terdaftar sebelumnya sebagai demo)
+            const googleUser = yield prisma.googleUser.findUnique({
+                where: { email: cleanEmail }
+            });
+            const businessMode = googleUser ? googleUser.businessMode : undefined;
+            return res.json({
+                id: cleanEmail,
+                name: user.name,
+                email: cleanEmail,
+                role: user.role,
+                isDemo: false,
+                businessMode, // Sertakan di response agar frontend langsung memetakan mode bisnis
+                tenantId: user.tenantId || cleanEmail,
+                registeredAt: user.registeredAt.toISOString()
+            });
+        }
+        // Jika tidak ditemukan di PremiumUser, coba cari di GoogleUser (untuk demo email)
+        const demoUser = yield prisma.googleUser.findUnique({
+            where: { email: cleanEmail }
+        });
+        if (!demoUser || !demoUser.passwordHash) {
             return res.status(401).json({ error: 'Email atau password salah' });
-        const oldSha256 = crypto_1.default.createHash('sha256').update(password).digest('hex');
-        const isMatch = verifyPassword(password, user.passwordHash) || user.passwordHash === oldSha256 || user.passwordHash === password;
-        if (!isMatch)
+        }
+        const isDemoMatch = verifyPassword(password, demoUser.passwordHash);
+        if (!isDemoMatch)
             return res.status(401).json({ error: 'Email atau password salah' });
+        if (!demoUser.isConfirmed && demoUser.demoExpiresAt && new Date() > demoUser.demoExpiresAt) {
+            return res.status(403).json({
+                error: 'Masa demo gratis 2 hari Anda telah kedaluwarsa dan tidak dibayar. Email ini tidak dapat digunakan untuk demo lagi. Silakan hubungi Admin POSBah untuk peningkatan ke Akun Premium.',
+                code: 'DEMO_EXPIRED'
+            });
+        }
+        // Hitung expiresAt: jika sudah dikonfirmasi, unlimited; jika belum, dari demoExpiresAt
+        const expiresAt = demoUser.isConfirmed
+            ? new Date(Date.now() + 99 * 365 * 24 * 60 * 60 * 1000).toISOString()
+            : (((_a = demoUser.demoExpiresAt) === null || _a === void 0 ? void 0 : _a.toISOString()) || new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString());
         res.json({
             id: cleanEmail,
-            name: user.name,
+            name: demoUser.userName || cleanEmail.split('@')[0],
             email: cleanEmail,
-            role: user.role,
-            isDemo: false,
-            tenantId: user.tenantId || cleanEmail,
-            registeredAt: user.registeredAt.toISOString()
+            role: 'OWNER',
+            isDemo: true,
+            businessMode: demoUser.businessMode,
+            tenantId: cleanEmail,
+            registeredAt: demoUser.registeredAt.toISOString(),
+            expiresAt
         });
     }
     catch (error) {
@@ -934,25 +1511,113 @@ app.post('/api/employees', requireOwner, (req, res) => __awaiter(void 0, void 0,
         if (employeeIdHeader === '0' || employeeIdHeader === '9999') {
             return res.status(403).json({ error: 'Akun demo tidak dapat menambah karyawan' });
         }
-        const count = yield prisma.employee.count();
-        if (count >= 10) {
-            return res.status(400).json({ error: 'Maksimal 10 karyawan telah tercapai' });
+        const tenantId = req.headers['x-tenant-id'];
+        let maxLimit = 4;
+        if (tenantId) {
+            const tenantLimit = yield mainPrisma.tenantLimit.findUnique({ where: { tenantId } });
+            if (tenantLimit) {
+                maxLimit = tenantLimit.limit;
+            }
         }
-        const { name, role, pin, salary } = req.body;
+        const count = yield prisma.employee.count();
+        if (count >= maxLimit) {
+            return res.status(400).json({
+                error: `Batas maksimal ${maxLimit} karyawan telah tercapai. Silakan lakukan ekspansi kapasitas karyawan.`,
+                limitReached: true,
+                maxLimit
+            });
+        }
+        const { name, email, role, pin, salary } = req.body;
+        if (!email) {
+            return res.status(400).json({ error: 'Email karyawan wajib diisi' });
+        }
+        const cleanEmail = email.toLowerCase().trim();
+        // Cek keunikan email secara global
+        const existingPremium = yield mainPrisma.premiumUser.findUnique({ where: { email: cleanEmail } });
+        if (existingPremium) {
+            return res.status(400).json({ error: 'Email ini sudah terdaftar di sistem' });
+        }
+        const existingGoogle = yield mainPrisma.googleUser.findUnique({ where: { email: cleanEmail } });
+        if (existingGoogle) {
+            return res.status(400).json({ error: 'Email ini sudah terdaftar sebagai akun demo' });
+        }
+        // Cek keunikan email di database penyewa lokal
+        const existingEmployee = yield prisma.employee.findFirst({ where: { email: cleanEmail } });
+        if (existingEmployee) {
+            return res.status(400).json({ error: 'Email ini sudah terdaftar sebagai karyawan di toko Anda' });
+        }
         // OWNER bisa tambah OWNER/ADMIN/KASIR; ADMIN hanya bisa tambah KASIR
         const requesterRole = req.headers['x-employee-role'];
         if (requesterRole !== 'OWNER' && role === 'OWNER') {
             return res.status(403).json({ error: 'Hanya OWNER yang dapat membuat akun OWNER' });
         }
         const hashedPin = pin && pin.length === 128 ? pin : hashPassword(pin || '');
+        // 1. Simpan di database penyewa
         const employee = yield prisma.employee.create({
             data: {
                 name,
+                email: cleanEmail,
                 role: role || 'KASIR',
                 pin: hashedPin,
-                salary: Number(salary || 0)
+                salary: role === 'OWNER' ? 0 : Number(salary || 0) // Gaji owner selalu 0
             }
         });
+        // 2. Simpan di database global PremiumUser agar bisa login menggunakan email & password
+        yield mainPrisma.premiumUser.create({
+            data: {
+                id: cleanEmail,
+                email: cleanEmail,
+                passwordHash: hashedPin,
+                name,
+                role: role || 'KASIR',
+                tenantId: tenantId
+            }
+        });
+        // 3. Dapatkan Nama Bisnis Owner dari database global
+        let businessName = 'POSBah';
+        const ownerUser = yield mainPrisma.premiumUser.findUnique({ where: { email: tenantId } });
+        if (ownerUser) {
+            businessName = ownerUser.name;
+        }
+        else {
+            const googleOwner = yield mainPrisma.googleUser.findUnique({ where: { email: tenantId } });
+            if (googleOwner) {
+                businessName = googleOwner.userName || tenantId;
+            }
+        }
+        // 4. Kirim Gmail selamat bergabung otomatis ke karyawan
+        const subject = `Selamat bergabung ke: ${businessName}`;
+        const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #E5E7EB; border-radius: 10px;">
+        <h2 style="color: #4F46E5; margin-top: 0; font-size: 1.4rem;">🎉 Selamat Bergabung!</h2>
+        <p>Halo <b>${name}</b>,</p>
+        <p>Anda telah terdaftar sebagai karyawan di <b>${businessName}</b>. Mulai hari ini, berikut adalah data kredensial login Anda:</p>
+        <table style="width: 100%; border-collapse: collapse; margin: 15px 0; background: #F9FAFB; border-radius: 8px; border: 1px solid #E5E7EB;">
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #E5E7EB; font-weight: bold; width: 140px; color: #374151;">Email:</td>
+            <td style="padding: 10px; border-bottom: 1px solid #E5E7EB; color: #111827; font-family: monospace; font-size: 14px;">${cleanEmail}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; font-weight: bold; color: #374151;">Password:</td>
+            <td style="padding: 10px; color: #111827; font-family: monospace; font-size: 14px; font-weight: bold;">${pin}</td>
+          </tr>
+        </table>
+        <p style="margin-top: 20px; font-size: 13px; color: #4B5563;">
+          ⚠️ <b>Penting:</b> Jika Anda ingin mengganti password atau lupa password, silakan hubungi Owner Anda di email: 
+          <a href="mailto:${tenantId}" style="color: #4F46E5; text-decoration: underline; font-weight: 600;">${tenantId}</a>
+        </p>
+        <div style="margin-top: 30px; text-align: center;">
+          <a href="${process.env.APP_BASE_URL || 'https://www.zedmz.cloud'}" style="background: linear-gradient(135deg, #4F46E5, #4338CA); color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3);">Masuk ke POSBah</a>
+        </div>
+        <p style="font-size: 11px; color: #9CA3AF; border-top: 1px solid #E5E7EB; padding-top: 15px; margin-top: 35px; text-align: center;">Sistem Otomatis POSBah</p>
+      </div>
+    `;
+        try {
+            yield sendEmail(cleanEmail, subject, emailHtml);
+        }
+        catch (mailErr) {
+            console.error('Failed to send employee welcome email:', mailErr);
+        }
         logActivity(req.headers['x-employee-id'], 'CREATE_EMPLOYEE', `Menambahkan karyawan baru ${employee.name} (Role: ${employee.role})`);
         res.json(employee);
     }
@@ -973,17 +1638,35 @@ app.put('/api/employees/:id', requireOwner, (req, res) => __awaiter(void 0, void
         if (requesterRole !== 'OWNER' && role === 'OWNER') {
             return res.status(403).json({ error: 'Hanya OWNER yang dapat mengubah role menjadi OWNER' });
         }
+        const existingEmployee = yield prisma.employee.findUnique({ where: { id: Number(id) } });
+        if (!existingEmployee) {
+            return res.status(404).json({ error: 'Karyawan tidak ditemukan' });
+        }
         const updateData = { name, role };
         if (pin && pin.trim() !== '') {
             updateData.pin = pin.length === 128 ? pin : hashPassword(pin);
         }
         if (salary !== undefined) {
-            updateData.salary = Number(salary);
+            updateData.salary = role === 'OWNER' ? 0 : Number(salary || 0); // Gaji owner selalu 0
         }
+        // 1. Update di database penyewa lokal
         const employee = yield prisma.employee.update({
             where: { id: Number(id) },
             data: updateData
         });
+        // 2. Sinkronkan perubahan ke PremiumUser global
+        if (existingEmployee.email) {
+            const premiumUpdateData = { name };
+            if (role !== undefined)
+                premiumUpdateData.role = role;
+            if (pin && pin.trim() !== '') {
+                premiumUpdateData.passwordHash = updateData.pin;
+            }
+            yield mainPrisma.premiumUser.updateMany({
+                where: { email: existingEmployee.email.toLowerCase().trim() },
+                data: premiumUpdateData
+            });
+        }
         logActivity(req.headers['x-employee-id'], 'UPDATE_EMPLOYEE', `Mengubah data karyawan ${employee.name} (Role: ${employee.role})`);
         res.json(employee);
     }
@@ -1011,8 +1694,18 @@ app.delete('/api/employees/:id', requireOwner, (req, res) => __awaiter(void 0, v
             });
         }
         const emp = yield prisma.employee.findUnique({ where: { id: Number(id) } });
+        if (!emp) {
+            return res.status(404).json({ error: 'Karyawan tidak ditemukan' });
+        }
+        // 1. Hapus dari database penyewa lokal
         yield prisma.employee.delete({ where: { id: Number(id) } });
-        logActivity(req.headers['x-employee-id'], 'DELETE_EMPLOYEE', `Menghapus karyawan: ${(emp === null || emp === void 0 ? void 0 : emp.name) || id}`);
+        // 2. Hapus dari database global PremiumUser jika ada emailnya
+        if (emp.email) {
+            yield mainPrisma.premiumUser.deleteMany({
+                where: { email: emp.email.toLowerCase().trim() }
+            });
+        }
+        logActivity(req.headers['x-employee-id'], 'DELETE_EMPLOYEE', `Menghapus karyawan: ${emp.name}`);
         res.json({ success: true });
     }
     catch (error) {
