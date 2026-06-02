@@ -113,7 +113,7 @@ export default function DaftarPage({ onLogin }) {
     try {
       const res = await api.post('/auth/email-register-demo', {
         email: googleProfile.email,
-        name: googleProfile.name,
+        name: name,
         password: password,
         businessMode: selected
       });
@@ -121,7 +121,7 @@ export default function DaftarPage({ onLogin }) {
 
       onLogin({
         id: googleProfile.email,
-        name: googleProfile.name || googleProfile.email.split('@')[0],
+        name: name || googleProfile.email.split('@')[0],
         email: googleProfile.email,
         role: 'OWNER',
         isDemo: true,
@@ -430,22 +430,22 @@ export default function DaftarPage({ onLogin }) {
             ) : (
               <form onSubmit={doEmailRegister} style={{ textAlign: 'left' }}>
                 <div style={{ marginBottom: '14px' }}>
-                  <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '12px', fontWeight: 600, marginBottom: '5px' }}>Nama Lengkap / Bisnis (dari Google)</label>
+                  <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '12px', fontWeight: 600, marginBottom: '5px' }}>Nama Lengkap / Bisnis</label>
                   <input
                     type="text"
+                    placeholder="Masukkan nama lengkap / bisnis"
                     value={name}
-                    readOnly
-                    disabled
+                    onChange={e => setName(e.target.value)}
                     style={{
                       width: '100%',
                       padding: '11px 14px',
                       borderRadius: '10px',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      background: 'rgba(255,255,255,0.03)',
-                      color: 'rgba(255,255,255,0.5)',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      background: 'rgba(255,255,255,0.05)',
+                      color: 'white',
                       fontSize: '13px',
                       outline: 'none',
-                      cursor: 'not-allowed'
+                      transition: 'all 0.2s'
                     }}
                     required
                   />
