@@ -75,10 +75,9 @@ export default function Login({ onLogin }) {
     setLoading(true);
     setError('');
     try {
-      // Inisialisasi plugin dengan webClientId
       await SocialLogin.initialize({
         google: {
-          webClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '276837280353-d83c8eo0nfo5v1ij1dr4okjjt443mbn0.apps.googleusercontent.com',
+          webClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '119416648055-06ujev0c1onnv8fs67no28dqhlca93fm.apps.googleusercontent.com',
         }
       });
 
@@ -196,7 +195,7 @@ export default function Login({ onLogin }) {
     const initGoogleGSI = () => {
       if (window.google) {
         google.accounts.id.initialize({
-          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || "276837280353-d83c8eo0nfo5v1ij1dr4okjjt443mbn0.apps.googleusercontent.com",
+          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || "119416648055-06ujev0c1onnv8fs67no28dqhlca93fm.apps.googleusercontent.com",
           callback: handleGoogleLoginResponse
         });
         const btnElem = document.getElementById("google-signin-btn");

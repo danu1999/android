@@ -6,7 +6,7 @@
   "plugins": {
     "SocialLogin": {
       "google": {
-        "webClientId": "276837280353-d83c8eo0nfo5v1ij1dr4okjjt443mbn0.apps.googleusercontent.com",
+        "webClientId": "119416648055-06ujev0c1onnv8fs67no28dqhlca93fm.apps.googleusercontent.com",
         "scopes": ["profile", "email"]
       }
     }

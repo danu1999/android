@@ -78,7 +78,7 @@ export default function DaftarPage({ onLogin }) {
     const initGSI = () => {
       if (window.google) {
         google.accounts.id.initialize({
-          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || '276837280353-d83c8eo0nfo5v1ij1dr4okjjt443mbn0.apps.googleusercontent.com',
+          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || '119416648055-06ujev0c1onnv8fs67no28dqhlca93fm.apps.googleusercontent.com',
           callback: handleGoogleResponse
         });
         const btn = document.getElementById('google-demo-btn');
@@ -190,7 +190,7 @@ export default function DaftarPage({ onLogin }) {
     setLoading(true);
     try {
       await SocialLogin.initialize({
-        google: { webClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '276837280353-d83c8eo0nfo5v1ij1dr4okjjt443mbn0.apps.googleusercontent.com' }
+        google: { webClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '119416648055-06ujev0c1onnv8fs67no28dqhlca93fm.apps.googleusercontent.com' }
       });
       const result = await SocialLogin.login({ provider: 'google', options: { scopes: ['profile', 'email'] } });
       const profile = result?.result?.profile;
