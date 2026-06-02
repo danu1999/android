@@ -85,7 +85,7 @@ Agar Google Sign-In native dapat berfungsi di APK, Replit harus mengetahui kunci
 - **Package Name**: `com.posbah.app`
 - **Vite API URL**: `https://posbah.up.railway.app/api`
 - **webClientId (dari Google Cloud Console)**:
-  `276837280353-d83c8eo0nfo5v1ij1dr4okjjt443mbn0.apps.googleusercontent.com`
+  `119416648055-06ujev0c1onnv8fs67no28dqhlca93fm.apps.googleusercontent.com`
 - **SHA-1 Fingerprint (Debug Key)**:
   `48:53:F9:B1:EE:33:BF:65:5B:DA:CE:33:F1:E9:09:10:57:A6:D9:2C`
 
