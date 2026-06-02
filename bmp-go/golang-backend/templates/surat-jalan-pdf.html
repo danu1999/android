@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="utf-8">
+    <title>Surat Jalan - {{ if .DemoMode }}BMP - Bintang Makmur Plastindo{{ else }}CV Bahtera Mulya Plastik{{ end }}</title>
+    <style>
+        /* Setup Kertas A4 */
+        @page {
+            size: 9.5in 11in;
+            margin: 0.5cm 1cm 1cm 0.5cm;
+        }
+
+        body {
+            font-family: Helvetica, Arial, sans-serif;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            font-size: 13px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .nota-title h1 {
+            margin: 0;
+            font-size: 28px;
+            letter-spacing: 2px;
+            color: #2c3e50;
+        }
+
+        .client-info {
+            margin-bottom: 20px;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 13px;
+        }
+
+        /* Tabel Barang (Tanpa Harga) */
+        .table-items {
+            margin-bottom: 20px;
+            border-collapse: collapse;
+        }
+
+
+        /* Ubah warna header jadi putih, tulisan hitam, dan tambah garis tegas atas-bawah */
+        .table-items th {
+            background-color: #ffffff;
+            color: #000000;
+            padding: 8px;
+            text-align: left;
+            text-transform: uppercase;
+            font-size: 13px;
+            border-top: 2px solid #000000;
+            border-bottom: 2px solid #000000;
+        }
+
+        /* Ubah juga garis bawah per-barang jadi hitam (bisa solid atau dashed) biar tercetak jelas */
+        .table-items td {
+            padding: 8px;
+            border-bottom: 1px solid #000000;
+            font-size: 12px;
+            color: #000000;
+        }
+    </style>
+</head>
+
+<body>
+    <table style="width: 100%; border-bottom: 2px solid #000000; margin-bottom: 20px; padding-bottom: 15px;">
+        <tr>
+            <td style="width: 60%; vertical-align: top; text-align: left; padding-left: 0;">
+                <h1 style="margin: 0; color: #000000; font-size: 20px; line-height: 1;">
+                    {{ if .DemoMode }}BMP - BINTANG MAKMUR PLASTINDO{{ else }}CV BAHTERA MULYA PLASTIK{{ end }}
+                </h1>
+                <p style="margin: 8px 0 2px 0; font-size: 12px;">
+                    {{ if .DemoMode }}Jl. Industri Raya No. 45, Semarang{{ else }}Jl. Arimbi, RT04 RW 01 Desa Ngrimbi{{ end }}
+                </p>
+                <p style="margin: 2px 0; font-size: 12px;">
+                    {{ if .DemoMode }}024-7654321{{ else }}{{ .Settings.PhoneNumber }} | {{ .Settings.EmailAddress }}{{ end }}
+                </p>
+            </td>
+
+            <td style="width: 40%; vertical-align: top; text-align: right; padding-right: 0;">
+                <div class="nota-title">
+                    <h1 style="margin: 0; font-size: 20px; letter-spacing: 2px; color: #000000; line-height: 1;">SURAT
+                        JALAN</h1>
+                    <div style="font-size: 13px; font-weight: normal;">
+                        #{{ .Invoice.Number }}<br>
+                        TGL: {{ formatDate .Invoice.DateCreated }}
+                    </div>
+                </div>
+            </td>
+        </tr>
+    </table>
+    <div class="client-info">
+        ALAMAT PENGIRIMAN:
+        {{ if .Invoice.Client.ID }}
+        {{ .Invoice.Client.ClientName }}<br>
+        <span style="font-weight: normal; font-size: 12px; text-transform: capitalize;">{{ .Invoice.Client.AddressLine1
+            }}</span>
+        {{ else }}
+        <span style="color: #000000;">(Pelanggan Belum Dipilih)</span>
+        {{ end }}
+    </div>
+
+    <table class="table-items">
+        <thead>
+            <tr>
+                <th style="width: 5%;">#</th>
+                <th style="width: 55%;">ITEM</th>
+                <th style="width: 20%;">LUSIN</th>
+                <th style="width: 20%;">QTY</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{ range $index, $product := .Products }}
+            {{ if $product.Title }}
+            <tr>
+                <td>{{ add $index 1 }}</td>
+                <td><strong>{{ $product.Title }}</strong></td>
+                <td>{{ printf "%.0f" $product.JumlahLusin }}</td>
+                <td>{{ intcomma $product.Quantity }}</td>
+            </tr>
+            {{ end }}
+            {{ end }}
+        </tbody>
+    </table>
+    <table style="margin-top: 60px; text-align: center; width: 100%; font-size: 12px;">
+        <tr>
+            <td style="width: 33%; vertical-align: top;">
+                <strong>Penerima / Pembeli</strong>
+                <br><br><br><br><br><br>
+                ( .......................... )
+            </td>
+            <td style="width: 33%; vertical-align: top;">
+                <strong>Sopir / Kurir</strong>
+                <br><br><br><br><br><br>
+                ( .......................... )
+            </td>
+            <td style="width: 34%; vertical-align: top;">
+                <strong>Hormat Kami,</strong>
+                <div style="height: 80px; margin: 5px 0;">
+                    <br><br><br><br>
+                </div>
+                <strong>Bag. Gudang</strong>
+            </td>
+        </tr>
+    </table>
+
+</body>
+
+</html>

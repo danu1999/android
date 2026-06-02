@@ -1,0 +1,28 @@
+
+*.pyc
+db.sqlite3
+.env
+
+*.rpm
+
+staticfiles/
+
+# IDE settings
+.idea/
+
+# User uploads/Media
+uploads/
+
+# Node.js
+node_modules/
+golang-frontend/dist/
+
+# IDE
+.junie/
+
+# Go build artifacts (binary, exe)
+*.exe
+*.exe~
+golang-backend/invoice-bmp-go
+golang-backend/invoice-bmp-go.exe
+

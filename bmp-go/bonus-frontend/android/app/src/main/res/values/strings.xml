@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">BMP Bonus</string>
+    <string name="title_activity_main">BMP Bonus</string>
+    <string name="package_name">com.bmppresisi.bonus</string>
+    <string name="custom_url_scheme">com.bmppresisi.bonus</string>
+</resources>
