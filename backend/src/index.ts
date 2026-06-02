@@ -122,6 +122,13 @@ const port = process.env.PORT || 3001;
 const BLOCKED_USERS: string[] = []; 
 // Contoh pemblokiran: const BLOCKED_USERS: string[] = ['hanafi', 'fed', 'fahri'];
 
+// ─── DAFTAR BLOKIR EMAIL (PENYUSUP) ─────────────────────────────────
+// Tambahkan email penyusup ke sini untuk mencegah registrasi & login selamanya.
+// Pengecekan dilakukan di semua endpoint register dan login.
+const BLOCKED_EMAILS: string[] = [
+  'tester_anak@gmail.com', // PENYUSUP - diblokir 2026-06-02
+];
+
 import crypto from 'crypto';
 import nodemailer from 'nodemailer';
 
@@ -307,6 +314,15 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 // ─── MIDDLEWARE PEMBLOKIRAN LANGGANAN ───────────────────────────────
 app.use(async (req: Request, res: Response, next: NextFunction) => {
   const employeeId = req.headers['x-employee-id'] as string;
+
+  // ─── CEK BLOKIR EMAIL PENYUSUP ──────────────────────────────────────
+  // Blokir semua request dari email yang ada di BLOCKED_EMAILS
+  const bodyEmail = req.body?.email as string | undefined;
+  if (bodyEmail && BLOCKED_EMAILS.includes(bodyEmail.toLowerCase().trim())) {
+    return res.status(403).json({
+      error: 'Akses ditolak. Akun Anda telah diblokir oleh Administrator.'
+    });
+  }
 
   // Cek jika sedang melakukan login POST /api/auth/login
   if (req.path === '/api/auth/login' && req.method === 'POST') {
