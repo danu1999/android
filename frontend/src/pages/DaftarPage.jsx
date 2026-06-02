@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { SocialLogin } from '@capgo/capacitor-social-login';
 import api from '../api';
 
+const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
+
 const PACKAGES = [
   {
     id: 'FNB',
@@ -50,11 +52,18 @@ export default function DaftarPage({ onLogin }) {
   const navigate = useNavigate();
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [step, setStep] = useState('choose'); // 'choose' | 'confirm' | 'processing'
+  const [step, setStep] = useState('choose'); // 'choose' | 'google-login' | 'confirm'
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
+  const [googleProfile, setGoogleProfile] = useState(null);
+
+  useEffect(() => {
+    if (step === 'confirm' && !googleProfile) {
+      window.location.href = 'https://www.zedmz.cloud';
+    }
+  }, [step, googleProfile]);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -64,7 +73,7 @@ export default function DaftarPage({ onLogin }) {
 
   useEffect(() => {
     /* global google */
-    if (step !== 'confirm' || !selected) return;
+    if (step !== 'google-login' || !selected) return;
     let retryCount = 0;
     const initGSI = () => {
       if (window.google) {
@@ -95,21 +104,25 @@ export default function DaftarPage({ onLogin }) {
 
   const doEmailRegister = async (e) => {
     e.preventDefault();
+    if (!googleProfile) {
+      window.location.href = 'https://www.zedmz.cloud';
+      return;
+    }
     if (!email || !password) return alert('Email dan password wajib diisi');
     setLoading(true);
     try {
       const res = await api.post('/auth/email-register-demo', {
-        email: email,
-        name: name,
+        email: googleProfile.email,
+        name: googleProfile.name,
         password: password,
         businessMode: selected
       });
       const { registeredAt, expiresAt } = res.data;
 
       onLogin({
-        id: email,
-        name: name || email.split('@')[0],
-        email: email,
+        id: googleProfile.email,
+        name: googleProfile.name || googleProfile.email.split('@')[0],
+        email: googleProfile.email,
         role: 'OWNER',
         isDemo: true,
         businessMode: selected,
@@ -167,7 +180,10 @@ export default function DaftarPage({ onLogin }) {
   const handleGoogleResponse = async (response) => {
     const payload = parseJwt(response.credential);
     if (!payload?.email) return alert('Gagal membaca profil Google');
-    await doGoogleRegister(payload.email, payload.name);
+    setGoogleProfile({ email: payload.email, name: payload.name });
+    setEmail(payload.email);
+    setName(payload.name || payload.email.split('@')[0]);
+    setStep('confirm');
   };
 
   const handleNativeGoogle = async () => {
@@ -179,7 +195,10 @@ export default function DaftarPage({ onLogin }) {
       const result = await SocialLogin.login({ provider: 'google', options: { scopes: ['profile', 'email'] } });
       const profile = result?.result?.profile;
       if (profile?.email) {
-        await doGoogleRegister(profile.email, profile.name || profile.givenName);
+        setGoogleProfile({ email: profile.email, name: profile.name || profile.givenName });
+        setEmail(profile.email);
+        setName(profile.name || profile.givenName || profile.email.split('@')[0]);
+        setStep('confirm');
       } else {
         alert('Login Google gagal');
       }
@@ -207,8 +226,8 @@ export default function DaftarPage({ onLogin }) {
         <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: '15px', margin: 0 }}>
           {step === 'choose' ? 'Pilih paket yang sesuai dengan bisnis Anda' : `Konfirmasi paket dan masuk dengan Google`}
         </p>
-        {step === 'confirm' && (
-          <button onClick={() => setStep('choose')} style={{ marginTop: '12px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)', padding: '6px 16px', borderRadius: '20px', cursor: 'pointer', fontSize: '13px' }}>
+        {(step === 'confirm' || step === 'google-login') && (
+          <button onClick={() => { setGoogleProfile(null); setStep('choose'); }} style={{ marginTop: '12px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.7)', padding: '6px 16px', borderRadius: '20px', cursor: 'pointer', fontSize: '13px' }}>
             ← Ganti Paket
           </button>
         )}
@@ -270,7 +289,7 @@ export default function DaftarPage({ onLogin }) {
 
           <div style={{ textAlign: 'center' }}>
             <button
-              onClick={() => selected && setStep('confirm')}
+              onClick={() => selected && setStep('google-login')}
               disabled={!selected}
               style={{
                 padding: '16px 48px', borderRadius: '14px', border: 'none', fontSize: '17px', fontWeight: 800, cursor: selected ? 'pointer' : 'not-allowed',
@@ -294,7 +313,85 @@ export default function DaftarPage({ onLogin }) {
         </div>
       )}
 
-      {/* Step 2: Konfirmasi & Google Sign-In */}
+      {/* Step 2: Wajib Login Google */}
+      {step === 'google-login' && pkg && (
+        <div style={{ maxWidth: '420px', margin: '0 auto' }}>
+          <div style={{
+            background: 'rgba(255,255,255,0.07)',
+            backdropFilter: 'blur(20px)',
+            borderRadius: '24px',
+            border: `1px solid ${pkg.color}44`,
+            padding: '32px',
+            boxShadow: `0 20px 60px rgba(0,0,0,0.4), 0 0 0 1px ${pkg.color}22`,
+            textAlign: 'center'
+          }}>
+            {/* Selected Package Badge */}
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: '10px',
+              background: `${pkg.color}22`, border: `1px solid ${pkg.color}44`,
+              borderRadius: '12px', padding: '10px 16px', marginBottom: '24px'
+            }}>
+              <span style={{ fontSize: '20px' }}>{pkg.icon}</span>
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ color: 'white', fontWeight: 700, fontSize: '15px' }}>{pkg.title}</div>
+                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px' }}>{pkg.subtitle}</div>
+              </div>
+            </div>
+
+            <h2 style={{ color: 'white', fontWeight: 800, margin: '0 0 8px', fontSize: '20px' }}>Wajib Login Google</h2>
+            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '13px', margin: '0 0 24px', lineHeight: 1.5 }}>
+              Untuk memverifikasi identitas Anda dan mencegah penyalahgunaan demo, Anda wajib masuk menggunakan Google terlebih dahulu.
+            </p>
+
+            {loading ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '20px', color: 'rgba(255,255,255,0.7)' }}>
+                <div style={{ width: '20px', height: '20px', border: '2px solid rgba(255,255,255,0.2)', borderTop: '2px solid white', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                Memproses...
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px' }}>
+                {isCapacitor ? (
+                  <button
+                    onClick={handleNativeGoogle}
+                    style={{
+                      width: '100%',
+                      padding: '14px',
+                      borderRadius: '14px',
+                      border: 'none',
+                      background: 'white',
+                      color: '#1f2937',
+                      fontSize: '0.95rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '10px',
+                      transition: 'all 0.2s',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" width="18" height="18" style={{ marginRight: '6px' }}>
+                      <path fill="#EA4335" d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.114-5.136 4.114-3.51 0-6.357-2.847-6.357-6.357s2.847-6.357 6.357-6.357c1.6 0 3.056.592 4.185 1.565l3.204-3.203C19.262 2.21 15.96 1 12.24 1 5.92 1 1 5.92 1 12.24s4.92 11.24 11.24 11.24c5.98 0 11.24-4.32 11.24-11.24 0-.74-.08-1.46-.22-2.155H12.24z"/>
+                    </svg>
+                    Masuk dengan Google
+                  </button>
+                ) : (
+                  <div id="google-demo-btn" style={{ minHeight: '44px', display: 'flex', justifyContent: 'center' }} />
+                )}
+              </div>
+            )}
+
+            <div style={{ marginTop: '24px', padding: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '10px' }}>
+              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: '12px', margin: 0, lineHeight: 1.5 }}>
+                🔒 Kami menjaga privasi Anda. POSBah hanya meminta akses ke profil dasar dan email untuk verifikasi keamanan akun demo.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Step 3: Konfirmasi & Input Password */}
       {step === 'confirm' && pkg && (
         <div style={{ maxWidth: '420px', margin: '0 auto' }}>
           <div style={{
@@ -321,7 +418,7 @@ export default function DaftarPage({ onLogin }) {
 
             <h2 style={{ color: 'white', fontWeight: 800, margin: '0 0 8px', fontSize: '20px' }}>Registrasi Demo 2 Hari</h2>
             <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '13px', margin: '0 0 20px', lineHeight: 1.5 }}>
-              Isi data di bawah untuk memulai trial Anda. Admin akan dikonfirmasi via email untuk mengaktifkan akun penuh.
+              Lengkapi pembuatan akun demo Anda dengan menentukan password baru di bawah ini.
             </p>
 
             {loading ? (
@@ -333,44 +430,44 @@ export default function DaftarPage({ onLogin }) {
             ) : (
               <form onSubmit={doEmailRegister} style={{ textAlign: 'left' }}>
                 <div style={{ marginBottom: '14px' }}>
-                  <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '12px', fontWeight: 600, marginBottom: '5px' }}>Nama Lengkap / Bisnis</label>
+                  <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '12px', fontWeight: 600, marginBottom: '5px' }}>Nama Lengkap / Bisnis (dari Google)</label>
                   <input
                     type="text"
-                    placeholder="Masukkan nama lengkap / bisnis"
                     value={name}
-                    onChange={e => setName(e.target.value)}
+                    readOnly
+                    disabled
                     style={{
                       width: '100%',
                       padding: '11px 14px',
                       borderRadius: '10px',
-                      border: '1px solid rgba(255,255,255,0.15)',
-                      background: 'rgba(255,255,255,0.05)',
-                      color: 'white',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      background: 'rgba(255,255,255,0.03)',
+                      color: 'rgba(255,255,255,0.5)',
                       fontSize: '13px',
                       outline: 'none',
-                      transition: 'all 0.2s'
+                      cursor: 'not-allowed'
                     }}
                     required
                   />
                 </div>
 
                 <div style={{ marginBottom: '14px' }}>
-                  <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '12px', fontWeight: 600, marginBottom: '5px' }}>Alamat Email</label>
+                  <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '12px', fontWeight: 600, marginBottom: '5px' }}>Alamat Email (dari Google)</label>
                   <input
                     type="email"
-                    placeholder="Masukkan alamat email Anda"
                     value={email}
-                    onChange={e => setEmail(e.target.value)}
+                    readOnly
+                    disabled
                     style={{
                       width: '100%',
                       padding: '11px 14px',
                       borderRadius: '10px',
-                      border: '1px solid rgba(255,255,255,0.15)',
-                      background: 'rgba(255,255,255,0.05)',
-                      color: 'white',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      background: 'rgba(255,255,255,0.03)',
+                      color: 'rgba(255,255,255,0.5)',
                       fontSize: '13px',
                       outline: 'none',
-                      transition: 'all 0.2s'
+                      cursor: 'not-allowed'
                     }}
                     required
                   />
