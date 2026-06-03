@@ -79,11 +79,7 @@ func GetDashboardSummary(c *fiber.Ctx) error {
 		database.DB.Where("invoice_id = ?", inv.ID).Find(&products)
 		total := 0.0
 		for _, p := range products {
-			if p.IsKhusus {
-				total += p.Quantity * p.JumlahLusin * p.HargaBeli
-			} else {
-				total += p.Quantity * p.JumlahLusin * p.Price
-			}
+			total += p.Quantity * p.JumlahLusin * p.Price
 		}
 
 		cName := "-"
@@ -114,11 +110,7 @@ func GetDashboardSummary(c *fiber.Ctx) error {
 		database.DB.Where("invoice_id = ?", inv.ID).Find(&products)
 		total := 0.0
 		for _, p := range products {
-			if p.IsKhusus {
-				total += p.Quantity * p.JumlahLusin * p.HargaBeli
-			} else {
-				total += p.Quantity * p.JumlahLusin * p.Price
-			}
+			total += p.Quantity * p.JumlahLusin * p.Price
 		}
 
 		totalInvoicesIdr += total
