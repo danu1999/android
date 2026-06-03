@@ -431,6 +431,9 @@ export default function Login({ onLogin }) {
               <p style={{ margin: 0, fontSize: '0.72rem', color: '#a7f3d0', fontWeight: 500, lineHeight: 1.4 }}>
                 Cetak struk bluetooth &amp; transaksi offline lebih cepat.
               </p>
+              <p style={{ margin: '4px 0 0', fontSize: '0.62rem', color: '#fca5a5', fontWeight: 700, lineHeight: 1.3 }}>
+                ⚠️ Update ini penting untuk pengusaha manufaktur. POS UMKM, laundry, Rental tidak perlu update.
+              </p>
             </div>
           </div>
           <button

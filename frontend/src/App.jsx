@@ -910,6 +910,26 @@ function FullscreenUpdateModal({ onClose, onDownload }) {
           flexDirection: 'column',
           gap: '12px'
         }}>
+          {/* Manufaktur Notice Banner */}
+          <div style={{
+            background: 'rgba(245, 158, 11, 0.1)',
+            border: '1px solid rgba(245, 158, 11, 0.25)',
+            borderRadius: '12px',
+            padding: '10px 14px',
+            fontSize: '0.78rem',
+            color: '#fcd34d',
+            lineHeight: '1.4',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '8px',
+            marginBottom: '4px'
+          }}>
+            <span style={{ fontSize: '1rem' }}>⚠️</span>
+            <span>
+              <strong>Penting untuk pengusaha manufaktur:</strong> Untuk POS UMKM, laundry, dan Rental tidak perlu update.
+            </span>
+          </div>
+
           <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, color: '#e2e8f0' }}>
             Apa saja yang baru di versi 1.1.0?
           </h3>
