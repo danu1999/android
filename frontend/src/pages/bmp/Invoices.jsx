@@ -73,6 +73,13 @@ const Invoices = () => {
     const [showEdit, setShowEdit] = useState(false);
     const [editData, setEditData] = useState({ id: 0, products: [] });
 
+    // === Edit Full Faktur (Header + Produk) ===
+    const [showEditHeader, setShowEditHeader] = useState(false);
+    const [editHeaderData, setEditHeaderData] = useState({
+        id: 0, number: '', title: '', client_id: 0,
+        due_date: '', date_created: '', payment_terms: '14 hari', notes: '', products: []
+    });
+
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth <= 768);
         window.addEventListener('resize', handleResize);
@@ -257,8 +264,19 @@ const Invoices = () => {
         }
     };
 
-    const handleDelete = async (id) => {
-        if (window.confirm("Yakin ingin menghapus faktur ini?")) {
+    const handleDelete = async (id, invoiceObj) => {
+        const status = invoiceObj?.Status || '';
+        const number = invoiceObj?.Number || id;
+        const paidAmount = invoiceObj?.PaidAmount || 0;
+        let msg = `Yakin ingin menghapus Faktur ${number}?`;
+        if (status === 'PAID') {
+            msg += `\n\n⚠️ Faktur ini sudah LUNAS:\n• Kas masuk terkait akan terhapus dari Kas Keuangan\n• Riwayat harga produk dari faktur ini akan hilang di Pricelist`;
+        } else if ((status === 'PARTIAL' || status === 'OVERDUE') && paidAmount > 0) {
+            const fmt = new Intl.NumberFormat('id-ID').format(paidAmount);
+            msg += `\n\n⚠️ Faktur sudah ada pembayaran Rp ${fmt}:\n• Kas masuk terkait akan terhapus dari Kas Keuangan`;
+        }
+        msg += '\n\nLanjutkan?';
+        if (window.confirm(msg)) {
             try {
                 await api.delete(`/invoices/${id}`);
                 fetchData(currentPage, filterStatus, filterClient, searchTerm);
@@ -304,6 +322,67 @@ const Invoices = () => {
             fetchData(currentPage, filterStatus, filterClient, searchTerm);
         } catch (e6) {
             alert("Gagal update produk faktur");
+        }
+    };
+
+    // Buka modal Edit Faktur Lengkap (header + produk) — untuk backdate
+    const openEditHeaderModal = async (inv) => {
+        try {
+            const res = await api.get(`/invoices/${inv.ID}`);
+            const data = res.data.data;
+            const products = (res.data.products || []).map(p => ({
+                master_item_id: p.MasterItemID,
+                quantity: p.Quantity,
+                jumlah_lusin: p.JumlahLusin,
+                custom_price: p.Price,
+                is_khusus: p.IsKhusus || false,
+                harga_beli: p.HargaBeli || 0,
+                _title: p.Title || ''
+            }));
+            setEditHeaderData({
+                id: inv.ID,
+                number: data.Number || '',
+                title: data.Title || '',
+                client_id: data.ClientID || 0,
+                due_date: data.DueDate ? data.DueDate.split('T')[0] : '',
+                date_created: data.DateCreated ? data.DateCreated.split('T')[0] : '',
+                payment_terms: data.PaymentTerms || '14 hari',
+                notes: data.Notes || '',
+                products
+            });
+            setShowEditHeader(true);
+        } catch (err) {
+            alert('Gagal memuat data faktur');
+        }
+    };
+
+    // Submit Edit Faktur Lengkap: update header dulu, lalu update produk
+    const handleEditHeaderSubmit = async (e) => {
+        e.preventDefault();
+        if (editHeaderData.products.length === 0) return alert('Minimal 1 produk!');
+        try {
+            // 1. Update header faktur
+            await api.put(`/invoices/${editHeaderData.id}`, {
+                number: editHeaderData.number,
+                title: editHeaderData.title,
+                client_id: Number(editHeaderData.client_id),
+                due_date: editHeaderData.due_date ? editHeaderData.due_date + 'T00:00:00Z' : '',
+                date_created: editHeaderData.date_created ? editHeaderData.date_created + 'T00:00:00Z' : '',
+                payment_terms: editHeaderData.payment_terms,
+                notes: editHeaderData.notes
+            });
+            // 2. Update produk (interconnect: pricelist & status faktur dihitung ulang)
+            const computedProducts = editHeaderData.products.map(p => ({
+                ...p,
+                harga_beli: p.is_khusus ? Number(p.harga_beli) : 0
+            }));
+            await api.put(`/invoices/${editHeaderData.id}/products`, { products: computedProducts });
+            alert('Faktur berhasil diupdate! Data kas keuangan dan pricelist sudah terupdate otomatis.');
+            setShowEditHeader(false);
+            fetchData(currentPage, filterStatus, filterClient, searchTerm);
+        } catch (err) {
+            const msg = err?.response?.data?.message || 'Gagal menyimpan perubahan faktur';
+            alert(msg);
         }
     };
 
@@ -723,11 +802,11 @@ const Invoices = () => {
                                 , inv.Status !== 'PAID' && (
                                     React.createElement('button', { onClick: () => openPaymentModal(inv.ID), style: { background: 'linear-gradient(135deg, #16a34a, #15803d)', color: 'white', border: 'none', padding: '10px', borderRadius: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'center', boxShadow: '0 2px 8px rgba(22,163,74,0.3)' }, title: "Bayar Cicilan" }, React.createElement(DollarSign, { size: 16 }))
                                 )
-                                , React.createElement('button', { onClick: () => openEditModal(inv.ID), style: { background: '#f1f5f9', color: '#64748b', border: 'none', padding: '10px', borderRadius: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'center' }, title: "Edit", __self: this, __source: {fileName: _jsxFileName, lineNumber: 624}}, React.createElement(Edit, { size: 16, __self: this, __source: {fileName: _jsxFileName, lineNumber: 624}}))
+                                , React.createElement('button', { onClick: () => openEditHeaderModal(inv), style: { background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: 'white', border: 'none', padding: '10px', borderRadius: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'center', boxShadow: '0 2px 8px rgba(59,130,246,0.35)' }, title: "Edit Faktur" }, React.createElement(Edit, { size: 16 }))
                                 , React.createElement('button', { onClick: () => downloadJPG(inv.ID, inv.Number), style: { background: '#f1f5f9', color: '#64748b', border: 'none', padding: '10px', borderRadius: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'center' }, title: "JPG", __self: this, __source: {fileName: _jsxFileName, lineNumber: 625}}, React.createElement(ImageIcon, { size: 16, __self: this, __source: {fileName: _jsxFileName, lineNumber: 625}}))
                                 , React.createElement('button', { onClick: () => downloadPDF(inv.ID, 'pdf'), style: { background: '#f1f5f9', color: '#64748b', border: 'none', padding: '10px', borderRadius: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'center' }, title: "PDF", __self: this, __source: {fileName: _jsxFileName, lineNumber: 626}}, React.createElement(Download, { size: 16, __self: this, __source: {fileName: _jsxFileName, lineNumber: 626}}))
                                 , React.createElement('button', { onClick: () => downloadPDF(inv.ID, 'surat-jalan'), style: { background: '#f1f5f9', color: '#64748b', border: 'none', padding: '10px', borderRadius: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'center' }, title: "Surat Jalan" , __self: this, __source: {fileName: _jsxFileName, lineNumber: 627}}, React.createElement(FileText, { size: 16, __self: this, __source: {fileName: _jsxFileName, lineNumber: 627}}))
-                                , React.createElement('button', { onClick: () => handleDelete(inv.ID), style: { background: '#fee2e2', color: '#dc3545', border: 'none', padding: '10px', borderRadius: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'center' }, title: "Hapus", __self: this, __source: {fileName: _jsxFileName, lineNumber: 628}}, React.createElement(Trash2, { size: 16, __self: this, __source: {fileName: _jsxFileName, lineNumber: 628}}))
+                                , React.createElement('button', { onClick: () => handleDelete(inv.ID, inv), style: { background: '#fee2e2', color: '#dc3545', border: 'none', padding: '10px', borderRadius: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'center' }, title: "Hapus" }, React.createElement(Trash2, { size: 16 }))
                             )
                         )
                     ))
@@ -779,11 +858,11 @@ const Invoices = () => {
                                         , inv.Status !== 'PAID' && (
                                             React.createElement('button', { onClick: () => openPaymentModal(inv.ID), style: { background: 'linear-gradient(135deg, #16a34a, #15803d)', color: 'white', border: 'none', padding: '8px', borderRadius: '8px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(22,163,74,0.3)' }, title: "Bayar Cicilan" }, React.createElement(DollarSign, { size: 14 }))
                                         )
-                                        , React.createElement('button', { onClick: () => openEditModal(inv.ID), style: { background: '#f1f5f9', color: '#64748b', border: 'none', padding: '8px', borderRadius: '8px', cursor: 'pointer' }, title: "Edit", __self: this, __source: {fileName: _jsxFileName, lineNumber: 680}}, React.createElement(Edit, { size: 14, __self: this, __source: {fileName: _jsxFileName, lineNumber: 680}}))
+                                        , React.createElement('button', { onClick: () => openEditHeaderModal(inv), style: { background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: 'white', border: 'none', padding: '8px', borderRadius: '8px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(59,130,246,0.35)' }, title: "Edit Faktur" }, React.createElement(Edit, { size: 14 }))
                                         , React.createElement('button', { onClick: () => downloadJPG(inv.ID, inv.Number), style: { background: '#f1f5f9', color: '#64748b', border: 'none', padding: '8px', borderRadius: '8px', cursor: 'pointer' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 681}}, React.createElement(ImageIcon, { size: 14, __self: this, __source: {fileName: _jsxFileName, lineNumber: 681}}))
                                         , React.createElement('button', { onClick: () => downloadPDF(inv.ID, 'pdf'), style: { background: '#f1f5f9', color: '#64748b', border: 'none', padding: '8px', borderRadius: '8px', cursor: 'pointer' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 682}}, React.createElement(Download, { size: 14, __self: this, __source: {fileName: _jsxFileName, lineNumber: 682}}))
                                         , React.createElement('button', { onClick: () => downloadPDF(inv.ID, 'surat-jalan'), style: { background: '#f1f5f9', color: '#64748b', border: 'none', padding: '8px', borderRadius: '8px', cursor: 'pointer' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 683}}, React.createElement(FileText, { size: 14, __self: this, __source: {fileName: _jsxFileName, lineNumber: 683}}))
-                                        , React.createElement('button', { onClick: () => handleDelete(inv.ID), style: { background: '#fee2e2', color: '#dc3545', border: 'none', padding: '8px', borderRadius: '8px', cursor: 'pointer' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 684}}, React.createElement(Trash2, { size: 14, __self: this, __source: {fileName: _jsxFileName, lineNumber: 684}}))
+                                        , React.createElement('button', { onClick: () => handleDelete(inv.ID, inv), style: { background: '#fee2e2', color: '#dc3545', border: 'none', padding: '8px', borderRadius: '8px', cursor: 'pointer' } }, React.createElement(Trash2, { size: 14 }))
 
 
                                     )
@@ -1048,6 +1127,155 @@ const Invoices = () => {
                             , React.createElement('div', { style: { display: 'flex', gap: '12px' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 844}}
                                 , React.createElement('button', { type: "button", onClick: () => setShowEdit(false), style: { flex: 1, padding: '14px', background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 845}}, "Batal")
                                 , React.createElement('button', { type: "submit", style: { flex: 2, padding: '14px', background: '#0d6efd', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 846}}, "Simpan Perubahan" )
+                            )
+                        )
+                    )
+                )
+            )
+
+            /* ============================================================
+               MODAL EDIT FAKTUR LENGKAP (Header + Produk) — Backdate
+               ============================================================ */
+            , showEditHeader && (
+                React.createElement('div', { style: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.78)', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', zIndex: 1300, padding: '15px', backdropFilter: 'blur(5px)', overflowY: 'auto' } }
+                    , React.createElement('div', { style: { background: 'white', padding: isMobile ? '20px' : '28px', borderRadius: '24px', width: '100%', maxWidth: '680px', position: 'relative', boxShadow: '0 25px 60px rgba(0,0,0,0.25)', margin: 'auto' } }
+                        , React.createElement('button', { onClick: () => setShowEditHeader(false), style: { position: 'absolute', right: '16px', top: '16px', border: 'none', background: '#f1f5f9', color: '#64748b', cursor: 'pointer', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' } }, React.createElement(X, { size: 18 }))
+
+                        , React.createElement('div', { style: { marginBottom: '20px', paddingRight: '40px' } }
+                            , React.createElement('h3', { style: { margin: '0 0 4px 0', fontWeight: '800', color: '#1e293b', fontSize: '18px' } }, '✏️ Edit Faktur Backdate')
+                            , React.createElement('p', { style: { margin: 0, fontSize: '12px', color: '#64748b' } }, 'Perubahan akan otomatis update Kas Keuangan, Pricelist, dan Dashboard')
+                        )
+
+                        , React.createElement('form', { onSubmit: handleEditHeaderSubmit }
+
+                            /* ── SEKSI 1: Info Faktur ── */
+                            , React.createElement('div', { style: { background: '#f8fafc', borderRadius: '16px', padding: '18px', marginBottom: '20px', border: '1px solid #e2e8f0' } }
+                                , React.createElement('div', { style: { fontSize: '11px', fontWeight: '800', color: '#3b82f6', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' } }, '📋 Info Faktur')
+
+                                , React.createElement('div', { style: { display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px', marginBottom: '12px' } }
+                                    , React.createElement('div', {}
+                                        , React.createElement('label', { style: { display: 'block', fontSize: '11px', fontWeight: '700', color: '#374151', marginBottom: '5px' } }, 'Nomor Faktur')
+                                        , React.createElement('input', { type: 'text', required: true, value: editHeaderData.number, onChange: e => setEditHeaderData({ ...editHeaderData, number: e.target.value }), style: { width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '14px', fontWeight: '700', color: '#0d6efd', boxSizing: 'border-box', outline: 'none' } })
+                                    )
+                                    , React.createElement('div', {}
+                                        , React.createElement('label', { style: { display: 'block', fontSize: '11px', fontWeight: '700', color: '#374151', marginBottom: '5px' } }, 'Pelanggan')
+                                        , React.createElement('select', { required: true, value: editHeaderData.client_id, onChange: e => setEditHeaderData({ ...editHeaderData, client_id: Number(e.target.value) }), style: { width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '13px', background: 'white', boxSizing: 'border-box' } }
+                                            , React.createElement('option', { value: 0 }, '-- Pilih Pelanggan --')
+                                            , (clients || []).map(c => React.createElement('option', { key: c.ID, value: c.ID }, c.ClientName))
+                                        )
+                                    )
+                                )
+
+                                , React.createElement('div', { style: { display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px', marginBottom: '12px' } }
+                                    , React.createElement('div', {}
+                                        , React.createElement('label', { style: { display: 'block', fontSize: '11px', fontWeight: '700', color: '#374151', marginBottom: '5px' } }, '📅 Tanggal Faktur (Backdate)')
+                                        , React.createElement('input', { type: 'date', required: true, value: editHeaderData.date_created, onChange: e => setEditHeaderData({ ...editHeaderData, date_created: e.target.value }), style: { width: '100%', padding: '10px 12px', border: '2px solid #3b82f6', borderRadius: '10px', fontSize: '14px', fontWeight: '600', boxSizing: 'border-box' } })
+                                    )
+                                    , React.createElement('div', {}
+                                        , React.createElement('label', { style: { display: 'block', fontSize: '11px', fontWeight: '700', color: '#374151', marginBottom: '5px' } }, 'Tanggal Jatuh Tempo')
+                                        , React.createElement('input', { type: 'date', value: editHeaderData.due_date, onChange: e => setEditHeaderData({ ...editHeaderData, due_date: e.target.value }), style: { width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '14px', boxSizing: 'border-box' } })
+                                    )
+                                )
+
+                                , React.createElement('div', { style: { display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' } }
+                                    , React.createElement('div', {}
+                                        , React.createElement('label', { style: { display: 'block', fontSize: '11px', fontWeight: '700', color: '#374151', marginBottom: '5px' } }, 'Judul Faktur')
+                                        , React.createElement('input', { type: 'text', value: editHeaderData.title, onChange: e => setEditHeaderData({ ...editHeaderData, title: e.target.value }), placeholder: 'Opsional', style: { width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '13px', boxSizing: 'border-box' } })
+                                    )
+                                    , React.createElement('div', {}
+                                        , React.createElement('label', { style: { display: 'block', fontSize: '11px', fontWeight: '700', color: '#374151', marginBottom: '5px' } }, 'Terms Pembayaran')
+                                        , React.createElement('input', { type: 'text', value: editHeaderData.payment_terms, onChange: e => setEditHeaderData({ ...editHeaderData, payment_terms: e.target.value }), placeholder: 'Contoh: 14 hari', style: { width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '13px', boxSizing: 'border-box' } })
+                                    )
+                                )
+
+                                , React.createElement('div', { style: { marginTop: '12px' } }
+                                    , React.createElement('label', { style: { display: 'block', fontSize: '11px', fontWeight: '700', color: '#374151', marginBottom: '5px' } }, 'Catatan')
+                                    , React.createElement('textarea', { rows: 2, value: editHeaderData.notes, onChange: e => setEditHeaderData({ ...editHeaderData, notes: e.target.value }), placeholder: 'Catatan opsional...', style: { width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '13px', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' } })
+                                )
+                            )
+
+                            /* ── SEKSI 2: Produk ── */
+                            , React.createElement('div', { style: { background: '#f0fdf4', borderRadius: '16px', padding: '18px', marginBottom: '20px', border: '1px solid #bbf7d0' } }
+                                , React.createElement('div', { style: { fontSize: '11px', fontWeight: '800', color: '#16a34a', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' } }, '📦 Produk Faktur')
+
+                                , editHeaderData.products.map((p, i) =>
+                                    React.createElement('div', { key: i, style: { background: 'white', borderRadius: '12px', padding: '14px', marginBottom: '10px', border: '1px solid #e2e8f0' } }
+                                        , React.createElement('div', { style: { display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '3fr 1fr 1fr 1.5fr', gap: '10px', alignItems: 'end' } }
+                                            , React.createElement('div', {}
+                                                , React.createElement('label', { style: { display: 'block', fontSize: '11px', fontWeight: '700', marginBottom: '4px' } }, 'Barang')
+                                                , React.createElement('select', { required: true, value: p.master_item_id, onChange: e => {
+                                                    const val = Number(e.target.value);
+                                                    const master = (masterProducts || []).find(m => m.ID === val);
+                                                    const np = [...editHeaderData.products];
+                                                    np[i] = { ...np[i], master_item_id: val, custom_price: master ? master.Price : np[i].custom_price };
+                                                    setEditHeaderData({ ...editHeaderData, products: np });
+                                                }, style: { width: '100%', padding: '9px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', background: 'white' } }
+                                                    , React.createElement('option', { value: 0 }, '-- Pilih --')
+                                                    , (masterProducts || []).map(mp => React.createElement('option', { key: mp.ID, value: mp.ID }, mp.Title))
+                                                )
+                                            )
+                                            , React.createElement('div', {}
+                                                , React.createElement('label', { style: { display: 'block', fontSize: '11px', fontWeight: '700', marginBottom: '4px' } }, 'Lusin')
+                                                , React.createElement('input', { type: 'number', step: 'any', min: 0.01, required: true, value: p.jumlah_lusin, onChange: e => {
+                                                    const np = [...editHeaderData.products];
+                                                    np[i] = { ...np[i], jumlah_lusin: Number(e.target.value) };
+                                                    setEditHeaderData({ ...editHeaderData, products: np });
+                                                }, style: { width: '100%', padding: '9px', border: '1px solid #e2e8f0', borderRadius: '8px', boxSizing: 'border-box' } })
+                                            )
+                                            , React.createElement('div', {}
+                                                , React.createElement('label', { style: { display: 'block', fontSize: '11px', fontWeight: '700', marginBottom: '4px' } }, 'Qty')
+                                                , React.createElement('input', { type: 'number', step: 'any', min: 0.01, required: true, value: p.quantity, onChange: e => {
+                                                    const np = [...editHeaderData.products];
+                                                    np[i] = { ...np[i], quantity: Number(e.target.value) };
+                                                    setEditHeaderData({ ...editHeaderData, products: np });
+                                                }, style: { width: '100%', padding: '9px', border: '1px solid #e2e8f0', borderRadius: '8px', boxSizing: 'border-box' } })
+                                            )
+                                            , React.createElement('div', {}
+                                                , React.createElement('label', { style: { display: 'block', fontSize: '11px', fontWeight: '700', marginBottom: '4px' } }, 'Harga Jual')
+                                                , React.createElement('input', { type: 'number', required: true, min: 0, value: p.custom_price, onChange: e => {
+                                                    const np = [...editHeaderData.products];
+                                                    np[i] = { ...np[i], custom_price: Number(e.target.value) };
+                                                    setEditHeaderData({ ...editHeaderData, products: np });
+                                                }, style: { width: '100%', padding: '9px', border: '1px solid #e2e8f0', borderRadius: '8px', boxSizing: 'border-box' } })
+                                            )
+                                        )
+                                        , React.createElement('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '10px' } }
+                                            , React.createElement('label', { style: { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: '600', color: '#854d0e', cursor: 'pointer' } }
+                                                , React.createElement('input', { type: 'checkbox', checked: p.is_khusus, onChange: e => {
+                                                    const np = [...editHeaderData.products];
+                                                    np[i] = { ...np[i], is_khusus: e.target.checked, harga_beli: e.target.checked ? np[i].harga_beli : 0 };
+                                                    setEditHeaderData({ ...editHeaderData, products: np });
+                                                } })
+                                                , '⭐ Barang Khusus'
+                                            )
+                                            , p.is_khusus && React.createElement('input', { type: 'number', placeholder: 'Modal Beli (Rp)', value: p.harga_beli || '', onChange: e => {
+                                                const np = [...editHeaderData.products];
+                                                np[i] = { ...np[i], harga_beli: Number(e.target.value) };
+                                                setEditHeaderData({ ...editHeaderData, products: np });
+                                            }, style: { padding: '6px 10px', border: '1px solid #fbbf24', borderRadius: '8px', fontSize: '12px', width: '140px' } })
+                                            , React.createElement('button', { type: 'button', onClick: () => {
+                                                const np = editHeaderData.products.filter((_, idx) => idx !== i);
+                                                setEditHeaderData({ ...editHeaderData, products: np });
+                                            }, style: { color: '#dc3545', border: 'none', background: '#fee2e2', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', fontSize: '12px', fontWeight: '700' } }, '🗑️ Hapus')
+                                        )
+                                        , React.createElement('div', { style: { marginTop: '8px', background: '#f0fdf4', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', color: '#16a34a', fontWeight: '700' } }
+                                            , 'Subtotal: Rp ' + (p.quantity * p.jumlah_lusin * p.custom_price).toLocaleString('id-ID')
+                                        )
+                                    )
+                                )
+
+                                , React.createElement('button', { type: 'button', onClick: () => setEditHeaderData({ ...editHeaderData, products: [...editHeaderData.products, { master_item_id: 0, quantity: 1, jumlah_lusin: 1, custom_price: 0, is_khusus: false, harga_beli: 0 }] }), style: { width: '100%', padding: '12px', background: 'white', color: '#16a34a', border: '2px dashed #86efac', borderRadius: '12px', cursor: 'pointer', fontWeight: '700', fontSize: '13px' } }, '+ Tambah Produk')
+
+                                , React.createElement('div', { style: { marginTop: '12px', background: 'white', borderRadius: '12px', padding: '12px 16px', border: '2px solid #16a34a', display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }
+                                    , React.createElement('span', { style: { fontSize: '13px', color: '#374151', fontWeight: '700' } }, 'Total Faktur:')
+                                    , React.createElement('span', { style: { fontSize: '16px', fontWeight: '900', color: '#1e293b' } }, 'Rp ' + editHeaderData.products.reduce((sum, p) => sum + (p.quantity * p.jumlah_lusin * p.custom_price), 0).toLocaleString('id-ID'))
+                                )
+                            )
+
+                            /* ── Tombol Aksi ── */
+                            , React.createElement('div', { style: { display: 'flex', gap: '12px' } }
+                                , React.createElement('button', { type: 'button', onClick: () => setShowEditHeader(false), style: { flex: 1, padding: '14px', background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '12px', fontWeight: '700', cursor: 'pointer', fontSize: '14px' } }, 'Batal')
+                                , React.createElement('button', { type: 'submit', style: { flex: 2, padding: '14px', background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '800', cursor: 'pointer', fontSize: '14px', boxShadow: '0 4px 12px rgba(59,130,246,0.35)' } }, '💾 Simpan Perubahan Faktur')
                             )
                         )
                     )

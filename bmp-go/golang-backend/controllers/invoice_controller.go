@@ -946,3 +946,131 @@ func DeletePayment(c *fiber.Ctx) error {
 
 	return c.JSON(fiber.Map{"success": true, "message": "Pembayaran berhasil dihapus", "status": inv.Status})
 }
+
+// UpdateInvoiceHeader updates header fields of an invoice: number, title, client, dates, notes, terms.
+// If the invoice number changes, CashFlow descriptions referencing the old number are updated too.
+func UpdateInvoiceHeader(c *fiber.Ctx) error {
+	id := c.Params("id")
+
+	type HeaderInput struct {
+		ClientID     uint   `json:"client_id"`
+		Number       string `json:"number"`
+		Title        string `json:"title"`
+		DueDate      string `json:"due_date"`
+		DateCreated  string `json:"date_created"`
+		PaymentTerms string `json:"payment_terms"`
+		Notes        string `json:"notes"`
+	}
+
+	input := new(HeaderInput)
+	if err := c.BodyParser(input); err != nil {
+		return c.Status(400).JSON(fiber.Map{"success": false, "message": "Invalid input data"})
+	}
+
+	var invoice models.Invoice
+	if err := database.DB.Preload("Client").First(&invoice, id).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{"success": false, "message": "Invoice not found"})
+	}
+
+	if invoice.IsDemo != IsDemoUser(c) {
+		return c.Status(403).JSON(fiber.Map{"success": false, "message": "Akses ditolak"})
+	}
+
+	oldNumber := invoice.Number
+
+	tx := database.DB.Begin()
+
+	// Update nomor faktur jika berubah (cek duplikat dulu)
+	if input.Number != "" && input.Number != invoice.Number {
+		var existing models.Invoice
+		if err := database.DB.Where("number = ? AND id != ?", input.Number, invoice.ID).First(&existing).Error; err == nil {
+			tx.Rollback()
+			return c.Status(400).JSON(fiber.Map{
+				"success": false,
+				"message": "Nomor faktur " + input.Number + " sudah digunakan oleh faktur lain.",
+			})
+		}
+		invoice.Number = input.Number
+		// Perbarui slug agar tetap unik
+		invoice.Slug = input.Number + "-" + invoice.UniqueID
+	}
+
+	if input.Title != "" {
+		invoice.Title = input.Title
+	}
+
+	// Update client jika diberikan dan berbeda
+	if input.ClientID > 0 && invoice.ClientID != nil && input.ClientID != *invoice.ClientID {
+		var client models.Client
+		if err := database.DB.First(&client, input.ClientID).Error; err != nil {
+			tx.Rollback()
+			return c.Status(400).JSON(fiber.Map{"success": false, "message": "Client not found"})
+		}
+		if client.IsDemo != IsDemoUser(c) {
+			tx.Rollback()
+			return c.Status(403).JSON(fiber.Map{"success": false, "message": "Akses ditolak"})
+		}
+		invoice.ClientID = &input.ClientID
+	} else if input.ClientID > 0 && invoice.ClientID == nil {
+		invoice.ClientID = &input.ClientID
+	}
+
+	// Parse DueDate
+	if input.DueDate != "" {
+		pd, err := time.Parse(time.RFC3339, input.DueDate)
+		if err != nil {
+			pd, err = time.Parse("2006-01-02", input.DueDate)
+		}
+		if err == nil {
+			invoice.DueDate = &pd
+		}
+	}
+
+	// Parse DateCreated (backdate)
+	if input.DateCreated != "" {
+		pc, err := time.Parse(time.RFC3339, input.DateCreated)
+		if err != nil {
+			pc, err = time.Parse("2006-01-02", input.DateCreated)
+		}
+		if err == nil {
+			invoice.DateCreated = pc
+		}
+	}
+
+	if input.PaymentTerms != "" {
+		invoice.PaymentTerms = input.PaymentTerms
+	}
+
+	// Notes boleh dikosongkan
+	invoice.Notes = input.Notes
+	invoice.LastUpdated = time.Now()
+
+	if err := tx.Save(&invoice).Error; err != nil {
+		tx.Rollback()
+		return c.Status(500).JSON(fiber.Map{"success": false, "message": "Gagal menyimpan perubahan header faktur"})
+	}
+
+	// Jika nomor berubah: update deskripsi CashFlow yang menyebut nomor lama
+	if oldNumber != invoice.Number {
+		oldRef := "Faktur " + oldNumber
+		newRef := "Faktur " + invoice.Number
+		if err := tx.Exec(
+			"UPDATE cash_flows SET description = REPLACE(description, ?, ?) WHERE description LIKE ? AND deleted_at IS NULL",
+			oldRef, newRef, "%"+oldRef+"%",
+		).Error; err != nil {
+			// Tidak fatal — log saja, jangan rollback
+			_ = err
+		}
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		return c.Status(500).JSON(fiber.Map{"success": false, "message": "Gagal menyimpan perubahan faktur"})
+	}
+
+	return c.JSON(fiber.Map{
+		"success": true,
+		"message": "Header faktur berhasil diperbarui",
+		"data":    invoice,
+	})
+}

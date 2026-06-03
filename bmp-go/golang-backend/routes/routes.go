@@ -90,6 +90,7 @@ func SetupRoutes(app *fiber.App) {
 	invoiceRoute.Put("/payments/:paymentId", controllers.EditPayment)
 	invoiceRoute.Delete("/payments/:paymentId", controllers.DeletePayment)
 	invoiceRoute.Put("/:id/products", controllers.UpdateInvoiceProducts)
+	invoiceRoute.Put("/:id", controllers.UpdateInvoiceHeader)
 	invoiceRoute.Delete("/:id", controllers.DeleteInvoice)
 
 	// Kas (CashFlow) Routes
