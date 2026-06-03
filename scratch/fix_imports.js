@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const bmpDir = 'c:\\Users\\danus\\Documents\\antigravity\\POSBah\\frontend\\src\\pages\\bmp';
+const bmpDir = path.join(__dirname, '..', 'frontend', 'src', 'pages', 'bmp');
 
 // Files that need API_URL imported
 const filesWithApiUrl = ['Invoices.jsx', 'Payroll.jsx', 'Pricelist.jsx', 'BahanNono.jsx'];
@@ -15,12 +15,12 @@ fs.readdirSync(bmpDir).forEach(filename => {
   // Fix api import
   if (filesWithApiUrl.includes(filename)) {
     content = content.replace(
-      "import api from '../services/api';",
+      /import api from ['"]\.\.\/services\/api['"];?/,
       "import api, { API_URL } from '../../services/apiBmp';"
     );
   } else {
     content = content.replace(
-      "import api from '../services/api';",
+      /import api from ['"]\.\.\/services\/api['"];?/,
       "import api from '../../services/apiBmp';"
     );
   }
@@ -28,14 +28,20 @@ fs.readdirSync(bmpDir).forEach(filename => {
   // Fix auth context import for Login.jsx
   if (filename === 'Login.jsx') {
     content = content.replace(
-      "import { AuthContext } from '../contexts/AuthContext';",
+      /import \{ AuthContext \} from ['"]\.\.\/contexts\/AuthContext['"];?/,
       "import { AuthContext } from '../../contexts/BmpAuthContext';"
     );
   }
 
+  // Fix components path for nested page directory
+  content = content.replace(
+    /from ['"]\.\.\/components\/InvoiceImageTemplate['"];?/,
+    "from '../../components/InvoiceImageTemplate';"
+  );
+
   // Replace railway URL with API_URL
-  content = content.replaceAll(
-    "import.meta.env.VITE_API_URL || 'https://bmp.up.railway.app/api'",
+  content = content.replace(
+    /import\.meta\.env\.VITE_API_URL\s*\|\|\s*['"]https:\/\/bmp\.up\.railway\.app\/api['"]/g,
     "API_URL"
   );
 
@@ -44,11 +50,13 @@ fs.readdirSync(bmpDir).forEach(filename => {
 });
 
 // Process InvoiceImageTemplate.jsx
-const templatePath = 'c:\\Users\\danus\\Documents\\antigravity\\POSBah\\frontend\\src\\components\\InvoiceImageTemplate.jsx';
+const templatePath = path.join(__dirname, '..', 'frontend', 'src', 'components', 'InvoiceImageTemplate.jsx');
 let templateContent = fs.readFileSync(templatePath, 'utf8');
-templateContent = "import { API_URL } from '../services/apiBmp';\n" + templateContent;
-templateContent = templateContent.replaceAll(
-  "import.meta.env.VITE_API_URL || 'https://bmp.up.railway.app/api'",
+if (!templateContent.includes("import { API_URL } from '../services/apiBmp';")) {
+  templateContent = "import { API_URL } from '../services/apiBmp';\n" + templateContent;
+}
+templateContent = templateContent.replace(
+  /import\.meta\.env\.VITE_API_URL\s*\|\|\s*['"]https:\/\/bmp\.up\.railway\.app\/api['"]/g,
   "API_URL"
 );
 fs.writeFileSync(templatePath, templateContent, 'utf8');
