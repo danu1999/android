@@ -529,7 +529,7 @@ app.get('/api/download-apk', (req, res) => {
 
 // Route to get the latest APK version name
 app.get('/api/apk-version', (req, res) => {
-  res.json({ version: '1.0.2' });
+  res.json({ version: '1.1.0' });
 });
 
 // Get employee limit for a tenant

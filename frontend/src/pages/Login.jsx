@@ -8,7 +8,7 @@ export default function Login({ onLogin }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [latestVer, setLatestVer] = useState("1.0.2");
+  const [latestVer, setLatestVer] = useState("1.1.0");
 
   const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
 

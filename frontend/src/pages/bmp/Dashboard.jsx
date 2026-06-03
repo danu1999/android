@@ -30,7 +30,7 @@ const Dashboard = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
-  const [latestVer, setLatestVer] = useState("1.0.2");
+  const [latestVer, setLatestVer] = useState("1.1.0");
   const navigate = useNavigate();
 
   const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
