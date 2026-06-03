@@ -25,4 +25,12 @@ golang-frontend/dist/
 *.exe~
 golang-backend/invoice-bmp-go
 golang-backend/invoice-bmp-go.exe
+golang-backend/invoice-bmp-go-new
+golang-backend/invoice-bmp-go*
+
+# Frontend build output (dihasilkan oleh Vite, di-deploy manual ke VPS)
+golang-backend/public/
+
+# Temp files
+golang-backend/temp_images_backup/
 

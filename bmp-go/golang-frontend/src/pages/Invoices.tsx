@@ -65,6 +65,16 @@ const Invoices: React.FC = () => {
     const [showEdit, setShowEdit] = useState(false);
     const [editData, setEditData] = useState<{ id: number; products: any[] }>({ id: 0, products: [] });
 
+    // === Payment Detail Modal (edit/hapus/tambah cicilan) ===
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [payModalInvoice, setPayModalInvoice] = useState<any>(null);
+    const [payModalPayments, setPayModalPayments] = useState<any[]>([]);
+    const [payModalLoading, setPayModalLoading] = useState(false);
+    const [payModalEditId, setPayModalEditId] = useState<number | null>(null);
+    const [payModalEditForm, setPayModalEditForm] = useState({ nominal: 0, tanggal: '', metode: 'TRANSFER' });
+    const [payModalAddVisible, setPayModalAddVisible] = useState(false);
+    const [payModalAddForm, setPayModalAddForm] = useState({ nominal: 0, tanggal: new Date().toISOString().split('T')[0], metode: 'TRANSFER' });
+
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth <= 768);
         window.addEventListener('resize', handleResize);
@@ -203,6 +213,70 @@ const Invoices: React.FC = () => {
             fetchData(currentPage, filterStatus, filterClient, searchTerm);
         } catch {
             alert("Gagal update produk faktur");
+        }
+    };
+
+    // === Fungsi Payment Detail Modal ===
+    const openPaymentModal = async (inv: Invoice) => {
+        setPayModalInvoice(inv);
+        setShowPaymentModal(true);
+        setPayModalLoading(true);
+        setPayModalEditId(null);
+        setPayModalAddVisible(false);
+        setPayModalAddForm({ nominal: 0, tanggal: new Date().toISOString().split('T')[0], metode: 'TRANSFER' });
+        try {
+            const res = await api.get(`/invoices/${inv.ID}`);
+            setPayModalPayments(res.data?.payments || []);
+        } catch {
+            alert('Gagal memuat riwayat pembayaran');
+        }
+        setPayModalLoading(false);
+    };
+
+    const handlePayModalEdit = async (paymentId: number) => {
+        try {
+            await api.put(`/invoices/payments/${paymentId}`, {
+                nominal: Number(payModalEditForm.nominal),
+                tanggal: payModalEditForm.tanggal ? payModalEditForm.tanggal + 'T00:00:00Z' : undefined,
+                metode: payModalEditForm.metode
+            });
+            setPayModalEditId(null);
+            const res = await api.get(`/invoices/${payModalInvoice.ID}`);
+            setPayModalPayments(res.data?.payments || []);
+            fetchData(currentPage, filterStatus, filterClient, searchTerm);
+        } catch {
+            alert('Gagal memperbarui pembayaran');
+        }
+    };
+
+    const handlePayModalDelete = async (paymentId: number) => {
+        if (!window.confirm('Yakin ingin menghapus cicilan ini? Data di Kas juga akan ikut terhapus.')) return;
+        try {
+            await api.delete(`/invoices/payments/${paymentId}`);
+            const res = await api.get(`/invoices/${payModalInvoice.ID}`);
+            setPayModalPayments(res.data?.payments || []);
+            fetchData(currentPage, filterStatus, filterClient, searchTerm);
+        } catch {
+            alert('Gagal menghapus cicilan');
+        }
+    };
+
+    const handlePayModalAdd = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!payModalAddForm.nominal || Number(payModalAddForm.nominal) <= 0) return alert('Masukkan nominal yang valid');
+        try {
+            await api.post(`/invoices/${payModalInvoice.ID}/pay`, {
+                nominal: Number(payModalAddForm.nominal),
+                metode: payModalAddForm.metode,
+                tanggal: payModalAddForm.tanggal + 'T00:00:00Z'
+            });
+            setPayModalAddVisible(false);
+            setPayModalAddForm({ nominal: 0, tanggal: new Date().toISOString().split('T')[0], metode: 'TRANSFER' });
+            const res = await api.get(`/invoices/${payModalInvoice.ID}`);
+            setPayModalPayments(res.data?.payments || []);
+            fetchData(currentPage, filterStatus, filterClient, searchTerm);
+        } catch {
+            alert('Gagal menambahkan pembayaran');
         }
     };
 
@@ -618,9 +692,7 @@ const Invoices: React.FC = () => {
                             </div>
 
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
-                                {inv.Status !== 'PAID' && (
-                                    <button onClick={() => { setSingleData({ ...singleData, id: inv.ID }); setShowSingle(true); }} style={{ background: '#198754', color: 'white', border: 'none', padding: '10px', borderRadius: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'center' }} title="Bayar"><DollarSign size={16}/></button>
-                                )}
+                                <button onClick={() => openPaymentModal(inv)} style={{ background: inv.Status === 'PAID' ? '#4f46e5' : '#198754', color: 'white', border: 'none', padding: '10px', borderRadius: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'center' }} title={inv.Status === 'PAID' ? 'Lihat/Edit Pembayaran' : 'Bayar / Edit Cicilan'}><DollarSign size={16}/></button>
                                 <button onClick={() => openEditModal(inv.ID)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', padding: '10px', borderRadius: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'center' }} title="Edit"><Edit size={16}/></button>
                                 <button onClick={() => downloadJPG(inv.ID, inv.Number)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', padding: '10px', borderRadius: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'center' }} title="JPG"><ImageIcon size={16}/></button>
                                 <button onClick={() => downloadPDF(inv.ID, 'pdf')} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', padding: '10px', borderRadius: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'center' }} title="PDF"><Download size={16}/></button>
@@ -674,9 +746,7 @@ const Invoices: React.FC = () => {
                                 </td>
                                 <td style={{ padding: '15px 20px', borderBottom: '1px solid #f1f5f9' }}>
                                     <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
-                                        {inv.Status !== 'PAID' && (
-                                            <button onClick={() => { setSingleData({ ...singleData, id: inv.ID }); setShowSingle(true); }} style={{ background: '#198754', color: 'white', border: 'none', padding: '8px', borderRadius: '8px', cursor: 'pointer' }}><DollarSign size={14}/></button>
-                                        )}
+                                        <button onClick={() => openPaymentModal(inv)} style={{ background: inv.Status === 'PAID' ? '#4f46e5' : '#198754', color: 'white', border: 'none', padding: '8px', borderRadius: '8px', cursor: 'pointer' }} title={inv.Status === 'PAID' ? 'Lihat/Edit Pembayaran' : 'Bayar / Edit Cicilan'}><DollarSign size={14}/></button>
                                         <button onClick={() => openEditModal(inv.ID)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', padding: '8px', borderRadius: '8px', cursor: 'pointer' }} title="Edit"><Edit size={14}/></button>
                                         <button onClick={() => downloadJPG(inv.ID, inv.Number)} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', padding: '8px', borderRadius: '8px', cursor: 'pointer' }}><ImageIcon size={14}/></button>
                                         <button onClick={() => downloadPDF(inv.ID, 'pdf')} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', padding: '8px', borderRadius: '8px', cursor: 'pointer' }}><Download size={14}/></button>
@@ -726,22 +796,196 @@ const Invoices: React.FC = () => {
                 </div>
             )}
 
-            {showSingle && (
-                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1200, padding: '15px', backdropFilter: 'blur(4px)' }}>
-                    <div style={{ background: 'white', padding: '30px', borderRadius: '24px', width: '100%', maxWidth: '400px', position: 'relative' }}>
-                        <button onClick={() => setShowSingle(false)} style={{ position: 'absolute', right: '20px', top: '20px', border: 'none', background: 'none', color: '#94a3b8', cursor: 'pointer' }}><X size={24}/></button>
-                        <h3 style={{ marginBottom: '25px', fontWeight: '800', color: '#1e293b' }}>Bayar Faktur</h3>
-                        <form onSubmit={handleSingle}>
-                            <div style={{ marginBottom: '18px' }}>
-                                <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600' }}>Tanggal Bayar</label>
-                                <input type="date" required value={singleData.tanggal} onChange={e => setSingleData({...singleData, tanggal: e.target.value})} style={{ width: '100%', padding: '12px', border: '1px solid #e2e8f0', borderRadius: '12px' }} />
+            {/* Payment Detail Modal — Edit/Hapus/Tambah Cicilan */}
+            {showPaymentModal && payModalInvoice && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1200, padding: '15px', backdropFilter: 'blur(6px)' }}>
+                    <div style={{ background: 'white', borderRadius: '24px', width: '100%', maxWidth: '520px', maxHeight: '90vh', overflowY: 'auto', position: 'relative', boxShadow: '0 30px 80px rgba(0,0,0,0.25)' }}>
+                        {/* Header */}
+                        <div style={{ padding: '24px 24px 0', borderBottom: '1px solid #f1f5f9', paddingBottom: '16px', position: 'sticky', top: 0, background: 'white', borderRadius: '24px 24px 0 0', zIndex: 1 }}>
+                            <button onClick={() => { setShowPaymentModal(false); setPayModalEditId(null); }} style={{ position: 'absolute', right: '20px', top: '20px', border: 'none', background: '#f1f5f9', color: '#64748b', cursor: 'pointer', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={18}/></button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                                <div style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', borderRadius: '10px', padding: '8px', display: 'flex' }}><DollarSign size={18} color="white"/></div>
+                                <div>
+                                    <div style={{ fontWeight: '800', fontSize: '17px', color: '#1e293b' }}>Riwayat &amp; Edit Pembayaran</div>
+                                    <div style={{ fontSize: '12px', color: '#64748b' }}>Faktur <strong style={{color:'#0d6efd'}}>{payModalInvoice.Number}</strong> · {payModalInvoice.Client?.ClientName}</div>
+                                </div>
                             </div>
-                            <div style={{ marginBottom: '25px' }}>
-                                <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600' }}>Nominal (Rp)</label>
-                                <input type="number" required value={singleData.nominal === 0 ? '' : singleData.nominal} onChange={e => setSingleData({...singleData, nominal: e.target.value === '' ? 0 : Number(e.target.value)})} style={{ width: '100%', padding: '12px', border: '1px solid #e2e8f0', borderRadius: '12px', fontSize: '16px', fontWeight: '800' }} />
+                            {/* Summary bar */}
+                            <div style={{ display: 'flex', gap: '10px', marginTop: '12px', flexWrap: 'wrap' }}>
+                                <div style={{ flex: 1, minWidth: '120px', background: '#f8fafc', borderRadius: '10px', padding: '10px 14px' }}>
+                                    <div style={{ fontSize: '10px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase' }}>Total Faktur</div>
+                                    <div style={{ fontSize: '15px', fontWeight: '800', color: '#1e293b' }}>Rp {(payModalInvoice.Total || 0).toLocaleString('id-ID')}</div>
+                                </div>
+                                <div style={{ flex: 1, minWidth: '120px', background: '#f0fdf4', borderRadius: '10px', padding: '10px 14px' }}>
+                                    <div style={{ fontSize: '10px', fontWeight: '700', color: '#16a34a', textTransform: 'uppercase' }}>Dibayar</div>
+                                    <div style={{ fontSize: '15px', fontWeight: '800', color: '#15803d' }}>Rp {payModalPayments.reduce((s: number, p: any) => s + p.PaymentAmount, 0).toLocaleString('id-ID')}</div>
+                                </div>
+                                <div style={{ flex: 1, minWidth: '120px', background: payModalInvoice.Total - payModalPayments.reduce((s: number, p: any) => s + p.PaymentAmount, 0) <= 0 ? '#f0fdf4' : '#fef2f2', borderRadius: '10px', padding: '10px 14px' }}>
+                                    <div style={{ fontSize: '10px', fontWeight: '700', color: payModalInvoice.Total - payModalPayments.reduce((s: number, p: any) => s + p.PaymentAmount, 0) <= 0 ? '#16a34a' : '#dc2626', textTransform: 'uppercase' }}>Sisa</div>
+                                    <div style={{ fontSize: '15px', fontWeight: '800', color: payModalInvoice.Total - payModalPayments.reduce((s: number, p: any) => s + p.PaymentAmount, 0) <= 0 ? '#15803d' : '#b91c1c' }}>
+                                        {payModalInvoice.Total - payModalPayments.reduce((s: number, p: any) => s + p.PaymentAmount, 0) <= 0 ? '✓ LUNAS' : `Rp ${(payModalInvoice.Total - payModalPayments.reduce((s: number, p: any) => s + p.PaymentAmount, 0)).toLocaleString('id-ID')}`}
+                                    </div>
+                                </div>
                             </div>
-                            <button type="submit" style={{ width: '100%', padding: '14px', background: '#198754', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer' }}>Simpan Pembayaran</button>
-                        </form>
+                        </div>
+
+                        {/* Payment list */}
+                        <div style={{ padding: '16px 24px' }}>
+                            <div style={{ fontSize: '11px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '12px' }}>Riwayat Cicilan</div>
+                            {payModalLoading ? (
+                                <div style={{ textAlign: 'center', padding: '30px', color: '#94a3b8' }}>Memuat...</div>
+                            ) : payModalPayments.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: '30px', color: '#94a3b8', fontSize: '14px' }}>Belum ada catatan pembayaran.</div>
+                            ) : (
+                                payModalPayments.map((pay: any) => (
+                                    <div key={pay.ID} style={{ marginBottom: '10px', borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                                        {/* Row utama */}
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: payModalEditId === pay.ID ? '#f8f5ff' : '#fafafa', gap: '10px', flexWrap: 'wrap' }}>
+                                            <div style={{ flex: 1, minWidth: '120px' }}>
+                                                <div style={{ fontWeight: '800', fontSize: '15px', color: '#1e293b' }}>Rp {Number(pay.PaymentAmount).toLocaleString('id-ID')}</div>
+                                                <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                                                    {new Date(pay.PaymentDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })} · {pay.PaymentMethod}
+                                                </div>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '6px' }}>
+                                                <button
+                                                    onClick={() => {
+                                                        if (payModalEditId === pay.ID) {
+                                                            setPayModalEditId(null);
+                                                        } else {
+                                                            setPayModalEditId(pay.ID);
+                                                            setPayModalEditForm({
+                                                                nominal: pay.PaymentAmount,
+                                                                tanggal: new Date(pay.PaymentDate).toISOString().split('T')[0],
+                                                                metode: pay.PaymentMethod
+                                                            });
+                                                        }
+                                                    }}
+                                                    style={{ background: payModalEditId === pay.ID ? '#ede9fe' : '#f1f5f9', color: payModalEditId === pay.ID ? '#7c3aed' : '#64748b', border: 'none', padding: '7px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                                >
+                                                    ✏️ {payModalEditId === pay.ID ? 'Batal' : 'Edit'}
+                                                </button>
+                                                <button
+                                                    onClick={() => handlePayModalDelete(pay.ID)}
+                                                    style={{ background: '#fee2e2', color: '#dc2626', border: 'none', padding: '7px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                                >
+                                                    🗑️ Hapus
+                                                </button>
+                                            </div>
+                                        </div>
+                                        {/* Edit form inline */}
+                                        {payModalEditId === pay.ID && (
+                                            <div style={{ padding: '14px', background: '#f5f3ff', borderTop: '1px solid #e2e8f0' }}>
+                                                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+                                                    <div>
+                                                        <label style={{ display: 'block', fontSize: '10px', fontWeight: '700', color: '#7c3aed', marginBottom: '4px', textTransform: 'uppercase' }}>Nominal Baru (Rp)</label>
+                                                        <input
+                                                            type="number"
+                                                            value={payModalEditForm.nominal === 0 ? '' : payModalEditForm.nominal}
+                                                            onChange={e => setPayModalEditForm({ ...payModalEditForm, nominal: e.target.value === '' ? 0 : Number(e.target.value) })}
+                                                            style={{ width: '100%', padding: '10px', border: '2px solid #7c3aed', borderRadius: '8px', fontSize: '14px', fontWeight: '700', outline: 'none', boxSizing: 'border-box' }}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label style={{ display: 'block', fontSize: '10px', fontWeight: '700', color: '#7c3aed', marginBottom: '4px', textTransform: 'uppercase' }}>Tanggal</label>
+                                                        <input
+                                                            type="date"
+                                                            value={payModalEditForm.tanggal}
+                                                            onChange={e => setPayModalEditForm({ ...payModalEditForm, tanggal: e.target.value })}
+                                                            style={{ width: '100%', padding: '10px', border: '2px solid #e2e8f0', borderRadius: '8px', outline: 'none', boxSizing: 'border-box' }}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label style={{ display: 'block', fontSize: '10px', fontWeight: '700', color: '#7c3aed', marginBottom: '4px', textTransform: 'uppercase' }}>Metode</label>
+                                                        <select
+                                                            value={payModalEditForm.metode}
+                                                            onChange={e => setPayModalEditForm({ ...payModalEditForm, metode: e.target.value })}
+                                                            style={{ width: '100%', padding: '10px', border: '2px solid #e2e8f0', borderRadius: '8px', outline: 'none', boxSizing: 'border-box', background: 'white' }}
+                                                        >
+                                                            <option value="TRANSFER">TRANSFER</option>
+                                                            <option value="CASH">CASH</option>
+                                                            <option value="QRIS">QRIS</option>
+                                                            <option value="DEBIT">DEBIT</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div style={{ background: '#ede9fe', borderRadius: '8px', padding: '8px 12px', fontSize: '11px', color: '#5b21b6', marginBottom: '12px', lineHeight: '1.5' }}>
+                                                    ⚠️ <strong>Perubahan ini akan otomatis memperbarui data di Kas Keuangan</strong> dan menghitung ulang status faktur (LUNAS / CICIL / BELUM BAYAR).
+                                                </div>
+                                                <button
+                                                    onClick={() => handlePayModalEdit(pay.ID)}
+                                                    style={{ width: '100%', padding: '11px', background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer', fontSize: '14px' }}
+                                                >
+                                                    ✅ Simpan Perubahan
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))
+                            )}
+
+                            {/* Tambah Cicilan Baru */}
+                            <div style={{ marginTop: '16px' }}>
+                                {!payModalAddVisible ? (
+                                    <button
+                                        onClick={() => setPayModalAddVisible(true)}
+                                        style={{ width: '100%', padding: '12px', background: 'white', color: '#198754', border: '2px dashed #198754', borderRadius: '12px', cursor: 'pointer', fontWeight: '700', fontSize: '14px' }}
+                                    >
+                                        + Tambah Cicilan Baru
+                                    </button>
+                                ) : (
+                                    <div style={{ background: '#f0fdf4', borderRadius: '14px', border: '1px solid #bbf7d0', padding: '16px' }}>
+                                        <div style={{ fontSize: '12px', fontWeight: '700', color: '#15803d', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>➕ Tambah Pembayaran Baru</div>
+                                        <form onSubmit={handlePayModalAdd}>
+                                            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: '10px', marginBottom: '12px' }}>
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '10px', fontWeight: '700', color: '#15803d', marginBottom: '4px', textTransform: 'uppercase' }}>Nominal (Rp)</label>
+                                                    <input
+                                                        type="number"
+                                                        required
+                                                        value={payModalAddForm.nominal === 0 ? '' : payModalAddForm.nominal}
+                                                        onChange={e => setPayModalAddForm({ ...payModalAddForm, nominal: e.target.value === '' ? 0 : Number(e.target.value) })}
+                                                        style={{ width: '100%', padding: '10px', border: '2px solid #16a34a', borderRadius: '8px', fontSize: '14px', fontWeight: '700', outline: 'none', boxSizing: 'border-box' }}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '10px', fontWeight: '700', color: '#15803d', marginBottom: '4px', textTransform: 'uppercase' }}>Tanggal</label>
+                                                    <input
+                                                        type="date"
+                                                        required
+                                                        value={payModalAddForm.tanggal}
+                                                        onChange={e => setPayModalAddForm({ ...payModalAddForm, tanggal: e.target.value })}
+                                                        style={{ width: '100%', padding: '10px', border: '2px solid #e2e8f0', borderRadius: '8px', outline: 'none', boxSizing: 'border-box' }}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label style={{ display: 'block', fontSize: '10px', fontWeight: '700', color: '#15803d', marginBottom: '4px', textTransform: 'uppercase' }}>Metode</label>
+                                                    <select
+                                                        value={payModalAddForm.metode}
+                                                        onChange={e => setPayModalAddForm({ ...payModalAddForm, metode: e.target.value })}
+                                                        style={{ width: '100%', padding: '10px', border: '2px solid #e2e8f0', borderRadius: '8px', outline: 'none', boxSizing: 'border-box', background: 'white' }}
+                                                    >
+                                                        <option value="TRANSFER">TRANSFER</option>
+                                                        <option value="CASH">CASH</option>
+                                                        <option value="QRIS">QRIS</option>
+                                                        <option value="DEBIT">DEBIT</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '10px' }}>
+                                                <button type="button" onClick={() => setPayModalAddVisible(false)} style={{ flex: 1, padding: '11px', background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer' }}>Batal</button>
+                                                <button type="submit" style={{ flex: 2, padding: '11px', background: 'linear-gradient(135deg, #16a34a, #15803d)', color: 'white', border: 'none', borderRadius: '10px', fontWeight: '700', cursor: 'pointer' }}>✅ Simpan Cicilan</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div style={{ padding: '16px 24px', borderTop: '1px solid #f1f5f9' }}>
+                            <button onClick={() => { setShowPaymentModal(false); setPayModalEditId(null); }} style={{ width: '100%', padding: '13px', background: '#f8fafc', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: '12px', fontWeight: '700', cursor: 'pointer', fontSize: '14px' }}>Tutup</button>
+                        </div>
                     </div>
                 </div>
             )}

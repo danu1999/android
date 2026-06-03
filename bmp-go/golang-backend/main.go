@@ -45,11 +45,15 @@ func main() {
 	// ==========================================
 	// 1. FRONTEND UTAMA (HARUS DI ATAS API)
 	// ==========================================
-	// Layani file statis (CSS, JS, logo, dll) dari folder "public"
-	// Daftarkan folder static agar bisa diakses oleh frontend (JPG)
-	app.Static("/static", "../static") // Untuk lingkungan lokal
-	app.Static("/static", "./static")  // Untuk lingkungan Railway
-	app.Static("/", "./public")
+	// Layani assets (JS/CSS dengan content-hash) dengan cache panjang
+	app.Static("/assets", "./public/assets", fiber.Static{
+		MaxAge: 31536000, // 1 tahun — aman karena nama file pakai hash
+	})
+	// Layani file statis lainnya (gambar, favicon, dll) tanpa cache
+	app.Static("/", "./public", fiber.Static{
+		MaxAge:   0,
+		Browse:   false,
+	})
 
 	// ==========================================
 	// 2. SETUP API ROUTES
@@ -61,6 +65,10 @@ func main() {
 	// ==========================================
 	// Menangani rute di browser seperti /kas, /login, dll agar memuat index.html.
 	app.Get("/*", func(c *fiber.Ctx) error {
+		// Jangan cache index.html — paksa browser ambil versi terbaru
+		c.Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		c.Set("Pragma", "no-cache")
+		c.Set("Expires", "0")
 		return c.SendFile("./public/index.html")
 	})
 
