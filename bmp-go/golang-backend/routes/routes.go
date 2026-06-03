@@ -87,6 +87,8 @@ func SetupRoutes(app *fiber.App) {
 	invoiceRoute.Get("/:id", controllers.GetInvoice)
 	invoiceRoute.Post("/", controllers.CreateInvoice)
 	invoiceRoute.Post("/:id/pay", controllers.PaySingleInvoice)
+	invoiceRoute.Put("/payments/:paymentId", controllers.EditPayment)
+	invoiceRoute.Delete("/payments/:paymentId", controllers.DeletePayment)
 	invoiceRoute.Put("/:id/products", controllers.UpdateInvoiceProducts)
 	invoiceRoute.Delete("/:id", controllers.DeleteInvoice)
 

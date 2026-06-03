@@ -66,6 +66,8 @@ const Invoices = () => {
     const [activeInvoice, setActiveInvoice] = useState(null);
     const [loadingPaymentDetail, setLoadingPaymentDetail] = useState(false);
     const [payForm, setPayForm] = useState({ nominal: 0, tanggal: new Date().toISOString().split('T')[0], metode: 'TRANSFER' });
+    const [editPayId, setEditPayId] = useState(null);
+    const [editPayForm, setEditPayForm] = useState({ nominal: 0, tanggal: new Date().toISOString().split('T')[0], metode: 'TRANSFER' });
 
     const [masterProducts, setMasterProducts] = useState([]);
     const [showEdit, setShowEdit] = useState(false);
@@ -207,6 +209,51 @@ const Invoices = () => {
             fetchData(currentPage, filterStatus, filterClient, searchTerm);
         } catch (err) {
             alert('Gagal menyimpan pembayaran');
+        }
+    };
+
+    // Edit cicilan: PUT /api/invoices/payments/:paymentId — cascade ke CashFlow + update status faktur
+    const handleEditPay = async (paymentId) => {
+        if (editPayForm.nominal <= 0) return alert('Nominal tidak valid');
+        try {
+            await api.put(`/invoices/payments/${paymentId}`, {
+                nominal: Number(editPayForm.nominal),
+                tanggal: editPayForm.tanggal + 'T00:00:00Z',
+                metode: editPayForm.metode
+            });
+            setEditPayId(null);
+            // Refresh modal
+            const res = await api.get(`/invoices/${activeInvoice.ID}`);
+            const inv = res.data.data;
+            const payments = res.data.payments || [];
+            const products = res.data.products || [];
+            const total = products.reduce((sum, p) => sum + (p.Quantity || 0) * (p.JumlahLusin || 1) * (p.Price || 0), 0);
+            const paid = payments.reduce((sum, p) => sum + (p.PaymentAmount || 0), 0);
+            setActiveInvoice({ ...inv, Total: total, PaidAmount: paid, payments });
+            setPayForm(f => ({ ...f, nominal: Math.max(0, total - paid) }));
+            fetchData(currentPage, filterStatus, filterClient, searchTerm);
+        } catch (err) {
+            alert('Gagal mengubah pembayaran');
+        }
+    };
+
+    // Hapus cicilan: DELETE /api/invoices/payments/:paymentId — cascade ke CashFlow + update status faktur
+    const handleDeletePay = async (paymentId, urutan) => {
+        if (!window.confirm(`Yakin ingin menghapus Bayar ke-${urutan}? Data kas keuangan terkait juga akan terhapus.`)) return;
+        try {
+            await api.delete(`/invoices/payments/${paymentId}`);
+            // Refresh modal
+            const res = await api.get(`/invoices/${activeInvoice.ID}`);
+            const inv = res.data.data;
+            const payments = res.data.payments || [];
+            const products = res.data.products || [];
+            const total = products.reduce((sum, p) => sum + (p.Quantity || 0) * (p.JumlahLusin || 1) * (p.Price || 0), 0);
+            const paid = payments.reduce((sum, p) => sum + (p.PaymentAmount || 0), 0);
+            setActiveInvoice({ ...inv, Total: total, PaidAmount: paid, payments });
+            setPayForm(f => ({ ...f, nominal: Math.max(0, total - paid) }));
+            fetchData(currentPage, filterStatus, filterClient, searchTerm);
+        } catch (err) {
+            alert('Gagal menghapus pembayaran');
         }
     };
 
@@ -815,18 +862,50 @@ const Invoices = () => {
                                 , activeInvoice.payments && activeInvoice.payments.length > 0 ? (
                                     React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } }
                                         , activeInvoice.payments.map((pay, idx) =>
-                                            React.createElement('div', { key: pay.ID || idx, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', borderRadius: '12px', padding: '12px 15px', border: '1px solid #e2e8f0' } }
-                                                , React.createElement('div', {}
-                                                    , React.createElement('div', { style: { fontSize: '11px', color: '#94a3b8', fontWeight: '700', marginBottom: '2px' } }, 'Bayar ke-' + (idx + 1))
-                                                    , React.createElement('div', { style: { fontSize: '12px', color: '#64748b' } }, new Date(pay.PaymentDate).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }) + (pay.PaymentMethod ? ' · ' + pay.PaymentMethod : ''))
+                                            editPayId === pay.ID ? (
+                                                React.createElement('div', { key: pay.ID || idx, style: { background: '#fffbeb', borderRadius: '12px', padding: '14px', border: '2px solid #fbbf24' } }
+                                                    , React.createElement('div', { style: { fontSize: '11px', color: '#92400e', fontWeight: '700', marginBottom: '10px' } }, 'Edit Bayar ke-' + (idx + 1))
+                                                    , React.createElement('div', { style: { display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '8px', marginBottom: '8px' } }
+                                                        , React.createElement('div', {}
+                                                            , React.createElement('label', { style: { fontSize: '11px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '4px' } }, 'Tanggal')
+                                                            , React.createElement('input', { type: 'date', value: editPayForm.tanggal, onChange: e => setEditPayForm({ ...editPayForm, tanggal: e.target.value }), style: { width: '100%', padding: '8px', border: '1px solid #fbbf24', borderRadius: '8px', fontSize: '13px', boxSizing: 'border-box' } })
+                                                        )
+                                                        , React.createElement('div', {}
+                                                            , React.createElement('label', { style: { fontSize: '11px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '4px' } }, 'Metode')
+                                                            , React.createElement('select', { value: editPayForm.metode, onChange: e => setEditPayForm({ ...editPayForm, metode: e.target.value }), style: { width: '100%', padding: '8px', border: '1px solid #fbbf24', borderRadius: '8px', fontSize: '13px', background: 'white', boxSizing: 'border-box' } }
+                                                                , React.createElement('option', { value: 'TRANSFER' }, 'Transfer Bank')
+                                                                , React.createElement('option', { value: 'TUNAI' }, 'Tunai / Cash')
+                                                                , React.createElement('option', { value: 'CEK' }, 'Cek / Giro')
+                                                            )
+                                                        )
+                                                    )
+                                                    , React.createElement('div', { style: { marginBottom: '10px' } }
+                                                        , React.createElement('label', { style: { fontSize: '11px', fontWeight: '600', color: '#374151', display: 'block', marginBottom: '4px' } }, 'Nominal (Rp)')
+                                                        , React.createElement('input', { type: 'number', min: 1, value: editPayForm.nominal === 0 ? '' : editPayForm.nominal, onChange: e => setEditPayForm({ ...editPayForm, nominal: e.target.value === '' ? 0 : Number(e.target.value) }), style: { width: '100%', padding: '8px', border: '1px solid #fbbf24', borderRadius: '8px', fontSize: '15px', fontWeight: '800', boxSizing: 'border-box' } })
+                                                    )
+                                                    , React.createElement('div', { style: { display: 'flex', gap: '8px' } }
+                                                        , React.createElement('button', { onClick: () => handleEditPay(pay.ID), style: { flex: 1, padding: '9px', background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '700', cursor: 'pointer', fontSize: '13px' } }, '💾 Simpan Perubahan')
+                                                        , React.createElement('button', { onClick: () => setEditPayId(null), style: { padding: '9px 14px', background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', fontSize: '13px' } }, 'Batal')
+                                                    )
                                                 )
-                                                , React.createElement('div', { style: { fontWeight: '800', color: '#198754', fontSize: '15px' } }, '+Rp ' + (pay.PaymentAmount || 0).toLocaleString('id-ID'))
+                                            ) : (
+                                                React.createElement('div', { key: pay.ID || idx, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', borderRadius: '12px', padding: '12px 15px', border: '1px solid #e2e8f0' } }
+                                                    , React.createElement('div', {}
+                                                        , React.createElement('div', { style: { fontSize: '11px', color: '#94a3b8', fontWeight: '700', marginBottom: '2px' } }, 'Bayar ke-' + (idx + 1))
+                                                        , React.createElement('div', { style: { fontSize: '12px', color: '#64748b' } }, new Date(pay.PaymentDate).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }) + (pay.PaymentMethod ? ' · ' + pay.PaymentMethod : ''))
+                                                    )
+                                                    , React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } }
+                                                        , React.createElement('div', { style: { fontWeight: '800', color: '#198754', fontSize: '15px', marginRight: '4px' } }, '+Rp ' + (pay.PaymentAmount || 0).toLocaleString('id-ID'))
+                                                        , React.createElement('button', { onClick: () => { setEditPayId(pay.ID); setEditPayForm({ nominal: pay.PaymentAmount || 0, tanggal: new Date(pay.PaymentDate).toISOString().split('T')[0], metode: pay.PaymentMethod || 'TRANSFER' }); }, style: { background: '#fef3c7', color: '#d97706', border: 'none', borderRadius: '8px', width: '30px', height: '30px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', flexShrink: 0 }, title: 'Edit Pembayaran' }, '✏️')
+                                                        , React.createElement('button', { onClick: () => handleDeletePay(pay.ID, idx + 1), style: { background: '#fee2e2', color: '#dc3545', border: 'none', borderRadius: '8px', width: '30px', height: '30px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', flexShrink: 0 }, title: 'Hapus Pembayaran' }, '🗑️')
+                                                    )
+                                                )
                                             )
                                         )
+                                    )
                                         , activeInvoice.Status === 'PAID' && React.createElement('div', { style: { display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', background: '#f0fdf4', borderRadius: '12px', padding: '14px', border: '2px solid #86efac', marginTop: '4px' } }
                                             , React.createElement('span', { style: { fontSize: '15px', fontWeight: '800', color: '#16a34a' } }, '✅ LUNAS pada ' + new Date(activeInvoice.payments[activeInvoice.payments.length - 1].PaymentDate).toLocaleDateString('id-ID'))
                                         )
-                                    )
                                 ) : (
                                     React.createElement('div', { style: { textAlign: 'center', padding: '20px', background: '#f8fafc', borderRadius: '12px', color: '#94a3b8', fontSize: '13px' } }, 'Belum ada pembayaran')
                                 )

@@ -785,3 +785,164 @@ func UpdateInvoiceProducts(c *fiber.Ctx) error {
 		"message": "Invoice products successfully updated",
 	})
 }
+
+// EditPayment updates nominal, tanggal, and metode of a single InvoicePayment.
+// Cascades to the linked CashFlow entry and recalculates Invoice status.
+func EditPayment(c *fiber.Ctx) error {
+	paymentID := c.Params("paymentId")
+
+	type EditInput struct {
+		Nominal float64 `json:"nominal"`
+		Tanggal string  `json:"tanggal"`
+		Metode  string  `json:"metode"`
+	}
+
+	input := new(EditInput)
+	if err := c.BodyParser(input); err != nil {
+		return c.Status(400).JSON(fiber.Map{"success": false, "message": "Invalid input"})
+	}
+	if input.Nominal <= 0 {
+		return c.Status(400).JSON(fiber.Map{"success": false, "message": "Nominal must be > 0"})
+	}
+
+	var payment models.InvoicePayment
+	if err := database.DB.First(&payment, paymentID).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{"success": false, "message": "Payment not found"})
+	}
+
+	var inv models.Invoice
+	if err := database.DB.First(&inv, payment.InvoiceID).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{"success": false, "message": "Invoice not found"})
+	}
+	if inv.IsDemo != IsDemoUser(c) {
+		return c.Status(403).JSON(fiber.Map{"success": false, "message": "Akses ditolak"})
+	}
+
+	// Parse tanggal
+	parsedTanggal := payment.PaymentDate
+	if input.Tanggal != "" {
+		if t, err := time.Parse(time.RFC3339, input.Tanggal); err == nil {
+			parsedTanggal = t
+		} else if t, err := time.Parse("2006-01-02", input.Tanggal); err == nil {
+			parsedTanggal = t
+		}
+	}
+
+	tx := database.DB.Begin()
+
+	// Update payment record
+	payment.PaymentAmount = int(input.Nominal)
+	payment.PaymentDate = parsedTanggal
+	if input.Metode != "" {
+		payment.PaymentMethod = input.Metode
+	}
+	if err := tx.Save(&payment).Error; err != nil {
+		tx.Rollback()
+		return c.Status(500).JSON(fiber.Map{"success": false, "message": "Gagal update pembayaran"})
+	}
+
+	// Cascade to linked CashFlow
+	tx.Model(&models.CashFlow{}).
+		Where("payment_ref_id = ?", payment.ID).
+		Updates(map[string]interface{}{
+			"amount":           float64(payment.PaymentAmount),
+			"transaction_date": parsedTanggal,
+		})
+
+	// Recalculate invoice status
+	var products []models.Product
+	tx.Where("invoice_id = ? AND deleted_at IS NULL", inv.ID).Find(&products)
+	total := 0.0
+	for _, p := range products {
+		total += p.Quantity * p.JumlahLusin * p.Price
+	}
+
+	var payments []models.InvoicePayment
+	tx.Where("invoice_id = ? AND deleted_at IS NULL", inv.ID).Find(&payments)
+	paid := 0.0
+	for _, p := range payments {
+		paid += float64(p.PaymentAmount)
+	}
+
+	sisa := total - paid
+	if sisa <= 0 {
+		inv.Status = "PAID"
+	} else if paid > 0 {
+		inv.Status = "PARTIAL"
+	} else {
+		inv.Status = "UNPAID"
+	}
+	tx.Save(&inv)
+
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		return c.Status(500).JSON(fiber.Map{"success": false, "message": "Gagal menyimpan perubahan"})
+	}
+
+	return c.JSON(fiber.Map{"success": true, "message": "Pembayaran berhasil diperbarui", "status": inv.Status})
+}
+
+// DeletePayment removes a single InvoicePayment and its linked CashFlow,
+// then recalculates Invoice status.
+func DeletePayment(c *fiber.Ctx) error {
+	paymentID := c.Params("paymentId")
+
+	var payment models.InvoicePayment
+	if err := database.DB.First(&payment, paymentID).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{"success": false, "message": "Payment not found"})
+	}
+
+	var inv models.Invoice
+	if err := database.DB.First(&inv, payment.InvoiceID).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{"success": false, "message": "Invoice not found"})
+	}
+	if inv.IsDemo != IsDemoUser(c) {
+		return c.Status(403).JSON(fiber.Map{"success": false, "message": "Akses ditolak"})
+	}
+
+	tx := database.DB.Begin()
+
+	// Delete linked CashFlow
+	if err := tx.Where("payment_ref_id = ?", payment.ID).Delete(&models.CashFlow{}).Error; err != nil {
+		tx.Rollback()
+		return c.Status(500).JSON(fiber.Map{"success": false, "message": "Gagal hapus cashflow terkait"})
+	}
+
+	// Delete payment
+	if err := tx.Delete(&payment).Error; err != nil {
+		tx.Rollback()
+		return c.Status(500).JSON(fiber.Map{"success": false, "message": "Gagal hapus pembayaran"})
+	}
+
+	// Recalculate invoice status
+	var products []models.Product
+	tx.Where("invoice_id = ? AND deleted_at IS NULL", inv.ID).Find(&products)
+	total := 0.0
+	for _, p := range products {
+		total += p.Quantity * p.JumlahLusin * p.Price
+	}
+
+	var payments []models.InvoicePayment
+	tx.Where("invoice_id = ? AND deleted_at IS NULL", inv.ID).Find(&payments)
+	paid := 0.0
+	for _, p := range payments {
+		paid += float64(p.PaymentAmount)
+	}
+
+	sisa := total - paid
+	if sisa <= 0 {
+		inv.Status = "PAID"
+	} else if paid > 0 {
+		inv.Status = "PARTIAL"
+	} else {
+		inv.Status = "UNPAID"
+	}
+	tx.Save(&inv)
+
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		return c.Status(500).JSON(fiber.Map{"success": false, "message": "Gagal menghapus pembayaran"})
+	}
+
+	return c.JSON(fiber.Map{"success": true, "message": "Pembayaran berhasil dihapus", "status": inv.Status})
+}
