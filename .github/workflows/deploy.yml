@@ -37,6 +37,17 @@ jobs:
           npm run build
           zip -r dist.zip dist/*
 
+      # --- BUILD GO BMP BACKEND ---
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Compile Go BMP Binary (Linux)
+        run: |
+          cd bmp-go/golang-backend
+          GOOS=linux GOARCH=amd64 go build -o invoice-bmp-go-linux .
+
       # --- SSH & DEPLOY TO VPS ---
       - name: Deploy to VPS via SSH & SCP
         uses: appleboy/scp-action@master
@@ -45,7 +56,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
-          source: "backend/dist/index.js,frontend/dist.zip,bmp-go/golang-backend/templates/*"
+          source: "backend/dist/index.js,frontend/dist.zip,bmp-go/golang-backend/templates/*,bmp-go/golang-backend/invoice-bmp-go-linux"
           target: "/home/muizz9900/deploy-temp/"
           strip_components: 0
 
@@ -57,28 +68,35 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
           script: |
-            # 1. Update Backend
+            # 1. Update Node.js Backend
             cp /home/muizz9900/deploy-temp/backend/dist/index.js /home/muizz9900/posbah-backend/dist/index.js
-            
+
             # 2. Update BMP PDF Templates
             mkdir -p /home/muizz9900/bmp-backend/templates
             cp -r /home/muizz9900/deploy-temp/bmp-go/golang-backend/templates/* /home/muizz9900/bmp-backend/templates/
-            
-            # 3. Restart PM2 Backend Service
+
+            # 3. Update BMP Go Binary
+            if [ -f "/home/muizz9900/deploy-temp/bmp-go/golang-backend/invoice-bmp-go-linux" ]; then
+              chmod +x /home/muizz9900/deploy-temp/bmp-go/golang-backend/invoice-bmp-go-linux
+              cp /home/muizz9900/deploy-temp/bmp-go/golang-backend/invoice-bmp-go-linux /home/muizz9900/bmp-backend/invoice-bmp-go
+              chmod +x /home/muizz9900/bmp-backend/invoice-bmp-go
+            fi
+
+            # 4. Restart PM2 Services
             pm2 restart posbah-backend
-            
-            # 4. Extract and Deploy Frontend to Nginx
+            pm2 restart bmp-backend || true
+
+            # 5. Extract and Deploy Frontend to Nginx
             sudo unzip -o /home/muizz9900/deploy-temp/frontend/dist.zip -d /var/www/posbah
-            # Move out of nested dist if zipped with path
             if [ -d "/var/www/posbah/dist" ]; then
               sudo cp -r /var/www/posbah/dist/* /var/www/posbah/
               sudo rm -rf /var/www/posbah/dist
             fi
-            
-            # 5. Reload Nginx
+
+            # 6. Reload Nginx
             sudo systemctl reload nginx
-            
-            # 6. Cleanup Temp Files
+
+            # 7. Cleanup
             rm -rf /home/muizz9900/deploy-temp/
-            
+
             echo "CI/CD Deployment successful!"
