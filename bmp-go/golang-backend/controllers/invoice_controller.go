@@ -849,7 +849,7 @@ func EditPayment(c *fiber.Ctx) error {
 			"transaction_date": parsedTanggal,
 		})
 
-	// Recalculate invoice status
+	// Recalculate invoice status (use actual DB values after payment update)
 	var products []models.Product
 	tx.Where("invoice_id = ? AND deleted_at IS NULL", inv.ID).Find(&products)
 	total := 0.0
@@ -857,10 +857,10 @@ func EditPayment(c *fiber.Ctx) error {
 		total += p.Quantity * p.JumlahLusin * p.Price
 	}
 
-	var payments []models.InvoicePayment
-	tx.Where("invoice_id = ? AND deleted_at IS NULL", inv.ID).Find(&payments)
+	var allPayments []models.InvoicePayment
+	tx.Where("invoice_id = ? AND deleted_at IS NULL", inv.ID).Find(&allPayments)
 	paid := 0.0
-	for _, p := range payments {
+	for _, p := range allPayments {
 		paid += float64(p.PaymentAmount)
 	}
 
@@ -879,7 +879,7 @@ func EditPayment(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"success": false, "message": "Gagal menyimpan perubahan"})
 	}
 
-	return c.JSON(fiber.Map{"success": true, "message": "Pembayaran berhasil diperbarui", "status": inv.Status})
+	return c.JSON(fiber.Map{"success": true, "message": "Pembayaran berhasil diperbarui", "status": inv.Status, "remaining": sisa})
 }
 
 // DeletePayment removes a single InvoicePayment and its linked CashFlow,
@@ -914,7 +914,7 @@ func DeletePayment(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"success": false, "message": "Gagal hapus pembayaran"})
 	}
 
-	// Recalculate invoice status
+	// Recalculate invoice status — eksplisit exclude payment yang baru dihapus
 	var products []models.Product
 	tx.Where("invoice_id = ? AND deleted_at IS NULL", inv.ID).Find(&products)
 	total := 0.0
@@ -922,10 +922,11 @@ func DeletePayment(c *fiber.Ctx) error {
 		total += p.Quantity * p.JumlahLusin * p.Price
 	}
 
-	var payments []models.InvoicePayment
-	tx.Where("invoice_id = ? AND deleted_at IS NULL", inv.ID).Find(&payments)
+	// Exclude payment yang baru dihapus dari kalkulasi
+	var remainingPayments []models.InvoicePayment
+	tx.Where("invoice_id = ? AND deleted_at IS NULL AND id != ?", inv.ID, payment.ID).Find(&remainingPayments)
 	paid := 0.0
-	for _, p := range payments {
+	for _, p := range remainingPayments {
 		paid += float64(p.PaymentAmount)
 	}
 
@@ -944,7 +945,7 @@ func DeletePayment(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"success": false, "message": "Gagal menghapus pembayaran"})
 	}
 
-	return c.JSON(fiber.Map{"success": true, "message": "Pembayaran berhasil dihapus", "status": inv.Status})
+	return c.JSON(fiber.Map{"success": true, "message": "Pembayaran berhasil dihapus", "status": inv.Status, "remaining": sisa})
 }
 
 // UpdateInvoiceHeader updates header fields of an invoice: number, title, client, dates, notes, terms.
