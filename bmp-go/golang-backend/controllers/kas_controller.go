@@ -272,8 +272,10 @@ func DeleteCashFlow(c *fiber.Ctx) error {
 				}
 
 				// Hitung sisa total pembayaran yang tersisa setelah penghapusan
+				// Eksplisit exclude payment yang baru dihapus dari kalkulasi
 				var remainingPayments []models.InvoicePayment
-				tx.Where("invoice_id = ?", invoice.ID).Find(&remainingPayments)
+				tx.Where("invoice_id = ? AND deleted_at IS NULL AND id != ?", invoice.ID, payment.ID).Find(&remainingPayments)
+
 				
 				totalPaid := 0.0
 				for _, p := range remainingPayments {

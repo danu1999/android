@@ -23,6 +23,7 @@ var machineBonus = map[string]float64{
 }
 
 // VerifyPIN - Cek PIN fingerprint dan kembalikan data karyawan
+// PUBLIC route: gunakan IsDemoEnv() karena tidak ada JWT
 func VerifyBonusPIN(c *fiber.Ctx) error {
 	type Input struct {
 		PIN string `json:"pin"`
@@ -32,8 +33,11 @@ func VerifyBonusPIN(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"success": false, "message": "PIN tidak boleh kosong"})
 	}
 
+	// Isolasi demo/produksi via env var (route ini PUBLIC, tidak ada JWT)
+	isDemo := IsDemoEnv()
+
 	var employee models.Employee
-	if err := database.DB.Where("fingerprint_pin = ?", input.PIN).First(&employee).Error; err != nil {
+	if err := database.DB.Where("fingerprint_pin = ? AND is_demo = ?", input.PIN, isDemo).First(&employee).Error; err != nil {
 		return c.Status(404).JSON(fiber.Map{"success": false, "message": "PIN tidak ditemukan. Cek kembali PIN Anda."})
 	}
 
@@ -47,6 +51,7 @@ func VerifyBonusPIN(c *fiber.Ctx) error {
 }
 
 // ClaimBonus - Karyawan klaim bonus mesin
+// PUBLIC route: gunakan IsDemoEnv() karena tidak ada JWT
 func ClaimBonus(c *fiber.Ctx) error {
 	type Input struct {
 		PIN             string `json:"pin"`
@@ -59,9 +64,12 @@ func ClaimBonus(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"success": false, "message": "Input tidak valid"})
 	}
 
-	// 1. Verifikasi PIN
+	// Isolasi demo/produksi via env var (route ini PUBLIC, tidak ada JWT)
+	isDemo := IsDemoEnv()
+
+	// 1. Verifikasi PIN — hanya cari di dataset yang sesuai (demo atau produksi)
 	var employee models.Employee
-	if err := database.DB.Where("fingerprint_pin = ?", input.PIN).First(&employee).Error; err != nil {
+	if err := database.DB.Where("fingerprint_pin = ? AND is_demo = ?", input.PIN, isDemo).First(&employee).Error; err != nil {
 		return c.Status(404).JSON(fiber.Map{"success": false, "message": "PIN tidak ditemukan"})
 	}
 
@@ -77,12 +85,12 @@ func ClaimBonus(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"success": false, "message": "Shift tidak valid"})
 	}
 
-	// 4. Cek duplikat: 1 karyawan hanya boleh 1 klaim per hari (apapun mesinnya)
+	// 4. Cek duplikat: 1 karyawan hanya boleh 1 klaim per hari — filter by is_demo
 	today := time.Now().Format("2006-01-02")
 	var existing models.MachineBonusLog
 	if err := database.DB.Where(
-		"employee_id = ? AND date = ?",
-		employee.ID, today,
+		"employee_id = ? AND date = ? AND is_demo = ?",
+		employee.ID, today, isDemo,
 	).First(&existing).Error; err == nil {
 		return c.Status(409).JSON(fiber.Map{
 			"success": false,
@@ -99,7 +107,7 @@ func ClaimBonus(c *fiber.Ctx) error {
 		BonusAmount:     bonus,
 		JumlahPerolehan: input.JumlahPerolehan,
 		Date:            tanggal,
-		IsDemo:          employee.IsDemo,
+		IsDemo:          isDemo,
 	}
 	if err := database.DB.Create(&log).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{"success": false, "message": "Gagal menyimpan bonus"})
@@ -185,10 +193,13 @@ func GetBonusByEmployee(c *fiber.Ctx) error {
 }
 
 // GetEmployeePINList - Tampilkan daftar PIN + Nama karyawan (untuk referensi di halaman bonus)
+// PUBLIC route: gunakan IsDemoEnv() karena tidak ada JWT
 func GetEmployeePINList(c *fiber.Ctx) error {
 	var employees []models.Employee
+	// Isolasi demo/produksi via env var — IsDemoUser(c) selalu false di public routes!
+	isDemo := IsDemoEnv()
 	if err := database.DB.
-		Where("deleted_at IS NULL AND fingerprint_pin IS NOT NULL AND fingerprint_pin != '' AND LOWER(name) != 'muizz' AND is_demo = ?", IsDemoUser(c)).
+		Where("deleted_at IS NULL AND fingerprint_pin IS NOT NULL AND fingerprint_pin != '' AND LOWER(name) != 'muizz' AND is_demo = ?", isDemo).
 		Order("name asc").
 		Find(&employees).Error; err != nil {
 		return c.Status(500).JSON(fiber.Map{"success": false})

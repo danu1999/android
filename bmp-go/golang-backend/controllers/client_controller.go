@@ -111,6 +111,9 @@ func UpdateClient(c *fiber.Ctx) error {
 		})
 	}
 
+	// Selalu pin IsDemo ke nilai asli — cegah BodyParser menimpa field ini
+	// (user tidak boleh memindahkan data demo ke produksi atau sebaliknya)
+	client.IsDemo = IsDemoUser(c)
 	client.LastUpdated = time.Now()
 
 	database.DB.Save(&client)
