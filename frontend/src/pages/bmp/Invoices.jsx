@@ -61,6 +61,12 @@ const Invoices = () => {
     const [showSingle, setShowSingle] = useState(false);
     const [singleData, setSingleData] = useState({ id: 0, nominal: 0, metode: 'TRANSFER', tanggal: new Date().toISOString().split('T')[0] });
 
+    // === Payment Modal (cicilan) ===
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [activeInvoice, setActiveInvoice] = useState(null);
+    const [loadingPaymentDetail, setLoadingPaymentDetail] = useState(false);
+    const [payForm, setPayForm] = useState({ nominal: 0, tanggal: new Date().toISOString().split('T')[0], metode: 'TRANSFER' });
+
     const [masterProducts, setMasterProducts] = useState([]);
     const [showEdit, setShowEdit] = useState(false);
     const [editData, setEditData] = useState({ id: 0, products: [] });
@@ -153,6 +159,54 @@ const Invoices = () => {
             fetchData(currentPage, filterStatus, filterClient, searchTerm);
         } catch (e3) {
             alert("Gagal melakukan pembayaran");
+        }
+    };
+
+    // Buka modal cicilan: fetch detail faktur termasuk riwayat pembayaran
+    const openPaymentModal = async (id) => {
+        setLoadingPaymentDetail(true);
+        setActiveInvoice(null);
+        setShowPaymentModal(true);
+        try {
+            const res = await api.get(`/invoices/${id}`);
+            const inv = res.data.data;
+            const payments = res.data.payments || [];
+            const products = res.data.products || [];
+            const total = products.reduce((sum, p) => sum + (p.Quantity || 0) * (p.JumlahLusin || 1) * (p.Price || 0), 0);
+            const paid = payments.reduce((sum, p) => sum + (p.PaymentAmount || 0), 0);
+            const invoiceData = { ...inv, Total: total, PaidAmount: paid, payments };
+            setActiveInvoice(invoiceData);
+            setPayForm(f => ({ ...f, nominal: Math.max(0, total - paid), tanggal: new Date().toISOString().split('T')[0] }));
+        } catch (err) {
+            alert('Gagal memuat detail faktur');
+            setShowPaymentModal(false);
+        }
+        setLoadingPaymentDetail(false);
+    };
+
+    // Submit cicilan baru
+    const handlePaySubmit = async (e) => {
+        e.preventDefault();
+        if (!activeInvoice || payForm.nominal <= 0) return alert('Nominal tidak valid');
+        try {
+            await api.post(`/invoices/${activeInvoice.ID}/pay`, {
+                nominal: Number(payForm.nominal),
+                metode: payForm.metode,
+                tanggal: payForm.tanggal + 'T00:00:00Z'
+            });
+            // Refresh data modal
+            const res = await api.get(`/invoices/${activeInvoice.ID}`);
+            const inv = res.data.data;
+            const payments = res.data.payments || [];
+            const products = res.data.products || [];
+            const total = products.reduce((sum, p) => sum + (p.Quantity || 0) * (p.JumlahLusin || 1) * (p.Price || 0), 0);
+            const paid = payments.reduce((sum, p) => sum + (p.PaymentAmount || 0), 0);
+            setActiveInvoice({ ...inv, Total: total, PaidAmount: paid, payments });
+            setPayForm(f => ({ ...f, nominal: Math.max(0, total - paid) }));
+            // Refresh daftar faktur
+            fetchData(currentPage, filterStatus, filterClient, searchTerm);
+        } catch (err) {
+            alert('Gagal menyimpan pembayaran');
         }
     };
 
@@ -620,7 +674,7 @@ const Invoices = () => {
 
                             , React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 620}}
                                 , inv.Status !== 'PAID' && (
-                                    React.createElement('button', { onClick: () => { setSingleData({ ...singleData, id: inv.ID }); setShowSingle(true); }, style: { background: '#198754', color: 'white', border: 'none', padding: '10px', borderRadius: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'center' }, title: "Bayar", __self: this, __source: {fileName: _jsxFileName, lineNumber: 622}}, React.createElement(DollarSign, { size: 16, __self: this, __source: {fileName: _jsxFileName, lineNumber: 622}}))
+                                    React.createElement('button', { onClick: () => openPaymentModal(inv.ID), style: { background: 'linear-gradient(135deg, #16a34a, #15803d)', color: 'white', border: 'none', padding: '10px', borderRadius: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'center', boxShadow: '0 2px 8px rgba(22,163,74,0.3)' }, title: "Bayar Cicilan" }, React.createElement(DollarSign, { size: 16 }))
                                 )
                                 , React.createElement('button', { onClick: () => openEditModal(inv.ID), style: { background: '#f1f5f9', color: '#64748b', border: 'none', padding: '10px', borderRadius: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'center' }, title: "Edit", __self: this, __source: {fileName: _jsxFileName, lineNumber: 624}}, React.createElement(Edit, { size: 16, __self: this, __source: {fileName: _jsxFileName, lineNumber: 624}}))
                                 , React.createElement('button', { onClick: () => downloadJPG(inv.ID, inv.Number), style: { background: '#f1f5f9', color: '#64748b', border: 'none', padding: '10px', borderRadius: '10px', cursor: 'pointer', display: 'flex', justifyContent: 'center' }, title: "JPG", __self: this, __source: {fileName: _jsxFileName, lineNumber: 625}}, React.createElement(ImageIcon, { size: 16, __self: this, __source: {fileName: _jsxFileName, lineNumber: 625}}))
@@ -676,7 +730,7 @@ const Invoices = () => {
                                 , React.createElement('td', { style: { padding: '15px 20px', borderBottom: '1px solid #f1f5f9' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 675}}
                                     , React.createElement('div', { style: { display: 'flex', gap: '6px', justifyContent: 'center' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 676}}
                                         , inv.Status !== 'PAID' && (
-                                            React.createElement('button', { onClick: () => { setSingleData({ ...singleData, id: inv.ID }); setShowSingle(true); }, style: { background: '#198754', color: 'white', border: 'none', padding: '8px', borderRadius: '8px', cursor: 'pointer' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 678}}, React.createElement(DollarSign, { size: 14, __self: this, __source: {fileName: _jsxFileName, lineNumber: 678}}))
+                                            React.createElement('button', { onClick: () => openPaymentModal(inv.ID), style: { background: 'linear-gradient(135deg, #16a34a, #15803d)', color: 'white', border: 'none', padding: '8px', borderRadius: '8px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(22,163,74,0.3)' }, title: "Bayar Cicilan" }, React.createElement(DollarSign, { size: 14 }))
                                         )
                                         , React.createElement('button', { onClick: () => openEditModal(inv.ID), style: { background: '#f1f5f9', color: '#64748b', border: 'none', padding: '8px', borderRadius: '8px', cursor: 'pointer' }, title: "Edit", __self: this, __source: {fileName: _jsxFileName, lineNumber: 680}}, React.createElement(Edit, { size: 14, __self: this, __source: {fileName: _jsxFileName, lineNumber: 680}}))
                                         , React.createElement('button', { onClick: () => downloadJPG(inv.ID, inv.Number), style: { background: '#f1f5f9', color: '#64748b', border: 'none', padding: '8px', borderRadius: '8px', cursor: 'pointer' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 681}}, React.createElement(ImageIcon, { size: 14, __self: this, __source: {fileName: _jsxFileName, lineNumber: 681}}))
@@ -727,21 +781,91 @@ const Invoices = () => {
                 )
             )
 
-            , showSingle && (
-                React.createElement('div', { style: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1200, padding: '15px', backdropFilter: 'blur(4px)' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 730}}
-                    , React.createElement('div', { style: { background: 'white', padding: '30px', borderRadius: '24px', width: '100%', maxWidth: '400px', position: 'relative' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 731}}
-                        , React.createElement('button', { onClick: () => setShowSingle(false), style: { position: 'absolute', right: '20px', top: '20px', border: 'none', background: 'none', color: '#94a3b8', cursor: 'pointer' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 732}}, React.createElement(X, { size: 24, __self: this, __source: {fileName: _jsxFileName, lineNumber: 732}}))
-                        , React.createElement('h3', { style: { marginBottom: '25px', fontWeight: '800', color: '#1e293b' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 733}}, "Bayar Faktur" )
-                        , React.createElement('form', { onSubmit: handleSingle, __self: this, __source: {fileName: _jsxFileName, lineNumber: 734}}
-                            , React.createElement('div', { style: { marginBottom: '18px' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 735}}
-                                , React.createElement('label', { style: { display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 736}}, "Tanggal Bayar" )
-                                , React.createElement('input', { type: "date", required: true, value: singleData.tanggal, onChange: e => setSingleData({...singleData, tanggal: e.target.value}), style: { width: '100%', padding: '12px', border: '1px solid #e2e8f0', borderRadius: '12px' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 737}} )
+            , showPaymentModal && (
+                React.createElement('div', { style: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.78)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1200, padding: '15px', backdropFilter: 'blur(5px)' } }
+                    , loadingPaymentDetail ? (
+                        React.createElement('div', { style: { background: 'white', borderRadius: '24px', padding: '40px', textAlign: 'center', minWidth: '260px' } }
+                            , React.createElement('div', { style: { width: '28px', height: '28px', border: '3px solid #f3f3f3', borderTop: '3px solid #198754', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 14px' } })
+                            , React.createElement('div', { style: { color: '#64748b', fontSize: '14px', fontWeight: '600' } }, 'Memuat data faktur...')
+                        )
+                    ) : activeInvoice && (
+                        React.createElement('div', { style: { background: 'white', padding: isMobile ? '20px' : '28px', borderRadius: '24px', width: '100%', maxWidth: '520px', maxHeight: '90vh', overflowY: 'auto', position: 'relative', boxShadow: '0 25px 60px rgba(0,0,0,0.25)' } }
+                            , React.createElement('button', { onClick: () => setShowPaymentModal(false), style: { position: 'absolute', right: '16px', top: '16px', border: 'none', background: '#f1f5f9', color: '#64748b', cursor: 'pointer', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' } }
+                                , React.createElement(X, { size: 18 })
                             )
-                            , React.createElement('div', { style: { marginBottom: '25px' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 739}}
-                                , React.createElement('label', { style: { display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 740}}, "Nominal (Rp)" )
-                                , React.createElement('input', { type: "number", required: true, value: singleData.nominal === 0 ? '' : singleData.nominal, onChange: e => setSingleData({...singleData, nominal: e.target.value === '' ? 0 : Number(e.target.value)}), style: { width: '100%', padding: '12px', border: '1px solid #e2e8f0', borderRadius: '12px', fontSize: '16px', fontWeight: '800' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 741}} )
+                            , React.createElement('h3', { style: { margin: '0 0 2px 0', fontWeight: '800', color: '#1e293b', paddingRight: '40px', fontSize: '18px' } }, 'Pembayaran Faktur')
+                            , React.createElement('div', { style: { fontSize: '13px', color: '#0d6efd', fontWeight: '700', marginBottom: '18px' } }, activeInvoice.Number)
+
+                            , React.createElement('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '20px' } }
+                                , React.createElement('div', { style: { background: '#f8fafc', borderRadius: '14px', padding: '14px', borderLeft: '4px solid #0d6efd' } }
+                                    , React.createElement('div', { style: { fontSize: '10px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '0.5px' } }, 'Total Tagihan')
+                                    , React.createElement('div', { style: { fontSize: '15px', fontWeight: '800', color: '#1e293b' } }, 'Rp ' + activeInvoice.Total.toLocaleString('id-ID'))
+                                    , activeInvoice.PaidAmount > 0 && React.createElement('div', { style: { fontSize: '11px', color: '#198754', marginTop: '4px', fontWeight: '600' } }, '✓ Dibayar: Rp ' + activeInvoice.PaidAmount.toLocaleString('id-ID'))
+                                )
+                                , React.createElement('div', { style: { background: activeInvoice.Status === 'PAID' ? '#f0fdf4' : '#fff5f5', borderRadius: '14px', padding: '14px', borderLeft: '4px solid ' + (activeInvoice.Status === 'PAID' ? '#16a34a' : '#dc3545') } }
+                                    , React.createElement('div', { style: { fontSize: '10px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', marginBottom: '4px', letterSpacing: '0.5px' } }, activeInvoice.Status === 'PAID' ? 'Status' : 'Sisa Tagihan')
+                                    , React.createElement('div', { style: { fontSize: '15px', fontWeight: '800', color: activeInvoice.Status === 'PAID' ? '#16a34a' : '#dc3545' } }
+                                        , activeInvoice.Status === 'PAID' ? '✅ LUNAS' : ('Rp ' + (activeInvoice.Total - activeInvoice.PaidAmount).toLocaleString('id-ID'))
+                                    )
+                                )
                             )
-                            , React.createElement('button', { type: "submit", style: { width: '100%', padding: '14px', background: '#198754', color: 'white', border: 'none', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 743}}, "Simpan Pembayaran" )
+
+                            , React.createElement('div', { style: { marginBottom: '20px' } }
+                                , React.createElement('div', { style: { fontSize: '11px', fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px' } }, 'Riwayat Pembayaran')
+                                , activeInvoice.payments && activeInvoice.payments.length > 0 ? (
+                                    React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } }
+                                        , activeInvoice.payments.map((pay, idx) =>
+                                            React.createElement('div', { key: pay.ID || idx, style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', borderRadius: '12px', padding: '12px 15px', border: '1px solid #e2e8f0' } }
+                                                , React.createElement('div', {}
+                                                    , React.createElement('div', { style: { fontSize: '11px', color: '#94a3b8', fontWeight: '700', marginBottom: '2px' } }, 'Bayar ke-' + (idx + 1))
+                                                    , React.createElement('div', { style: { fontSize: '12px', color: '#64748b' } }, new Date(pay.PaymentDate).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }) + (pay.PaymentMethod ? ' · ' + pay.PaymentMethod : ''))
+                                                )
+                                                , React.createElement('div', { style: { fontWeight: '800', color: '#198754', fontSize: '15px' } }, '+Rp ' + (pay.PaymentAmount || 0).toLocaleString('id-ID'))
+                                            )
+                                        )
+                                        , activeInvoice.Status === 'PAID' && React.createElement('div', { style: { display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', background: '#f0fdf4', borderRadius: '12px', padding: '14px', border: '2px solid #86efac', marginTop: '4px' } }
+                                            , React.createElement('span', { style: { fontSize: '15px', fontWeight: '800', color: '#16a34a' } }, '✅ LUNAS pada ' + new Date(activeInvoice.payments[activeInvoice.payments.length - 1].PaymentDate).toLocaleDateString('id-ID'))
+                                        )
+                                    )
+                                ) : (
+                                    React.createElement('div', { style: { textAlign: 'center', padding: '20px', background: '#f8fafc', borderRadius: '12px', color: '#94a3b8', fontSize: '13px' } }, 'Belum ada pembayaran')
+                                )
+                            )
+
+                            , activeInvoice.Status !== 'PAID' && (
+                                React.createElement('div', {}
+                                    , React.createElement('div', { style: { fontSize: '11px', fontWeight: '700', color: '#198754', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '12px', background: '#f0fdf4', padding: '8px 12px', borderRadius: '8px', display: 'inline-block' } }
+                                        , '💳 Input Pembayaran ke-' + ((activeInvoice.payments ? activeInvoice.payments.length : 0) + 1)
+                                    )
+                                    , React.createElement('form', { onSubmit: handlePaySubmit }
+                                        , React.createElement('div', { style: { display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px', marginBottom: '12px' } }
+                                            , React.createElement('div', {}
+                                                , React.createElement('label', { style: { display: 'block', marginBottom: '6px', fontSize: '12px', fontWeight: '600', color: '#374151' } }, 'Tanggal Bayar')
+                                                , React.createElement('input', { type: 'date', required: true, value: payForm.tanggal, onChange: e => setPayForm({ ...payForm, tanggal: e.target.value }), style: { width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '14px', boxSizing: 'border-box' } })
+                                            )
+                                            , React.createElement('div', {}
+                                                , React.createElement('label', { style: { display: 'block', marginBottom: '6px', fontSize: '12px', fontWeight: '600', color: '#374151' } }, 'Metode')
+                                                , React.createElement('select', { value: payForm.metode, onChange: e => setPayForm({ ...payForm, metode: e.target.value }), style: { width: '100%', padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '14px', background: 'white', boxSizing: 'border-box' } }
+                                                    , React.createElement('option', { value: 'TRANSFER' }, 'Transfer Bank')
+                                                    , React.createElement('option', { value: 'TUNAI' }, 'Tunai / Cash')
+                                                    , React.createElement('option', { value: 'CEK' }, 'Cek / Giro')
+                                                )
+                                            )
+                                        )
+                                        , React.createElement('div', { style: { marginBottom: '10px' } }
+                                            , React.createElement('label', { style: { display: 'block', marginBottom: '6px', fontSize: '12px', fontWeight: '600', color: '#374151' } }, 'Nominal (Rp)')
+                                            , React.createElement('input', { type: 'number', required: true, min: 1, value: payForm.nominal === 0 ? '' : payForm.nominal, onChange: e => setPayForm({ ...payForm, nominal: e.target.value === '' ? 0 : Number(e.target.value) }), placeholder: '0', style: { width: '100%', padding: '12px', border: '2px solid #e2e8f0', borderRadius: '10px', fontSize: '18px', fontWeight: '800', color: '#1e293b', boxSizing: 'border-box', outline: 'none' } })
+                                        )
+                                        , React.createElement('div', { style: { background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px', padding: '10px 14px', marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }
+                                            , React.createElement('span', { style: { fontSize: '12px', color: '#92400e', fontWeight: '600' } }, 'Sisa tagihan:')
+                                            , React.createElement('span', { style: { fontSize: '13px', fontWeight: '800', color: '#b45309' } }, 'Rp ' + (activeInvoice.Total - activeInvoice.PaidAmount).toLocaleString('id-ID'))
+                                        )
+                                        , React.createElement('button', { type: 'submit', style: { width: '100%', padding: '14px', background: 'linear-gradient(135deg, #16a34a, #15803d)', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '800', cursor: 'pointer', fontSize: '15px', boxShadow: '0 4px 12px rgba(22,163,74,0.3)' } }
+                                            , '💰 Simpan Pembayaran ke-' + ((activeInvoice.payments ? activeInvoice.payments.length : 0) + 1)
+                                        )
+                                    )
+                                )
+                            )
                         )
                     )
                 )
