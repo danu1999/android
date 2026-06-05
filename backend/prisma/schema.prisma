@@ -267,14 +267,17 @@ model LaundryExpense {
 }
 
 model PremiumUser {
-  id           String   @id // email
-  email        String   @unique
-  passwordHash String
-  name         String
-  role         String   @default("OWNER")
-  tenantId     String?  // Map ke database tenant owner
-  registeredAt DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                     String    @id // email
+  email                  String    @unique
+  passwordHash           String
+  name                   String
+  role                   String    @default("OWNER")
+  tenantId               String?   // Map ke database tenant owner
+  whatsapp               String?   // Nomor WhatsApp
+  registeredAt           DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  lastPaymentConfirmedAt DateTime? // Terakhir dikonfirmasi bayar oleh admin
+  deletionScheduledAt    DateTime? // Jika diset → akan dihapus pada tanggal ini
 }
 
 model GoogleUser {
@@ -291,6 +294,7 @@ model GoogleUser {
   demoExpiresAt DateTime? // Kadaluarsa demo (2 hari dari registeredAt)
   userName      String?   // Nama user dari profil Google
   passwordHash  String?   // Sandi untuk registrasi non-Google
+  whatsapp      String?   // Nomor WhatsApp
 }
 
 model TenantLimit {
