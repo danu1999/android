@@ -71,13 +71,13 @@ export const InvoiceImageTemplate = ({ inv, settings }) => {
             }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 106 }
         }
             , React.createElement('div', { style: { borderBottom: '2px solid #212529', paddingBottom: '15px', marginBottom: '20px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 113 } }
-                , React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '20px' }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 114 } }
+                , React.createElement('div', { style: { display: 'flex', alignItems: 'flex-start', gap: '30px' }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 114 } }
                     , isDemo ? (
-                        React.createElement('div', { style: { width: '140px', height: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '20px', border: '1px dashed #ccc', boxSizing: 'border-box' }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 116 } }, "Logo"
+                        React.createElement('div', { style: { width: '180px', height: '100px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '20px', border: '1px dashed #ccc', boxSizing: 'border-box' }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 116 } }, "Logo"
 
                         )
                     ) : (
-                        logoBase64 && React.createElement('img', { src: logoBase64, alt: "Logo BMP", style: { maxHeight: '80px', maxWidth: '170px', width: 'auto', objectFit: 'contain' }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 120 } })
+                        logoBase64 && React.createElement('img', { src: logoBase64, alt: "Logo BMP", style: { maxHeight: '100px', maxWidth: '180px', width: 'auto', height: 'auto', objectFit: 'contain', display: 'block' }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 120 } })
                     )
                     , React.createElement('div', { style: { textAlign: 'left' }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 122 } }
                         , React.createElement('h2', { style: { margin: 0, color: '#0d6efd', fontWeight: 'bold', fontSize: '22px', lineHeight: 1 }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 123 } }
