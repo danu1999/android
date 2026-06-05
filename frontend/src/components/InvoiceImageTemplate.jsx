@@ -77,7 +77,10 @@ export const InvoiceImageTemplate = ({ inv, settings }) => {
 
                         )
                     ) : (
-                        logoBase64 && React.createElement('img', { src: logoBase64, alt: "Logo BMP", style: { maxHeight: '140px', maxWidth: '270px', width: 'auto', height: 'auto', objectFit: 'contain', display: 'block' }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 120 } })
+                        logoBase64 && React.createElement('img', {
+                            src: logoBase64, alt: "Logo BMP", style: { maxHeight: '170px', maxWidth: '270px', width: 'auto', height: 'auto', objectFit: 'contain', display: 'block' }
+                            , __self: this, __source: { fileName: _jsxFileName, lineNumber: 120 }
+                        })
                     )
                     , React.createElement('div', { style: { textAlign: 'left' }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 122 } }
                         , React.createElement('h2', { style: { margin: 0, color: '#0d6efd', fontWeight: 'bold', fontSize: '22px', lineHeight: 1 }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 123 } }
