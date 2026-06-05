@@ -265,7 +265,8 @@ const Invoices = () => {
     if (!previewImage) return;
     const filename = `Faktur-${previewInvoiceNumber || "BMP"}.jpg`;
     try {
-      if (window.Capacitor) {
+      const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
+      if (isCapacitor) {
         const base64Data = previewImage.split(",")[1];
         const savedFile = await Filesystem.writeFile({
           path: filename,
@@ -296,7 +297,8 @@ const Invoices = () => {
     const filename = `Faktur-${previewInvoiceNumber || "BMP"}.jpg`;
     const invoiceText = `Faktur BMP No. ${previewInvoiceNumber}`;
     try {
-      if (window.Capacitor) {
+      const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
+      if (isCapacitor) {
         const base64Data = previewImage.split(",")[1];
         const savedFile = await Filesystem.writeFile({
           path: filename,
