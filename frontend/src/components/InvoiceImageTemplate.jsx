@@ -77,7 +77,7 @@ export const InvoiceImageTemplate = ({ inv, settings }) => {
 
                         )
                     ) : (
-                        logoBase64 && React.createElement('img', { src: logoBase64, alt: "Logo BMP", style: { maxHeight: '180px', maxWidth: '270px', width: 'auto', height: 'auto', objectFit: 'contain', display: 'block' }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 120 } })
+                        logoBase64 && React.createElement('img', { src: logoBase64, alt: "Logo BMP", style: { maxHeight: '140px', maxWidth: '270px', width: 'auto', height: 'auto', objectFit: 'contain', display: 'block' }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 120 } })
                     )
                     , React.createElement('div', { style: { textAlign: 'left' }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 122 } }
                         , React.createElement('h2', { style: { margin: 0, color: '#0d6efd', fontWeight: 'bold', fontSize: '22px', lineHeight: 1 }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 123 } }
@@ -92,9 +92,9 @@ export const InvoiceImageTemplate = ({ inv, settings }) => {
                     )
                 )
                 , React.createElement('div', { style: { textAlign: 'right', position: 'relative' }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 134 } }
-                    , React.createElement('h1', { style: { margin: 0, fontWeight: 'bold', color: '#212529', fontSize: '22px', letterSpacing: '2px', lineHeight: 1 }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 135 } }, "NOTA")
-                    , React.createElement('p', { style: { margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#6c757d' }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 136 } }, inv.Number)
-                    , React.createElement('p', { style: { margin: '2px 0', fontSize: '16px', fontWeight: 'bold', color: '#6c757d' }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 137 } }, "TGL: "
+                    , React.createElement('h1', { style: { margin: 0, fontWeight: 'bold', color: '#212529', fontSize: '18px', letterSpacing: '2px', lineHeight: 1 }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 135 } }, "NOTA")
+                    , React.createElement('p', { style: { margin: 0, fontSize: '14px', fontWeight: 'bold', color: '#6c757d' }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 136 } }, inv.Number)
+                    , React.createElement('p', { style: { margin: '2px 0', fontSize: '14px', fontWeight: 'bold', color: '#6c757d' }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 137 } }, "TGL: "
                         , new Date(inv.DateCreated).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
                     )
                     , React.createElement('p', { style: { margin: '2px 0', fontSize: '16px', fontWeight: 'bold', color: '#6c757d' }, __self: this, __source: { fileName: _jsxFileName, lineNumber: 137 } }, "TGL Jatuh Tempo: "
