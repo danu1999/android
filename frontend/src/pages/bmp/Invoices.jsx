@@ -267,12 +267,17 @@ const Invoices = () => {
     try {
       if (window.Capacitor) {
         const base64Data = previewImage.split(",")[1];
-        await Filesystem.writeFile({
+        const savedFile = await Filesystem.writeFile({
           path: filename,
           data: base64Data,
-          directory: Directory.Documents
+          directory: Directory.Cache
         });
-        alert(`Gambar berhasil disimpan ke folder Dokumen: ${filename}`);
+        await Share.share({
+          title: filename,
+          text: `Simpan atau bagikan ${filename}`,
+          url: savedFile.uri,
+          dialogTitle: "Simpan Gambar Faktur"
+        });
       } else {
         const link = document.createElement("a");
         link.download = filename;
@@ -328,7 +333,8 @@ const Invoices = () => {
     let phone = (previewClientPhone || "").replace(/[^0-9]/g, "");
     if (phone.startsWith("0")) phone = "62" + phone.slice(1);
     const waUrl = phone ? `https://api.whatsapp.com/send?phone=${phone}&text=${text}` : `https://api.whatsapp.com/send?text=${text}`;
-    window.open(waUrl, "_blank");
+    const target = window.Capacitor ? "_system" : "_blank";
+    window.open(waUrl, target);
   };
   const downloadPDF = (id, type) => {
     const token = localStorage.getItem("token");
@@ -865,7 +871,6 @@ const Invoices = () => {
   >
                                                             <option value="TRANSFER">TRANSFER</option>
                                                             <option value="CASH">CASH</option>
-                                                            <option value="QRIS">QRIS</option>
                                                             <option value="DEBIT">DEBIT</option>
                                                         </select>
                                                     </div>
@@ -924,7 +929,6 @@ const Invoices = () => {
   >
                                                         <option value="TRANSFER">TRANSFER</option>
                                                         <option value="CASH">CASH</option>
-                                                        <option value="QRIS">QRIS</option>
                                                         <option value="DEBIT">DEBIT</option>
                                                     </select>
                                                 </div>
