@@ -112,13 +112,13 @@ export const InvoiceImageTemplate = ({ inv, settings }) => {
             boxSizing: 'border-box'
         }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 106}}
             , React.createElement('div', { style: { borderBottom: '2px solid #212529', paddingBottom: '15px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 113}}
-                , React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '20px' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 114}}
+                , React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: '40px' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 114}}
                     , isDemo ? (
-                        React.createElement('div', { style: { width: '80px', height: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '20px', border: '1px dashed #ccc', boxSizing: 'border-box' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 116}}, "Logo"
+                        React.createElement('div', { style: { width: '140px', height: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '20px', border: '1px dashed #ccc', boxSizing: 'border-box' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 116}}, "Logo"
 
                         )
                     ) : (
-                        logoBase64 && React.createElement('img', { src: logoBase64, alt: "Logo BMP" , style: { maxHeight: '80px', objectFit: 'contain' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 120}} )
+                        logoBase64 && React.createElement('img', { src: logoBase64, alt: "Logo BMP" , style: { maxHeight: '80px', maxWidth: '140px', width: 'auto', objectFit: 'contain' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 120}} )
                     )
                     , React.createElement('div', { style: { textAlign: 'left' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 122}}
                         , React.createElement('h2', { style: { margin: 0, marginTop: '-8px', color: '#0d6efd', fontWeight: 'bold', fontSize: '22px' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 123}}
@@ -128,15 +128,18 @@ export const InvoiceImageTemplate = ({ inv, settings }) => {
                             , isDemo ? 'Jl. Industri Raya No. 45, Semarang' : (_optionalChain([settings, 'optionalAccess', _10 => _10.AddressLine1]) || 'Jl. Arimbi, RT04 RW 01 Desa Ngrimbi')
                         )
                         , React.createElement('p', { style: { margin: '2px 0', fontSize: '13px' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 129}}
-                            , isDemo ? '024-7654321' : (_optionalChain([settings, 'optionalAccess', _11 => _11.PhoneNumber]) || '0889-8608-4722'), "  |  "  , isDemo ? 'info@bintangmakmurplastindo.com' : (_optionalChain([settings, 'optionalAccess', _12 => _12.EmailAddress]) || 'bahteramulyap@gmail.com')
+                            , isDemo ? '024-7654321' : (_optionalChain([settings, 'optionalAccess', _11 => _11.PhoneNumber]) || '0889-8608-4722'), "  |   "  , isDemo ? 'info@bintangmakmurplastindo.com' : (_optionalChain([settings, 'optionalAccess', _12 => _12.EmailAddress]) || 'bahteramulyap@gmail.com')
                         )
                     )
                 )
                 , React.createElement('div', { style: { textAlign: 'right', position: 'relative' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 134}}
-                    , React.createElement('h1', { style: { margin: 0, fontWeight: 'bold', color: '#212529', fontSize: '32px' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 135}}, "NOTA")
+                    , React.createElement('h1', { style: { margin: 0, fontWeight: 'bold', color: '#212529', fontSize: '22px' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 135}}, "NOTA")
                     , React.createElement('p', { style: { margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#6c757d' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 136}}, inv.Number)
                     , React.createElement('p', { style: { margin: '2px 0', fontSize: '16px', fontWeight: 'bold', color: '#6c757d' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 137}}, "TGL: "
                          , new Date(inv.DateCreated).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
+                    )
+                    , React.createElement('p', { style: { margin: '2px 0', fontSize: '16px', fontWeight: 'bold', color: '#6c757d' }, __self: this, __source: {fileName: _jsxFileName, lineNumber: 137}}, "TGL Jatuh Tempo: "
+                         , inv.DueDate ? new Date(inv.DueDate).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\./g, '/') : '-'
                     )
                 )
             )
