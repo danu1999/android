@@ -26,7 +26,7 @@
 
         .nota-title h1 {
             margin: 0;
-            font-size: 24px;
+            font-size: 18px;
             letter-spacing: 2px;
             color: #000000;
         }
@@ -82,23 +82,28 @@
                 <table style="width: 100%; border: none;">
                     <tr>
                         {{ if .DemoMode }}
-                        <td style="width: 80px; vertical-align: top; padding-right: 15px; font-weight: bold; font-size: 20px; line-height: 70px;">
+                        <td
+                            style="width: 95px; vertical-align: top; padding-right: 15px; font-weight: bold; font-size: 20px; line-height: 70px;">
                             Logo
                         </td>
                         {{ else if .LogoBase64 }}
-                        <td style="width: 80px; vertical-align: top; padding-right: 15px;">
-                            <img src="{{ .LogoBase64 }}" alt="Logo BMP" style="max-height: 70px; width: auto;">
+                        <td style="width: 95px; vertical-align: top; padding-right: 15px;">
+                            <img src="{{ .LogoBase64 }}" alt="Logo BMP" style="max-height: 80px; width: auto;">
                         </td>
                         {{ end }}
                         <td style="vertical-align: top;">
                             <h1 style="margin: 0; color: #000000; font-size: 22px; line-height: 1;">
-                                {{ if .DemoMode }}BMP - BINTANG MAKMUR PLASTINDO{{ else }}CV BAHTERA MULYA PLASTIK{{ end }}
+                                {{ if .DemoMode }}BMP - BINTANG MAKMUR PLASTINDO{{ else }}CV BAHTERA MULYA PLASTIK{{ end
+                                }}
                             </h1>
                             <p style="margin: 8px 0 2px 0; font-size: 12px;">
-                                {{ if .DemoMode }}Jl. Industri Raya No. 45, Semarang{{ else }}Jl. Arimbi, RT04 RW 01 Desa Ngrimbi{{ end }}
+                                {{ if .DemoMode }}Jl. Industri Raya No. 45, Semarang{{ else }}Jl. Arimbi, RT04 RW 01
+                                Desa Ngrimbi{{ end }}
                             </p>
                             <p style="margin: 2px 0; font-size: 12px;">
-                                {{ if .DemoMode }}024-7654321{{ else }}{{ .Settings.PhoneNumber }}{{ end }} | {{ if .DemoMode }}info@bintangmakmurplastindo.com{{ else }}{{ .Settings.EmailAddress }}{{ end }}
+                                {{ if .DemoMode }}024-7654321{{ else }}{{ .Settings.PhoneNumber }}{{ end }} | {{ if
+                                .DemoMode }}info@bintangmakmurplastindo.com{{ else }}{{ .Settings.EmailAddress }}{{ end
+                                }}
                             </p>
                         </td>
                     </tr>
@@ -168,8 +173,10 @@
                     <strong>INFO PEMBAYARAN</strong><br>
                     Pembayaran melalui rekening:<br>
                     An: {{ if .DemoMode }}Zedmz{{ else }}Dedi Santoso{{ end }}<br>
-                    BCA: <span style="font-weight: bold; letter-spacing: 2px;">{{ if .DemoMode }}1234567890 (Simulasi){{ else }}0184517724{{ end }}</span><br>
-                    BRI: <span style="font-weight: bold; letter-spacing: 2px;">{{ if .DemoMode }}0987654321 (Simulasi){{ else }}119801008053502{{ end }}</span>
+                    BCA: <span style="font-weight: bold; letter-spacing: 2px;">{{ if .DemoMode }}1234567890 (Simulasi){{
+                        else }}0184517724{{ end }}</span><br>
+                    BRI: <span style="font-weight: bold; letter-spacing: 2px;">{{ if .DemoMode }}0987654321 (Simulasi){{
+                        else }}119801008053502{{ end }}</span>
                 </div>
                 {{ end }}
 
@@ -219,9 +226,12 @@
                     </tr>
                     {{ else if ne .Invoice.Status "PAID" }}
                     <tr>
-                        <td style="text-align: left; font-weight: bold; color: #000000; padding: 8px 5px; font-size: 16px;">SALDO
+                        <td
+                            style="text-align: left; font-weight: bold; color: #000000; padding: 8px 5px; font-size: 16px;">
+                            SALDO
                             TERUTANG</td>
-                        <td style="text-align: right; font-weight: bold; color: #000000; padding: 8px 5px; font-size: 16px;">
+                        <td
+                            style="text-align: right; font-weight: bold; color: #000000; padding: 8px 5px; font-size: 16px;">
                             Rp{{ intcomma .Subtotal }}
                         </td>
                     </tr>
@@ -266,7 +276,8 @@
                     {{ if .DemoMode }}
                     <span style="font-style: italic; font-size: 16px; color: #555; font-weight: bold;">signature</span>
                     {{ else if .TTDBase64 }}
-                    <img src="{{ .TTDBase64 }}" alt="Tanda Tangan" style="max-height: 120px; width: auto; vertical-align: middle;">
+                    <img src="{{ .TTDBase64 }}" alt="Tanda Tangan"
+                        style="max-height: 120px; width: auto; vertical-align: middle;">
                     {{ else }}
                     <br><br><br><br>
                     {{ end }}
