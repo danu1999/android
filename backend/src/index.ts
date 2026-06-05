@@ -239,7 +239,7 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-employee-id', 'x-employee-role', 'x-app-mode', 'x-offline-sync', 'x-tenant-id']
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-employee-id', 'x-employee-role', 'x-employee-name', 'x-app-mode', 'x-offline-sync', 'x-tenant-id']
 }));
 app.use(express.json());
 
@@ -299,9 +299,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 // ─────────────────────────────────────────────────────────────
 app.use((req: Request, res: Response, next: NextFunction) => {
   const employeeId = req.headers['x-employee-id'] as string;
-  const isLoginRoute = req.path === '/api/auth/login';
+  const isPublicRoute = req.path.startsWith('/api/auth/') || req.path === '/api/download-apk' || req.path === '/';
 
-  if (!isLoginRoute && (employeeId === '9999' || employeeId === '0')) {
+  if (!isPublicRoute && (employeeId === '9999' || employeeId === '0')) {
     return res.status(403).json({
       error: 'Akun demo tidak diizinkan mengakses data production. Semua data dikelola secara lokal di perangkat Anda.',
       code: 'DEMO_ACCESS_DENIED',
@@ -337,7 +337,15 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
   // Cek untuk semua request API lainnya berdasarkan ID karyawan yang terkirim di header
   if (employeeId && employeeId !== '0' && employeeId !== '9999') {
     try {
-      const emp = await prisma.employee.findUnique({ where: { id: Number(employeeId) } });
+      let emp;
+      if (employeeId.includes('@')) {
+        emp = await prisma.employee.findFirst({ where: { email: employeeId } });
+      } else {
+        const empId = Number(employeeId);
+        if (!isNaN(empId)) {
+          emp = await prisma.employee.findUnique({ where: { id: empId } });
+        }
+      }
       if (emp && BLOCKED_USERS.includes(emp.name.toLowerCase().trim())) {
         return res.status(403).json({
           error: 'Masa langganan Anda telah berakhir. Silakan hubungi Admin POSBah untuk perpanjangan.'
@@ -477,24 +485,6 @@ const requireNotDemo = (req: Request, res: Response, next: NextFunction) => {
 
 /** Middleware: blokir akses karyawan tertentu dari fitur rental (Hanafi, Fed, Fahri) */
 const checkExcludedEmployee = async (req: Request, res: Response, next: NextFunction) => {
-  const employeeId = req.headers['x-employee-id'] as string;
-  if (employeeId && employeeId !== '0' && employeeId !== '9999') {
-    try {
-      let empName = '';
-      if (employeeId.includes('@')) {
-        const emp = await prisma.employee.findFirst({ where: { email: employeeId } });
-        if (emp) empName = emp.name;
-      } else {
-        const emp = await prisma.employee.findUnique({ where: { id: Number(employeeId) } });
-        if (emp) empName = emp.name;
-      }
-      if (empName && ['hanafi', 'fed', 'fahri'].includes(empName.toLowerCase())) {
-        return res.status(403).json({ error: 'Akses ditolak. Fitur rental tidak aktif untuk akun Anda.' });
-      }
-    } catch (e) {
-      console.error('Error checking excluded employee:', e);
-    }
-  }
   next();
 };
 
@@ -505,7 +495,38 @@ app.get('/', (req, res) => {
   res.send('POSBah API is running');
 });
 
-// Route to download the latest APK
+// Memory map to store single-use download tokens
+const downloadTokens = new Map<string, { tenantId: string; expiresAt: number }>();
+
+// Route to generate a temporary download token (requires premium owner authentication headers)
+app.get('/api/auth/get-apk-download-token', async (req, res) => {
+  try {
+    const tenantId = req.headers['x-tenant-id'] as string;
+    if (!tenantId) {
+      return res.status(403).json({ error: 'Akses ditolak. Tenant ID diperlukan.' });
+    }
+
+    const cleanEmail = tenantId.toLowerCase().trim();
+    const premium = await mainPrisma.premiumUser.findUnique({
+      where: { email: cleanEmail }
+    });
+
+    if (!premium) {
+      return res.status(403).json({ error: 'Akses ditolak. Hanya akun Premium aktif yang dapat mengunduh APK.' });
+    }
+
+    // Generate single-use token
+    const token = crypto.randomBytes(16).toString('hex');
+    downloadTokens.set(token, { tenantId: cleanEmail, expiresAt: Date.now() + 5 * 60 * 1000 }); // 5 minutes validity
+
+    res.json({ token });
+  } catch (err) {
+    console.error('Error generating download token:', err);
+    res.status(500).json({ error: 'Gagal memproses token unduhan.' });
+  }
+});
+
+// Route to download the latest APK (bypassed token verification for older APK client updates)
 app.get('/api/download-apk', (req, res) => {
   // Check common paths for app-debug.apk
   const paths = [
@@ -529,7 +550,7 @@ app.get('/api/download-apk', (req, res) => {
 
 // Route to get the latest APK version name
 app.get('/api/apk-version', (req, res) => {
-  res.json({ version: '1.1.0' });
+  res.json({ version: '1.1.1' });
 });
 
 // Get employee limit for a tenant
@@ -693,7 +714,7 @@ app.post('/api/auth/login', async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 app.post('/api/auth/google-register', async (req, res) => {
   try {
-    const { email, name, businessMode } = req.body;
+    const { email, name, businessMode, whatsapp } = req.body;
     if (!email) return res.status(400).json({ error: 'Email wajib diisi' });
 
     const cleanEmail = email.toLowerCase().trim();
@@ -726,7 +747,8 @@ app.post('/api/auth/google-register', async (req, res) => {
           userName: cleanName,
           businessMode: mode,
           confirmToken: token,
-          demoExpiresAt
+          demoExpiresAt,
+          whatsapp: whatsapp || null
         }
       });
 
@@ -750,7 +772,7 @@ app.post('/api/auth/google-register', async (req, res) => {
         BMP: '🏭 Manufaktur & Invoice (BMP)'
       };
       const modeLabel = modeLabels[mode] || mode;
-      const ownerEmail = process.env.OWNER_EMAIL || '';
+      const ownerEmail = process.env.ADMIN_BILLING_EMAIL || 'muhammadmuizz8@gmail.com';
       const now = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
 
       if (ownerEmail) {
@@ -804,7 +826,7 @@ app.post('/api/auth/google-register', async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 app.post('/api/auth/email-register-demo', async (req, res) => {
   try {
-    const { email, name, password, businessMode } = req.body;
+    const { email, name, password, businessMode, whatsapp } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email dan password wajib diisi' });
 
     const cleanEmail = email.toLowerCase().trim();
@@ -841,7 +863,8 @@ app.post('/api/auth/email-register-demo', async (req, res) => {
         businessMode: mode,
         confirmToken: token,
         demoExpiresAt,
-        passwordHash: hashedPassword
+        passwordHash: hashedPassword,
+        whatsapp: whatsapp || null
       }
     });
 
@@ -865,7 +888,7 @@ app.post('/api/auth/email-register-demo', async (req, res) => {
       BMP: '🏭 Manufaktur & Invoice (BMP)'
     };
     const modeLabel = modeLabels[mode] || mode;
-    const ownerEmail = process.env.OWNER_EMAIL || '';
+    const ownerEmail = process.env.ADMIN_BILLING_EMAIL || 'muhammadmuizz8@gmail.com';
     const now = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
 
     if (ownerEmail) {
@@ -1053,14 +1076,18 @@ app.post('/api/admin/confirm-demo', async (req, res) => {
       // 3. Buat/update PremiumUser agar bisa login email
       await prisma.premiumUser.upsert({
         where: { email: user.email },
-        update: { passwordHash: hashedPassword },
+        update: { 
+          passwordHash: hashedPassword,
+          whatsapp: user.whatsapp || null
+        },
         create: {
           id: user.email,
           email: user.email,
           passwordHash: hashedPassword,
           name: user.userName || user.email.split('@')[0],
           role: 'OWNER',
-          tenantId: user.email
+          tenantId: user.email,
+          whatsapp: user.whatsapp || null
         }
       });
 
@@ -1125,7 +1152,7 @@ app.post('/api/admin/confirm-demo', async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 app.post('/api/auth/register-email', async (req, res) => {
   try {
-    const { email, password, name, role } = req.body;
+    const { email, password, name, role, whatsapp } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email dan password wajib diisi' });
 
     const cleanEmail = email.toLowerCase().trim();
@@ -1144,7 +1171,8 @@ app.post('/api/auth/register-email', async (req, res) => {
         email: cleanEmail,
         passwordHash: hashedPassword,
         name: name || email.split('@')[0],
-        role: role || 'OWNER'
+        role: role || 'OWNER',
+        whatsapp: whatsapp || null
       }
     });
 
@@ -1185,9 +1213,10 @@ app.post('/api/auth/login-email', async (req, res) => {
 
       if (!isMatch) return res.status(401).json({ error: 'Email atau password salah' });
 
-      // Cari businessMode dari GoogleUser (jika terdaftar sebelumnya sebagai demo)
+      // Cari businessMode dari GoogleUser (jika terdaftar sebelumnya sebagai demo, atau dari tenantId jika karyawan)
+      const targetEmailForMode = user.tenantId || cleanEmail;
       const googleUser = await prisma.googleUser.findUnique({
-        where: { email: cleanEmail }
+        where: { email: targetEmailForMode }
       });
       const businessMode = googleUser ? googleUser.businessMode : undefined;
 
@@ -1669,6 +1698,11 @@ app.delete('/api/customers/:id', requireAdmin, async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 app.get('/api/employees', requireAdmin, async (req, res) => {
   try {
+    const tenantId = req.headers['x-tenant-id'] as string;
+    if (tenantId) {
+      await syncTenantEmployees(tenantId);
+    }
+
     const employees = await prisma.employee.findMany({
       where: {
         name: {
@@ -3273,17 +3307,797 @@ const migrateActivityLogs = async () => {
   }
 };
 
+const syncTenantEmployees = async (tenantId: string): Promise<void> => {
+  try {
+    const cleanTenantId = tenantId.toLowerCase().trim();
+    const dbName = getCleanTenantDbName(cleanTenantId);
+    
+    const dbExists = await mainPrisma.$queryRawUnsafe<any[]>(
+      `SELECT 1 FROM pg_database WHERE datname = $1`,
+      dbName
+    );
+    if (!dbExists || dbExists.length === 0) return;
+
+    const tenantPrisma = getTenantPrisma(cleanTenantId);
+    const employees = await tenantPrisma.employee.findMany({
+      where: {
+        email: { not: null, notIn: [''] }
+      }
+    });
+
+    for (const emp of employees) {
+      if (!emp.email) continue;
+      const cleanEmpEmail = emp.email.toLowerCase().trim();
+      if (cleanEmpEmail === cleanTenantId) continue;
+
+      const existingPremium = await mainPrisma.premiumUser.findUnique({
+        where: { email: cleanEmpEmail }
+      });
+
+      if (!existingPremium) {
+        await mainPrisma.premiumUser.create({
+          data: {
+            id: cleanEmpEmail,
+            email: cleanEmpEmail,
+            passwordHash: emp.pin,
+            name: emp.name,
+            role: emp.role || 'KASIR',
+            tenantId: cleanTenantId
+          }
+        });
+        console.log(`[SYNC] Restored missing PremiumUser for employee: ${emp.name} (${cleanEmpEmail}) under owner ${cleanTenantId}`);
+      } else {
+        if (
+          existingPremium.name !== emp.name ||
+          existingPremium.role !== emp.role ||
+          existingPremium.passwordHash !== emp.pin ||
+          existingPremium.tenantId !== cleanTenantId
+        ) {
+          await mainPrisma.premiumUser.update({
+            where: { email: cleanEmpEmail },
+            data: {
+              name: emp.name,
+              role: emp.role || 'KASIR',
+              passwordHash: emp.pin,
+              tenantId: cleanTenantId
+            }
+          });
+          console.log(`[SYNC] Updated PremiumUser data for employee: ${emp.name} (${cleanEmpEmail})`);
+        }
+      }
+    }
+  } catch (err: any) {
+    console.error(`[SYNC] Failed to sync employees for tenant ${tenantId}:`, err?.message || err);
+  }
+};
+
+const syncAllEmployeesToPremiumUsers = async (): Promise<void> => {
+  try {
+    console.log('[SYNC] Starting synchronization of all employees to PremiumUser...');
+    const premiumOwners = await mainPrisma.premiumUser.findMany({
+      where: { role: 'OWNER' }
+    });
+    const googleUsers = await mainPrisma.googleUser.findMany();
+    
+    const ownerEmails = new Set<string>();
+    premiumOwners.forEach(o => ownerEmails.add(o.email.toLowerCase().trim()));
+    googleUsers.forEach(g => ownerEmails.add(g.email.toLowerCase().trim()));
+    
+    let totalSynced = 0;
+    
+    for (const ownerEmail of ownerEmails) {
+      const dbName = getCleanTenantDbName(ownerEmail);
+      const dbExists = await mainPrisma.$queryRawUnsafe<any[]>(
+        `SELECT 1 FROM pg_database WHERE datname = $1`,
+        dbName
+      );
+      if (!dbExists || dbExists.length === 0) continue;
+      
+      const tenantPrisma = getTenantPrisma(ownerEmail);
+      const employees = await tenantPrisma.employee.findMany({
+        where: {
+          email: { not: null, notIn: [''] }
+        }
+      });
+      
+      for (const emp of employees) {
+        if (!emp.email) continue;
+        const cleanEmpEmail = emp.email.toLowerCase().trim();
+        if (cleanEmpEmail === ownerEmail) continue;
+        
+        const existingPremium = await mainPrisma.premiumUser.findUnique({
+          where: { email: cleanEmpEmail }
+        });
+        
+        if (!existingPremium) {
+          await mainPrisma.premiumUser.create({
+            data: {
+              id: cleanEmpEmail,
+              email: cleanEmpEmail,
+              passwordHash: emp.pin,
+              name: emp.name,
+              role: emp.role || 'KASIR',
+              tenantId: ownerEmail
+            }
+          });
+          console.log(`[SYNC] Restored missing PremiumUser for employee: ${emp.name} (${cleanEmpEmail}) under owner ${ownerEmail}`);
+          totalSynced++;
+        } else {
+          if (
+            existingPremium.name !== emp.name ||
+            existingPremium.role !== emp.role ||
+            existingPremium.passwordHash !== emp.pin ||
+            existingPremium.tenantId !== ownerEmail
+          ) {
+            await mainPrisma.premiumUser.update({
+              where: { email: cleanEmpEmail },
+              data: {
+                name: emp.name,
+                role: emp.role || 'KASIR',
+                passwordHash: emp.pin,
+                tenantId: ownerEmail
+              }
+            });
+            console.log(`[SYNC] Updated PremiumUser data for employee: ${emp.name} (${cleanEmpEmail})`);
+            totalSynced++;
+          }
+        }
+      }
+    }
+    console.log(`[SYNC] Synchronization finished. Synced/Updated ${totalSynced} employee records.`);
+  } catch (err: any) {
+    console.error('[SYNC] Failed to run employee synchronization:', err?.message || err);
+  }
+};
+
 const runStartupMigrations = async () => {
   try {
     await autoCreateMuizz();
     await migratePlaintextPins();
     await migrateActivityLogs();
+    await syncAllEmployeesToPremiumUsers();
     console.log('All startup migrations checked/executed successfully.');
   } catch (error) {
     console.error('Startup migrations error:', error);
   }
 };
 runStartupMigrations();
+
+// ─────────────────────────────────────────────────────────────
+// Auto Cleanup: Hapus Akun Demo yang Kedaluwarsa Otomatis
+// Berjalan saat startup + setiap 24 jam (via setInterval)
+// ─────────────────────────────────────────────────────────────
+const cleanupExpiredDemoUsers = async (): Promise<void> => {
+  const now = new Date();
+  console.log(`[CLEANUP] Running expired demo cleanup at ${now.toISOString()}`);
+
+  try {
+    // Cari semua GoogleUser yang BELUM dikonfirmasi DAN masa demo sudah lewat
+    const expiredUsers = await mainPrisma.googleUser.findMany({
+      where: {
+        isConfirmed: false,
+        demoExpiresAt: {
+          lt: now  // Sudah lewat dari sekarang
+        }
+      },
+      select: {
+        email: true,
+        userName: true,
+        businessMode: true,
+        demoExpiresAt: true,
+        registeredAt: true
+      }
+    });
+
+    if (expiredUsers.length === 0) {
+      console.log('[CLEANUP] Tidak ada akun demo kedaluwarsa. Selesai.');
+      return;
+    }
+
+    console.log(`[CLEANUP] Ditemukan ${expiredUsers.length} akun demo kedaluwarsa.`);
+    const results: { email: string; status: string; reason?: string }[] = [];
+
+    for (const user of expiredUsers) {
+      const userEmail = user.email;
+      let dbDropped = false;
+      let userDeleted = false;
+
+      // 1. Drop tenant database
+      try {
+        const dbName = getCleanTenantDbName(userEmail);
+
+        // Tutup koneksi Prisma tenant jika ada
+        if (tenantClients.has(dbName)) {
+          const client = tenantClients.get(dbName)!;
+          await client.$disconnect();
+          tenantClients.delete(dbName);
+        }
+
+        // Putuskan semua koneksi aktif ke database ini sebelum DROP
+        await mainPrisma.$executeRawUnsafe(`
+          SELECT pg_terminate_backend(pg_stat_activity.pid)
+          FROM pg_stat_activity
+          WHERE pg_stat_activity.datname = '${dbName}'
+            AND pid <> pg_backend_pid()
+        `);
+
+        // Cek apakah database memang ada
+        const dbExists = await mainPrisma.$queryRawUnsafe<any[]>(
+          `SELECT 1 FROM pg_database WHERE datname = $1`,
+          dbName
+        );
+
+        if (dbExists && dbExists.length > 0) {
+          await mainPrisma.$executeRawUnsafe(`DROP DATABASE "${dbName}"`);
+          console.log(`[CLEANUP] ✅ Dropped database: ${dbName}`);
+        } else {
+          console.log(`[CLEANUP] ⚠️  Database ${dbName} tidak ditemukan (mungkin sudah dihapus).`);
+        }
+        dbDropped = true;
+      } catch (err: any) {
+        console.error(`[CLEANUP] ❌ Gagal drop database untuk ${userEmail}:`, err?.message || err);
+      }
+
+      // 2. Hapus GoogleUser dari main database
+      try {
+        await mainPrisma.googleUser.delete({ where: { email: userEmail } });
+        userDeleted = true;
+        console.log(`[CLEANUP] ✅ Deleted GoogleUser: ${userEmail}`);
+      } catch (err: any) {
+        console.error(`[CLEANUP] ❌ Gagal hapus GoogleUser ${userEmail}:`, err?.message || err);
+      }
+
+      // 3. Hapus PremiumUser jika ada yang terbuat dari demo ini (edge case)
+      try {
+        const premiumExists = await mainPrisma.premiumUser.findUnique({ where: { email: userEmail } });
+        if (premiumExists && !premiumExists.tenantId) {
+          // Hanya hapus jika belum punya tenantId (artinya belum dikonfirmasi betulan)
+          await mainPrisma.premiumUser.delete({ where: { email: userEmail } });
+          console.log(`[CLEANUP] ✅ Deleted stale PremiumUser: ${userEmail}`);
+        }
+      } catch (err: any) {
+        // Tidak apa-apa jika tidak ada
+      }
+
+      results.push({
+        email: userEmail,
+        status: dbDropped && userDeleted ? 'CLEANED' : dbDropped ? 'DB_ONLY' : userDeleted ? 'USER_ONLY' : 'FAILED',
+        reason: `Expired: ${user.demoExpiresAt?.toISOString()}`
+      });
+    }
+
+    const cleaned = results.filter(r => r.status === 'CLEANED').length;
+    const failed = results.filter(r => r.status === 'FAILED').length;
+    console.log(`[CLEANUP] Selesai. ${cleaned} berhasil dibersihkan, ${failed} gagal.`);
+
+    // Notifikasi ke admin jika ada yang dibersihkan
+    const ownerEmail = process.env.ADMIN_BILLING_EMAIL || 'muhammadmuizz8@gmail.com';
+    if (ownerEmail && results.length > 0) {
+      const rows = results.map(r =>
+        `<tr style="background:${r.status === 'CLEANED' ? '#f0fdf4' : '#fef2f2'}">
+          <td style="padding:8px;border-bottom:1px solid #f1f5f9;">${r.email}</td>
+          <td style="padding:8px;border-bottom:1px solid #f1f5f9;">${r.status}</td>
+          <td style="padding:8px;border-bottom:1px solid #f1f5f9;color:#64748b;font-size:12px;">${r.reason}</td>
+        </tr>`
+      ).join('');
+
+      await sendEmail(
+        ownerEmail,
+        `🧹 Auto-Cleanup: ${results.length} Akun Demo Kedaluwarsa Dibersihkan`,
+        `
+        <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px;background:#f8f9fa;border-radius:12px;">
+          <div style="background:linear-gradient(135deg,#1e1b4b,#4c1d95);padding:24px;border-radius:12px;margin-bottom:20px;text-align:center;">
+            <h1 style="color:white;margin:0;font-size:20px;">🧹 Laporan Auto-Cleanup Demo</h1>
+            <p style="color:rgba(255,255,255,0.8);margin:8px 0 0;font-size:14px;">${now.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB</p>
+          </div>
+          <div style="background:white;padding:20px;border-radius:12px;margin-bottom:16px;">
+            <p style="color:#475569;margin:0 0 16px;">Berikut daftar akun demo yang telah otomatis dibersihkan karena tidak membayar setelah 2 hari:</p>
+            <table style="width:100%;border-collapse:collapse;">
+              <thead>
+                <tr style="background:#f8fafc;">
+                  <th style="padding:8px;text-align:left;color:#64748b;font-size:12px;border-bottom:2px solid #e2e8f0;">Email</th>
+                  <th style="padding:8px;text-align:left;color:#64748b;font-size:12px;border-bottom:2px solid #e2e8f0;">Status</th>
+                  <th style="padding:8px;text-align:left;color:#64748b;font-size:12px;border-bottom:2px solid #e2e8f0;">Keterangan</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+          <p style="color:#94a3b8;font-size:12px;text-align:center;">Auto-cleanup berjalan otomatis setiap 24 jam. Tidak ada tindakan diperlukan.</p>
+        </div>
+        `
+      ).catch(err => console.warn('[CLEANUP] Gagal kirim email laporan:', err));
+    }
+  } catch (err: any) {
+    console.error('[CLEANUP] Fatal error during cleanup:', err?.message || err);
+  }
+};
+
+// ─── Endpoint Internal: Trigger Cleanup Manual ───────────────
+// GET /api/admin/cleanup-expired?secret=CLEANUP_SECRET
+// Bisa dipanggil dari cron VPS atau secara manual
+app.get('/api/admin/cleanup-expired', async (req, res) => {
+  const { secret } = req.query as { secret: string };
+  const expectedSecret = process.env.CLEANUP_SECRET || 'posbah_cleanup_secret_2026';
+
+  if (secret !== expectedSecret) {
+    return res.status(403).json({ error: 'Akses ditolak. Secret tidak valid.' });
+  }
+
+  try {
+    await cleanupExpiredDemoUsers();
+    res.json({ success: true, message: 'Cleanup selesai dijalankan. Cek log server untuk detail.' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Cleanup gagal', detail: err?.message });
+  }
+});
+
+// ─── Jalankan Cleanup Saat Startup (dengan delay 30 detik) ───
+setTimeout(() => {
+  cleanupExpiredDemoUsers().catch(err =>
+    console.error('[CLEANUP] Startup cleanup error:', err)
+  );
+}, 30 * 1000);
+
+// ─── Jalankan Cleanup Setiap 24 Jam ──────────────────────────
+const CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 jam
+setInterval(() => {
+  cleanupExpiredDemoUsers().catch(err =>
+    console.error('[CLEANUP] Scheduled cleanup error:', err)
+  );
+}, CLEANUP_INTERVAL_MS);
+console.log('[CLEANUP] Auto-cleanup dijadwalkan setiap 24 jam.');
+
+// ═════════════════════════════════════════════════════════════════
+// SISTEM LAPORAN BULANAN OWNER (Tanggal 7 setiap bulan)
+// ═════════════════════════════════════════════════════════════════
+
+const ADMIN_SECRET = process.env.CLEANUP_SECRET || 'posbah_cleanup_secret_2026';
+const ADMIN_BASE_URL = process.env.APP_BASE_URL || 'https://www.zedmz.cloud';
+
+// ─── Helper: Label paket bisnis ───────────────────────────────
+const MODE_LABELS: Record<string, string> = {
+  FNB: '🍹 Retail & F&B',
+  RENTAL: '🚗 Rental Mobil',
+  LAUNDRY: '🧺 Laundry',
+  BMP: '🏭 Manufaktur (BMP)'
+};
+
+// ─── Eksekusi penghapusan owner yang sudah dijadwalkan ─────────
+const executePendingOwnerDeletions = async (): Promise<void> => {
+  const now = new Date();
+  try {
+    const pendingUsers = await mainPrisma.premiumUser.findMany({
+      where: {
+        deletionScheduledAt: { lt: now }
+      },
+      select: {
+        email: true,
+        name: true,
+        tenantId: true
+      }
+    });
+
+    if (pendingUsers.length === 0) return;
+
+    console.log(`[BILLING] Ditemukan ${pendingUsers.length} akun owner untuk dihapus (jadwal terpenuhi).`);
+    // Laporan eksekusi hapus HANYA ke admin utama
+    const ownerEmail = process.env.ADMIN_BILLING_EMAIL || 'muhammadmuizz8@gmail.com';
+    const deletedList: string[] = [];
+
+    for (const user of pendingUsers) {
+      const userEmail = user.email;
+      try {
+        // 1. Tutup dan drop tenant database
+        const dbName = getCleanTenantDbName(userEmail);
+        if (tenantClients.has(dbName)) {
+          await tenantClients.get(dbName)!.$disconnect();
+          tenantClients.delete(dbName);
+        }
+        await mainPrisma.$executeRawUnsafe(`
+          SELECT pg_terminate_backend(pid) FROM pg_stat_activity
+          WHERE datname = '${dbName}' AND pid <> pg_backend_pid()
+        `);
+        const dbCheck = await mainPrisma.$queryRawUnsafe<any[]>(
+          `SELECT 1 FROM pg_database WHERE datname = $1`, dbName
+        );
+        if (dbCheck && dbCheck.length > 0) {
+          await mainPrisma.$executeRawUnsafe(`DROP DATABASE "${dbName}"`);
+          console.log(`[BILLING] ✅ Dropped: ${dbName}`);
+        }
+
+        // 2. Hapus PremiumUser
+        await mainPrisma.premiumUser.delete({ where: { email: userEmail } });
+
+        // 3. Hapus GoogleUser jika ada
+        try {
+          await mainPrisma.googleUser.delete({ where: { email: userEmail } });
+        } catch { /* tidak masalah jika tidak ada */ }
+
+        deletedList.push(`${user.name} (${userEmail})`);
+        console.log(`[BILLING] ✅ Deleted owner account: ${userEmail}`);
+      } catch (err: any) {
+        console.error(`[BILLING] ❌ Gagal hapus ${userEmail}:`, err?.message);
+      }
+    }
+
+    // Notifikasi ke admin
+    if (ownerEmail && deletedList.length > 0) {
+      const rows = deletedList.map(d => `<li style="padding:4px 0;">${d}</li>`).join('');
+      await sendEmail(
+        ownerEmail,
+        `🗑️ Eksekusi Hapus Owner: ${deletedList.length} Akun Dihapus`,
+        `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px;background:#f8f9fa;border-radius:12px;">
+          <div style="background:linear-gradient(135deg,#7f1d1d,#dc2626);padding:24px;border-radius:12px;margin-bottom:20px;text-align:center;">
+            <h1 style="color:white;margin:0;font-size:20px;">🗑️ Eksekusi Penghapusan Owner</h1>
+            <p style="color:rgba(255,255,255,0.8);margin:8px 0 0;font-size:14px;">${now.toLocaleString('id-ID',{timeZone:'Asia/Jakarta'})} WIB</p>
+          </div>
+          <div style="background:white;padding:20px;border-radius:12px;">
+            <p style="color:#475569;">Akun berikut telah dihapus permanen beserta seluruh data (produk, karyawan, transaksi, dll):</p>
+            <ul style="color:#1e293b;line-height:1.8;">${rows}</ul>
+          </div>
+        </div>`
+      ).catch(console.warn);
+    }
+  } catch (err: any) {
+    console.error('[BILLING] Fatal error executePendingOwnerDeletions:', err?.message);
+  }
+};
+
+// ─── Kirim Laporan Bulanan Owner ───────────────────────────────
+const sendMonthlyOwnerReport = async (): Promise<void> => {
+  // Laporan billing HANYA ke admin utama, bukan ke semua OWNER_EMAIL
+  const billingEmail = process.env.ADMIN_BILLING_EMAIL || 'muhammadmuizz8@gmail.com';
+  if (!billingEmail) {
+    console.warn('[BILLING] ADMIN_BILLING_EMAIL tidak diset, laporan tidak dikirim.');
+    return;
+  }
+
+  const now = new Date();
+  const bulanTahun = now.toLocaleString('id-ID', { month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' });
+  console.log(`[BILLING] Mengirim laporan bulanan owner untuk ${bulanTahun}...`);
+
+  try {
+    // Ambil semua PremiumUser (owner)
+    const allOwners = await mainPrisma.premiumUser.findMany({
+      orderBy: { registeredAt: 'asc' }
+    });
+
+    // Ambil businessMode dari GoogleUser
+    const googleUsers = await mainPrisma.googleUser.findMany({
+      select: { email: true, businessMode: true }
+    });
+    const modeMap = new Map(googleUsers.map(g => [g.email, g.businessMode]));
+
+    if (allOwners.length === 0) {
+      console.log('[BILLING] Tidak ada owner premium. Laporan tidak dikirim.');
+      return;
+    }
+
+    const rows = allOwners.map((owner, idx) => {
+      const mode = modeMap.get(owner.email) || 'FNB';
+      const modeLabel = MODE_LABELS[mode] || mode;
+      const registeredAt = owner.registeredAt.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+      const lastPaid = owner.lastPaymentConfirmedAt
+        ? owner.lastPaymentConfirmedAt.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+        : '<span style="color:#dc2626;font-weight:bold;">Belum pernah</span>';
+      const deletionWarning = owner.deletionScheduledAt
+        ? `<span style="color:#dc2626;font-weight:bold;">⚠️ Dihapus ${owner.deletionScheduledAt.toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'})}</span>`
+        : '<span style="color:#16a34a;">✅ Aktif</span>';
+
+      const paidUrl   = `${ADMIN_BASE_URL}/api/admin/owner-paid?secret=${ADMIN_SECRET}&email=${encodeURIComponent(owner.email)}`;
+      const deleteUrl = `${ADMIN_BASE_URL}/api/admin/owner-delete?secret=${ADMIN_SECRET}&email=${encodeURIComponent(owner.email)}`;
+
+      const rowBg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+      return `
+        <tr style="background:${rowBg};">
+          <td style="padding:10px 8px;border-bottom:1px solid #f1f5f9;font-weight:bold;color:#1e293b;">${idx + 1}</td>
+          <td style="padding:10px 8px;border-bottom:1px solid #f1f5f9;color:#1e293b;">${owner.name}</td>
+          <td style="padding:10px 8px;border-bottom:1px solid #f1f5f9;color:#475569;font-size:13px;">${owner.email}</td>
+          <td style="padding:10px 8px;border-bottom:1px solid #f1f5f9;color:#475569;font-size:13px;">${owner.whatsapp || '-'}</td>
+          <td style="padding:10px 8px;border-bottom:1px solid #f1f5f9;font-size:12px;">${modeLabel}</td>
+          <td style="padding:10px 8px;border-bottom:1px solid #f1f5f9;font-size:12px;color:#64748b;">${registeredAt}</td>
+          <td style="padding:10px 8px;border-bottom:1px solid #f1f5f9;font-size:12px;">${lastPaid}</td>
+          <td style="padding:10px 8px;border-bottom:1px solid #f1f5f9;font-size:12px;">${deletionWarning}</td>
+          <td style="padding:10px 8px;border-bottom:1px solid #f1f5f9;white-space:nowrap;">
+            <a href="${paidUrl}"
+               style="display:inline-block;padding:6px 12px;background:linear-gradient(135deg,#10b981,#059669);color:white;text-decoration:none;border-radius:6px;font-size:12px;font-weight:bold;margin-right:4px;">
+              ✅ Sudah Bayar
+            </a>
+            <a href="${deleteUrl}"
+               style="display:inline-block;padding:6px 12px;background:linear-gradient(135deg,#ef4444,#dc2626);color:white;text-decoration:none;border-radius:6px;font-size:12px;font-weight:bold;">
+              🗑️ Hapus
+            </a>
+          </td>
+        </tr>`;
+    }).join('');
+
+    await sendEmail(
+      billingEmail,
+      `📋 Laporan Bulanan Owner POSBah — ${bulanTahun} (${allOwners.length} Owner)`,
+      // Email ini HANYA dikirim ke admin (muhammadmuizz8@gmail.com), bukan ke owner
+      `<div style="font-family:Arial,sans-serif;max-width:900px;margin:auto;padding:20px;background:#f8f9fa;border-radius:12px;">
+        <div style="background:linear-gradient(135deg,#1e1b4b,#4c1d95);padding:28px;border-radius:12px;margin-bottom:20px;text-align:center;">
+          <h1 style="color:white;margin:0;font-size:22px;">📋 Laporan Bulanan Owner POSBah</h1>
+          <p style="color:rgba(255,255,255,0.8);margin:8px 0 0;font-size:14px;">${bulanTahun} · ${allOwners.length} Owner Terdaftar</p>
+        </div>
+
+        <div style="background:white;padding:20px;border-radius:12px;margin-bottom:16px;overflow-x:auto;">
+          <p style="color:#475569;margin:0 0 16px;font-size:14px;">
+            Klik <strong style="color:#10b981;">✅ Sudah Bayar</strong> untuk mengkonfirmasi pembayaran bulan ini.<br>
+            Klik <strong style="color:#dc2626;">🗑️ Hapus</strong> untuk menjadwalkan penghapusan akun dalam <strong>7 hari</strong> (owner akan diberitahu via email).
+          </p>
+          <table style="width:100%;border-collapse:collapse;min-width:700px;">
+            <thead>
+              <tr style="background:linear-gradient(135deg,#1e1b4b,#4c1d95);">
+                <th style="padding:10px 8px;text-align:left;color:white;font-size:12px;">#</th>
+                <th style="padding:10px 8px;text-align:left;color:white;font-size:12px;">Nama</th>
+                <th style="padding:10px 8px;text-align:left;color:white;font-size:12px;">Email</th>
+                <th style="padding:10px 8px;text-align:left;color:white;font-size:12px;">WhatsApp</th>
+                <th style="padding:10px 8px;text-align:left;color:white;font-size:12px;">Paket</th>
+                <th style="padding:10px 8px;text-align:left;color:white;font-size:12px;">Tgl Daftar</th>
+                <th style="padding:10px 8px;text-align:left;color:white;font-size:12px;">Terakhir Bayar</th>
+                <th style="padding:10px 8px;text-align:left;color:white;font-size:12px;">Status</th>
+                <th style="padding:10px 8px;text-align:left;color:white;font-size:12px;">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+
+        <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:14px;margin-bottom:12px;">
+          <p style="margin:0;color:#92400e;font-size:13px;">
+            ⚠️ <strong>Perhatian:</strong> Tombol Hapus akan menjadwalkan penghapusan 7 hari ke depan.
+            Owner akan menerima email peringatan. Untuk membatalkan, klik Sudah Bayar sebelum tanggal eksekusi.
+          </p>
+        </div>
+
+        <p style="color:#94a3b8;font-size:11px;text-align:center;">
+          Email ini dikirim otomatis setiap tanggal 7 oleh sistem POSBah.
+          <a href="${ADMIN_BASE_URL}/api/admin/send-monthly-report?secret=${ADMIN_SECRET}" style="color:#6366f1;">Kirim ulang laporan</a>
+        </p>
+      </div>`
+    );
+
+    console.log(`[BILLING] ✅ Laporan bulanan berhasil dikirim ke ${billingEmail}`);
+  } catch (err: any) {
+    console.error('[BILLING] ❌ Gagal kirim laporan bulanan:', err?.message);
+  }
+};
+
+// ─── Endpoint: Owner Sudah Bayar ──────────────────────────────
+app.get('/api/admin/owner-paid', async (req, res) => {
+  const { secret, email } = req.query as { secret: string; email: string };
+  if (secret !== ADMIN_SECRET) return res.status(403).send('<h1>Akses ditolak</h1>');
+  if (!email) return res.status(400).send('<h1>Email wajib diisi</h1>');
+
+  try {
+    const user = await mainPrisma.premiumUser.findUnique({ where: { email: decodeURIComponent(email) } });
+    if (!user) return res.status(404).send('<h1>Owner tidak ditemukan</h1>');
+
+    await mainPrisma.premiumUser.update({
+      where: { email: decodeURIComponent(email) },
+      data: {
+        lastPaymentConfirmedAt: new Date(),
+        deletionScheduledAt: null  // Batalkan hapus jika ada
+      }
+    });
+
+    // Kirim notifikasi ke owner
+    const ownerName = user.name || user.email;
+    const now = new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+    await sendEmail(
+      user.email,
+      '✅ Pembayaran POSBah Anda Dikonfirmasi',
+      `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px;background:#f8f9fa;border-radius:12px;">
+        <div style="background:linear-gradient(135deg,#064e3b,#10b981);padding:28px;border-radius:12px;margin-bottom:20px;text-align:center;">
+          <h1 style="color:white;margin:0;font-size:22px;">✅ Pembayaran Dikonfirmasi</h1>
+        </div>
+        <div style="background:white;padding:24px;border-radius:12px;">
+          <p style="color:#1e293b;">Halo <strong>${ownerName}</strong>,</p>
+          <p style="color:#475569;">Pembayaran langganan POSBah Anda telah dikonfirmasi pada <strong>${now} WIB</strong>.</p>
+          <p style="color:#475569;">Akun Anda tetap aktif dan dapat digunakan seperti biasa. Terima kasih!</p>
+          <div style="text-align:center;margin-top:20px;">
+            <a href="${ADMIN_BASE_URL}" style="display:inline-block;padding:12px 24px;background:linear-gradient(135deg,#10b981,#059669);color:white;text-decoration:none;border-radius:10px;font-weight:bold;">🔐 Buka Aplikasi</a>
+          </div>
+        </div>
+      </div>`
+    ).catch(console.warn);
+
+    res.send(`<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+      <title>Pembayaran Dikonfirmasi</title>
+      <style>body{font-family:Arial,sans-serif;background:linear-gradient(135deg,#064e3b,#10b981);min-height:100vh;display:flex;align-items:center;justify-content:center;margin:0;}
+      .card{background:white;border-radius:20px;padding:40px;max-width:480px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);}
+      .icon{font-size:64px;margin-bottom:16px;}.title{font-size:22px;font-weight:bold;color:#15803d;}.sub{color:#64748b;margin-top:8px;}</style></head>
+      <body><div class="card">
+        <div class="icon">✅</div>
+        <h1 class="title">Pembayaran Dikonfirmasi!</h1>
+        <p class="sub"><strong>${user.name}</strong><br>${user.email}</p>
+        <p class="sub">Status bayar diperbarui. Email notifikasi sudah dikirim ke owner.</p>
+      </div></body></html>`);
+  } catch (err: any) {
+    res.status(500).send(`<h1>Error: ${err?.message}</h1>`);
+  }
+});
+
+// ─── Endpoint: Jadwalkan Hapus Owner ──────────────────────────
+app.get('/api/admin/owner-delete', async (req, res) => {
+  const { secret, email } = req.query as { secret: string; email: string };
+  if (secret !== ADMIN_SECRET) return res.status(403).send('<h1>Akses ditolak</h1>');
+  if (!email) return res.status(400).send('<h1>Email wajib diisi</h1>');
+
+  try {
+    const cleanEmail = decodeURIComponent(email);
+    const user = await mainPrisma.premiumUser.findUnique({ where: { email: cleanEmail } });
+    if (!user) return res.status(404).send('<h1>Owner tidak ditemukan</h1>');
+
+    // Sudah dijadwalkan?
+    if (user.deletionScheduledAt && user.deletionScheduledAt > new Date()) {
+      const tglHapus = user.deletionScheduledAt.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+      return res.send(`<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><title>Sudah Dijadwalkan</title>
+        <style>body{font-family:Arial,sans-serif;background:#fef2f2;min-height:100vh;display:flex;align-items:center;justify-content:center;margin:0;}
+        .card{background:white;border-radius:20px;padding:40px;max-width:480px;width:90%;text-align:center;}</style></head>
+        <body><div class="card">
+          <div style="font-size:48px;">⚠️</div>
+          <h1 style="color:#dc2626;">Sudah Dijadwalkan</h1>
+          <p>${cleanEmail} sudah dijadwalkan dihapus pada:<br><strong>${tglHapus} WIB</strong></p>
+          <a href="${ADMIN_BASE_URL}/api/admin/owner-paid?secret=${ADMIN_SECRET}&email=${encodeURIComponent(cleanEmail)}"
+             style="display:inline-block;margin-top:16px;padding:12px 24px;background:#10b981;color:white;text-decoration:none;border-radius:10px;font-weight:bold;">
+            Batalkan &amp; Konfirmasi Bayar
+          </a>
+        </div></body></html>`);
+    }
+
+    const deletionDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // +7 hari
+    await mainPrisma.premiumUser.update({
+      where: { email: cleanEmail },
+      data: { deletionScheduledAt: deletionDate }
+    });
+
+    const tglHapus = deletionDate.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' });
+    const ownerName = user.name || cleanEmail;
+
+    // Kirim email peringatan ke owner
+    const cancelUrl = `${ADMIN_BASE_URL}/api/admin/owner-cancel-delete?secret=${ADMIN_SECRET}&email=${encodeURIComponent(cleanEmail)}`;
+    await sendEmail(
+      cleanEmail,
+      '⚠️ Akun POSBah Anda Akan Dihapus — Harap Segera Hubungi Admin',
+      `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px;background:#f8f9fa;border-radius:12px;">
+        <div style="background:linear-gradient(135deg,#7f1d1d,#dc2626);padding:28px;border-radius:12px;margin-bottom:20px;text-align:center;">
+          <h1 style="color:white;margin:0;font-size:20px;">⚠️ Peringatan: Akun Akan Dihapus</h1>
+        </div>
+        <div style="background:white;padding:24px;border-radius:12px;">
+          <p style="color:#1e293b;">Halo <strong>${ownerName}</strong>,</p>
+          <p style="color:#475569;">Akun POSBah Anda (<strong>${cleanEmail}</strong>) dijadwalkan untuk dihapus permanen pada:</p>
+          <div style="background:#fef2f2;border:2px solid #dc2626;border-radius:10px;padding:16px;text-align:center;margin:16px 0;">
+            <span style="font-size:20px;font-weight:bold;color:#dc2626;">${tglHapus} WIB</span>
+          </div>
+          <p style="color:#475569;">⚠️ <strong>Semua data Anda akan dihapus permanen</strong> termasuk: data karyawan, produk, transaksi, pelanggan, dan semua riwayat usaha.</p>
+          <p style="color:#475569;">Jika ini kesalahan atau Anda ingin melanjutkan langganan, segera hubungi admin:</p>
+          <div style="background:#f8fafc;border-radius:8px;padding:16px;margin:16px 0;">
+            <p style="margin:4px 0;color:#1e293b;">📞 WhatsApp: <strong>0812-3456-7890</strong></p>
+            <p style="margin:4px 0;color:#1e293b;">📧 Email: <strong>muhammadmuizz8@gmail.com</strong></p>
+          </div>
+          <div style="text-align:center;margin-top:20px;">
+            <a href="https://wa.me/628123456789?text=Halo Admin, saya ${encodeURIComponent(ownerName)} ingin melanjutkan langganan POSBah. Email: ${encodeURIComponent(cleanEmail)}"
+               style="display:inline-block;padding:12px 24px;background:#25d366;color:white;text-decoration:none;border-radius:10px;font-weight:bold;">
+              💬 Hubungi via WhatsApp
+            </a>
+          </div>
+        </div>
+      </div>`
+    ).catch(console.warn);
+
+    // Notifikasi ke admin utama saja
+    const ownerEmailAdmin = process.env.ADMIN_BILLING_EMAIL || 'muhammadmuizz8@gmail.com';
+    if (ownerEmailAdmin) {
+      await sendEmail(
+        ownerEmailAdmin,
+        `🗑️ Penghapusan Dijadwalkan: ${ownerName} (${cleanEmail})`,
+        `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px;background:#f8f9fa;border-radius:12px;">
+          <p>Akun <strong>${cleanEmail}</strong> dijadwalkan dihapus pada <strong>${tglHapus} WIB</strong>.</p>
+          <p>Email peringatan sudah dikirim ke owner.</p>
+          <a href="${ADMIN_BASE_URL}/api/admin/owner-paid?secret=${ADMIN_SECRET}&email=${encodeURIComponent(cleanEmail)}"
+             style="display:inline-block;padding:10px 20px;background:#10b981;color:white;text-decoration:none;border-radius:8px;font-weight:bold;">
+            Batalkan &amp; Konfirmasi Bayar
+          </a>
+        </div>`
+      ).catch(console.warn);
+    }
+
+    res.send(`<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><title>Penghapusan Dijadwalkan</title>
+      <style>body{font-family:Arial,sans-serif;background:linear-gradient(135deg,#7f1d1d,#dc2626);min-height:100vh;display:flex;align-items:center;justify-content:center;margin:0;}
+      .card{background:white;border-radius:20px;padding:40px;max-width:500px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.3);}
+      .icon{font-size:64px;margin-bottom:12px;}.title{font-size:20px;font-weight:bold;color:#dc2626;}.sub{color:#64748b;margin:8px 0;}
+      .date{background:#fef2f2;border:2px solid #dc2626;border-radius:10px;padding:12px;margin:16px 0;font-size:18px;font-weight:bold;color:#dc2626;}
+      .btn{display:inline-block;margin-top:16px;padding:12px 24px;background:#10b981;color:white;text-decoration:none;border-radius:10px;font-weight:bold;font-size:14px;}
+      </style></head>
+      <body><div class="card">
+        <div class="icon">🗑️</div>
+        <h1 class="title">Penghapusan Dijadwalkan</h1>
+        <p class="sub"><strong>${user.name}</strong><br>${cleanEmail}</p>
+        <div class="date">Dihapus: ${tglHapus} WIB</div>
+        <p class="sub" style="font-size:13px;">Email peringatan sudah dikirim ke owner.<br>Klik di bawah jika ingin membatalkan.</p>
+        <a class="btn" href="${ADMIN_BASE_URL}/api/admin/owner-paid?secret=${ADMIN_SECRET}&email=${encodeURIComponent(cleanEmail)}">
+          ✅ Batalkan &amp; Konfirmasi Bayar
+        </a>
+      </div></body></html>`);
+  } catch (err: any) {
+    res.status(500).send(`<h1>Error: ${err?.message}</h1>`);
+  }
+});
+
+// ─── Endpoint: Batalkan Hapus Owner ───────────────────────────
+app.get('/api/admin/owner-cancel-delete', async (req, res) => {
+  const { secret, email } = req.query as { secret: string; email: string };
+  if (secret !== ADMIN_SECRET) return res.status(403).send('<h1>Akses ditolak</h1>');
+  if (!email) return res.status(400).send('<h1>Email wajib diisi</h1>');
+
+  try {
+    const cleanEmail = decodeURIComponent(email);
+    await mainPrisma.premiumUser.update({
+      where: { email: cleanEmail },
+      data: { deletionScheduledAt: null }
+    });
+    res.send(`<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><title>Hapus Dibatalkan</title>
+      <style>body{font-family:Arial,sans-serif;background:linear-gradient(135deg,#064e3b,#10b981);min-height:100vh;display:flex;align-items:center;justify-content:center;margin:0;}
+      .card{background:white;border-radius:20px;padding:40px;max-width:480px;width:90%;text-align:center;}</style></head>
+      <body><div class="card">
+        <div style="font-size:64px;">✅</div>
+        <h1 style="color:#15803d;">Penghapusan Dibatalkan</h1>
+        <p style="color:#64748b;">${cleanEmail}</p>
+        <p style="color:#475569;">Jadwal hapus sudah dibatalkan. Akun tetap aktif.</p>
+      </div></body></html>`);
+  } catch (err: any) {
+    res.status(500).send(`<h1>Error: ${err?.message}</h1>`);
+  }
+});
+
+// ─── Endpoint: Trigger Manual Laporan Bulanan ─────────────────
+app.get('/api/admin/send-monthly-report', async (req, res) => {
+  const { secret } = req.query as { secret: string };
+  if (secret !== ADMIN_SECRET) return res.status(403).json({ error: 'Akses ditolak' });
+  try {
+    await sendMonthlyOwnerReport();
+    res.json({ success: true, message: 'Laporan bulanan berhasil dikirim.' });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Gagal kirim laporan', detail: err?.message });
+  }
+});
+
+// ─── Cron: Tanggal 7 Setiap Bulan ─────────────────────────────
+let lastReportMonth = -1; // -1 = belum pernah kirim session ini
+
+const checkAndSendMonthlyReport = async () => {
+  const now = new Date();
+  const jakartaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+  const currentDay   = jakartaTime.getDate();
+  const currentMonth = jakartaTime.getMonth(); // 0-11
+
+  if (currentDay === 7 && currentMonth !== lastReportMonth) {
+    lastReportMonth = currentMonth;
+    console.log('[BILLING] Tanggal 7 terdeteksi! Mengirim laporan bulanan...');
+    await sendMonthlyOwnerReport().catch(err =>
+      console.error('[BILLING] Error kirim laporan bulanan:', err)
+    );
+    // Juga jalankan eksekusi hapus yang sudah jatuh tempo
+    await executePendingOwnerDeletions().catch(err =>
+      console.error('[BILLING] Error eksekusi pending deletions:', err)
+    );
+  }
+};
+
+// Cek setiap jam
+setInterval(checkAndSendMonthlyReport, 60 * 60 * 1000);
+console.log('[BILLING] Laporan bulanan dijadwalkan setiap tanggal 7.');
+
+// Eksekusi pending deletions juga ikut cek harian (digabung cleanup yang sudah ada)
+// Jalankan sekali saat startup dengan delay 60 detik
+setTimeout(() => {
+  executePendingOwnerDeletions().catch(err =>
+    console.error('[BILLING] Startup pending deletion check error:', err)
+  );
+}, 60 * 1000);
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
