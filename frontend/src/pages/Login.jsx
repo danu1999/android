@@ -8,7 +8,7 @@ export default function Login({ onLogin }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [latestVer, setLatestVer] = useState("1.1.0");
+  const [latestVer, setLatestVer] = useState("1.1.2");
 
   const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
 
@@ -432,7 +432,7 @@ export default function Login({ onLogin }) {
                 Cetak struk bluetooth &amp; transaksi offline lebih cepat.
               </p>
               <p style={{ margin: '4px 0 0', fontSize: '0.62rem', color: '#fca5a5', fontWeight: 700, lineHeight: 1.3 }}>
-                ⚠️ Update ini penting untuk pengusaha manufaktur. POS UMKM, laundry, Rental tidak perlu update.
+                ⚠️ Update v1.1.2: Pembaruan alur absensi heurisitik produksi, pembersihan data, serta pembaharuan label 'Nono' menjadi 'Bahan Baku' untuk semua pelanggan.
               </p>
             </div>
           </div>

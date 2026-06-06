@@ -508,7 +508,7 @@ app.get('/api/download-apk', (req, res) => {
 });
 // Route to get the latest APK version name
 app.get('/api/apk-version', (req, res) => {
-    res.json({ version: '1.1.1' });
+    res.json({ version: '1.1.2' });
 });
 // Get employee limit for a tenant
 app.get('/api/employees/limit', (req, res) => __awaiter(void 0, void 0, void 0, function* () {

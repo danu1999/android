@@ -445,7 +445,7 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
 
 // ─── App Content ───────────────────────────────────────────────
 function AppContent({ user, onLogout, appMode, setAppMode, theme, toggleTheme }) {
-  const [latestVer, setLatestVer] = useState("1.1.0");
+  const [latestVer, setLatestVer] = useState("1.1.2");
   const location = useLocation();
   const isPublicStore = location.pathname === '/toko-online';
   const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
@@ -874,7 +874,7 @@ function BackButtonHandler({ setShowExitModal, user, showUpdateFullscreen, setSh
 
 // ─── Fullscreen Update Modal Component ──────────────────────────
 function FullscreenUpdateModal({ onClose, onDownload }) {
-  const [latestVer, setLatestVer] = useState("1.1.0");
+  const [latestVer, setLatestVer] = useState("1.1.2");
 
   useEffect(() => {
     const fetchVer = async () => {
@@ -1014,28 +1014,28 @@ function FullscreenUpdateModal({ onClose, onDownload }) {
           </div>
 
           <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, color: '#e2e8f0' }}>
-            Apa saja yang baru di versi 1.1.0?
+            Apa saja yang baru di versi v{latestVer}?
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.8rem', color: '#94a3b8', lineHeight: 1.5 }}>
             <div style={{ display: 'flex', gap: '10px' }}>
               <span style={{ color: '#10b981', fontSize: '1rem' }}>✓</span>
               <div>
-                <strong style={{ color: '#f1f5f9' }}>Pembayaran Cicilan Bertahap</strong>
-                <p style={{ margin: '2px 0 0' }}>Mendukung pembayaran faktur secara bertahap (cicilan 1, 2, 3 hingga Lunas) dengan penentuan tanggal bayar masing-masing.</p>
+                <strong style={{ color: '#f1f5f9' }}>Pembaruan Alur Absensi</strong>
+                <p style={{ margin: '2px 0 0' }}>Alur absensi heuristik (cek keluar otomatis) kini hanya diaktifkan secara khusus untuk produksi tenant Bahtera Mulya.</p>
               </div>
             </div>
             <div style={{ display: 'flex', gap: '10px' }}>
               <span style={{ color: '#10b981', fontSize: '1rem' }}>✓</span>
               <div>
-                <strong style={{ color: '#f1f5f9' }}>Edit &amp; Hapus Pembayaran</strong>
-                <p style={{ margin: '2px 0 0' }}>Riwayat pembayaran/cicilan kini dapat di-edit dan di-hapus dengan sinkronisasi otomatis ke Kas Keuangan dan Dashboard.</p>
+                <strong style={{ color: '#f1f5f9' }}>Pembaharuan Label</strong>
+                <p style={{ margin: '2px 0 0' }}>Label bahan/usaha "Nono" telah diubah menjadi "Bahan Baku" secara global untuk seluruh pelanggan (Invoice &amp; Manufaktur).</p>
               </div>
             </div>
             <div style={{ display: 'flex', gap: '10px' }}>
               <span style={{ color: '#10b981', fontSize: '1rem' }}>✓</span>
               <div>
-                <strong style={{ color: '#f1f5f9' }}>Perbaikan Stabilitas Aplikasi</strong>
-                <p style={{ margin: '2px 0 0' }}>Memperbaiki masalah navigasi Android dan layar putih kosong saat berinteraksi dengan menu unduhan APK.</p>
+                <strong style={{ color: '#f1f5f9' }}>Perbaikan Estimasi &amp; Data</strong>
+                <p style={{ margin: '2px 0 0' }}>Memperbaiki kebocoran data estimasi bersih di panel utama serta melakukan pembersihan data sistem.</p>
               </div>
             </div>
           </div>
