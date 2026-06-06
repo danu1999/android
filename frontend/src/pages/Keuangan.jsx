@@ -729,6 +729,10 @@ export default function Keuangan({ appMode: propAppMode }) {
 
   const handleExportPDF = () => {
     const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Ekspor PDF tidak didukung di APK. Silakan buka POSBah melalui browser website untuk cetak PDF.');
+      return;
+    }
     let content = `
       <html>
         <head>

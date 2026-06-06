@@ -190,7 +190,7 @@ const Dashboard = () => {
               <span style={{ fontWeight: "800", fontSize: "13px" }}>Rp {formatRp(data.total_kas_in)}</span>
             </div>
             <div>
-              <small style={{ opacity: 0.75, display: "block", fontSize: "9px", fontWeight: "700" }}>TOTAL KELUAR (+NONO)</small>
+              <small style={{ opacity: 0.75, display: "block", fontSize: "9px", fontWeight: "700" }}>TOTAL KELUAR (+BAHAN BAKU)</small>
               <span style={{ fontWeight: "800", fontSize: "13px" }}>Rp {formatRp(data.total_kas_out + data.nono_total_bayar)}</span>
             </div>
           </div>
@@ -221,7 +221,7 @@ const Dashboard = () => {
           </div>
           <div style={{ borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: "8px" }}>
             <p style={{ fontSize: "11px", opacity: 0.75, margin: 0, lineHeight: "1.4" }}>
-              Estimasi sisa kas riil aman setelah dikurangi sisa hutang Nono serta tagihan berjalan selesai dilunasi.
+              Estimasi sisa kas riil aman setelah dikurangi sisa hutang Bahan Baku serta tagihan berjalan selesai dilunasi.
             </p>
           </div>
         </div>
@@ -308,10 +308,10 @@ const Dashboard = () => {
         <div className="card-premium" style={{ padding: "18px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
           <div>
             <h5 style={{ fontWeight: "800", color: "#1e293b", margin: "0 0 12px 0", display: "flex", alignItems: "center", gap: "8px", fontSize: "15px" }}>
-              <Package color="#ef4444" size={18} /> Hutang Bahan Nono
+              <Package color="#ef4444" size={18} /> Hutang Bahan Baku
             </h5>
             <p style={{ fontSize: "12px", color: "#64748b", margin: "0 0 12px 0", lineHeight: "1.4" }}>
-              Rekapitulasi sisa kewajiban pembayaran bahan baku yang diambil dari supplier Mas Nono.
+              Rekapitulasi sisa kewajiban pembayaran bahan baku yang diambil dari supplier Bahan Baku.
             </p>
           </div>
 

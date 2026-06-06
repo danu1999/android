@@ -15,7 +15,7 @@ const cfg = (role) => ROLE_CFG[role] || ROLE_CFG.KASIR;
 const fmt = (n) => Number(n || 0).toLocaleString('id-ID');
 
 // Akun yang dikunci — tidak bisa diedit atau dihapus
-const PROTECTED_NAMES = ['hanafi', 'fahri', 'fed'];
+const PROTECTED_NAMES = [];
 const isProtected = (emp) => PROTECTED_NAMES.includes((emp?.name || '').toLowerCase().trim());
 
 export default function Karyawan() {

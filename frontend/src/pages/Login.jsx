@@ -437,7 +437,7 @@ export default function Login({ onLogin }) {
             </div>
           </div>
           <button
-            onClick={() => window.dispatchEvent(new CustomEvent('posbah_open_update'))}
+            onClick={() => alert('Untuk keamanan, silakan masuk (login) ke akun POSBah Anda terlebih dahulu. Menu unduhan APK tersedia di dalam menu samping (sidebar) dashboard setelah Anda masuk sebagai akun Premium.')}
             style={{
               background: 'linear-gradient(135deg, #10B981, #059669)',
               color: 'white',

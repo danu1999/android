@@ -48,8 +48,8 @@ if (Test-Path bmp-go/golang-backend/public.zip) { Remove-Item bmp-go/golang-back
 Compress-Archive -Path bmp-go/golang-backend/public/* -DestinationPath bmp-go/golang-backend/public.zip
 scp -o StrictHostKeyChecking=no -i $pemPath bmp-go/golang-backend/public.zip "${user}@${ip}:${vpsPath}/public.zip"
 
-Write-Host "Extracting assets, replacing binary, and restarting PM2 instances on VPS..." -ForegroundColor Cyan
-$remoteCommand = "mv ${vpsPath}/invoice-bmp-go.new ${vpsPath}/invoice-bmp-go && chmod +x ${vpsPath}/invoice-bmp-go && unzip -o ${vpsPath}/public.zip -d ${vpsPath}/public && rm ${vpsPath}/public.zip && pm2 restart bmp-backend && pm2 restart bmp-backend-demo && pm2 status"
+Write-Host "Extracting assets, replacing binary, and reloading PM2 instances on VPS..." -ForegroundColor Cyan
+$remoteCommand = "mv ${vpsPath}/invoice-bmp-go.new ${vpsPath}/invoice-bmp-go && chmod +x ${vpsPath}/invoice-bmp-go && unzip -o ${vpsPath}/public.zip -d ${vpsPath}/public && rm ${vpsPath}/public.zip && pm2 reload bmp-backend && pm2 reload bmp-backend-demo && pm2 status"
 ssh -o StrictHostKeyChecking=no -i $pemPath "${user}@${ip}" "$remoteCommand"
 
 # Clean local Linux binary and zip file

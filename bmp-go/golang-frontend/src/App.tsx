@@ -183,7 +183,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
               <NavLink to="/invoices" style={navStyle} onClick={closeSidebar}><FileText size={18}/> Daftar Faktur</NavLink>
               <NavLink to="/products" style={navStyle} onClick={closeSidebar}><ShoppingCart size={18}/> Master Barang</NavLink>
               <NavLink to="/clients" style={navStyle} onClick={closeSidebar}><Users size={18}/> Data Pelanggan</NavLink>
-              <NavLink to="/bahan-nono" style={navStyle} onClick={closeSidebar}><Package size={18}/> Bahan Mas Nono</NavLink>
+              <NavLink to="/bahan-nono" style={navStyle} onClick={closeSidebar}><Package size={18}/> Bahan Baku</NavLink>
               <NavLink to="/kas" style={navStyle} onClick={closeSidebar}><RefreshCw size={18}/> Kas Keuangan</NavLink>
               <NavLink to="/pricelist" style={navStyle} onClick={closeSidebar}><List size={18}/> Pricelist Harga</NavLink>
               <NavLink to="/hpp-calculator" style={navStyle} onClick={closeSidebar}><Cpu size={18}/> Kalkulator HPP</NavLink>

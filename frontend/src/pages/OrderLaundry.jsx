@@ -86,7 +86,8 @@ export default function OrderLaundry() {
     }
 
     const waUrl = `https://api.whatsapp.com/send?phone=${formatHp}&text=${encodeURIComponent(message)}`;
-    window.open(waUrl, '_blank');
+    const target = window.Capacitor ? '_system' : '_blank';
+    window.open(waUrl, target);
   };
 
   const getStatusColor = (status) => {

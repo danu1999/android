@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, ShoppingCart, Trash2, CreditCard, QrCode, Printer, X, ChevronUp, ClipboardList, Plus, Minus, Barcode, Camera, ShoppingBag } from 'lucide-react';
+import { Search, ShoppingCart, Trash2, CreditCard, QrCode, Printer, X, ChevronUp, ClipboardList, Plus, Minus, Barcode, Camera, ShoppingBag, Settings } from 'lucide-react';
 import api from '../api';
 import { useAuth, useDemoBlock, DEMO_LIMITS } from '../AuthContext';
 import ProductCard from '../components/ProductCard';
@@ -26,9 +26,34 @@ export default function Kasir() {
   const { showDemoBlock, isDemo } = useDemoBlock();
   const { user } = useAuth();
 
-  // Akun yang tidak diizinkan menggunakan fitur barcode scanner
-  const SCAN_BLOCKED = ['hanafi', 'fahri', 'fed'];
-  const canScan = !SCAN_BLOCKED.includes((user?.name || '').toLowerCase().trim());
+  // Akun yang tidak diizinkan menggunakan fitur barcode scanner (dihapus pengecualian)
+  const SCAN_BLOCKED = [];
+  const canScan = true;
+
+  const [receiptSettings, setReceiptSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('posbah_receipt_settings');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return {
+      storeName: 'PISANG KEJU RAMAYANA',
+      subheader: 'Struk Pembayaran',
+      footer: 'Terima Kasih! 🙏'
+    };
+  });
+
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [tempStoreName, setTempStoreName] = useState(receiptSettings.storeName);
+  const [tempSubheader, setTempSubheader] = useState(receiptSettings.subheader);
+  const [tempFooter, setTempFooter] = useState(receiptSettings.footer);
+
+  useEffect(() => {
+    if (settingsModalOpen) {
+      setTempStoreName(receiptSettings.storeName);
+      setTempSubheader(receiptSettings.subheader);
+      setTempFooter(receiptSettings.footer);
+    }
+  }, [settingsModalOpen, receiptSettings]);
 
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
@@ -418,11 +443,22 @@ export default function Kasir() {
   };
 
   const RECEIPT_STYLE = (size) =>
-    `body{font-family:monospace;width:${size};margin:0 auto;padding:10px;font-size:12px}` +
+    `@page { margin: 0; }` +
+    `body{font-family:monospace;width:${size};margin:0 auto;padding:0.6cm;font-size:12px}` +
     `.c{text-align:center}.b{font-weight:bold}.r{text-align:right}hr{border-top:1px dashed #000}` +
     `td{vertical-align:top;padding:1px 2px}.indent{padding-left:8px;color:#555;font-size:11px}`;
 
   const buildReceiptHTML = (t, cartSnapshot, size) => {
+    let settings = receiptSettings;
+    try {
+      const saved = localStorage.getItem('posbah_receipt_settings');
+      if (saved) settings = JSON.parse(saved);
+    } catch (e) {}
+
+    const storeName = settings?.storeName || 'PISANG KEJU RAMAYANA';
+    const subheader = settings?.subheader || 'Struk Pembayaran';
+    const footer = settings?.footer || 'Terima Kasih! 🙏';
+
     const qLine = t.queueNumber ? `<div class="b c" style="font-size:16px;border:2px solid #000;padding:4px;margin:4px 0">No. Antrian: #${t.queueNumber}</div>` : '';
     const cLine = t.customerName ? `<div>Pelanggan: ${t.customerName}</div>` : '';
     const notesLine = t.notes ? `<div>Catatan: ${t.notes}</div>` : '';
@@ -441,30 +477,88 @@ export default function Kasir() {
     const discRow = dAmt > 0 ? `<tr><td colspan="2">${dLabel}</td><td class="r">-Rp${Number(dAmt).toLocaleString('id-ID')}</td></tr>` : '';
     const subRow = dAmt > 0 ? `<tr><td colspan="2">Subtotal</td><td class="r">Rp${Number(sub).toLocaleString('id-ID')}</td></tr>` : '';
     const paidRow = t.amountPaid > 0 ? `<tr><td colspan="2">Tunai</td><td class="r">Rp${Number(t.amountPaid).toLocaleString('id-ID')}</td></tr><tr><td colspan="2">Kembali</td><td class="r">Rp${Number(t.change || 0).toLocaleString('id-ID')}</td></tr>` : '';
-    const isTargetUser = ['hanafi', 'fed', 'fahri'].includes(user?.name?.toLowerCase().trim());
-    const brandRow = isTargetUser ? '<div class="c" style="font-size:10px;margin-top:6px;opacity:0.7">POSBah</div>' : '';
+    const brandRow = '';
     return `<html><head><style>${RECEIPT_STYLE(size)}</style></head><body>
-      <div class="c b" style="font-size:16px">PISANG KEJU RAMAYANA</div>
-      <div class="c">Struk Pembayaran</div><hr>
+      <div class="c b" style="font-size:16px">${storeName}</div>
+      <div class="c">${subheader}</div><hr>
       <div>No: ${t.receiptNumber}</div><div>Metode: ${t.paymentMethod}</div>${cLine}${notesLine}<hr>
       ${qLine}
       <table width="100%">${itemsHtml}</table><hr>
       <table width="100%">${subRow}${discRow}<tr><td colspan="2" class="b">TOTAL</td><td class="r b">Rp${Number(t.total).toLocaleString('id-ID')}</td></tr>${paidRow}</table><hr>
-      <div class="c">Terima Kasih! 🙏</div>
+      <div class="c">${footer}</div>
       ${brandRow}
       <script>window.print();window.onafterprint=()=>window.close()</script></body></html>`;
   };
 
   const printReceipt = (size) => {
     const w = window.open('', '_blank');
+    if (!w) {
+      alert('Pencetakan sistem (browser) tidak didukung di APK. Silakan gunakan printer Bluetooth.');
+      return;
+    }
     w.document.write(buildReceiptHTML(receipt, lastCart, size));
     w.document.close();
   };
 
   const printQueueReceipt = (t, size) => {
     const w = window.open('', '_blank');
+    if (!w) {
+      alert('Pencetakan sistem (browser) tidak didukung di APK. Silakan gunakan printer Bluetooth.');
+      return;
+    }
     w.document.write(buildReceiptHTML(t, null, size));
     w.document.close();
+  };
+
+  const printTestReceipt = (size) => {
+    const dummyTx = {
+      receiptNumber: "TX-TEST-PRINTER",
+      paymentMethod: "CASH",
+      customerName: "Pelanggan Demo",
+      notes: "Cetak Uji Coba Ukuran " + size,
+      total: 35000,
+      amountPaid: 50000,
+      change: 15000,
+      createdAt: new Date().toISOString(),
+      items: [
+        {
+          productName: "Es Kopi Susu Aren",
+          quantity: 2,
+          price: 15000
+        },
+        {
+          productName: "Roti Bakar Cokelat",
+          quantity: 1,
+          price: 5000
+        }
+      ]
+    };
+    
+    const origSettings = localStorage.getItem('posbah_receipt_settings');
+    localStorage.setItem('posbah_receipt_settings', JSON.stringify({
+      storeName: tempStoreName,
+      subheader: tempSubheader,
+      footer: tempFooter
+    }));
+
+    const w = window.open('', '_blank');
+    if (!w) {
+      alert('Pencetakan sistem (browser) tidak didukung di APK. Silakan gunakan printer Bluetooth.');
+      if (origSettings) {
+        localStorage.setItem('posbah_receipt_settings', origSettings);
+      } else {
+        localStorage.removeItem('posbah_receipt_settings');
+      }
+      return;
+    }
+    w.document.write(buildReceiptHTML(dummyTx, null, size));
+    w.document.close();
+
+    if (origSettings) {
+      localStorage.setItem('posbah_receipt_settings', origSettings);
+    } else {
+      localStorage.removeItem('posbah_receipt_settings');
+    }
   };
 
   const printViaBluetooth = async (t, cartSnapshot, size) => {
@@ -578,10 +672,6 @@ export default function Kasir() {
 
       d += CENTER + 'Terima kasih atas pembelian Anda! 🙏' + LINE_FEED;
       d += CENTER + '- POSBAH -' + LINE_FEED;
-      const isTargetUser = ['hanafi', 'fed', 'fahri'].includes(user?.name?.toLowerCase().trim());
-      if (isTargetUser) {
-        d += CENTER + 'POSBah' + LINE_FEED;
-      }
       d += LINE_FEED + LINE_FEED + LINE_FEED;
 
       const rawBytes = encoder.encode(d);
@@ -729,6 +819,26 @@ export default function Kasir() {
           }}
         >
           <ClipboardList size={16} />
+        </button>
+
+        {/* Settings button — icon only */}
+        <button
+          onClick={() => setSettingsModalOpen(true)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '7px 9px',
+            borderRadius: 9,
+            border: '1px solid rgba(255,255,255,0.25)',
+            background: 'rgba(255,255,255,0.18)',
+            color: 'white',
+            cursor: 'pointer',
+            flexShrink: 0,
+          }}
+          title="Pengaturan Struk"
+        >
+          <Settings size={16} />
         </button>
       </div>
 
@@ -1625,6 +1735,318 @@ export default function Kasir() {
                   </button>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal Pengaturan Struk */}
+      {settingsModalOpen && (
+        <div
+          onClick={() => setSettingsModalOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(8px)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+            fontFamily: "'Inter', sans-serif"
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#ffffff',
+              borderRadius: '24px',
+              padding: '28px',
+              width: '100%',
+              maxWidth: '680px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '20px'
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#1E293B', tracking: '-0.025em' }}>
+                  ⚙️ Pengaturan Kustomisasi Struk
+                </h2>
+                <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: '#64748B', fontWeight: 500 }}>
+                  Sesuaikan nama toko, header, dan footer struk fisik Anda.
+                </p>
+              </div>
+              <button
+                onClick={() => setSettingsModalOpen(false)}
+                style={{
+                  background: '#F1F5F9',
+                  border: 'none',
+                  borderRadius: '12px',
+                  padding: '8px',
+                  cursor: 'pointer',
+                  color: '#64748B',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'background 0.2s'
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Content Layout: 2 Columns */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: window.innerWidth > 640 ? '1.2fr 1fr' : '1fr',
+                gap: '24px'
+              }}
+            >
+              {/* Left Column: Form Fields */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Nama Toko</label>
+                  <input
+                    type="text"
+                    value={tempStoreName}
+                    onChange={e => setTempStoreName(e.target.value)}
+                    placeholder="Masukkan Nama Toko..."
+                    style={{
+                      padding: '11px 14px',
+                      borderRadius: '12px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '0.9rem',
+                      outline: 'none',
+                      color: '#1E293B',
+                      background: '#F8FAFC',
+                      fontWeight: 600,
+                      transition: 'border-color 0.2s'
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Subheader Struk</label>
+                  <input
+                    type="text"
+                    value={tempSubheader}
+                    onChange={e => setTempSubheader(e.target.value)}
+                    placeholder="Masukkan Subheader..."
+                    style={{
+                      padding: '11px 14px',
+                      borderRadius: '12px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '0.9rem',
+                      outline: 'none',
+                      color: '#1E293B',
+                      background: '#F8FAFC',
+                      fontWeight: 600,
+                      transition: 'border-color 0.2s'
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label style={{ fontSize: '0.78rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Footer Struk (Kaki)</label>
+                  <textarea
+                    value={tempFooter}
+                    onChange={e => setTempFooter(e.target.value)}
+                    placeholder="Masukkan pesan penutup..."
+                    rows={2}
+                    style={{
+                      padding: '11px 14px',
+                      borderRadius: '12px',
+                      border: '1px solid #CBD5E1',
+                      fontSize: '0.9rem',
+                      outline: 'none',
+                      color: '#1E293B',
+                      background: '#F8FAFC',
+                      fontWeight: 600,
+                      resize: 'none',
+                      fontFamily: 'inherit',
+                      transition: 'border-color 0.2s'
+                    }}
+                  />
+                </div>
+
+                {/* Print Test Buttons */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cetak Struk Percobaan</div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      onClick={() => printTestReceipt('58mm')}
+                      style={{
+                        flex: 1,
+                        padding: '10px 12px',
+                        background: '#FFFFFF',
+                        border: '1px solid #CBD5E1',
+                        borderRadius: '12px',
+                        color: '#334155',
+                        fontWeight: 700,
+                        fontSize: '0.82rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        transition: 'background 0.2s'
+                      }}
+                    >
+                      <Printer size={14} /> Cetak 58mm
+                    </button>
+                    <button
+                      onClick={() => printTestReceipt('80mm')}
+                      style={{
+                        flex: 1,
+                        padding: '10px 12px',
+                        background: '#FFFFFF',
+                        border: '1px solid #CBD5E1',
+                        borderRadius: '12px',
+                        color: '#334155',
+                        fontWeight: 700,
+                        fontSize: '0.82rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        transition: 'background 0.2s'
+                      }}
+                    >
+                      <Printer size={14} /> Cetak 80mm
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Live thermal receipt mockup preview */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pratinjau Live (Preview)</div>
+                <div
+                  style={{
+                    background: '#F8FAFC',
+                    border: '1px dashed #CBD5E1',
+                    borderRadius: '16px',
+                    padding: '16px',
+                    fontFamily: 'monospace',
+                    fontSize: '11px',
+                    color: '#0F172A',
+                    boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'stretch',
+                    lineHeight: '1.4'
+                  }}
+                >
+                  {/* Mock store info */}
+                  <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '12px', marginBottom: '2px', wordBreak: 'break-word' }}>
+                    {tempStoreName || 'NAMA TOKO'}
+                  </div>
+                  <div style={{ textAlign: 'center', marginBottom: '6px', opacity: 0.8, wordBreak: 'break-word' }}>
+                    {tempSubheader || 'Header Struk'}
+                  </div>
+                  <div style={{ borderTop: '1px dashed #94A3B8', margin: '4px 0' }}></div>
+                  
+                  {/* Mock transaction details */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>No: TX-PREVIEW-999</span>
+                    <span>Tunai</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span>Tgl: {new Date().toLocaleDateString('id-ID')}</span>
+                    <span>12:00</span>
+                  </div>
+                  <div style={{ borderTop: '1px dashed #94A3B8', margin: '4px 0' }}></div>
+                  
+                  {/* Mock items */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                    <div>1. Produk Contoh A</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '8px', opacity: 0.8 }}>
+                      <span>2x @ Rp15.000</span>
+                      <span>Rp30.000</span>
+                    </div>
+                    <div>2. Produk Contoh B</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingLeft: '8px', opacity: 0.8 }}>
+                      <span>1x @ Rp5.000</span>
+                      <span>Rp5.000</span>
+                    </div>
+                  </div>
+                  <div style={{ borderTop: '1px dashed #94A3B8', margin: '4px 0' }}></div>
+                  
+                  {/* Mock totals */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+                    <span>TOTAL</span>
+                    <span>Rp35.000</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}>
+                    <span>Tunai</span>
+                    <span>Rp50.000</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', opacity: 0.8 }}>
+                    <span>Kembali</span>
+                    <span>Rp15.000</span>
+                  </div>
+                  <div style={{ borderTop: '1px dashed #94A3B8', margin: '4px 0' }}></div>
+                  
+                  {/* Mock footer */}
+                  <div style={{ textAlign: 'center', marginTop: '6px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', opacity: 0.9 }}>
+                    {tempFooter || 'Terima Kasih!'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', borderTop: '1px solid #F1F5F9', paddingTop: '16px' }}>
+              <button
+                onClick={() => setSettingsModalOpen(false)}
+                style={{
+                  padding: '10px 20px',
+                  background: '#F1F5F9',
+                  border: 'none',
+                  borderRadius: '12px',
+                  color: '#475569',
+                  fontWeight: 700,
+                  fontSize: '0.88rem',
+                  cursor: 'pointer',
+                  transition: 'background 0.2s'
+                }}
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => {
+                  const newSettings = {
+                    storeName: tempStoreName,
+                    subheader: tempSubheader,
+                    footer: tempFooter
+                  };
+                  localStorage.setItem('posbah_receipt_settings', JSON.stringify(newSettings));
+                  setReceiptSettings(newSettings);
+                  setSettingsModalOpen(false);
+                }}
+                style={{
+                  padding: '10px 24px',
+                  background: 'linear-gradient(135deg, #4F46E5, #6366F1)',
+                  border: 'none',
+                  borderRadius: '12px',
+                  color: '#FFFFFF',
+                  fontWeight: 700,
+                  fontSize: '0.88rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(79, 70, 229, 0.15)',
+                  transition: 'opacity 0.2s'
+                }}
+              >
+                Simpan Pengaturan
+              </button>
             </div>
           </div>
         </div>

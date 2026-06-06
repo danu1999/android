@@ -25,14 +25,24 @@ func wibLocation() *time.Location {
 	return loc
 }
 
-// workDateWIB menentukan "tanggal kerja" berdasarkan jam WIB.
-//
-// ATURAN SHIFT MALAM (Cross-Midnight):
-//   - Jika jam fingerprint (WIB) berada di antara rentang 00:00 hingga 11:59 WIB,
-//     maka secara otomatis dikurangi 1 hari (masuk ke WorkDate hari sebelumnya).
-//   - Jika di atas jam 12:00 WIB, tetap hari yang sama.
-//   - Semua ketergantungan terhadap nilai 'state' mesin dihapus.
+// workDateWIB menentukan "tanggal kerja" masuk (WIB) untuk Check-In baru.
+// Jika scan terjadi jam 00:00 s.d 03:59 subuh, dianggap shift malam kemarin.
 func workDateWIB(logTime time.Time) time.Time {
+	wib := wibLocation()
+	tWIB := logTime.In(wib)
+	h := tWIB.Hour()
+
+	workDate := time.Date(tWIB.Year(), tWIB.Month(), tWIB.Day(), 0, 0, 0, 0, time.UTC)
+
+	if h >= 0 && h < 4 {
+		workDate = workDate.AddDate(0, 0, -1)
+	}
+	return workDate
+}
+
+// workDateWIB_old menentukan tanggal kerja asli sebelum perbaikan shift pagi.
+// Digunakan khusus untuk demo mode guna mempertahankan kompatibilitas.
+func workDateWIB_old(logTime time.Time) time.Time {
 	wib := wibLocation()
 	tWIB := logTime.In(wib)
 	h := tWIB.Hour()
@@ -43,6 +53,30 @@ func workDateWIB(logTime time.Time) time.Time {
 		workDate = workDate.AddDate(0, 0, -1)
 	}
 	return workDate
+}
+
+// isCheckOutWindow mendeteksi apakah logTime (WIB) berada di dalam jendela waktu pulang shift:
+// - Shift 1 Check-Out: 14:00 - 15:59 WIB (h >= 14 && h < 16)
+// - Shift 2 Check-Out: 22:00 - 23:59 WIB ATAU 00:00 - 00:59 WIB (h >= 22 || h == 0)
+// - Shift 3 Check-Out: 06:00 - 07:59 WIB (h >= 6 && h < 8)
+func isCheckOutWindow(logTime time.Time) bool {
+	wib := wibLocation()
+	tWIB := logTime.In(wib)
+	h := tWIB.Hour()
+
+	// Shift 3 Check-Out: 06:00 - 07:59 WIB
+	if h >= 6 && h < 8 {
+		return true
+	}
+	// Shift 1 Check-Out: 14:00 - 15:59 WIB
+	if h >= 14 && h < 16 {
+		return true
+	}
+	// Shift 2 Check-Out: 22:00 - 00:59 WIB (h >= 22 || h == 0)
+	if h >= 22 || h == 0 {
+		return true
+	}
+	return false
 }
 
 // hitungKeterlambatan menghitung menit keterlambatan masuk.
@@ -158,11 +192,7 @@ func AdmsCdata(c *fiber.Ctx) error {
 			pin := strings.TrimSpace(parts[0])
 			timeStr := strings.TrimSpace(parts[1])
 
-			state := 0
 			verifyType := 0
-			if len(parts) >= 3 {
-				fmt.Sscanf(strings.TrimSpace(parts[2]), "%d", &state)
-			}
 			if len(parts) >= 4 {
 				fmt.Sscanf(strings.TrimSpace(parts[3]), "%d", &verifyType)
 			}
@@ -174,67 +204,144 @@ func AdmsCdata(c *fiber.Ctx) error {
 				pin, timeStr, logTime.Format("2006-01-02 15:04:05"),
 			)
 
-			// ── Tentukan WorkDate (tanggal kerja riil, aman untuk shift malam) ──
-			workDate := workDateWIB(logTime)
-
-			// ── Cek apakah sudah ada log absensi untuk PIN dan WorkDate ini ──
-			var existingLog models.AttendanceLog
-			err := database.DB.Where("employee_pin = ? AND work_date = ? AND is_demo = ?", pin, workDate, device.IsDemo).First(&existingLog).Error
-
-			if err == nil {
-				// 📋 LOG DI HARI YANG SAMA DITEMUKAN → INI ADALAH CHECK-OUT
+			if device.IsDemo {
+				// ── ALUR LAMA (KHUSUS DEMO / NON-BMP PRODUCTION) ──
+				workDate := workDateWIB_old(logTime)
 				
-				// Validasi ketat retransmit & multi-scan
-				// a. Jika logTime baru <= logTime Check-In yang sudah ada, abaikan
-				if logTime.Before(existingLog.LogTime) || logTime.Equal(existingLog.LogTime) {
-					log.Printf("[ADMS] ⚠️ Abaikan retransmit/data check-in lama: PIN=%s | logTime=%s WIB <= existing.LogTime=%s WIB",
-						pin, logTime.In(loc).Format("2006-01-02 15:04:05"), existingLog.LogTime.In(loc).Format("2006-01-02 15:04:05"),
-					)
-					continue
-				}
+				var existingLog models.AttendanceLog
+				err := database.DB.Where("employee_pin = ? AND work_date = ? AND is_demo = ?", pin, workDate, device.IsDemo).First(&existingLog).Error
 
-				// b. Jika check_out_time sudah terisi, update hanya jika logTime baru > check_out_time lama
-				if existingLog.CheckOutTime != nil {
-					if !logTime.After(*existingLog.CheckOutTime) {
-						log.Printf("[ADMS] ⚠️ Abaikan check-out lama / retransmit: PIN=%s | logTime=%s WIB <= existing.CheckOutTime=%s WIB",
-							pin, logTime.In(loc).Format("2006-01-02 15:04:05"), existingLog.CheckOutTime.In(loc).Format("2006-01-02 15:04:05"),
-						)
+				if err == nil {
+					// LOG DI HARI YANG SAMA DITEMUKAN → INI ADALAH CHECK-OUT
+					if logTime.Before(existingLog.LogTime) || logTime.Equal(existingLog.LogTime) {
+						log.Printf("[ADMS] [DEMO] ⚠️ Abaikan retransmit/data check-in lama: PIN=%s", pin)
 						continue
 					}
-				}
 
-				// Update check-out time dengan waktu terbaru, dan ubah VerifyState ke 1 (Check-Out)
-				existingLog.CheckOutTime = &logTime
-				existingLog.VerifyState = 1
-				if err := database.DB.Save(&existingLog).Error; err != nil {
-					log.Printf("[ADMS] ❌ Gagal update log check-out PIN=%s: %v", pin, err)
-					continue
+					if existingLog.CheckOutTime != nil {
+						if !logTime.After(*existingLog.CheckOutTime) {
+							log.Printf("[ADMS] [DEMO] ⚠️ Abaikan check-out lama / retransmit: PIN=%s", pin)
+							continue
+						}
+					}
+
+					existingLog.CheckOutTime = &logTime
+					existingLog.VerifyState = 1
+					if err := database.DB.Save(&existingLog).Error; err != nil {
+						log.Printf("[ADMS] [DEMO] ❌ Gagal update log check-out PIN=%s: %v", pin, err)
+						continue
+					}
+					log.Printf("[ADMS] [DEMO] 💾 Terupdate (Check-Out): ID=%d | PIN=%s | Pulang=%s WIB | WorkDate=%s",
+						existingLog.ID, pin, logTime.In(loc).Format("15:04:05"), workDate.Format("2006-01-02"),
+					)
+				} else {
+					// LOG BELUM ADA → INI ADALAH CHECK-IN
+					lateMinutes := hitungKeterlambatan(logTime)
+
+					attLog := models.AttendanceLog{
+						DeviceSN:    sn,
+						EmployeePIN: pin,
+						VerifyType:  verifyType,
+						VerifyState: 0,
+						LogTime:     logTime,
+						WorkDate:    workDate,
+						LateMinutes: lateMinutes,
+						IsDemo:      device.IsDemo,
+					}
+					if err := database.DB.Create(&attLog).Error; err != nil {
+						log.Printf("[ADMS] [DEMO] ❌ Gagal simpan log check-in PIN=%s: %v", pin, err)
+						continue
+					}
+					log.Printf("[ADMS] [DEMO] 💾 Tersimpan (Check-In): ID=%d | PIN=%s | Masuk=%s WIB | WorkDate=%s | Late=%dmnt",
+						attLog.ID, pin, logTime.In(loc).Format("15:04:05"), workDate.Format("2006-01-02"), lateMinutes,
+					)
 				}
-				log.Printf("[ADMS] 💾 Terupdate (Check-Out): ID=%d | PIN=%s | Pulang=%s WIB | WorkDate=%s",
-					existingLog.ID, pin, logTime.In(loc).Format("15:04:05"), workDate.Format("2006-01-02"),
-				)
 			} else {
-				// 📋 LOG BELUM ADA → INI ADALAH CHECK-IN
-				// Hitung keterlambatan berdasarkan rentang window shift ketat
-				lateMinutes := hitungKeterlambatan(logTime)
+				// ── ALUR BARU DENGAN HEURISTIK CERDAS & WARNING FLAG (KHUSUS PRODUKSI BMP: bahteramulyap@gmail.com) ──
+				var lastLog models.AttendanceLog
+				err := database.DB.Where("employee_pin = ? AND is_demo = ?", pin, device.IsDemo).Order("log_time DESC").First(&lastLog).Error
 
-				attLog := models.AttendanceLog{
-					DeviceSN:    sn,
-					EmployeePIN: pin,
-					VerifyType:  verifyType,
-					VerifyState: 0, // Check-In
-					LogTime:     logTime,
-					WorkDate:    workDate,
-					LateMinutes: lateMinutes,
-					IsDemo:      device.IsDemo,
+				isCheckIn := true
+				var matchedLog *models.AttendanceLog = nil
+
+				if err == nil {
+					// Ada log sebelumnya
+					if lastLog.CheckOutTime == nil {
+						// Log terakhir belum Check-Out
+						duration := logTime.Sub(lastLog.LogTime)
+
+						// Abaikan scan ganda kurang dari 2 menit (retransmit/sengaja scan ulang cepat)
+						if duration.Minutes() < 2 {
+							log.Printf("[ADMS] ⚠️ Abaikan scan ganda/retransmit: PIN=%s | Selisih=%v", pin, duration)
+							continue
+						}
+
+						// Jika selisih masuk s.d. sekarang <= 12 jam, dianggap scan pulang (Check-Out)
+						if duration.Hours() <= 12 {
+							isCheckIn = false
+							matchedLog = &lastLog
+						} else {
+							// Jika > 12 jam, berarti kemarin lupa scan pulang. Dianggap Check-In baru.
+							isCheckIn = true
+						}
+					} else {
+						// Log terakhir sudah Check-Out. Dianggap Check-In baru.
+						duration := logTime.Sub(*lastLog.CheckOutTime)
+						if duration.Minutes() < 2 {
+							log.Printf("[ADMS] ⚠️ Abaikan scan ganda setelah checkout: PIN=%s | Selisih=%v", pin, duration)
+							continue
+						}
+						isCheckIn = true
+					}
+				} else {
+					// Belum ada log sama sekali
+					isCheckIn = true
 				}
-				if err := database.DB.Create(&attLog).Error; err != nil {
-					log.Printf("[ADMS] ❌ Gagal simpan log check-in PIN=%s: %v", pin, err)
-					continue
+
+				if isCheckIn {
+					// 📋 ALUR CHECK-IN (Masuk Kerja)
+					workDate := workDateWIB(logTime)
+					lateMinutes := hitungKeterlambatan(logTime)
+
+					alasan := ""
+					if isCheckOutWindow(logTime) {
+						alasan = "Hanya Scan Pulang / Lupa Scan Masuk"
+					}
+
+					attLog := models.AttendanceLog{
+						DeviceSN:    sn,
+						EmployeePIN: pin,
+						VerifyType:  verifyType,
+						VerifyState: 0, // Check-In
+						LogTime:     logTime,
+						WorkDate:    workDate,
+						LateMinutes: lateMinutes,
+						Alasan:      alasan,
+						IsDemo:      device.IsDemo,
+					}
+					if err := database.DB.Create(&attLog).Error; err != nil {
+						log.Printf("[ADMS] ❌ Gagal simpan log check-in PIN=%s: %v", pin, err)
+						continue
+					}
+					log.Printf("[ADMS] 💾 Tersimpan (Check-In): ID=%d | PIN=%s | Masuk=%s WIB | WorkDate=%s | Late=%dmnt | Alasan=%s",
+						attLog.ID, pin, logTime.In(loc).Format("15:04:05"), workDate.Format("2006-01-02"), lateMinutes, alasan,
+					)
+				} else {
+					// 📋 ALUR CHECK-OUT (Pulang Kerja)
+					// Waktu pulang langsung dikaitkan ke log masuk pasangannya
+					matchedLog.CheckOutTime = &logTime
+					matchedLog.VerifyState = 1 // Check-Out
+					if matchedLog.Alasan == "Hanya Scan Pulang / Lupa Scan Masuk" {
+						matchedLog.Alasan = ""
+					}
+					if err := database.DB.Save(matchedLog).Error; err != nil {
+						log.Printf("[ADMS] ❌ Gagal update log check-out PIN=%s: %v", pin, err)
+						continue
+					}
+					log.Printf("[ADMS] 💾 Terupdate (Check-Out): ID=%d | PIN=%s | Pulang=%s WIB | WorkDate=%s | Alasan=%s",
+						matchedLog.ID, pin, logTime.In(loc).Format("15:04:05"), matchedLog.WorkDate.Format("2006-01-02"), matchedLog.Alasan,
+					)
 				}
-				log.Printf("[ADMS] 💾 Tersimpan (Check-In): ID=%d | PIN=%s | Masuk=%s WIB | WorkDate=%s | Late=%dmnt",
-					attLog.ID, pin, logTime.In(loc).Format("15:04:05"), workDate.Format("2006-01-02"), lateMinutes,
-				)
 			}
 		}
 

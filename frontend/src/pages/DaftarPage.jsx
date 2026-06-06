@@ -57,6 +57,7 @@ export default function DaftarPage({ onLogin }) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
+  const [whatsapp, setWhatsapp] = useState('');
   const [googleProfile, setGoogleProfile] = useState(null);
 
   useEffect(() => {
@@ -115,7 +116,8 @@ export default function DaftarPage({ onLogin }) {
         email: googleProfile.email,
         name: name,
         password: password,
-        businessMode: selected
+        businessMode: selected,
+        whatsapp: whatsapp
       });
       const { registeredAt, expiresAt } = res.data;
 
@@ -149,7 +151,8 @@ export default function DaftarPage({ onLogin }) {
       const res = await api.post('/auth/google-register', {
         email: emailVal,
         name: nameVal,
-        businessMode: selected
+        businessMode: selected,
+        whatsapp: whatsapp
       });
       const { registeredAt, expiresAt, isNewUser } = res.data;
 
@@ -468,6 +471,28 @@ export default function DaftarPage({ onLogin }) {
                       fontSize: '13px',
                       outline: 'none',
                       cursor: 'not-allowed'
+                    }}
+                    required
+                  />
+                </div>
+
+                <div style={{ marginBottom: '14px' }}>
+                  <label style={{ display: 'block', color: 'rgba(255,255,255,0.7)', fontSize: '12px', fontWeight: 600, marginBottom: '5px' }}>Nomor WhatsApp</label>
+                  <input
+                    type="tel"
+                    placeholder="Contoh: 081234567890"
+                    value={whatsapp}
+                    onChange={e => setWhatsapp(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '11px 14px',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      background: 'rgba(255,255,255,0.05)',
+                      color: 'white',
+                      fontSize: '13px',
+                      outline: 'none',
+                      transition: 'all 0.2s'
                     }}
                     required
                   />

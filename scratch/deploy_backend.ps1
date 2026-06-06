@@ -17,7 +17,7 @@ scp -o StrictHostKeyChecking=no -i $pemPath backend/dist/index.js "${user}@${ip}
 Write-Host "Uploading BMP PDF templates to VPS..." -ForegroundColor Cyan
 scp -o StrictHostKeyChecking=no -i $pemPath -r bmp-go/golang-backend/templates/* "${user}@${ip}:/home/muizz9900/bmp-backend/templates/"
 
-Write-Host "Restarting backend via PM2 on VPS..." -ForegroundColor Cyan
-ssh -o StrictHostKeyChecking=no -i $pemPath "${user}@${ip}" "pm2 restart posbah-backend && pm2 status"
+Write-Host "Reloading backend via PM2 on VPS (Zero-Downtime)..." -ForegroundColor Cyan
+ssh -o StrictHostKeyChecking=no -i $pemPath "${user}@${ip}" "pm2 reload posbah-backend && pm2 status"
 
 Write-Host "Backend successfully deployed!" -ForegroundColor Green

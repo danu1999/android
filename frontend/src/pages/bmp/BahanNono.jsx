@@ -314,7 +314,7 @@ const BahanNono = () => {
             <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", alignItems: isMobile ? "stretch" : "center", marginBottom: "20px", gap: "12px" }}>
                 <div>
                     <h2 style={{ fontSize: isMobile ? "20px" : "24px", fontWeight: "800", margin: 0, color: "#0f172a" }}>Buku Bahan Baku</h2>
-                    <p style={{ margin: "4px 0 0 0", color: "#64748b", fontSize: "13px" }}>Pencatatan ambil bahan (Nono) & pembayaran</p>
+                    <p style={{ margin: "4px 0 0 0", color: "#64748b", fontSize: "13px" }}>Pencatatan ambil Bahan Baku & pembayaran</p>
                 </div>
                 
                 {

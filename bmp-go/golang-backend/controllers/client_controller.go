@@ -175,11 +175,7 @@ func GetClientSummary(c *fiber.Ctx) error {
 		database.DB.Where("invoice_id = ?", inv.ID).Find(&products)
 		totalInv := 0.0
 		for _, p := range products {
-			if p.IsKhusus {
-				totalInv += p.Quantity * p.JumlahLusin * p.HargaBeli
-			} else {
-				totalInv += p.Quantity * p.JumlahLusin * p.Price
-			}
+			totalInv += p.Quantity * p.JumlahLusin * p.Price
 		}
 
 		// Calculate total paid

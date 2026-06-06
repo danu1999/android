@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation, Navigate, useNavigate } from 'react-router-dom';
+import api from './api';
 import {
   Calculator, Package, LayoutDashboard, LogOut, Clock,
   DollarSign, Users, UserCog, Crown, ShieldCheck, Lock, X, Sparkles, History, Car, WifiOff,
@@ -193,8 +194,7 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
   const { logout: bmpLogout } = React.useContext(BmpAuthContext);
 
   const isExcludedName = (name) => {
-    if (!name) return false;
-    return ['hanafi', 'fed', 'fahri'].includes(name.toLowerCase());
+    return false;
   };
 
   const allNavItems = appMode === 'RENTAL' ? [
@@ -218,7 +218,7 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
     { path: '/invoices', label: 'Daftar Faktur', icon: <FileText size={20} />, minRole: 'KASIR', showInNav: true },
     { path: '/products', label: 'Master Barang', icon: <Package size={20} />, minRole: 'KASIR', showInNav: true },
     { path: '/clients', label: 'Data Pelanggan', icon: <Users size={20} />, minRole: 'KASIR', showInNav: true },
-    { path: '/bahan-nono', label: 'Bahan Mas Nono', icon: <Package size={20} />, minRole: 'KASIR', showInNav: true },
+    { path: '/bahan-nono', label: 'Bahan Baku', icon: <Package size={20} />, minRole: 'KASIR', showInNav: true },
     { path: '/kas', label: 'Kas Keuangan', icon: <RefreshCw size={20} />, minRole: 'KASIR', showInNav: true },
     { path: '/pricelist', label: 'Pricelist Harga', icon: <List size={20} />, minRole: 'KASIR', showInNav: true },
     { path: '/hpp-calculator', label: 'Kalkulator HPP', icon: <Cpu size={20} />, minRole: 'KASIR', showInNav: true },
@@ -341,6 +341,48 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
           {appMode === 'BMP' && !user && (
             <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1F2937', marginBottom: '4px' }}>BMP Admin</div>
           )}
+          {user && !user.isDemo && (
+            <button
+              onClick={async () => {
+                try {
+                  const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
+                  const base = isCapacitor ? 'https://www.zedmz.cloud' : '';
+                  const res = await api.get('/auth/get-apk-download-token');
+                  if (res.data && res.data.token) {
+                    const downloadUrl = `${base}/api/download-apk?token=${res.data.token}`;
+                    if (isCapacitor) {
+                      window.open(downloadUrl, '_system');
+                    } else {
+                      window.open(downloadUrl, '_blank');
+                    }
+                  } else {
+                    alert('Gagal mendapatkan token unduhan.');
+                  }
+                } catch (err) {
+                  alert(err.response?.data?.error || 'Gagal mengunduh APK. Hanya akun premium aktif yang diperbolehkan.');
+                }
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                width: '100%',
+                padding: '8px 12px',
+                marginTop: '8px',
+                marginBottom: '8px',
+                borderRadius: '8px',
+                border: 'none',
+                background: 'linear-gradient(135deg, #10B981, #059669)',
+                color: 'white',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 4px 10px rgba(16,185,129,0.2)'
+              }}
+            >
+              <Download size={14} /> Unduh APK POSBah
+            </button>
+          )}
           <button onClick={handleLogoutClick} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', padding: '8px 0 0', fontWeight: 600 }}>
             <LogOut size={14} /> Keluar
           </button>
@@ -349,7 +391,48 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
 
       {/* Mobile Bottom Nav */}
       <nav className="mobile-bottom-nav glass-panel md-hidden">
-        {navItems.map(item => (
+        {navItems.slice(0, Math.ceil(navItems.length / 2)).map(item => (
+          <Link key={item.path} to={item.path} className={location.pathname === item.path ? 'active' : ''}>
+            {item.icon}
+            <span className="text-xs">{item.label}</span>
+          </Link>
+        ))}
+
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('posbah_open_update'))}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.25rem',
+            padding: '0.5rem',
+            background: 'none',
+            border: 'none',
+            color: 'var(--text-main)',
+            fontSize: '0.75rem',
+            textAlign: 'center',
+            flex: 1,
+            minWidth: '60px',
+            cursor: 'pointer',
+            position: 'relative'
+          }}
+        >
+          <span style={{
+            position: 'absolute',
+            top: '8px',
+            right: 'calc(50% - 12px)',
+            width: '6px',
+            height: '6px',
+            background: '#EF4444',
+            borderRadius: '50%',
+            boxShadow: '0 0 6px #EF4444',
+          }} />
+          <Download size={20} />
+          <span className="text-xs">Update</span>
+        </button>
+
+        {navItems.slice(Math.ceil(navItems.length / 2)).map(item => (
           <Link key={item.path} to={item.path} className={location.pathname === item.path ? 'active' : ''}>
             {item.icon}
             <span className="text-xs">{item.label}</span>
@@ -399,7 +482,7 @@ function AppContent({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
     return <Navigate to="/" replace />;
   }
 
-  const isTargetUser = user?.name && ['hanafi', 'fed', 'fahri'].includes(user.name.toLowerCase().trim());
+  const isTargetUser = false;
 
   return (
     <div className="app-layout select-none">
@@ -1105,8 +1188,7 @@ function App() {
   });
 
   const isExcludedName = (name) => {
-    if (!name) return false;
-    return ['hanafi', 'fed', 'fahri'].includes(name.toLowerCase());
+    return false;
   };
 
   const [appMode, setAppMode] = useState(() => {
@@ -1247,14 +1329,23 @@ function App() {
             {showUpdateFullscreen && (
               <FullscreenUpdateModal
                 onClose={() => setShowUpdateFullscreen(false)}
-                onDownload={() => {
-                  const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
-                  const base = isCapacitor ? 'https://www.zedmz.cloud' : '';
-                  const downloadUrl = `${base}/api/download-apk`;
-                  if (isCapacitor) {
-                    window.open(downloadUrl, '_system');
-                  } else {
-                    window.open(downloadUrl, '_blank');
+                onDownload={async () => {
+                  try {
+                    const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
+                    const base = isCapacitor ? 'https://www.zedmz.cloud' : '';
+                    const res = await api.get('/auth/get-apk-download-token');
+                    if (res.data && res.data.token) {
+                      const downloadUrl = `${base}/api/download-apk?token=${res.data.token}`;
+                      if (isCapacitor) {
+                        window.open(downloadUrl, '_system');
+                      } else {
+                        window.open(downloadUrl, '_blank');
+                      }
+                    } else {
+                      alert('Gagal mendapatkan tautan unduhan.');
+                    }
+                  } catch (err) {
+                    alert(err.response?.data?.error || 'Gagal mengunduh APK. Hanya akun premium aktif yang diperbolehkan.');
                   }
                 }}
               />

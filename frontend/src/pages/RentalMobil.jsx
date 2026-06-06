@@ -1,13 +1,73 @@
 import React, { useState, useEffect } from 'react';
 import {
   Car, Plus, Edit2, Trash2, Calendar, DollarSign,
-  User, ClipboardList, CheckCircle, AlertTriangle, Search, RefreshCw, Printer
+  User, ClipboardList, CheckCircle, AlertTriangle, Search, RefreshCw, Printer, Settings, X
 } from 'lucide-react';
 import api from '../api';
 import { useDemoBlock } from '../AuthContext';
 
 export default function RentalMobil() {
   const { showDemoBlock, isDemo } = useDemoBlock();
+  
+  const [receiptSettings, setReceiptSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('posbah_receipt_settings_rental');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return {
+      storeName: 'POSBAH RENTAL MOBIL',
+      subheader: 'Jasa Sewa Mobil Terbaik & Cepat',
+      footer: "Terima kasih atas kunjungan Anda!\nHarap berkendara dengan aman.\n- POSBAH -"
+    };
+  });
+
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [tempStoreName, setTempStoreName] = useState(receiptSettings.storeName);
+  const [tempSubheader, setTempSubheader] = useState(receiptSettings.subheader);
+  const [tempFooter, setTempFooter] = useState(receiptSettings.footer);
+
+  useEffect(() => {
+    if (settingsModalOpen) {
+      setTempStoreName(receiptSettings.storeName);
+      setTempSubheader(receiptSettings.subheader);
+      setTempFooter(receiptSettings.footer);
+    }
+  }, [settingsModalOpen, receiptSettings]);
+
+  const printTestReceipt = (size) => {
+    const dummyRental = {
+      id: "TEST",
+      createdAt: new Date().toISOString(),
+      customerName: "Pelanggan Demo",
+      startDate: new Date().toISOString(),
+      endDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+      totalPrice: 500000,
+      paymentMethod: "CASH",
+      status: "ACTIVE",
+      car: {
+        name: "Toyota Avanza",
+        plateNumber: "B 1234 ABC",
+        type: "MPV",
+        pricePerDay: 250000
+      }
+    };
+    
+    const origSettings = localStorage.getItem('posbah_receipt_settings_rental');
+    localStorage.setItem('posbah_receipt_settings_rental', JSON.stringify({
+      storeName: tempStoreName,
+      subheader: tempSubheader,
+      footer: tempFooter
+    }));
+
+    printViaSystem(dummyRental, size);
+
+    if (origSettings) {
+      localStorage.setItem('posbah_receipt_settings_rental', origSettings);
+    } else {
+      localStorage.removeItem('posbah_receipt_settings_rental');
+    }
+  };
+
   const [activeTab, setActiveTab] = useState('POS'); // 'POS', 'CARS', 'HISTORY'
   const [cars, setCars] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -43,6 +103,10 @@ export default function RentalMobil() {
   const printViaSystem = (rental, size) => {
     const width = size === '58mm' ? '58mm' : '80mm';
     const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Pencetakan sistem (browser) tidak didukung di APK. Silakan gunakan printer Bluetooth.');
+      return;
+    }
     
     const start = new Date(rental.startDate);
     const end = new Date(rental.endDate);
@@ -50,6 +114,16 @@ export default function RentalMobil() {
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
     const basicCost = (rental.car?.pricePerDay || 0) * diffDays;
     const grandTotal = Number(rental.totalPrice || 0) + Number(rental.status === 'RETURNED' ? (rental.lateFee || 0) : 0);
+
+    let settings = receiptSettings;
+    try {
+      const saved = localStorage.getItem('posbah_receipt_settings_rental');
+      if (saved) settings = JSON.parse(saved);
+    } catch (e) {}
+
+    const storeName = settings?.storeName || 'POSBAH RENTAL MOBIL';
+    const subheader = settings?.subheader || 'Jasa Sewa Mobil Terbaik & Cepat';
+    const footer = settings?.footer || "Terima kasih atas kunjungan Anda!\nHarap berkendara dengan aman.\n- POSBAH -";
 
     const content = `
       <html>
@@ -79,8 +153,8 @@ export default function RentalMobil() {
           </style>
         </head>
         <body>
-          <div class="c title">POSBAH RENTAL MOBIL</div>
-          <div class="c subtitle">Jasa Sewa Mobil Terbaik & Cepat</div>
+          <div class="c title">${storeName}</div>
+          <div class="c subtitle">${subheader}</div>
           <hr>
           <div>No. Sewa : RENT-${rental.id}</div>
           <div>Tanggal  : ${new Date(rental.createdAt || Date.now()).toLocaleString('id-ID')}</div>
@@ -109,9 +183,7 @@ export default function RentalMobil() {
           </table>
           <hr>
           <div class="c footer">
-            Terima kasih atas kunjungan Anda!<br>
-            Harap berkendara dengan aman.<br>
-            - POSBAH -
+            ${footer.replace(/\n/g, '<br>')}
           </div>
           <script>
             window.onload = function() {
@@ -184,10 +256,20 @@ export default function RentalMobil() {
         return left + ' '.repeat(spaceNeeded > 0 ? spaceNeeded : 1) + right;
       };
 
+      let settings = receiptSettings;
+      try {
+        const saved = localStorage.getItem('posbah_receipt_settings_rental');
+        if (saved) settings = JSON.parse(saved);
+      } catch (e) {}
+
+      const storeName = settings?.storeName || 'POSBAH RENTAL MOBIL';
+      const subheader = settings?.subheader || 'Jasa Sewa Mobil Terbaik';
+      const footer = settings?.footer || "Terima kasih atas kunjungan Anda!\nHarap berkendara dengan aman.\n- POSBAH -";
+
       let d = '';
       d += RESET;
-      d += CENTER + DOUBLE_HEIGHT + BOLD_ON + 'POSBAH RENTAL MOBIL' + NORMAL + LINE_FEED;
-      d += CENTER + 'Jasa Sewa Mobil Terbaik' + LINE_FEED;
+      d += CENTER + DOUBLE_HEIGHT + BOLD_ON + storeName + NORMAL + LINE_FEED;
+      d += CENTER + subheader + LINE_FEED;
       d += CENTER + '-'.repeat(charLimit) + LINE_FEED;
 
       d += LEFT;
@@ -224,9 +306,9 @@ export default function RentalMobil() {
       d += padText('Status Sewa', rental.status === 'ACTIVE' ? 'DISEWA (AKTIF)' : 'KEMBALI (SELESAI)') + LINE_FEED;
       d += '-'.repeat(charLimit) + LINE_FEED;
 
-      d += CENTER + 'Terima kasih atas kunjungan Anda!' + LINE_FEED;
-      d += CENTER + 'Harap berkendara dengan aman.' + LINE_FEED;
-      d += CENTER + '- POSBAH -' + LINE_FEED;
+      footer.split('\n').forEach(line => {
+        if (line.trim()) d += CENTER + line.trim() + LINE_FEED;
+      });
       d += LINE_FEED + LINE_FEED + LINE_FEED;
 
       const rawBytes = encoder.encode(d);
@@ -482,6 +564,28 @@ export default function RentalMobil() {
             <p className="text-xs text-gray-400 font-semibold mt-0.5">Kelola penyewaan kendaraan dengan mudah & cepat</p>
           </div>
         </div>
+
+        {/* Settings button */}
+        <button
+          onClick={() => setSettingsModalOpen(true)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '8px 12px',
+            borderRadius: '10px',
+            border: '1px solid #d1d5db',
+            background: 'white',
+            color: '#374151',
+            cursor: 'pointer',
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            gap: '6px'
+          }}
+          title="Pengaturan Struk"
+        >
+          <Settings size={16} /> Pengaturan Struk
+        </button>
       </div>
 
       {/* Tabs Menu */}
@@ -619,8 +723,8 @@ export default function RentalMobil() {
               {/* Payment Method */}
               <div className="form-group flex flex-col gap-1.5">
                 <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Metode Pembayaran</label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-gray-50/50 p-1.5 rounded-2xl border border-gray-100">
-                  {['CASH', 'TRANSFER', 'QRIS', 'HUTANG'].map(method => (
+                <div className="grid grid-cols-3 gap-2 bg-gray-50/50 p-1.5 rounded-2xl border border-gray-100">
+                  {['CASH', 'TRANSFER', 'HUTANG'].map(method => (
                     <button
                       key={method}
                       type="button"
@@ -1131,8 +1235,8 @@ export default function RentalMobil() {
               {lateFee > 0 && (
                 <div className="form-group flex flex-col gap-1.5">
                   <label className="text-[10px] font-bold text-gray-455 uppercase tracking-wider">Metode Pembayaran Denda</label>
-                  <div className="grid grid-cols-3 gap-2 bg-gray-50/50 p-1 rounded-xl border border-gray-100">
-                    {['CASH', 'TRANSFER', 'QRIS'].map(method => (
+                  <div className="grid grid-cols-2 gap-2 bg-gray-50/50 p-1 rounded-xl border border-gray-100">
+                    {['CASH', 'TRANSFER'].map(method => (
                       <button
                         key={method}
                         type="button"
@@ -1248,9 +1352,20 @@ export default function RentalMobil() {
                       return left + ' '.repeat(spaceNeeded > 0 ? spaceNeeded : 1) + right;
                     };
                     
+                    let settings = receiptSettings;
+                    try {
+                      const saved = localStorage.getItem('posbah_receipt_settings_rental');
+                      if (saved) settings = JSON.parse(saved);
+                    } catch (e) {}
+                    const storeName = settings?.storeName || 'POSBAH RENTAL MOBIL';
+                    const subheader = settings?.subheader || 'Jasa Sewa Mobil Terbaik & Cepat';
+                    const footer = settings?.footer || "Terima kasih atas kunjungan Anda!\nHarap berkendara dengan aman.\n- POSBAH -";
+
                     let text = '';
-                    text += '      POSBAH RENTAL MOBIL\n';
-                    text += '    Jasa Sewa Mobil Terbaik\n';
+                    text += ' '.repeat(Math.max(0, Math.floor((charLimit - storeName.length) / 2))) + storeName + '\n';
+                    subheader.split('\n').forEach(line => {
+                      if (line.trim()) text += ' '.repeat(Math.max(0, Math.floor((charLimit - line.trim().length) / 2))) + line.trim() + '\n';
+                    });
                     text += '-'.repeat(charLimit) + '\n';
                     text += `No. Sewa : RENT-${printRental.id}\n`;
                     text += `Tanggal  : ${new Date(printRental.createdAt || Date.now()).toLocaleDateString('id-ID')}\n`;
@@ -1280,9 +1395,9 @@ export default function RentalMobil() {
                     text += padText('Metode Bayar', String(printRental.paymentMethod || 'CASH').toUpperCase()) + '\n';
                     text += padText('Status Sewa', printRental.status === 'ACTIVE' ? 'DISEWA (AKTIF)' : 'KEMBALI (SELESAI)') + '\n';
                     text += '-'.repeat(charLimit) + '\n';
-                    text += '  Terima kasih atas kunjungan Anda!\n';
-                    text += '    Harap berkendara dengan aman.\n';
-                    text += '              - POSBAH -';
+                    footer.split('\n').forEach(line => {
+                      if (line.trim()) text += ' '.repeat(Math.max(0, Math.floor((charLimit - line.trim().length) / 2))) + line.trim() + '\n';
+                    });
                     return text;
                   })()}
                 </pre>
@@ -1313,6 +1428,153 @@ export default function RentalMobil() {
                 className="w-full py-2.5 text-gray-500 hover:text-gray-800 text-xs font-bold rounded-xl border border-gray-200/50 cursor-pointer transition-all mt-1"
               >
                 Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Pengaturan Struk */}
+      {settingsModalOpen && (
+        <div className="modal-overlay z-[999] backdrop-blur-md bg-black/45 flex items-center justify-center px-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl p-6 shadow-xl flex flex-col gap-4 relative animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center pb-2 border-b border-gray-100">
+              <div>
+                <h3 className="text-base font-black text-gray-800 m-0">Pengaturan Desain Struk</h3>
+                <p className="text-[10px] text-gray-400 font-semibold mt-0.5">Kustomisasi informasi struk belanja POS Rental Mobil</p>
+              </div>
+              <button
+                onClick={() => setSettingsModalOpen(false)}
+                className="text-gray-400 hover:text-gray-650 font-bold text-lg cursor-pointer border-none bg-transparent"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Left Column: Form inputs */}
+              <div className="flex flex-col gap-4">
+                <div className="form-group flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Nama Toko / Bisnis</label>
+                  <input
+                    type="text"
+                    value={tempStoreName}
+                    onChange={(e) => setTempStoreName(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm text-gray-800 outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 transition-all duration-200 h-11"
+                    placeholder="Contoh: POSBAH RENTAL MOBIL"
+                  />
+                </div>
+
+                <div className="form-group flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Subheader / Keterangan</label>
+                  <input
+                    type="text"
+                    value={tempSubheader}
+                    onChange={(e) => setTempSubheader(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm text-gray-800 outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 transition-all duration-200 h-11"
+                    placeholder="Contoh: Jasa Sewa Mobil Terbaik & Cepat"
+                  />
+                </div>
+
+                <div className="form-group flex flex-col gap-1.5">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Kaki Struk (Footer)</label>
+                  <textarea
+                    value={tempFooter}
+                    onChange={(e) => setTempFooter(e.target.value)}
+                    rows={3}
+                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm text-gray-800 outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 transition-all duration-200 resize-none"
+                    placeholder="Contoh: Terima kasih atas kunjungan Anda!"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Cetak Uji Coba (Test Print)</span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => printTestReceipt('58mm')}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200 rounded-xl text-xs font-bold cursor-pointer transition-all active:scale-[0.98]"
+                    >
+                      <Printer size={13} /> Cetak 58mm
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => printTestReceipt('80mm')}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200 rounded-xl text-xs font-bold cursor-pointer transition-all active:scale-[0.98]"
+                    >
+                      <Printer size={13} /> Cetak 80mm
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Live thermal receipt mockup preview */}
+              <div className="flex flex-col gap-2">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Pratinjau Live (Preview)</span>
+                <div
+                  className="bg-slate-900 text-slate-100 p-4 rounded-2xl text-left overflow-y-auto font-mono text-[10px] leading-relaxed whitespace-pre flex flex-col gap-1 border border-slate-800"
+                  style={{ maxHeight: '220px' }}
+                >
+                  <div className="text-center font-bold text-[11px] uppercase tracking-wider">{tempStoreName || 'NAMA TOKO'}</div>
+                  <div className="text-center text-[9px] opacity-80">{tempSubheader || 'Subheader Struk'}</div>
+                  <div className="border-t border-dashed border-slate-700 my-1"></div>
+                  
+                  <div className="flex justify-between">
+                    <span>No: RENT-PREVIEW-999</span>
+                    <span>Tunai</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Tgl: {new Date().toLocaleDateString('id-ID')}</span>
+                    <span>12:00</span>
+                  </div>
+                  <div className="border-t border-dashed border-slate-700 my-1"></div>
+                  
+                  <div>Mobil    : Toyota Avanza</div>
+                  <div>Plat No  : B 1234 ABC</div>
+                  <div>Mulai    : {new Date().toLocaleDateString('id-ID')}</div>
+                  <div>Tenggat  : {new Date(Date.now() + 2*24*60*60*1000).toLocaleDateString('id-ID')}</div>
+                  <div>Durasi   : 2 Hari</div>
+                  <div className="border-t border-dashed border-slate-700 my-1"></div>
+                  
+                  <div className="flex justify-between">
+                    <span>Tarif Sewa</span>
+                    <span>Rp 250.000/hr</span>
+                  </div>
+                  <div className="flex justify-between font-bold">
+                    <span>GRAND TOTAL</span>
+                    <span>Rp 500.000</span>
+                  </div>
+                  <div className="border-t border-dashed border-slate-700 my-1"></div>
+                  
+                  <div className="text-center opacity-90 whitespace-pre-line text-[9px]">{tempFooter || 'Terima kasih!'}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 justify-end border-t border-gray-100 pt-4 mt-2">
+              <button
+                type="button"
+                onClick={() => setSettingsModalOpen(false)}
+                className="py-2.5 px-5 text-sm font-bold text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-xl border border-gray-200/50 cursor-pointer transition-all"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const newSettings = {
+                    storeName: tempStoreName,
+                    subheader: tempSubheader,
+                    footer: tempFooter
+                  };
+                  localStorage.setItem('posbah_receipt_settings_rental', JSON.stringify(newSettings));
+                  setReceiptSettings(newSettings);
+                  setSettingsModalOpen(false);
+                }}
+                className="py-2.5 px-6 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-600/10 cursor-pointer transition-all active:scale-[0.98]"
+              >
+                Simpan Pengaturan
               </button>
             </div>
           </div>

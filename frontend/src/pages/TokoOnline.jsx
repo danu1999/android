@@ -27,7 +27,7 @@ export default function TokoOnline() {
 
   // Hanafi/fed/fahri = toko asli pemilik → nomor 085746135996
   // Toko lain (template pelanggan) → nomor 082245077959
-  const PROTECTED_NAMES = ['hanafi', 'fahri', 'fed'];
+  const PROTECTED_NAMES = [];
   const OWNER_WA    = '6285746135996';
   const TEMPLATE_WA = '6282245077959';
 
@@ -161,7 +161,8 @@ export default function TokoOnline() {
       message += `\n🏪 *Ambil di tempat*`;
     }
     message += `\n\nMohon konfirmasi ketersediaan. Terima kasih 🙏`;
-    window.open(`https://wa.me/${storeWANumber.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
+    const target = window.Capacitor ? '_system' : '_blank';
+    window.open(`https://wa.me/${storeWANumber.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, target);
     setWaQueueModal(false); setWaQueueNum(''); setBuyerName(''); setBuyerAddress('');
   };
 

@@ -81,7 +81,7 @@ const CashFlow = () => {
     handleDelete(id);
   };
   const handleSync = async () => {
-    if (window.confirm("Sinkronisasi akan menghapus data kas Nono dan mereset ulang seluruh data pembayaran faktur. Lanjutkan?")) {
+    if (window.confirm("Sinkronisasi akan menghapus data kas Bahan Baku dan mereset ulang seluruh data pembayaran faktur. Lanjutkan?")) {
       try {
         const res = await api.post("/kas/sync");
         alert(res.data.message + ` (${res.data.synced_count} disinkronisasi)`);
