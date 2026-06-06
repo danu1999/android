@@ -1020,22 +1020,22 @@ function FullscreenUpdateModal({ onClose, onDownload }) {
             <div style={{ display: 'flex', gap: '10px' }}>
               <span style={{ color: '#10b981', fontSize: '1rem' }}>✓</span>
               <div>
-                <strong style={{ color: '#f1f5f9' }}>Pembaruan Alur Absensi</strong>
-                <p style={{ margin: '2px 0 0' }}>Alur absensi heuristik (cek keluar otomatis) kini hanya diaktifkan secara khusus untuk produksi tenant Bahtera Mulya.</p>
+                <strong style={{ color: '#f1f5f9' }}>Pembaruan Manajemen Karyawan</strong>
+                <p style={{ margin: '2px 0 0' }}>Owner bisa dengan sendiri menambah dan mengurangi karyawan.</p>
               </div>
             </div>
             <div style={{ display: 'flex', gap: '10px' }}>
               <span style={{ color: '#10b981', fontSize: '1rem' }}>✓</span>
               <div>
-                <strong style={{ color: '#f1f5f9' }}>Pembaharuan Label</strong>
-                <p style={{ margin: '2px 0 0' }}>Label bahan/usaha "Nono" telah diubah menjadi "Bahan Baku" secara global untuk seluruh pelanggan (Invoice &amp; Manufaktur).</p>
+                <strong style={{ color: '#f1f5f9' }}>Pembaharuan Sistem Cerdas</strong>
+                <p style={{ margin: '2px 0 0' }}>Authentikasi Gmail untuk kepercayaan data pelanggan.</p>
               </div>
             </div>
             <div style={{ display: 'flex', gap: '10px' }}>
               <span style={{ color: '#10b981', fontSize: '1rem' }}>✓</span>
               <div>
-                <strong style={{ color: '#f1f5f9' }}>Perbaikan Estimasi &amp; Data</strong>
-                <p style={{ margin: '2px 0 0' }}>Memperbaiki kebocoran data estimasi bersih di panel utama serta melakukan pembersihan data sistem.</p>
+                <strong style={{ color: '#f1f5f9' }}>Memperkuat Sistem</strong>
+                <p style={{ margin: '2px 0 0' }}>Restore dan backup data dengan akurat.</p>
               </div>
             </div>
           </div>

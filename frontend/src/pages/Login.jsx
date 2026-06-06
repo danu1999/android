@@ -432,7 +432,7 @@ export default function Login({ onLogin }) {
                 Cetak struk bluetooth &amp; transaksi offline lebih cepat.
               </p>
               <p style={{ margin: '4px 0 0', fontSize: '0.62rem', color: '#fca5a5', fontWeight: 700, lineHeight: 1.3 }}>
-                ⚠️ Update v1.1.2: Pembaruan alur absensi heurisitik produksi, pembersihan data, serta pembaharuan label 'Nono' menjadi 'Bahan Baku' untuk semua pelanggan.
+                ⚠️ Update v1.1.2: Pembaruan Manajemen Karyawan (Owner mandiri menambah/mengurangi), Pembaharuan Sistem Cerdas (Otentikasi Gmail), dan Memperkuat Sistem (Restore & Backup akurat).
               </p>
             </div>
           </div>
