@@ -3760,6 +3760,7 @@ const sendMonthlyOwnerReport = async (): Promise<void> => {
   try {
     // Ambil semua PremiumUser (owner)
     const allOwners = await mainPrisma.premiumUser.findMany({
+      where: { role: 'OWNER' },
       orderBy: { registeredAt: 'asc' }
     });
 
@@ -3873,7 +3874,7 @@ app.get('/api/admin/owner-paid', async (req, res) => {
 
   try {
     const user = await mainPrisma.premiumUser.findUnique({ where: { email: decodeURIComponent(email) } });
-    if (!user) return res.status(404).send('<h1>Owner tidak ditemukan</h1>');
+    if (!user || user.role !== 'OWNER') return res.status(404).send('<h1>Owner tidak ditemukan</h1>');
 
     await mainPrisma.premiumUser.update({
       where: { email: decodeURIComponent(email) },
@@ -3929,7 +3930,7 @@ app.get('/api/admin/owner-delete', async (req, res) => {
   try {
     const cleanEmail = decodeURIComponent(email);
     const user = await mainPrisma.premiumUser.findUnique({ where: { email: cleanEmail } });
-    if (!user) return res.status(404).send('<h1>Owner tidak ditemukan</h1>');
+    if (!user || user.role !== 'OWNER') return res.status(404).send('<h1>Owner tidak ditemukan</h1>');
 
     // Sudah dijadwalkan?
     if (user.deletionScheduledAt && user.deletionScheduledAt > new Date()) {

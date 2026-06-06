@@ -3345,6 +3345,7 @@ const sendMonthlyOwnerReport = () => __awaiter(void 0, void 0, void 0, function*
     try {
         // Ambil semua PremiumUser (owner)
         const allOwners = yield mainPrisma.premiumUser.findMany({
+            where: { role: 'OWNER' },
             orderBy: { registeredAt: 'asc' }
         });
         // Ambil businessMode dari GoogleUser
@@ -3449,7 +3450,7 @@ app.get('/api/admin/owner-paid', (req, res) => __awaiter(void 0, void 0, void 0,
         return res.status(400).send('<h1>Email wajib diisi</h1>');
     try {
         const user = yield mainPrisma.premiumUser.findUnique({ where: { email: decodeURIComponent(email) } });
-        if (!user)
+        if (!user || user.role !== 'OWNER')
             return res.status(404).send('<h1>Owner tidak ditemukan</h1>');
         yield mainPrisma.premiumUser.update({
             where: { email: decodeURIComponent(email) },
@@ -3500,7 +3501,7 @@ app.get('/api/admin/owner-delete', (req, res) => __awaiter(void 0, void 0, void 
     try {
         const cleanEmail = decodeURIComponent(email);
         const user = yield mainPrisma.premiumUser.findUnique({ where: { email: cleanEmail } });
-        if (!user)
+        if (!user || user.role !== 'OWNER')
             return res.status(404).send('<h1>Owner tidak ditemukan</h1>');
         // Sudah dijadwalkan?
         if (user.deletionScheduledAt && user.deletionScheduledAt > new Date()) {
