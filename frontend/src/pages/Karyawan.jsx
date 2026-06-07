@@ -25,6 +25,7 @@ export default function Karyawan() {
 
   const [tab, setTab] = useState('karyawan');
   const [employees, setEmp] = useState([]);
+  const [outlets, setOutlets] = useState([]);
   const [payHistory, setHist] = useState([]);
   const [isModalOpen, setModal] = useState(false);
   const [isViewOnly, setView] = useState(false);
@@ -33,7 +34,7 @@ export default function Karyawan() {
   const [payAmt, setPayAmt] = useState('');
   const [selMonth, setSelMonth] = useState(new Date().getMonth() + 1);
   const [selYear, setSelYear] = useState(new Date().getFullYear());
-  const [formData, setForm] = useState({ id: null, name: '', email: '', role: 'KASIR', pin: '', confirmPin: '', salary: '' });
+  const [formData, setForm] = useState({ id: null, name: '', email: '', role: 'KASIR', pin: '', confirmPin: '', salary: '', outletId: '' });
   // Quick salary editor langsung dari kartu karyawan
   const [salaryEditId, setSalaryEditId] = useState(null);
   const [salaryEditVal, setSalaryEditVal] = useState('');
@@ -125,10 +126,12 @@ export default function Karyawan() {
   useEffect(() => { 
     fetchEmp(); 
     fetchLimit();
+    fetchOutlets();
   }, []);
   useEffect(() => { if (tab === 'penggajian') fetchHistory(); }, [tab, selMonth, selYear]);
 
   const fetchEmp = async () => { try { const r = await api.get('/employees'); setEmp(r.data); } catch (_) { } };
+  const fetchOutlets = async () => { try { const r = await api.get('/outlets'); setOutlets(r.data); } catch (_) { } };
   const fetchHistory = async () => { try { const r = await api.get(`/payroll/history?month=${selMonth}&year=${selYear}`); setHist(r.data); } catch (_) { } };
 
   const paidIds = new Set(payHistory.map(h => {
@@ -137,7 +140,7 @@ export default function Karyawan() {
 
   const handleOpenModal = (emp = null, viewOnly = false) => {
     if (employees.length >= maxLimit && !emp) { setShowLimitBanner(true); return; }
-    setForm(emp ? { ...emp, email: emp.email || '', pin: '', confirmPin: '', salary: emp.salary || '' } : { id: null, name: '', email: '', role: 'KASIR', pin: '', confirmPin: '', salary: '' });
+    setForm(emp ? { ...emp, email: emp.email || '', pin: '', confirmPin: '', salary: emp.salary || '', outletId: emp.outletId || '' } : { id: null, name: '', email: '', role: 'KASIR', pin: '', confirmPin: '', salary: '', outletId: '' });
     setView(viewOnly); setModal(true);
   };
 
@@ -170,7 +173,11 @@ export default function Karyawan() {
     }
 
     try {
-      const payload = { ...formData, salary: Number(formData.salary || 0) };
+      const payload = { 
+        ...formData, 
+        salary: Number(formData.salary || 0),
+        outletId: formData.outletId ? Number(formData.outletId) : null
+      };
       if (formData.id) {
         await api.put(`/employees/${formData.id}`, payload);
       } else {
@@ -401,7 +408,20 @@ export default function Karyawan() {
                           {isSelf && <span style={{ fontSize: 10, background: '#EEF2FF', color: '#4F46E5', padding: '1px 7px', borderRadius: 99, fontWeight: 700 }}>Saya</span>}
                           {locked && <span style={{ fontSize: 10, background: '#F3F4F6', color: '#6B7280', padding: '1px 7px', borderRadius: 99, fontWeight: 700 }}>🔒 Terkunci</span>}
                         </div>
-                        <span style={{ display: 'inline-block', marginTop: 3, fontSize: 11, fontWeight: 800, background: c.badge.bg, color: c.badge.color, padding: '2px 10px', borderRadius: 99 }}>{c.label}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 3 }}>
+                          <span style={{ display: 'inline-block', fontSize: 11, fontWeight: 800, background: c.badge.bg, color: c.badge.color, padding: '2px 10px', borderRadius: 99 }}>{c.label}</span>
+                          {emp.outlet ? (
+                            <span style={{ display: 'inline-block', fontSize: 11, fontWeight: 800, background: '#E0F2FE', color: '#0369A1', padding: '2px 10px', borderRadius: 99 }}>
+                              📍 {emp.outlet.name}
+                            </span>
+                          ) : (
+                            emp.role !== 'OWNER' && (
+                              <span style={{ display: 'inline-block', fontSize: 11, fontWeight: 800, background: '#F3F4F6', color: '#4B5563', padding: '2px 10px', borderRadius: 99 }}>
+                                🌍 Semua Cabang
+                              </span>
+                            )
+                          )}
+                        </div>
                       </div>
                     </div>
                     {isOwner && emp.role !== 'OWNER' && (
@@ -551,6 +571,22 @@ export default function Karyawan() {
                   ))}
                 </select>
               </div>
+              {formData.role !== 'OWNER' && (
+                <div className="form-group">
+                  <label style={{ fontWeight: 700 }}>📍 Cabang / Outlet</label>
+                  <select
+                    value={formData.outletId || ''}
+                    onChange={e => setForm({ ...formData, outletId: e.target.value })}
+                    disabled={isViewOnly}
+                    style={{ border: `1.5px solid ${cfg(formData.role).border}` }}
+                  >
+                    <option value="">Semua Cabang (Global)</option>
+                    {outlets.map(o => (
+                      <option key={o.id} value={o.id}>📍 {o.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               {isOwner && formData.role !== 'OWNER' && (
                 <div className="form-group">
                   <label style={{ fontWeight: 700 }}>💰 Gaji Pokok (Rp/bulan)</label>

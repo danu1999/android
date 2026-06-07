@@ -1309,6 +1309,15 @@ app.get('/api/auth/me', async (req, res) => {
 app.get('/api/outlets', async (req, res) => {
   try {
     const outlets = await prisma.outlet.findMany({
+      include: {
+        _count: {
+          select: {
+            employees: true,
+            products: true,
+            transactions: true
+          }
+        }
+      },
       orderBy: { name: 'asc' }
     });
     res.json(outlets);

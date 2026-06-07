@@ -31,6 +31,20 @@ export default function OutletManagement() {
     fetchOutlets();
   }, []);
 
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(''), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
+
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => setError(''), 7000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
+
   const openCreateModal = () => {
     setEditingId(null);
     setName('');
@@ -142,10 +156,16 @@ export default function OutletManagement() {
         </div>
       )}
 
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
       {/* Outlets Grid */}
       {loading && outlets.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: '#6B7280' }}>
-          <RefreshCw size={24} className="animate-spin" style={{ margin: '0 auto 8px' }} />
+          <RefreshCw size={24} style={{ margin: '0 auto 8px', animation: 'spin 1s linear infinite' }} />
           <span>Memuat data outlet...</span>
         </div>
       ) : outlets.length === 0 ? (
@@ -169,8 +189,11 @@ export default function OutletManagement() {
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
-                transition: 'all 0.2s'
+                boxShadow: '0 2px 10px rgba(0,0,0,0.06)',
+                transition: 'transform 0.18s, box-shadow 0.18s'
               }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 22px rgba(0,0,0,0.1)' }}
+              onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.06)' }}
             >
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
@@ -191,6 +214,23 @@ export default function OutletManagement() {
                     <Phone size={14} style={{ color: '#6B7280' }} />
                     <span>{outlet.phone || 'Nomor telepon tidak diisi'}</span>
                   </div>
+                </div>
+
+                {/* Metrics badges */}
+                <div style={{ display: 'flex', gap: '8px', marginTop: '14px', flexWrap: 'wrap' }}>
+                  {outlet._count && (
+                    <>
+                      <span style={{ fontSize: '0.72rem', background: '#F0FDF4', color: '#16A34A', padding: '3px 8px', borderRadius: '8px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        👥 {outlet._count.employees} Karyawan
+                      </span>
+                      <span style={{ fontSize: '0.72rem', background: '#EFF6FF', color: '#2563EB', padding: '3px 8px', borderRadius: '8px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        📦 {outlet._count.products} Produk
+                      </span>
+                      <span style={{ fontSize: '0.72rem', background: '#FFF7ED', color: '#EA580C', padding: '3px 8px', borderRadius: '8px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        🧾 {outlet._count.transactions} Transaksi
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
 
