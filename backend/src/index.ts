@@ -1273,6 +1273,125 @@ app.post('/api/auth/login-email', async (req, res) => {
   }
 });
 
+app.get('/api/auth/me', async (req, res) => {
+  try {
+    const employeeIdHeader = req.headers['x-employee-id'] as string;
+    if (!employeeIdHeader) return res.status(401).json({ error: 'Unauthorized' });
+
+    let employee: any = null;
+    if (employeeIdHeader.includes('@')) {
+      employee = await prisma.employee.findFirst({
+        where: { email: employeeIdHeader },
+        include: { outlet: true }
+      });
+    } else {
+      const numericId = Number(employeeIdHeader);
+      if (!isNaN(numericId)) {
+        employee = await prisma.employee.findUnique({
+          where: { id: numericId },
+          include: { outlet: true }
+        });
+      }
+    }
+
+    if (!employee) return res.status(404).json({ error: 'Employee not found' });
+    res.json(employee);
+  } catch (error) {
+    console.error('Failed fetching auth me profile:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Outlets (READ: KASIR+ | WRITE: OWNER only)
+// ─────────────────────────────────────────────────────────────
+
+app.get('/api/outlets', async (req, res) => {
+  try {
+    const outlets = await prisma.outlet.findMany({
+      orderBy: { name: 'asc' }
+    });
+    res.json(outlets);
+  } catch (error) {
+    console.error('Failed to fetch outlets:', error);
+    res.status(400).json({ error: 'Failed to fetch outlets' });
+  }
+});
+
+app.post('/api/outlets', requireOwner, async (req, res) => {
+  try {
+    const { name, address, phone } = req.body;
+    if (!name) return res.status(400).json({ error: 'Nama outlet wajib diisi' });
+    const outlet = await prisma.outlet.create({
+      data: { name, address, phone }
+    });
+    const employeeIdHeader = req.headers['x-employee-id'] as string;
+    logActivity(
+      employeeIdHeader,
+      'CREATE_OUTLET',
+      `Membuat outlet baru: ${name}`
+    );
+    res.json(outlet);
+  } catch (error) {
+    console.error('Failed to create outlet:', error);
+    res.status(400).json({ error: 'Failed to create outlet' });
+  }
+});
+
+app.put('/api/outlets/:id', requireOwner, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, address, phone } = req.body;
+    if (!name) return res.status(400).json({ error: 'Nama outlet wajib diisi' });
+    const outlet = await prisma.outlet.update({
+      where: { id: Number(id) },
+      data: { name, address, phone }
+    });
+    const employeeIdHeader = req.headers['x-employee-id'] as string;
+    logActivity(
+      employeeIdHeader,
+      'UPDATE_OUTLET',
+      `Mengubah outlet: ${name}`
+    );
+    res.json(outlet);
+  } catch (error) {
+    console.error('Failed to update outlet:', error);
+    res.status(400).json({ error: 'Failed to update outlet' });
+  }
+});
+
+app.delete('/api/outlets/:id', requireOwner, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const outletId = Number(id);
+
+    // Cek apakah outlet masih digunakan oleh produk atau karyawan
+    const hasEmployees = await prisma.employee.findFirst({ where: { outletId } });
+    if (hasEmployees) {
+      return res.status(400).json({ error: 'Outlet tidak dapat dihapus karena masih memiliki karyawan.' });
+    }
+
+    const hasProducts = await prisma.product.findFirst({ where: { outletId } });
+    if (hasProducts) {
+      return res.status(400).json({ error: 'Outlet tidak dapat dihapus karena masih memiliki produk.' });
+    }
+
+    const outlet = await prisma.outlet.findUnique({ where: { id: outletId } });
+    await prisma.outlet.delete({ where: { id: outletId } });
+    
+    const employeeIdHeader = req.headers['x-employee-id'] as string;
+    logActivity(
+      employeeIdHeader,
+      'DELETE_OUTLET',
+      `Menghapus outlet: ${outlet?.name || outletId}`
+    );
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to delete outlet:', error);
+    res.status(400).json({ error: 'Failed to delete outlet' });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────
 // Queue endpoints — Bisa diakses KASIR (semua role)
 // ─────────────────────────────────────────────────────────────
@@ -1280,8 +1399,14 @@ app.post('/api/auth/login-email', async (req, res) => {
 // Antrian aktif (PENDING + ada queueNumber) — untuk cek slot yang terpakai
 app.get('/api/queues/active', async (req, res) => {
   try {
+    const outletIdHeader = req.headers['x-outlet-id'];
+    const outletId = outletIdHeader ? Number(outletIdHeader) : undefined;
+    const where: any = { status: 'PENDING', queueNumber: { not: null } };
+    if (outletId && !isNaN(outletId)) {
+      where.outletId = outletId;
+    }
     const queues = await prisma.transaction.findMany({
-      where: { status: 'PENDING', queueNumber: { not: null } },
+      where,
       select: { id: true, queueNumber: true, customerName: true, total: true }
     });
     res.json(queues);
@@ -1293,8 +1418,14 @@ app.get('/api/queues/active', async (req, res) => {
 // Semua transaksi PENDING — untuk tampil di modal Daftar Antrian
 app.get('/api/queues/pending', async (req, res) => {
   try {
+    const outletIdHeader = req.headers['x-outlet-id'];
+    const outletId = outletIdHeader ? Number(outletIdHeader) : undefined;
+    const where: any = { status: 'PENDING' };
+    if (outletId && !isNaN(outletId)) {
+      where.outletId = outletId;
+    }
     const queues = await prisma.transaction.findMany({
-      where: { status: 'PENDING' },
+      where,
       include: { items: { include: { product: true } }, customer: true },
       orderBy: { date: 'asc' }
     });
@@ -1308,15 +1439,31 @@ app.get('/api/queues/pending', async (req, res) => {
 // Products  (READ: semua | WRITE: ADMIN+)
 // ─────────────────────────────────────────────────────────────
 app.get('/api/products', async (req, res) => {
-  const products = await prisma.product.findMany();
-  res.json(products);
+  try {
+    const outletIdHeader = req.headers['x-outlet-id'];
+    const outletId = outletIdHeader ? Number(outletIdHeader) : undefined;
+    const where: any = {};
+    if (outletId && !isNaN(outletId)) {
+      where.outletId = outletId;
+    }
+    const products = await prisma.product.findMany({ where });
+    res.json(products);
+  } catch (error) {
+    res.status(400).json({ error: 'Failed to fetch products' });
+  }
 });
 
 // Lookup produk by barcode (untuk scanner kasir)
 app.get('/api/products/barcode/:code', async (req, res) => {
   try {
+    const outletIdHeader = req.headers['x-outlet-id'];
+    const outletId = outletIdHeader ? Number(outletIdHeader) : undefined;
+    const where: any = { barcode: req.params.code };
+    if (outletId && !isNaN(outletId)) {
+      where.outletId = outletId;
+    }
     const product = await (prisma.product as any).findFirst({
-      where: { barcode: req.params.code }
+      where
     });
     if (!product) return res.status(404).json({ error: 'Produk tidak ditemukan' });
     res.json(product);
@@ -1327,6 +1474,8 @@ app.get('/api/products/barcode/:code', async (req, res) => {
 
 app.post('/api/products', requireAdmin, async (req, res) => {
   try {
+    const outletIdHeader = req.headers['x-outlet-id'];
+    const outletId = outletIdHeader ? Number(outletIdHeader) : undefined;
     const { name, price, costPrice, stock, unit, barcode, category, wholesaleEnabled, wholesalePrices, variants, image } = req.body;
     const product = await prisma.product.create({
       data: {
@@ -1340,7 +1489,8 @@ app.post('/api/products', requireAdmin, async (req, res) => {
         wholesalePrices: wholesalePrices ? JSON.stringify(wholesalePrices) : null,
         variants: variants && variants.length > 0 ? JSON.stringify(variants) : null,
         image,
-        ...(barcode ? { barcode } : {})
+        ...(barcode ? { barcode } : {}),
+        ...(outletId && !isNaN(outletId) ? { outletId } : {})
       } as any
     });
     logActivity(
@@ -1358,7 +1508,7 @@ app.post('/api/products', requireAdmin, async (req, res) => {
 app.put('/api/products/:id', requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, price, costPrice, stock, unit, barcode, category, wholesaleEnabled, wholesalePrices, variants, image } = req.body;
+    const { name, price, costPrice, stock, unit, barcode, category, wholesaleEnabled, wholesalePrices, variants, image, outletId } = req.body;
     const product = await prisma.product.update({
       where: { id: Number(id) },
       data: {
@@ -1372,7 +1522,8 @@ app.put('/api/products/:id', requireAdmin, async (req, res) => {
         wholesalePrices: wholesalePrices ? JSON.stringify(wholesalePrices) : null,
         variants: variants && variants.length > 0 ? JSON.stringify(variants) : null,
         image,
-        ...(barcode !== undefined ? { barcode: barcode || null } : {})
+        ...(barcode !== undefined ? { barcode: barcode || null } : {}),
+        ...(outletId !== undefined ? { outletId: outletId ? Number(outletId) : null } : {})
       } as any
     });
     logActivity(
@@ -1420,7 +1571,14 @@ app.delete('/api/products/:id', requireAdmin, async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 app.get('/api/transactions', requireAdmin, async (req, res) => {
   try {
+    const outletIdHeader = req.headers['x-outlet-id'];
+    const outletId = outletIdHeader ? Number(outletIdHeader) : undefined;
+    const where: any = {};
+    if (outletId && !isNaN(outletId)) {
+      where.outletId = outletId;
+    }
     const transactions = await prisma.transaction.findMany({
+      where,
       include: {
         employee: true,
         customer: true,
@@ -1446,6 +1604,8 @@ app.post('/api/transactions', requireNotDemo, async (req, res) => {
     } = req.body;
 
     const employeeId = await resolveEmployeeId(req);
+    const outletIdHeader = req.headers['x-outlet-id'];
+    const outletId = outletIdHeader ? Number(outletIdHeader) : undefined;
 
     // Hitung subtotal dari items jika tidak dikirim
     const computedSubtotal = subtotal ?? items.reduce((sum: number, i: any) => sum + (i.price * i.quantity), 0);
@@ -1474,6 +1634,7 @@ app.post('/api/transactions', requireNotDemo, async (req, res) => {
           date: date ? new Date(date) : new Date(),
           employeeId,
           customerId: customerId || null,
+          ...(outletId && !isNaN(outletId) ? { outletId } : {}),
           items: {
             create: items.map((item: any) => ({
               productId: item.productId,
@@ -1710,6 +1871,7 @@ app.get('/api/employees', requireAdmin, async (req, res) => {
           mode: 'insensitive'
         }
       },
+      include: { outlet: true },
       orderBy: { name: 'asc' }
     });
     res.json(employees);
@@ -1742,7 +1904,7 @@ app.post('/api/employees', requireOwner, async (req, res) => {
         maxLimit
       });
     }
-    const { name, email, role, pin, salary } = req.body;
+    const { name, email, role, pin, salary, outletId } = req.body;
     if (!email) {
       return res.status(400).json({ error: 'Email karyawan wajib diisi' });
     }
@@ -1780,7 +1942,8 @@ app.post('/api/employees', requireOwner, async (req, res) => {
         email: cleanEmail,
         role: role || 'KASIR',
         pin: hashedPin,
-        salary: role === 'OWNER' ? 0 : Number(salary || 0) // Gaji owner selalu 0
+        salary: role === 'OWNER' ? 0 : Number(salary || 0), // Gaji owner selalu 0
+        ...(outletId ? { outletId: Number(outletId) } : {})
       }
     });
 
@@ -1861,7 +2024,7 @@ app.put('/api/employees/:id', requireOwner, async (req, res) => {
     if (employeeIdHeader === '0' || employeeIdHeader === '9999') {
       return res.status(403).json({ error: 'Akun demo tidak dapat mengubah karyawan' });
     }
-    const { name, role, pin, salary } = req.body;
+    const { name, role, pin, salary, outletId } = req.body;
 
     const requesterRole = req.headers['x-employee-role'] as string;
     if (requesterRole !== 'OWNER' && role === 'OWNER') {
@@ -1879,6 +2042,9 @@ app.put('/api/employees/:id', requireOwner, async (req, res) => {
     }
     if (salary !== undefined) {
       updateData.salary = role === 'OWNER' ? 0 : Number(salary || 0); // Gaji owner selalu 0
+    }
+    if (outletId !== undefined) {
+      updateData.outletId = outletId ? Number(outletId) : null;
     }
 
     // 1. Update di database penyewa lokal
@@ -2078,6 +2244,8 @@ app.delete('/api/laundry/services/:id', requireAdmin, async (req: Request, res: 
 app.get('/api/laundry/orders', async (req: Request, res: Response) => {
   try {
     const { cari, filterBayar, filterTipe } = req.query;
+    const outletIdHeader = req.headers['x-outlet-id'];
+    const outletId = outletIdHeader ? Number(outletIdHeader) : undefined;
     let whereClause: any = {};
 
     if (cari) {
@@ -2094,6 +2262,10 @@ app.get('/api/laundry/orders', async (req: Request, res: Response) => {
       whereClause.jenisLayanan = {
         NOT: { contains: 'Barang', mode: 'insensitive' }
       };
+    }
+
+    if (outletId && !isNaN(outletId)) {
+      whereClause.outletId = outletId;
     }
 
     const orders = await (prisma as any).laundryOrder.findMany({
@@ -2129,6 +2301,8 @@ app.post('/api/laundry/orders', requireNotDemo, async (req: Request, res: Respon
     } = req.body;
 
     const employeeId = await resolveEmployeeId(req);
+    const outletIdHeader = req.headers['x-outlet-id'];
+    const outletId = outletIdHeader ? Number(outletIdHeader) : undefined;
 
     const receiptNumber = `INV-LND-${Date.now()}`;
 
@@ -2148,7 +2322,8 @@ app.post('/api/laundry/orders', requireNotDemo, async (req: Request, res: Respon
         korden: Number(korden || 0),
         lokasi: lokasi || null,
         employeeId,
-        customerId: customerId ? Number(customerId) : null
+        customerId: customerId ? Number(customerId) : null,
+        ...(outletId && !isNaN(outletId) ? { outletId } : {})
       }
     });
 
@@ -2507,6 +2682,9 @@ app.get('/api/reports', requireAdmin, async (req, res) => {
     const startOfToday = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate(), 0, 0, 0, 0) - tzOffset);
     const endOfToday = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate(), 23, 59, 59, 999) - tzOffset);
 
+    const outletIdHeader = req.headers['x-outlet-id'];
+    const outletId = outletIdHeader ? Number(outletIdHeader) : undefined;
+
     if (appMode === 'LAUNDRY') {
       const orderWhere: any = { statusBayar: 'Lunas' };
       const pendingWhere: any = { statusBayar: 'Belum Lunas' };
@@ -2518,17 +2696,27 @@ app.get('/api/reports', requireAdmin, async (req, res) => {
         expenseWhere.tanggal = dateFilter;
       }
 
+      if (outletId && !isNaN(outletId)) {
+        orderWhere.outletId = outletId;
+        pendingWhere.outletId = outletId;
+      }
+
       const totalSales = await (prisma as any).laundryOrder.aggregate({
         where: orderWhere,
         _sum: { totalHarga: true }
       });
       const totalSalesVal = totalSales._sum.totalHarga || 0;
 
+      const todaySalesWhere: any = {
+        statusBayar: 'Lunas',
+        tanggalMasuk: { gte: startOfToday, lte: endOfToday }
+      };
+      if (outletId && !isNaN(outletId)) {
+        todaySalesWhere.outletId = outletId;
+      }
+
       const todaySales = await (prisma as any).laundryOrder.aggregate({
-        where: {
-          statusBayar: 'Lunas',
-          tanggalMasuk: { gte: startOfToday, lte: endOfToday }
-        },
+        where: todaySalesWhere,
         _sum: { totalHarga: true }
       });
       const todaySalesVal = todaySales._sum.totalHarga || 0;
@@ -2605,18 +2793,26 @@ app.get('/api/reports', requireAdmin, async (req, res) => {
       if (dateFilterActive) {
         salesWhere.date = dateFilter;
       }
+      if (outletId && !isNaN(outletId)) {
+        salesWhere.outletId = outletId;
+      }
       const totalSales = await prisma.transaction.aggregate({
         where: salesWhere,
         _sum: { total: true }
       });
       totalSalesVal = totalSales._sum.total || 0;
 
+      const todaySalesWhere: any = {
+        type: 'SALES',
+        status: { not: 'CANCELLED' },
+        date: { gte: startOfToday, lte: endOfToday }
+      };
+      if (outletId && !isNaN(outletId)) {
+        todaySalesWhere.outletId = outletId;
+      }
+
       const todaySales = await prisma.transaction.aggregate({
-        where: {
-          type: 'SALES',
-          status: { not: 'CANCELLED' },
-          date: { gte: startOfToday, lte: endOfToday }
-        },
+        where: todaySalesWhere,
         _sum: { total: true }
       });
       todaySalesVal = todaySales._sum.total || 0;
@@ -3375,7 +3571,7 @@ const syncAllEmployeesToPremiumUsers = async (): Promise<void> => {
   try {
     console.log('[SYNC] Starting synchronization of all employees to PremiumUser...');
     const premiumOwners = await mainPrisma.premiumUser.findMany({
-      where: { role: 'OWNER' }
+      where: { role: 'OWNER', tenantId: null }
     });
     const googleUsers = await mainPrisma.googleUser.findMany();
     
@@ -3760,7 +3956,7 @@ const sendMonthlyOwnerReport = async (): Promise<void> => {
   try {
     // Ambil semua PremiumUser (owner)
     const allOwners = await mainPrisma.premiumUser.findMany({
-      where: { role: 'OWNER' },
+      where: { role: 'OWNER', tenantId: null },
       orderBy: { registeredAt: 'asc' }
     });
 
@@ -3874,7 +4070,7 @@ app.get('/api/admin/owner-paid', async (req, res) => {
 
   try {
     const user = await mainPrisma.premiumUser.findUnique({ where: { email: decodeURIComponent(email) } });
-    if (!user || user.role !== 'OWNER') return res.status(404).send('<h1>Owner tidak ditemukan</h1>');
+    if (!user || user.role !== 'OWNER' || user.tenantId !== null) return res.status(404).send('<h1>Owner tidak ditemukan</h1>');
 
     await mainPrisma.premiumUser.update({
       where: { email: decodeURIComponent(email) },
@@ -3930,7 +4126,7 @@ app.get('/api/admin/owner-delete', async (req, res) => {
   try {
     const cleanEmail = decodeURIComponent(email);
     const user = await mainPrisma.premiumUser.findUnique({ where: { email: cleanEmail } });
-    if (!user || user.role !== 'OWNER') return res.status(404).send('<h1>Owner tidak ditemukan</h1>');
+    if (!user || user.role !== 'OWNER' || user.tenantId !== null) return res.status(404).send('<h1>Owner tidak ditemukan</h1>');
 
     // Sudah dijadwalkan?
     if (user.deletionScheduledAt && user.deletionScheduledAt > new Date()) {
@@ -4036,6 +4232,8 @@ app.get('/api/admin/owner-cancel-delete', async (req, res) => {
 
   try {
     const cleanEmail = decodeURIComponent(email);
+    const user = await mainPrisma.premiumUser.findUnique({ where: { email: cleanEmail } });
+    if (!user || user.role !== 'OWNER' || user.tenantId !== null) return res.status(404).send('<h1>Owner tidak ditemukan</h1>');
     await mainPrisma.premiumUser.update({
       where: { email: cleanEmail },
       data: { deletionScheduledAt: null }

@@ -24,6 +24,8 @@ model Employee {
   activityLogs ActivityLog[]
   rentals      Rental[]
   laundryOrders LaundryOrder[]
+  outletId  Int?
+  outlet    Outlet?  @relation(fields: [outletId], references: [id])
 }
 
 model Customer {
@@ -56,6 +58,8 @@ model Product {
   updatedAt        DateTime @updatedAt
   transactionItems TransactionItem[]
   purchaseItems    PurchaseOrderItem[]
+  outletId         Int?
+  outlet           Outlet?  @relation(fields: [outletId], references: [id])
 }
 
 model Transaction {
@@ -94,6 +98,8 @@ model Transaction {
   items           TransactionItem[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  outletId        Int?
+  outlet          Outlet?  @relation(fields: [outletId], references: [id])
 }
 
 model TransactionItem {
@@ -254,6 +260,8 @@ model LaundryOrder {
   
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+  outletId       Int?
+  outlet         Outlet?   @relation(fields: [outletId], references: [id])
 }
 
 model LaundryExpense {
@@ -302,5 +310,19 @@ model TenantLimit {
   limit     Int      @default(4)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Outlet {
+  id        Int      @id @default(autoincrement())
+  name      String
+  address   String?
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  employees     Employee[]
+  products      Product[]
+  transactions  Transaction[]
+  laundryOrders LaundryOrder[]
 }
 

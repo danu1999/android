@@ -1,4 +1,11 @@
 import axios, { getAdapter } from 'axios';
+import { 
+  cacheProducts, 
+  getProducts, 
+  cacheCustomers, 
+  getCustomers, 
+  queueTransaction 
+} from './utils/offlineDb';
 
 const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
 const isLocalDev = !isCapacitor && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '';
@@ -27,6 +34,11 @@ api.interceptors.request.use((config) => {
     const tenantId = localStorage.getItem('posbah_tenant_id');
     if (tenantId) {
       config.headers['x-tenant-id'] = tenantId;
+    }
+
+    const activeOutletId = localStorage.getItem('posbah_active_outlet_id');
+    if (activeOutletId) {
+      config.headers['x-outlet-id'] = activeOutletId;
     }
   } catch (_) {}
   return config;
@@ -1277,7 +1289,21 @@ async function handleOfflineRequest(config, route) {
     const cacheKey = `posbah_cache_${parts[0]}`;
     const cachedData = localStorage.getItem(cacheKey);
     
-    if (parts[0] === 'reports') {
+    if (parts[0] === 'products') {
+      try {
+        data = await getProducts();
+      } catch (err) {
+        console.error('Failed to get products from IndexedDB:', err);
+        data = JSON.parse(cachedData || '[]');
+      }
+    } else if (parts[0] === 'customers') {
+      try {
+        data = await getCustomers();
+      } catch (err) {
+        console.error('Failed to get customers from IndexedDB:', err);
+        data = JSON.parse(cachedData || '[]');
+      }
+    } else if (parts[0] === 'reports') {
       const txs = JSON.parse(localStorage.getItem('posbah_cache_transactions') || '[]').filter(t => t.status === 'COMPLETED');
       const fins = JSON.parse(localStorage.getItem('posbah_cache_finances') || '[]');
       const totalExpenses = fins.filter(f => f.type === 'EXPENSE' && f.status === 'PAID').reduce((sum, f) => sum + f.amount, 0);
@@ -1315,16 +1341,43 @@ async function handleOfflineRequest(config, route) {
   }
   
   const payload = config.data ? JSON.parse(config.data) : {};
-  const queue = JSON.parse(localStorage.getItem('posbah_offline_writes') || '[]');
   
-  queue.push({
-    url: config.url,
-    method: config.method,
-    data: payload,
-    headers: config.headers,
-    timestamp: Date.now()
-  });
-  localStorage.setItem('posbah_offline_writes', JSON.stringify(queue));
+  // Tentukan apakah ini transaksi sales (retail/FNB) atau laundry order
+  let queueType = '';
+  if (parts[0] === 'transactions') {
+    queueType = 'SALES';
+  } else if (parts[0] === 'laundry' && parts[1] === 'orders') {
+    queueType = 'LAUNDRY';
+  }
+
+  if (queueType) {
+    try {
+      await queueTransaction(queueType, payload);
+    } catch (err) {
+      console.error('Failed to queue transaction to IndexedDB:', err);
+      // Fallback ke localStorage
+      const queue = JSON.parse(localStorage.getItem('posbah_offline_writes') || '[]');
+      queue.push({
+        url: config.url,
+        method: config.method,
+        data: payload,
+        headers: config.headers,
+        timestamp: Date.now()
+      });
+      localStorage.setItem('posbah_offline_writes', JSON.stringify(queue));
+    }
+  } else {
+    // Non-transaction writes tetap menggunakan queue localStorage
+    const queue = JSON.parse(localStorage.getItem('posbah_offline_writes') || '[]');
+    queue.push({
+      url: config.url,
+      method: config.method,
+      data: payload,
+      headers: config.headers,
+      timestamp: Date.now()
+    });
+    localStorage.setItem('posbah_offline_writes', JSON.stringify(queue));
+  }
   
   const cacheKey = `posbah_cache_${parts[0]}`;
   let list = JSON.parse(localStorage.getItem(cacheKey) || '[]');
@@ -1461,6 +1514,13 @@ api.interceptors.response.use(
         const parts = route.split('/');
         if (parts.length === 1) {
           localStorage.setItem(`posbah_cache_${route}`, JSON.stringify(response.data));
+          
+          // Sinkronisasi data ke IndexedDB untuk offline caching
+          if (route === 'products') {
+            cacheProducts(response.data).catch(err => console.error('Failed caching products to IndexedDB:', err));
+          } else if (route === 'customers') {
+            cacheCustomers(response.data).catch(err => console.error('Failed caching customers to IndexedDB:', err));
+          }
         }
       }
     }

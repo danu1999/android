@@ -4,7 +4,7 @@ import api from './api';
 import {
   Calculator, Package, LayoutDashboard, LogOut, Clock,
   DollarSign, Users, UserCog, Crown, ShieldCheck, Lock, X, Sparkles, History, Car, WifiOff,
-  Sun, Moon, FileText, RefreshCw, List, Cpu, Settings as SettingsIcon, Download
+  Sun, Moon, FileText, RefreshCw, List, Cpu, Settings as SettingsIcon, Download, Store
 } from 'lucide-react';
 import Kasir from './pages/Kasir';
 import Katalog from './pages/Katalog';
@@ -23,6 +23,7 @@ import KasirLaundry from './pages/KasirLaundry';
 import LayananLaundry from './pages/LayananLaundry';
 import OrderLaundry from './pages/OrderLaundry';
 import StrukLaundry from './pages/StrukLaundry';
+import OutletManagement from './pages/OutletManagement';
 import { AuthContext, DemoContext, hasRole, DEMO_LIMITS, useAuth } from './AuthContext';
 import { syncOfflineWrites } from './api';
 import { App as CapApp } from '@capacitor/app';
@@ -51,7 +52,7 @@ const ROLE_ACCESS = {
   KASIR: ['/', '/katalog', '/orders-laundry'],
   CASHIER: ['/', '/katalog', '/orders-laundry'],
   ADMIN: ['/', '/katalog', '/dashboard', '/keuangan', '/pelanggan', '/karyawan', '/pesanan', '/supplier', '/orders-laundry', '/layanan-laundry'],
-  OWNER: ['/', '/katalog', '/dashboard', '/keuangan', '/pelanggan', '/karyawan', '/pesanan', '/supplier', '/activity-logs', '/orders-laundry', '/layanan-laundry'],
+  OWNER: ['/', '/katalog', '/dashboard', '/keuangan', '/pelanggan', '/karyawan', '/pesanan', '/supplier', '/activity-logs', '/orders-laundry', '/layanan-laundry', '/outlets'],
 };
 
 const canAccess = (role, path) => {
@@ -193,6 +194,66 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
   const roleStyle = ROLE_STYLE[user?.role] || ROLE_STYLE['KASIR'];
   const { logout: bmpLogout } = React.useContext(BmpAuthContext);
 
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [syncStatus, setSyncStatus] = useState('idle');
+  const [syncCount, setSyncCount] = useState(0);
+  const [outlets, setOutlets] = useState([]);
+  const [activeOutletId, setActiveOutletId] = useState(() => {
+    return localStorage.getItem('posbah_active_outlet_id') || '';
+  });
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    const handleSyncStatus = (e) => {
+      setSyncStatus(e.detail.status);
+      setSyncCount(e.detail.count || 0);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('posbah_sync_status', handleSyncStatus);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('posbah_sync_status', handleSyncStatus);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (user && user.role !== 'OWNER' && user.role !== 'ADMIN' && user.outletId) {
+      localStorage.setItem('posbah_active_outlet_id', String(user.outletId));
+      setActiveOutletId(String(user.outletId));
+    }
+  }, [user]);
+
+  useEffect(() => {
+    const fetchOutlets = async () => {
+      if (user && (user.role === 'OWNER' || user.role === 'ADMIN')) {
+        try {
+          const res = await api.get('/outlets');
+          setOutlets(res.data);
+          if (!localStorage.getItem('posbah_active_outlet_id') && res.data.length > 0) {
+            localStorage.setItem('posbah_active_outlet_id', String(res.data[0].id));
+            setActiveOutletId(String(res.data[0].id));
+          }
+        } catch (err) {
+          console.error('Gagal mengambil data outlet:', err);
+        }
+      }
+    };
+    fetchOutlets();
+  }, [user]);
+
+  const handleOutletChange = (outletId) => {
+    localStorage.setItem('posbah_active_outlet_id', outletId);
+    setActiveOutletId(outletId);
+    window.location.reload();
+  };
+
+  const activeOutletName = outlets.find(o => String(o.id) === String(activeOutletId))?.name || '';
+
   const isExcludedName = (name) => {
     return false;
   };
@@ -209,6 +270,7 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
     { path: '/orders-laundry', label: 'Riwayat Order', icon: <Clock size={20} />, minRole: 'KASIR', showInNav: true },
     { path: '/layanan-laundry', label: 'Tarif Layanan', icon: <Package size={20} />, minRole: 'ADMIN', showInNav: true },
     { path: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} />, minRole: 'ADMIN', showInNav: true },
+    { path: '/outlets', label: 'Kelola Outlet', icon: <Store size={20} />, minRole: 'OWNER', showInNav: true },
     { path: '/keuangan', label: 'Keuangan', icon: <DollarSign size={20} />, minRole: 'ADMIN', showInNav: false },
     { path: '/pelanggan', label: 'Pelanggan', icon: <Users size={20} />, minRole: 'ADMIN', showInNav: false },
     { path: '/karyawan', label: 'Karyawan', icon: <UserCog size={20} />, minRole: 'ADMIN', showInNav: false },
@@ -229,6 +291,7 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
     { path: '/', label: 'Kasir', icon: <Calculator size={20} />, minRole: 'KASIR', showInNav: true },
     { path: '/katalog', label: 'Katalog', icon: <Package size={20} />, minRole: 'KASIR', showInNav: true },
     { path: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} />, minRole: 'ADMIN', showInNav: true },
+    { path: '/outlets', label: 'Kelola Outlet', icon: <Store size={20} />, minRole: 'OWNER', showInNav: true },
     { path: '/keuangan', label: 'Keuangan', icon: <DollarSign size={20} />, minRole: 'ADMIN', showInNav: false },
     { path: '/pelanggan', label: 'Pelanggan', icon: <Users size={20} />, minRole: 'ADMIN', showInNav: false },
     { path: '/karyawan', label: 'Karyawan', icon: <UserCog size={20} />, minRole: 'ADMIN', showInNav: false },
@@ -281,10 +344,54 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
       <div className="mobile-header glass-panel md-hidden" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div className="brand" style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <img src="/logo.png" alt="Logo" style={{ width: '24px', height: '24px', borderRadius: '6px', objectFit: 'cover' }} />
-          {appMode === 'BMP' ? 'BAHTERA MULYA' : 'POSBah'}
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontWeight: 800, fontSize: '0.95rem' }}>{appMode === 'BMP' ? 'BAHTERA MULYA' : 'POSBah'}</span>
+            <span style={{
+              fontSize: '0.55rem',
+              color: isOnline ? '#10B981' : '#EF4444',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '3px',
+              marginTop: '-2px'
+            }}>
+              <span style={{
+                width: '5px',
+                height: '5px',
+                borderRadius: '50%',
+                backgroundColor: isOnline ? '#10B981' : '#EF4444',
+                boxShadow: isOnline ? '0 0 5px #10B981' : '0 0 5px #EF4444',
+                display: 'inline-block'
+              }} />
+              {isOnline ? (syncStatus === 'syncing' ? 'Sync...' : 'Online') : 'Offline'}
+            </span>
+          </div>
           <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {user && (user.role === 'OWNER' || user.role === 'ADMIN') && outlets.length > 0 && (
+            <select
+              value={activeOutletId}
+              onChange={(e) => handleOutletChange(e.target.value)}
+              style={{
+                padding: '4px 8px',
+                borderRadius: '6px',
+                border: '1px solid #E5E7EB',
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                background: 'white',
+                color: '#374151',
+                cursor: 'pointer',
+                maxWidth: '100px'
+              }}
+            >
+              {outlets.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+          )}
           {user?.name?.toLowerCase() !== 'muizz' && user?.name && (
             <>
               <span style={{ fontSize: '0.75rem', color: '#1F2937', fontWeight: 600 }}>{user?.name}</span>
@@ -305,7 +412,27 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
         <div className="brand hidden md-block" style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'space-between', width: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <img src="/logo.png" alt="Logo" style={{ width: '32px', height: '32px', borderRadius: '8px', objectFit: 'cover' }} />
-            {appMode === 'BMP' ? 'BAHTERA MULYA' : 'POSBah'}
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ fontWeight: 800 }}>{appMode === 'BMP' ? 'BAHTERA MULYA' : 'POSBah'}</span>
+              <span style={{
+                fontSize: '0.6rem',
+                color: isOnline ? '#10B981' : '#EF4444',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                <span style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: isOnline ? '#10B981' : '#EF4444',
+                  boxShadow: isOnline ? '0 0 6px #10B981' : '0 0 6px #EF4444',
+                  display: 'inline-block'
+                }} />
+                {isOnline ? (syncStatus === 'syncing' ? `Sinkronisasi (${syncCount})...` : 'Online') : 'Offline (Local DB)'}
+              </span>
+            </div>
           </div>
           <ThemeToggle theme={theme} toggleTheme={toggleTheme} />
         </div>
@@ -317,6 +444,33 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
           ))}
         </nav>
         <div style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid rgba(0,0,0,0.08)' }}>
+          {/* Selector Cabang/Outlet */}
+          {user && (user.role === 'OWNER' || user.role === 'ADMIN') && outlets.length > 0 && (
+            <div style={{ marginBottom: '12px' }}>
+              <div style={{ fontSize: '0.7rem', color: '#6B7280', fontWeight: 800, marginBottom: '4px', textTransform: 'uppercase' }}>Cabang / Outlet</div>
+              <select
+                value={activeOutletId}
+                onChange={(e) => handleOutletChange(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '6px 10px',
+                  borderRadius: '8px',
+                  border: '1.5px solid #E5E7EB',
+                  fontSize: '0.8rem',
+                  fontWeight: 800,
+                  background: 'white',
+                  color: '#374151',
+                  cursor: 'pointer'
+                }}
+              >
+                {outlets.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    🏪 {o.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           {showModeSwitcher && (
             <div style={{ marginBottom: '12px' }}>
               <div style={{ fontSize: '0.7rem', color: '#6B7280', fontWeight: 800, marginBottom: '4px', textTransform: 'uppercase' }}>Mode POS</div>
@@ -325,7 +479,7 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
                 onChange={(e) => handleModeChange(e.target.value)}
                 style={{ width: '100%', padding: '6px 10px', borderRadius: '8px', border: '1.5px solid #E5E7EB', fontSize: '0.8rem', fontWeight: 800, background: 'white', color: '#374151', cursor: 'pointer' }}
               >
-                <option value="FNB">🍹 UMKM & Jus</option>
+                <option value="FNB">🍹 UMKM &amp; Jus</option>
                 <option value="RENTAL">🚗 Rental Mobil</option>
                 <option value="LAUNDRY">🧺 POS Laundry</option>
                 <option value="BMP">🏭 Invoice &amp; Manufaktur</option>
@@ -334,8 +488,15 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
           )}
           {user?.name?.toLowerCase() !== 'muizz' && user?.name && (
             <>
-              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1F2937', marginBottom: '4px' }}>{user?.name}</div>
-              <RoleBadge />
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1F2937', marginBottom: '2px' }}>{user?.name}</div>
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap', marginBottom: '8px' }}>
+                <RoleBadge />
+                {user.role === 'KASIR' && user.outletId && (
+                  <span style={{ fontSize: '0.65rem', background: '#F3F4F6', color: '#4B5563', padding: '2px 7px', borderRadius: '99px', fontWeight: 700 }}>
+                    🏪 {user.outlet?.name || activeOutletName || 'Outlet'}
+                  </span>
+                )}
+              </div>
             </>
           )}
           {appMode === 'BMP' && !user && (
@@ -541,6 +702,7 @@ function AppContent({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
           {canAccess(effectiveRole, '/pesanan') && <Route path="/pesanan" element={<Pesanan />} />}
           {canAccess(effectiveRole, '/supplier') && <Route path="/supplier" element={<Supplier />} />}
           {canAccess(effectiveRole, '/activity-logs') && <Route path="/activity-logs" element={<LogAktivitas />} />}
+          {canAccess(effectiveRole, '/outlets') && <Route path="/outlets" element={<OutletManagement />} />}
 
           {/* BMP Routes */}
           <Route path="/bonus" element={<BmpBonusClaim />} />
@@ -1168,6 +1330,49 @@ function App() {
       return parsed;
     } catch { return null; }
   });
+
+  useEffect(() => {
+    const checkProfile = async () => {
+      if (user && !user.isDemo) {
+        try {
+          const res = await api.get('/auth/me');
+          if (res.data) {
+            const hasChanged =
+              res.data.role !== user.role ||
+              res.data.name !== user.name ||
+              res.data.outletId !== user.outletId ||
+              JSON.stringify(res.data.outlet) !== JSON.stringify(user.outlet);
+
+            if (hasChanged) {
+              const updatedUser = {
+                ...user,
+                name: res.data.name,
+                role: res.data.role,
+                outletId: res.data.outletId,
+                outlet: res.data.outlet
+              };
+              localStorage.setItem('posbah_user', JSON.stringify(updatedUser));
+              setUser(updatedUser);
+
+              if (res.data.outletId) {
+                localStorage.setItem('posbah_active_outlet_id', String(res.data.outletId));
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('Failed fetching profile in App.jsx check:', err);
+        }
+      }
+    };
+    checkProfile();
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (user && navigator.onLine && !user.isDemo) {
+      api.get('/products').catch(() => {});
+      api.get('/customers').catch(() => {});
+    }
+  }, [user?.id]);
 
   const isExcludedName = (name) => {
     return false;

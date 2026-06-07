@@ -1175,14 +1175,125 @@ app.post('/api/auth/login-email', (req, res) => __awaiter(void 0, void 0, void 0
         res.status(500).json({ error: 'Gagal melakukan login email' });
     }
 }));
+app.get('/api/auth/me', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const employeeIdHeader = req.headers['x-employee-id'];
+        if (!employeeIdHeader)
+            return res.status(401).json({ error: 'Unauthorized' });
+        let employee = null;
+        if (employeeIdHeader.includes('@')) {
+            employee = yield prisma.employee.findFirst({
+                where: { email: employeeIdHeader },
+                include: { outlet: true }
+            });
+        }
+        else {
+            const numericId = Number(employeeIdHeader);
+            if (!isNaN(numericId)) {
+                employee = yield prisma.employee.findUnique({
+                    where: { id: numericId },
+                    include: { outlet: true }
+                });
+            }
+        }
+        if (!employee)
+            return res.status(404).json({ error: 'Employee not found' });
+        res.json(employee);
+    }
+    catch (error) {
+        console.error('Failed fetching auth me profile:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+}));
+// ─────────────────────────────────────────────────────────────
+// Outlets (READ: KASIR+ | WRITE: OWNER only)
+// ─────────────────────────────────────────────────────────────
+app.get('/api/outlets', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const outlets = yield prisma.outlet.findMany({
+            orderBy: { name: 'asc' }
+        });
+        res.json(outlets);
+    }
+    catch (error) {
+        console.error('Failed to fetch outlets:', error);
+        res.status(400).json({ error: 'Failed to fetch outlets' });
+    }
+}));
+app.post('/api/outlets', requireOwner, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { name, address, phone } = req.body;
+        if (!name)
+            return res.status(400).json({ error: 'Nama outlet wajib diisi' });
+        const outlet = yield prisma.outlet.create({
+            data: { name, address, phone }
+        });
+        const employeeIdHeader = req.headers['x-employee-id'];
+        logActivity(employeeIdHeader, 'CREATE_OUTLET', `Membuat outlet baru: ${name}`);
+        res.json(outlet);
+    }
+    catch (error) {
+        console.error('Failed to create outlet:', error);
+        res.status(400).json({ error: 'Failed to create outlet' });
+    }
+}));
+app.put('/api/outlets/:id', requireOwner, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { id } = req.params;
+        const { name, address, phone } = req.body;
+        if (!name)
+            return res.status(400).json({ error: 'Nama outlet wajib diisi' });
+        const outlet = yield prisma.outlet.update({
+            where: { id: Number(id) },
+            data: { name, address, phone }
+        });
+        const employeeIdHeader = req.headers['x-employee-id'];
+        logActivity(employeeIdHeader, 'UPDATE_OUTLET', `Mengubah outlet: ${name}`);
+        res.json(outlet);
+    }
+    catch (error) {
+        console.error('Failed to update outlet:', error);
+        res.status(400).json({ error: 'Failed to update outlet' });
+    }
+}));
+app.delete('/api/outlets/:id', requireOwner, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { id } = req.params;
+        const outletId = Number(id);
+        // Cek apakah outlet masih digunakan oleh produk atau karyawan
+        const hasEmployees = yield prisma.employee.findFirst({ where: { outletId } });
+        if (hasEmployees) {
+            return res.status(400).json({ error: 'Outlet tidak dapat dihapus karena masih memiliki karyawan.' });
+        }
+        const hasProducts = yield prisma.product.findFirst({ where: { outletId } });
+        if (hasProducts) {
+            return res.status(400).json({ error: 'Outlet tidak dapat dihapus karena masih memiliki produk.' });
+        }
+        const outlet = yield prisma.outlet.findUnique({ where: { id: outletId } });
+        yield prisma.outlet.delete({ where: { id: outletId } });
+        const employeeIdHeader = req.headers['x-employee-id'];
+        logActivity(employeeIdHeader, 'DELETE_OUTLET', `Menghapus outlet: ${(outlet === null || outlet === void 0 ? void 0 : outlet.name) || outletId}`);
+        res.json({ success: true });
+    }
+    catch (error) {
+        console.error('Failed to delete outlet:', error);
+        res.status(400).json({ error: 'Failed to delete outlet' });
+    }
+}));
 // ─────────────────────────────────────────────────────────────
 // Queue endpoints — Bisa diakses KASIR (semua role)
 // ─────────────────────────────────────────────────────────────
 // Antrian aktif (PENDING + ada queueNumber) — untuk cek slot yang terpakai
 app.get('/api/queues/active', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        const outletIdHeader = req.headers['x-outlet-id'];
+        const outletId = outletIdHeader ? Number(outletIdHeader) : undefined;
+        const where = { status: 'PENDING', queueNumber: { not: null } };
+        if (outletId && !isNaN(outletId)) {
+            where.outletId = outletId;
+        }
         const queues = yield prisma.transaction.findMany({
-            where: { status: 'PENDING', queueNumber: { not: null } },
+            where,
             select: { id: true, queueNumber: true, customerName: true, total: true }
         });
         res.json(queues);
@@ -1194,8 +1305,14 @@ app.get('/api/queues/active', (req, res) => __awaiter(void 0, void 0, void 0, fu
 // Semua transaksi PENDING — untuk tampil di modal Daftar Antrian
 app.get('/api/queues/pending', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        const outletIdHeader = req.headers['x-outlet-id'];
+        const outletId = outletIdHeader ? Number(outletIdHeader) : undefined;
+        const where = { status: 'PENDING' };
+        if (outletId && !isNaN(outletId)) {
+            where.outletId = outletId;
+        }
         const queues = yield prisma.transaction.findMany({
-            where: { status: 'PENDING' },
+            where,
             include: { items: { include: { product: true } }, customer: true },
             orderBy: { date: 'asc' }
         });
@@ -1209,14 +1326,31 @@ app.get('/api/queues/pending', (req, res) => __awaiter(void 0, void 0, void 0, f
 // Products  (READ: semua | WRITE: ADMIN+)
 // ─────────────────────────────────────────────────────────────
 app.get('/api/products', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    const products = yield prisma.product.findMany();
-    res.json(products);
+    try {
+        const outletIdHeader = req.headers['x-outlet-id'];
+        const outletId = outletIdHeader ? Number(outletIdHeader) : undefined;
+        const where = {};
+        if (outletId && !isNaN(outletId)) {
+            where.outletId = outletId;
+        }
+        const products = yield prisma.product.findMany({ where });
+        res.json(products);
+    }
+    catch (error) {
+        res.status(400).json({ error: 'Failed to fetch products' });
+    }
 }));
 // Lookup produk by barcode (untuk scanner kasir)
 app.get('/api/products/barcode/:code', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        const outletIdHeader = req.headers['x-outlet-id'];
+        const outletId = outletIdHeader ? Number(outletIdHeader) : undefined;
+        const where = { barcode: req.params.code };
+        if (outletId && !isNaN(outletId)) {
+            where.outletId = outletId;
+        }
         const product = yield prisma.product.findFirst({
-            where: { barcode: req.params.code }
+            where
         });
         if (!product)
             return res.status(404).json({ error: 'Produk tidak ditemukan' });
@@ -1228,9 +1362,11 @@ app.get('/api/products/barcode/:code', (req, res) => __awaiter(void 0, void 0, v
 }));
 app.post('/api/products', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        const outletIdHeader = req.headers['x-outlet-id'];
+        const outletId = outletIdHeader ? Number(outletIdHeader) : undefined;
         const { name, price, costPrice, stock, unit, barcode, category, wholesaleEnabled, wholesalePrices, variants, image } = req.body;
         const product = yield prisma.product.create({
-            data: Object.assign({ name, price: Number(price), costPrice: Number(costPrice || 0), stock: Number(stock), unit: unit || 'pcs', category: category || 'Umum', wholesaleEnabled: Boolean(wholesaleEnabled), wholesalePrices: wholesalePrices ? JSON.stringify(wholesalePrices) : null, variants: variants && variants.length > 0 ? JSON.stringify(variants) : null, image }, (barcode ? { barcode } : {}))
+            data: Object.assign(Object.assign({ name, price: Number(price), costPrice: Number(costPrice || 0), stock: Number(stock), unit: unit || 'pcs', category: category || 'Umum', wholesaleEnabled: Boolean(wholesaleEnabled), wholesalePrices: wholesalePrices ? JSON.stringify(wholesalePrices) : null, variants: variants && variants.length > 0 ? JSON.stringify(variants) : null, image }, (barcode ? { barcode } : {})), (outletId && !isNaN(outletId) ? { outletId } : {}))
         });
         logActivity(req.headers['x-employee-id'], 'CREATE_PRODUCT', `Membuat produk baru ${product.name} (Stok: ${product.stock} ${product.unit}, Harga: Rp ${product.price.toLocaleString('id-ID')})`);
         res.json(product);
@@ -1243,10 +1379,10 @@ app.post('/api/products', requireAdmin, (req, res) => __awaiter(void 0, void 0, 
 app.put('/api/products/:id', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { id } = req.params;
-        const { name, price, costPrice, stock, unit, barcode, category, wholesaleEnabled, wholesalePrices, variants, image } = req.body;
+        const { name, price, costPrice, stock, unit, barcode, category, wholesaleEnabled, wholesalePrices, variants, image, outletId } = req.body;
         const product = yield prisma.product.update({
             where: { id: Number(id) },
-            data: Object.assign({ name, price: Number(price), costPrice: Number(costPrice || 0), stock: Number(stock), unit: unit || 'pcs', category: category || 'Umum', wholesaleEnabled: Boolean(wholesaleEnabled), wholesalePrices: wholesalePrices ? JSON.stringify(wholesalePrices) : null, variants: variants && variants.length > 0 ? JSON.stringify(variants) : null, image }, (barcode !== undefined ? { barcode: barcode || null } : {}))
+            data: Object.assign(Object.assign({ name, price: Number(price), costPrice: Number(costPrice || 0), stock: Number(stock), unit: unit || 'pcs', category: category || 'Umum', wholesaleEnabled: Boolean(wholesaleEnabled), wholesalePrices: wholesalePrices ? JSON.stringify(wholesalePrices) : null, variants: variants && variants.length > 0 ? JSON.stringify(variants) : null, image }, (barcode !== undefined ? { barcode: barcode || null } : {})), (outletId !== undefined ? { outletId: outletId ? Number(outletId) : null } : {}))
         });
         logActivity(req.headers['x-employee-id'], 'UPDATE_PRODUCT', `Mengubah data produk ${product.name} (Stok: ${product.stock} ${product.unit}, Harga: Rp ${product.price.toLocaleString('id-ID')})`);
         res.json(product);
@@ -1282,7 +1418,14 @@ app.delete('/api/products/:id', requireAdmin, (req, res) => __awaiter(void 0, vo
 // ─────────────────────────────────────────────────────────────
 app.get('/api/transactions', requireAdmin, (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
+        const outletIdHeader = req.headers['x-outlet-id'];
+        const outletId = outletIdHeader ? Number(outletIdHeader) : undefined;
+        const where = {};
+        if (outletId && !isNaN(outletId)) {
+            where.outletId = outletId;
+        }
         const transactions = yield prisma.transaction.findMany({
+            where,
             include: {
                 employee: true,
                 customer: true,
@@ -1301,6 +1444,8 @@ app.post('/api/transactions', requireNotDemo, (req, res) => __awaiter(void 0, vo
     try {
         const { items, total, subtotal, discount, discountType, discountInput, discountAmt, paymentMethod, amountPaid, change, type, customerId, date, status, notes, customerName, queueNumber } = req.body;
         const employeeId = yield resolveEmployeeId(req);
+        const outletIdHeader = req.headers['x-outlet-id'];
+        const outletId = outletIdHeader ? Number(outletIdHeader) : undefined;
         // Hitung subtotal dari items jika tidak dikirim
         const computedSubtotal = subtotal !== null && subtotal !== void 0 ? subtotal : items.reduce((sum, i) => sum + (i.price * i.quantity), 0);
         const computedDiscountAmt = discountAmt !== null && discountAmt !== void 0 ? discountAmt : Number(discount || 0);
@@ -1308,26 +1453,7 @@ app.post('/api/transactions', requireNotDemo, (req, res) => __awaiter(void 0, vo
         const transaction = yield prisma.$transaction((tx) => __awaiter(void 0, void 0, void 0, function* () {
             // 1. Buat transaksi
             const createdTx = yield tx.transaction.create({
-                data: {
-                    receiptNumber: `INV-${Date.now()}`,
-                    total: Number(computedTotal),
-                    subtotal: Number(computedSubtotal),
-                    discount: Number(computedDiscountAmt), // legacy compat
-                    discountType: discountType || null,
-                    discountInput: Number(discountInput || 0),
-                    discountAmt: Number(computedDiscountAmt),
-                    amountPaid: amountPaid ? Number(amountPaid) : null,
-                    change: change ? Number(change) : null,
-                    paymentMethod: paymentMethod || 'PENDING',
-                    status: status || 'COMPLETED',
-                    notes: notes || null,
-                    customerName: customerName || null,
-                    queueNumber: queueNumber ? Number(queueNumber) : null,
-                    type: type || 'SALES',
-                    date: date ? new Date(date) : new Date(),
-                    employeeId,
-                    customerId: customerId || null,
-                    items: {
+                data: Object.assign(Object.assign({ receiptNumber: `INV-${Date.now()}`, total: Number(computedTotal), subtotal: Number(computedSubtotal), discount: Number(computedDiscountAmt), discountType: discountType || null, discountInput: Number(discountInput || 0), discountAmt: Number(computedDiscountAmt), amountPaid: amountPaid ? Number(amountPaid) : null, change: change ? Number(change) : null, paymentMethod: paymentMethod || 'PENDING', status: status || 'COMPLETED', notes: notes || null, customerName: customerName || null, queueNumber: queueNumber ? Number(queueNumber) : null, type: type || 'SALES', date: date ? new Date(date) : new Date(), employeeId, customerId: customerId || null }, (outletId && !isNaN(outletId) ? { outletId } : {})), { items: {
                         create: items.map((item) => ({
                             productId: item.productId,
                             quantity: item.quantity,
@@ -1338,8 +1464,7 @@ app.post('/api/transactions', requireNotDemo, (req, res) => __awaiter(void 0, vo
                             variantName: item.variantName || null,
                             note: item.note || null,
                         }))
-                    }
-                },
+                    } }),
                 include: { items: { include: { product: true } } }
             });
             // 2. Kurangi stok produk
@@ -1536,6 +1661,7 @@ app.get('/api/employees', requireAdmin, (req, res) => __awaiter(void 0, void 0, 
                     mode: 'insensitive'
                 }
             },
+            include: { outlet: true },
             orderBy: { name: 'asc' }
         });
         res.json(employees);
@@ -1567,7 +1693,7 @@ app.post('/api/employees', requireOwner, (req, res) => __awaiter(void 0, void 0,
                 maxLimit
             });
         }
-        const { name, email, role, pin, salary } = req.body;
+        const { name, email, role, pin, salary, outletId } = req.body;
         if (!email) {
             return res.status(400).json({ error: 'Email karyawan wajib diisi' });
         }
@@ -1594,13 +1720,7 @@ app.post('/api/employees', requireOwner, (req, res) => __awaiter(void 0, void 0,
         const hashedPin = pin && pin.length === 128 ? pin : hashPassword(pin || '');
         // 1. Simpan di database penyewa
         const employee = yield prisma.employee.create({
-            data: {
-                name,
-                email: cleanEmail,
-                role: role || 'KASIR',
-                pin: hashedPin,
-                salary: role === 'OWNER' ? 0 : Number(salary || 0) // Gaji owner selalu 0
-            }
+            data: Object.assign({ name, email: cleanEmail, role: role || 'KASIR', pin: hashedPin, salary: role === 'OWNER' ? 0 : Number(salary || 0) }, (outletId ? { outletId: Number(outletId) } : {}))
         });
         // 2. Simpan di database global PremiumUser agar bisa login menggunakan email & password
         yield mainPrisma.premiumUser.create({
@@ -1673,7 +1793,7 @@ app.put('/api/employees/:id', requireOwner, (req, res) => __awaiter(void 0, void
         if (employeeIdHeader === '0' || employeeIdHeader === '9999') {
             return res.status(403).json({ error: 'Akun demo tidak dapat mengubah karyawan' });
         }
-        const { name, role, pin, salary } = req.body;
+        const { name, role, pin, salary, outletId } = req.body;
         const requesterRole = req.headers['x-employee-role'];
         if (requesterRole !== 'OWNER' && role === 'OWNER') {
             return res.status(403).json({ error: 'Hanya OWNER yang dapat mengubah role menjadi OWNER' });
@@ -1688,6 +1808,9 @@ app.put('/api/employees/:id', requireOwner, (req, res) => __awaiter(void 0, void
         }
         if (salary !== undefined) {
             updateData.salary = role === 'OWNER' ? 0 : Number(salary || 0); // Gaji owner selalu 0
+        }
+        if (outletId !== undefined) {
+            updateData.outletId = outletId ? Number(outletId) : null;
         }
         // 1. Update di database penyewa lokal
         const employee = yield prisma.employee.update({
@@ -1859,6 +1982,8 @@ app.delete('/api/laundry/services/:id', requireAdmin, (req, res) => __awaiter(vo
 app.get('/api/laundry/orders', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { cari, filterBayar, filterTipe } = req.query;
+        const outletIdHeader = req.headers['x-outlet-id'];
+        const outletId = outletIdHeader ? Number(outletIdHeader) : undefined;
         let whereClause = {};
         if (cari) {
             whereClause.namaPelanggan = { contains: cari, mode: 'insensitive' };
@@ -1873,6 +1998,9 @@ app.get('/api/laundry/orders', (req, res) => __awaiter(void 0, void 0, void 0, f
             whereClause.jenisLayanan = {
                 NOT: { contains: 'Barang', mode: 'insensitive' }
             };
+        }
+        if (outletId && !isNaN(outletId)) {
+            whereClause.outletId = outletId;
         }
         const orders = yield prisma.laundryOrder.findMany({
             where: whereClause,
@@ -1904,25 +2032,12 @@ app.post('/api/laundry/orders', requireNotDemo, (req, res) => __awaiter(void 0, 
     try {
         const { namaPelanggan, noHp, jenisLayanan, jenisLaundry, totalHarga, statusBayar, selimut, sprei, boneka, korden, lokasi, customerId } = req.body;
         const employeeId = yield resolveEmployeeId(req);
+        const outletIdHeader = req.headers['x-outlet-id'];
+        const outletId = outletIdHeader ? Number(outletIdHeader) : undefined;
         const receiptNumber = `INV-LND-${Date.now()}`;
         const order = yield prisma.laundryOrder.create({
-            data: {
-                receiptNumber,
-                namaPelanggan,
-                noHp: noHp || '-',
-                jenisLayanan: jenisLayanan || '-',
-                jenisLaundry: jenisLaundry || '-',
-                totalHarga: Number(totalHarga) || 0,
-                statusBayar: statusBayar || 'Belum Lunas',
-                status: 'Menunggu',
-                selimut: Number(selimut || 0),
-                sprei: Number(sprei || 0),
-                boneka: Number(boneka || 0),
-                korden: Number(korden || 0),
-                lokasi: lokasi || null,
-                employeeId,
-                customerId: customerId ? Number(customerId) : null
-            }
+            data: Object.assign({ receiptNumber,
+                namaPelanggan, noHp: noHp || '-', jenisLayanan: jenisLayanan || '-', jenisLaundry: jenisLaundry || '-', totalHarga: Number(totalHarga) || 0, statusBayar: statusBayar || 'Belum Lunas', status: 'Menunggu', selimut: Number(selimut || 0), sprei: Number(sprei || 0), boneka: Number(boneka || 0), korden: Number(korden || 0), lokasi: lokasi || null, employeeId, customerId: customerId ? Number(customerId) : null }, (outletId && !isNaN(outletId) ? { outletId } : {}))
         });
         logActivity(req.headers['x-employee-id'], 'CREATE_LAUNDRY_ORDER', `Membuat pesanan laundry baru ${receiptNumber} untuk ${namaPelanggan} senilai Rp ${order.totalHarga.toLocaleString('id-ID')}`);
         res.json(order);
@@ -2209,6 +2324,8 @@ app.get('/api/reports', requireAdmin, (req, res) => __awaiter(void 0, void 0, vo
         const localNow = new Date(Date.now() + tzOffset);
         const startOfToday = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate(), 0, 0, 0, 0) - tzOffset);
         const endOfToday = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate(), 23, 59, 59, 999) - tzOffset);
+        const outletIdHeader = req.headers['x-outlet-id'];
+        const outletId = outletIdHeader ? Number(outletIdHeader) : undefined;
         if (appMode === 'LAUNDRY') {
             const orderWhere = { statusBayar: 'Lunas' };
             const pendingWhere = { statusBayar: 'Belum Lunas' };
@@ -2218,16 +2335,24 @@ app.get('/api/reports', requireAdmin, (req, res) => __awaiter(void 0, void 0, vo
                 pendingWhere.tanggalMasuk = dateFilter;
                 expenseWhere.tanggal = dateFilter;
             }
+            if (outletId && !isNaN(outletId)) {
+                orderWhere.outletId = outletId;
+                pendingWhere.outletId = outletId;
+            }
             const totalSales = yield prisma.laundryOrder.aggregate({
                 where: orderWhere,
                 _sum: { totalHarga: true }
             });
             const totalSalesVal = totalSales._sum.totalHarga || 0;
+            const todaySalesWhere = {
+                statusBayar: 'Lunas',
+                tanggalMasuk: { gte: startOfToday, lte: endOfToday }
+            };
+            if (outletId && !isNaN(outletId)) {
+                todaySalesWhere.outletId = outletId;
+            }
             const todaySales = yield prisma.laundryOrder.aggregate({
-                where: {
-                    statusBayar: 'Lunas',
-                    tanggalMasuk: { gte: startOfToday, lte: endOfToday }
-                },
+                where: todaySalesWhere,
                 _sum: { totalHarga: true }
             });
             const todaySalesVal = todaySales._sum.totalHarga || 0;
@@ -2296,17 +2421,24 @@ app.get('/api/reports', requireAdmin, (req, res) => __awaiter(void 0, void 0, vo
             if (dateFilterActive) {
                 salesWhere.date = dateFilter;
             }
+            if (outletId && !isNaN(outletId)) {
+                salesWhere.outletId = outletId;
+            }
             const totalSales = yield prisma.transaction.aggregate({
                 where: salesWhere,
                 _sum: { total: true }
             });
             totalSalesVal = totalSales._sum.total || 0;
+            const todaySalesWhere = {
+                type: 'SALES',
+                status: { not: 'CANCELLED' },
+                date: { gte: startOfToday, lte: endOfToday }
+            };
+            if (outletId && !isNaN(outletId)) {
+                todaySalesWhere.outletId = outletId;
+            }
             const todaySales = yield prisma.transaction.aggregate({
-                where: {
-                    type: 'SALES',
-                    status: { not: 'CANCELLED' },
-                    date: { gte: startOfToday, lte: endOfToday }
-                },
+                where: todaySalesWhere,
                 _sum: { total: true }
             });
             todaySalesVal = todaySales._sum.total || 0;
@@ -3010,7 +3142,7 @@ const syncAllEmployeesToPremiumUsers = () => __awaiter(void 0, void 0, void 0, f
     try {
         console.log('[SYNC] Starting synchronization of all employees to PremiumUser...');
         const premiumOwners = yield mainPrisma.premiumUser.findMany({
-            where: { role: 'OWNER' }
+            where: { role: 'OWNER', tenantId: null }
         });
         const googleUsers = yield mainPrisma.googleUser.findMany();
         const ownerEmails = new Set();
@@ -3345,7 +3477,7 @@ const sendMonthlyOwnerReport = () => __awaiter(void 0, void 0, void 0, function*
     try {
         // Ambil semua PremiumUser (owner)
         const allOwners = yield mainPrisma.premiumUser.findMany({
-            where: { role: 'OWNER' },
+            where: { role: 'OWNER', tenantId: null },
             orderBy: { registeredAt: 'asc' }
         });
         // Ambil businessMode dari GoogleUser
@@ -3450,7 +3582,7 @@ app.get('/api/admin/owner-paid', (req, res) => __awaiter(void 0, void 0, void 0,
         return res.status(400).send('<h1>Email wajib diisi</h1>');
     try {
         const user = yield mainPrisma.premiumUser.findUnique({ where: { email: decodeURIComponent(email) } });
-        if (!user || user.role !== 'OWNER')
+        if (!user || user.role !== 'OWNER' || user.tenantId !== null)
             return res.status(404).send('<h1>Owner tidak ditemukan</h1>');
         yield mainPrisma.premiumUser.update({
             where: { email: decodeURIComponent(email) },
@@ -3501,7 +3633,7 @@ app.get('/api/admin/owner-delete', (req, res) => __awaiter(void 0, void 0, void 
     try {
         const cleanEmail = decodeURIComponent(email);
         const user = yield mainPrisma.premiumUser.findUnique({ where: { email: cleanEmail } });
-        if (!user || user.role !== 'OWNER')
+        if (!user || user.role !== 'OWNER' || user.tenantId !== null)
             return res.status(404).send('<h1>Owner tidak ditemukan</h1>');
         // Sudah dijadwalkan?
         if (user.deletionScheduledAt && user.deletionScheduledAt > new Date()) {
@@ -3595,6 +3727,9 @@ app.get('/api/admin/owner-cancel-delete', (req, res) => __awaiter(void 0, void 0
         return res.status(400).send('<h1>Email wajib diisi</h1>');
     try {
         const cleanEmail = decodeURIComponent(email);
+        const user = yield mainPrisma.premiumUser.findUnique({ where: { email: cleanEmail } });
+        if (!user || user.role !== 'OWNER' || user.tenantId !== null)
+            return res.status(404).send('<h1>Owner tidak ditemukan</h1>');
         yield mainPrisma.premiumUser.update({
             where: { email: cleanEmail },
             data: { deletionScheduledAt: null }

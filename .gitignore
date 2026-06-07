@@ -1,7 +1,8 @@
 node_modules/
 *.zip
-POSBah-v1.0.1.apk
+POSBah-*.apk
 frontend/dist/
 backend/dist/
 .env
 .idea/
+scratch/
