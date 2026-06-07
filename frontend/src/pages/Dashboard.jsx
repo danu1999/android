@@ -23,12 +23,12 @@ export default function Dashboard({ appMode }) {
   const [laundryOrders, setLaundryOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [hasUpdate, setHasUpdate] = useState(false);
-  const [latestVer, setLatestVer] = useState("1.1.2");
+  const [latestVer, setLatestVer] = useState("1.0.2");
 
   useEffect(() => {
     const checkVersion = async () => {
       try {
-        let currentVer = "1.1.2";
+        let currentVer = "1.0.2";
         try {
           const info = await CapApp.getInfo();
           if (info && info.version) {

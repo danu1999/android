@@ -606,7 +606,7 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
 
 // ─── App Content ───────────────────────────────────────────────
 function AppContent({ user, onLogout, appMode, setAppMode, theme, toggleTheme }) {
-  const [latestVer, setLatestVer] = useState("1.1.2");
+  const [latestVer, setLatestVer] = useState("1.0.2");
   const location = useLocation();
   const isPublicStore = location.pathname === '/toko-online';
   const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
@@ -1036,7 +1036,7 @@ function BackButtonHandler({ setShowExitModal, user, showUpdateFullscreen, setSh
 
 // ─── Fullscreen Update Modal Component ──────────────────────────
 function FullscreenUpdateModal({ onClose, onDownload }) {
-  const [latestVer, setLatestVer] = useState("1.1.2");
+  const [latestVer, setLatestVer] = useState("1.0.2");
 
   useEffect(() => {
     const fetchVer = async () => {
@@ -1164,22 +1164,22 @@ function FullscreenUpdateModal({ onClose, onDownload }) {
             <div style={{ display: 'flex', gap: '10px' }}>
               <span style={{ color: '#10b981', fontSize: '1rem' }}>✓</span>
               <div>
-                <strong style={{ color: '#f1f5f9' }}>Pembaruan Manajemen Karyawan</strong>
-                <p style={{ margin: '2px 0 0' }}>Owner bisa dengan sendiri menambah dan mengurangi karyawan.</p>
+                <strong style={{ color: '#f1f5f9' }}>Manajemen Banyak Outlet (Multi-Outlet)</strong>
+                <p style={{ margin: '2px 0 0' }}>Kelola data, karyawan, dan laporan transaksi di seluruh cabang outlet secara terpusat.</p>
               </div>
             </div>
             <div style={{ display: 'flex', gap: '10px' }}>
               <span style={{ color: '#10b981', fontSize: '1rem' }}>✓</span>
               <div>
-                <strong style={{ color: '#f1f5f9' }}>Pembaharuan Sistem Cerdas</strong>
-                <p style={{ margin: '2px 0 0' }}>Authentikasi Gmail untuk kepercayaan data pelanggan.</p>
+                <strong style={{ color: '#f1f5f9' }}>Badge Metrik Kinerja</strong>
+                <p style={{ margin: '2px 0 0' }}>Pantau perkembangan performa bisnis dengan indikator metrik yang intuitif.</p>
               </div>
             </div>
             <div style={{ display: 'flex', gap: '10px' }}>
               <span style={{ color: '#10b981', fontSize: '1rem' }}>✓</span>
               <div>
-                <strong style={{ color: '#f1f5f9' }}>Memperkuat Sistem</strong>
-                <p style={{ margin: '2px 0 0' }}>Restore dan backup data dengan akurat.</p>
+                <strong style={{ color: '#f1f5f9' }}>Loader CSS Modern &amp; Firewall Keamanan</strong>
+                <p style={{ margin: '2px 0 0' }}>Navigasi lebih halus dengan loading baru dan proteksi keamanan database yang diperketat.</p>
               </div>
             </div>
           </div>
