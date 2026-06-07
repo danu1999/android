@@ -358,6 +358,35 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+// ─── MIDDLEWARE ISOLASI OUTLET / CABANG (PHASE 1 FIREWALL) ───────────
+app.use(async (req: Request, res: Response, next: NextFunction) => {
+  const employeeId = req.headers['x-employee-id'] as string;
+  const isPublicRoute = req.path.startsWith('/api/auth/') || req.path === '/api/download-apk' || req.path === '/';
+
+  if (!isPublicRoute && employeeId && employeeId !== '0' && employeeId !== '9999') {
+    try {
+      let emp: any = null;
+      if (employeeId.includes('@')) {
+        emp = await prisma.employee.findFirst({ where: { email: employeeId } });
+      } else {
+        const empId = Number(employeeId);
+        if (!isNaN(empId)) {
+          emp = await prisma.employee.findUnique({ where: { id: empId } });
+        }
+      }
+
+      if (emp && emp.outletId) {
+        // Jika karyawan dikunci ke cabang tertentu, paksa header x-outlet-id agar selalu mengarah ke outlet mereka
+        req.headers['x-outlet-id'] = String(emp.outletId);
+      }
+    } catch (e) {
+      console.error('Error enforcing outlet isolation in firewall middleware:', e);
+    }
+  }
+  next();
+});
+
+
 // ─────────────────────────────────────────────────────────────
 // Role hierarchy helpers
 // ─────────────────────────────────────────────────────────────

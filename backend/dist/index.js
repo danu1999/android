@@ -340,6 +340,33 @@ app.use((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     }
     next();
 }));
+// ─── MIDDLEWARE ISOLASI OUTLET / CABANG (PHASE 1 FIREWALL) ───────────
+app.use((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
+    const employeeId = req.headers['x-employee-id'];
+    const isPublicRoute = req.path.startsWith('/api/auth/') || req.path === '/api/download-apk' || req.path === '/';
+    if (!isPublicRoute && employeeId && employeeId !== '0' && employeeId !== '9999') {
+        try {
+            let emp = null;
+            if (employeeId.includes('@')) {
+                emp = yield prisma.employee.findFirst({ where: { email: employeeId } });
+            }
+            else {
+                const empId = Number(employeeId);
+                if (!isNaN(empId)) {
+                    emp = yield prisma.employee.findUnique({ where: { id: empId } });
+                }
+            }
+            if (emp && emp.outletId) {
+                // Jika karyawan dikunci ke cabang tertentu, paksa header x-outlet-id agar selalu mengarah ke outlet mereka
+                req.headers['x-outlet-id'] = String(emp.outletId);
+            }
+        }
+        catch (e) {
+            console.error('Error enforcing outlet isolation in firewall middleware:', e);
+        }
+    }
+    next();
+}));
 // ─────────────────────────────────────────────────────────────
 // Role hierarchy helpers
 // ─────────────────────────────────────────────────────────────
@@ -1211,6 +1238,15 @@ app.get('/api/auth/me', (req, res) => __awaiter(void 0, void 0, void 0, function
 app.get('/api/outlets', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const outlets = yield prisma.outlet.findMany({
+            include: {
+                _count: {
+                    select: {
+                        employees: true,
+                        products: true,
+                        transactions: true
+                    }
+                }
+            },
             orderBy: { name: 'asc' }
         });
         res.json(outlets);
