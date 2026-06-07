@@ -9,7 +9,7 @@ import { exec } from 'child_process';
 
 const mainPrisma = new PrismaClient();
 const prismaContext = new AsyncLocalStorage<PrismaClient>();
-const tenantClients = new Map<string, PrismaClient>();
+const tenantClients = new Map<string, { client: PrismaClient; lastAccessed: number }>();
 
 function getCleanTenantDbName(tenantId: string): string {
   const cleanId = tenantId.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase().trim();
@@ -18,29 +18,66 @@ function getCleanTenantDbName(tenantId: string): string {
 
 const getTenantPrisma = (tenantId: string): PrismaClient => {
   const dbName = getCleanTenantDbName(tenantId);
-  if (!tenantClients.has(dbName)) {
-    const originalUrl = process.env.DATABASE_URL || '';
-    let tenantDbUrl = originalUrl;
-    if (originalUrl.includes('?')) {
-      const parts = originalUrl.split('?');
-      const base = parts[0];
-      const query = parts[1];
-      const lastSlash = base.lastIndexOf('/');
-      tenantDbUrl = base.substring(0, lastSlash + 1) + dbName + '?' + query;
+  const now = Date.now();
+
+  if (tenantClients.has(dbName)) {
+    const entry = tenantClients.get(dbName)!;
+    entry.lastAccessed = now;
+    return entry.client;
+  }
+
+  // Evict LRU connection if cache limit is reached
+  const MAX_CACHED_TENANTS = 15;
+  if (tenantClients.size >= MAX_CACHED_TENANTS) {
+    let oldestDbName = '';
+    let oldestTime = Infinity;
+    for (const [name, entry] of tenantClients.entries()) {
+      if (entry.lastAccessed < oldestTime) {
+        oldestTime = entry.lastAccessed;
+        oldestDbName = name;
+      }
+    }
+    if (oldestDbName) {
+      console.log(`[Tenancy Cache] Evicting dynamic connection for tenant: ${oldestDbName}`);
+      const oldestEntry = tenantClients.get(oldestDbName)!;
+      oldestEntry.client.$disconnect().catch(err => {
+        console.error(`[Tenancy Cache] Failed to disconnect tenant database ${oldestDbName}:`, err);
+      });
+      tenantClients.delete(oldestDbName);
+    }
+  }
+
+  const originalUrl = process.env.DATABASE_URL || '';
+  let tenantDbUrl = originalUrl;
+  if (originalUrl.includes('?')) {
+    const parts = originalUrl.split('?');
+    const base = parts[0];
+    const query = parts[1];
+    const lastSlash = base.lastIndexOf('/');
+
+    // Inject connection limit parameter
+    let cleanQuery = query;
+    if (cleanQuery.includes('connection_limit=')) {
+      cleanQuery = cleanQuery.replace(/connection_limit=\d+/, 'connection_limit=3');
     } else {
-      const lastSlash = originalUrl.lastIndexOf('/');
-      tenantDbUrl = originalUrl.substring(0, lastSlash + 1) + dbName;
+      cleanQuery += '&connection_limit=3';
     }
 
-    console.log(`Initializing new PrismaClient for tenant ${tenantId} (${dbName})`);
-    const client = new PrismaClient({
-      datasources: {
-        db: { url: tenantDbUrl }
-      }
-    });
-    tenantClients.set(dbName, client);
+    tenantDbUrl = base.substring(0, lastSlash + 1) + dbName + '?' + cleanQuery;
+  } else {
+    const lastSlash = originalUrl.lastIndexOf('/');
+    tenantDbUrl = originalUrl.substring(0, lastSlash + 1) + dbName + '?connection_limit=3';
   }
-  return tenantClients.get(dbName)!;
+
+  console.log(`Initializing new PrismaClient for tenant ${tenantId} (${dbName}) with connection_limit=3`);
+  const client = new PrismaClient({
+    datasources: {
+      db: { url: tenantDbUrl }
+    }
+  });
+
+  tenantClients.set(dbName, { client, lastAccessed: now });
+  return client;
 };
 
 // Global proxy to dynamically swap prisma connection on runtime based on AsyncLocalStorage context
@@ -253,7 +290,8 @@ app.use((req: Request, res: Response, next: NextFunction) => {
     '/api/download-apk',
     '/api/auth/register-email',
     '/api/auth/login-email',
-    '/api/auth/google-register'
+    '/api/auth/google-register',
+    '/api/logs/client-error'
   ].includes(req.path);
 
   if (isGlobalPath) {
@@ -580,6 +618,23 @@ app.get('/api/download-apk', (req, res) => {
 // Route to get the latest APK version name
 app.get('/api/apk-version', (req, res) => {
   res.json({ version: '1.0.2' });
+});
+
+// Endpoint for centralized client error logging
+app.post('/api/logs/client-error', (req: Request, res: Response) => {
+  try {
+    const { errorMsg, stack, url, userAgent, userEmail } = req.body;
+    const logMsg = `[CLIENT ERROR] [${new Date().toISOString()}] Email: ${userEmail || 'Guest'} | URL: ${url} | UA: ${userAgent}\nMessage: ${errorMsg}\nStack: ${stack || 'No Stack'}\n----------------------------------------\n`;
+    console.error(logMsg);
+
+    const logFilePath = path.join(__dirname, '../client_errors.log');
+    fs.appendFile(logFilePath, logMsg, (err) => {
+      if (err) console.error('Failed to write client error to log file:', err);
+    });
+  } catch (err) {
+    console.error('Error logging client error:', err);
+  }
+  res.sendStatus(200);
 });
 
 // Get employee limit for a tenant
@@ -3742,8 +3797,8 @@ const cleanupExpiredDemoUsers = async (): Promise<void> => {
 
         // Tutup koneksi Prisma tenant jika ada
         if (tenantClients.has(dbName)) {
-          const client = tenantClients.get(dbName)!;
-          await client.$disconnect();
+          const entry = tenantClients.get(dbName)!;
+          await entry.client.$disconnect();
           tenantClients.delete(dbName);
         }
 
@@ -3925,7 +3980,7 @@ const executePendingOwnerDeletions = async (): Promise<void> => {
         // 1. Tutup dan drop tenant database
         const dbName = getCleanTenantDbName(userEmail);
         if (tenantClients.has(dbName)) {
-          await tenantClients.get(dbName)!.$disconnect();
+          await tenantClients.get(dbName)!.client.$disconnect();
           tenantClients.delete(dbName);
         }
         await mainPrisma.$executeRawUnsafe(`

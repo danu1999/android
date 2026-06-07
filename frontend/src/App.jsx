@@ -607,6 +607,23 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
 // ─── App Content ───────────────────────────────────────────────
 function AppContent({ user, onLogout, appMode, setAppMode, theme, toggleTheme }) {
   const [latestVer, setLatestVer] = useState("1.0.2");
+  const [toast, setToast] = useState(null);
+
+  useEffect(() => {
+    let timer;
+    const handleShowToast = (e) => {
+      setToast(e.detail);
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        setToast(null);
+      }, 5000);
+    };
+    window.addEventListener('posbah_show_toast', handleShowToast);
+    return () => {
+      window.removeEventListener('posbah_show_toast', handleShowToast);
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
   const location = useLocation();
   const isPublicStore = location.pathname === '/toko-online';
   const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
@@ -647,6 +664,37 @@ function AppContent({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
 
   return (
     <div className="app-layout select-none">
+      {/* Toast Alert Banner */}
+      {toast && (
+        <>
+          <style>{`
+            @keyframes slideDown {
+              from { transform: translate(-50%, -20px); opacity: 0; }
+              to { transform: translate(-50%, 0); opacity: 1; }
+            }
+          `}</style>
+          <div style={{
+            position: 'fixed',
+            top: '20px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 9999999,
+            background: toast.type === 'success' ? 'linear-gradient(135deg, #10B981, #059669)' : 'linear-gradient(135deg, #F59E0B, #D97706)',
+            color: 'white',
+            padding: '12px 24px',
+            borderRadius: '12px',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+            fontWeight: 700,
+            fontSize: '0.85rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            animation: 'slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+          }}>
+            <span>{toast.message}</span>
+          </div>
+        </>
+      )}
       <Navigation user={user} onLogout={onLogout} appMode={appMode} setAppMode={setAppMode} theme={theme} toggleTheme={toggleTheme} />
       <main className="main-content">
 

@@ -66,6 +66,17 @@ export async function syncOfflineTransactions() {
         hasRemaining: false
       } 
     }));
+
+    if (successCount > 0 || errorCount > 0) {
+      window.dispatchEvent(new CustomEvent('posbah_show_toast', {
+        detail: {
+          message: errorCount === 0
+            ? `✅ Berhasil sinkronisasi ${successCount} transaksi offline.`
+            : `⚠️ Sinkronisasi selesai: ${successCount} sukses, ${errorCount} gagal.`,
+          type: errorCount === 0 ? 'success' : 'warning'
+        }
+      }));
+    }
   } catch (error) {
     console.error('[SyncManager] Failed in sync loop:', error);
     isSyncing = false;
