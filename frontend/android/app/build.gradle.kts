@@ -25,7 +25,7 @@ android {
         buildConfigField(
             "String",
             "GOOGLE_WEB_CLIENT_ID",
-            "\"119416648055-ak3nbovntgm32kd210vks3i1lb8bseok.apps.googleusercontent.com\""
+            "\"119416648055-hil4u0bmuqffcn2u1f6se66h1lhdiugr.apps.googleusercontent.com\""
         )
         buildConfigField("boolean", "ENFORCE_INTEGRITY", "true")
         ndk {
