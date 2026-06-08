@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">POSBah</string>
-    <string name="app_tagline">Solusi POS & Invoice untuk UMKM &amp; Manufaktur</string>
+    <string name="app_tagline">Solusi POS &amp; Invoice untuk UMKM &amp; Manufaktur</string>
 
     <!-- Auth -->
     <string name="login_title">Masuk ke POSBah</string>

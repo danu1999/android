@@ -31,7 +31,7 @@ import com.posbah.app.data.local.entities.Employee
 import com.posbah.app.data.local.entities.LocalUser
 import com.posbah.app.data.local.entities.Outlet
 import com.posbah.app.data.local.entities.Tenant
-import net.sqlcipher.database.SupportFactory
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 
 @Database(
     entities = [
@@ -73,10 +73,10 @@ abstract class PosBahDatabase : RoomDatabase() {
         const val DB_NAME = "posbah.db"
 
         fun build(context: Context, passphrase: ByteArray): PosBahDatabase {
-            // Important: SQLCipher's loadLibs() must be called once per process.
-            net.sqlcipher.database.SQLiteDatabase.loadLibs(context)
+            // Load SQLCipher native library
+            System.loadLibrary("sqlcipher")
 
-            val factory = SupportFactory(passphrase, /* hook */ null, /* clearPassphrase */ true)
+            val factory = SupportOpenHelperFactory(passphrase)
 
             return Room.databaseBuilder(
                 context.applicationContext,

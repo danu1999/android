@@ -1,6 +1,5 @@
 package com.posbah.app.data.repository
 
-import com.posbah.app.data.local.dao.BmpAggregateDao
 import com.posbah.app.data.local.dao.BmpCashFlowDao
 import com.posbah.app.data.local.dao.BmpClientDao
 import com.posbah.app.data.local.dao.BmpEmployeeDao

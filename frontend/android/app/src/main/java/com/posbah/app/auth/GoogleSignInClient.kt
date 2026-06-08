@@ -133,33 +133,35 @@ class GoogleSignInClient @Inject constructor(
         data class Invalid(val reason: String) : Validation()
     }
 
-    private fun validateIdToken(idToken: String, expectedNonce: String): Validation = try {
-        val jwt = JWT(idToken)
-        val iss = jwt.issuer ?: return Validation.Invalid("missing iss")
-        if (iss != "accounts.google.com" && iss != "https://accounts.google.com") {
-            return Validation.Invalid("bad iss: $iss")
+    private fun validateIdToken(idToken: String, expectedNonce: String): Validation {
+        return try {
+            val jwt = JWT(idToken)
+            val iss = jwt.issuer ?: return Validation.Invalid("missing iss")
+            if (iss != "accounts.google.com" && iss != "https://accounts.google.com") {
+                return Validation.Invalid("bad iss: $iss")
+            }
+            val audClaim = jwt.audience
+            if (audClaim == null || !audClaim.contains(BuildConfig.GOOGLE_WEB_CLIENT_ID)) {
+                return Validation.Invalid("bad aud: $audClaim")
+            }
+            val exp = jwt.expiresAt
+            if (exp == null || exp.before(Date())) {
+                return Validation.Invalid("token expired")
+            }
+            val nonce = jwt.getClaim("nonce").asString()
+            if (!nonce.isNullOrEmpty() && nonce != expectedNonce) {
+                return Validation.Invalid("nonce mismatch")
+            }
+            val sub = jwt.subject ?: return Validation.Invalid("missing sub")
+            Validation.Valid(
+                sub = sub,
+                email = jwt.getClaim("email").asString(),
+                name = jwt.getClaim("name").asString(),
+                iat = jwt.issuedAt?.time ?: System.currentTimeMillis(),
+                exp = exp.time
+            )
+        } catch (e: Exception) {
+            Validation.Invalid("decode failed: ${e.message}")
         }
-        val audClaim = jwt.audience
-        if (audClaim.none { it == BuildConfig.GOOGLE_WEB_CLIENT_ID }) {
-            return Validation.Invalid("bad aud: $audClaim")
-        }
-        val exp = jwt.expiresAt
-        if (exp == null || exp.before(Date())) {
-            return Validation.Invalid("token expired")
-        }
-        val nonce = jwt.getClaim("nonce").asString()
-        if (!nonce.isNullOrEmpty() && nonce != expectedNonce) {
-            return Validation.Invalid("nonce mismatch")
-        }
-        val sub = jwt.subject ?: return Validation.Invalid("missing sub")
-        Validation.Valid(
-            sub = sub,
-            email = jwt.getClaim("email").asString(),
-            name = jwt.getClaim("name").asString(),
-            iat = jwt.issuedAt?.time ?: System.currentTimeMillis(),
-            exp = exp.time
-        )
-    } catch (e: Exception) {
-        Validation.Invalid("decode failed: ${e.message}")
     }
 }
