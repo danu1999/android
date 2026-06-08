@@ -6,6 +6,186 @@ import fs from 'fs';
 import { exec } from 'child_process';
 import ejs from 'ejs';
 
+// ─── PASCAL-CASE TRANSFORMERS ────────────────────────────────────────────────
+// Prisma returns camelCase; frontend expects PascalCase. These normalizers bridge
+// the gap cleanly without touching frontend code.
+
+function transformClient(c: any) {
+  if (!c) return null;
+  return {
+    ID: c.id,
+    ClientName: c.clientName,
+    PhoneNumber: c.phoneNumber || '',
+    Address: c.address || '',
+    Email: c.email || '',
+    SaldoTitipan: c.saldoTitipan || 0,
+    UniqueID: c.uniqueID,
+    Slug: c.slug,
+    CreatedAt: c.createdAt,
+    UpdatedAt: c.updatedAt
+  };
+}
+
+function transformMasterProduct(p: any) {
+  if (!p) return null;
+  return {
+    ID: p.id,
+    Title: p.title,
+    Unit: p.unit,
+    Price: p.price,
+    BeratGram: p.beratGram,
+    CycleTime: p.cycleTime,
+    RejectRate: p.rejectRate,
+    UniqueID: p.uniqueID,
+    Slug: p.slug
+  };
+}
+
+function transformCashFlow(f: any) {
+  if (!f) return null;
+  return {
+    ID: f.id,
+    TransactionDate: f.transactionDate,
+    TransactionType: f.transactionType,
+    Description: f.description,
+    Amount: f.amount,
+    PaymentRefId: f.paymentRefId,
+    CreatedAt: f.createdAt
+  };
+}
+
+function transformInvoicePayment(p: any) {
+  if (!p) return null;
+  return {
+    ID: p.id,
+    InvoiceId: p.invoiceId,
+    PaymentDate: p.paymentDate,
+    PaymentAmount: p.paymentAmount,
+    PaymentMethod: p.paymentMethod,
+    CreatedAt: p.createdAt
+  };
+}
+
+function transformInvoiceProduct(p: any) {
+  if (!p) return null;
+  return {
+    ID: p.id,
+    InvoiceId: p.invoiceId,
+    MasterItemID: p.masterItemID,
+    Title: p.title,
+    Unit: p.unit,
+    Price: p.price,
+    JumlahLusin: p.jumlahLusin,
+    Quantity: p.quantity,
+    IsKhusus: p.isKhusus,
+    HargaBeli: p.hargaBeli,
+    MasterItem: p.masterItem ? transformMasterProduct(p.masterItem) : undefined
+  };
+}
+
+function transformInvoice(inv: any) {
+  if (!inv) return null;
+  const rawProducts = inv.products || [];
+  const rawPayments = inv.payments || [];
+  const total = rawProducts.reduce((sum: number, p: any) => sum + p.quantity * p.jumlahLusin * p.price, 0);
+  const paidAmount = rawPayments.reduce((sum: number, p: any) => sum + p.paymentAmount, 0);
+  return {
+    ID: inv.id,
+    Number: inv.number,
+    Title: inv.title,
+    Status: inv.status,
+    DueDate: inv.dueDate,
+    DateCreated: inv.createdAt,
+    PaymentTerms: inv.paymentTerms,
+    Notes: inv.notes,
+    ClientId: inv.clientId,
+    UniqueID: inv.uniqueID,
+    Slug: inv.slug,
+    Client: inv.client ? transformClient(inv.client) : undefined,
+    Products: rawProducts.map(transformInvoiceProduct),
+    Payments: rawPayments.map(transformInvoicePayment),
+    Total: total,
+    PaidAmount: paidAmount
+  };
+}
+
+function transformBahanNonoItem(item: any) {
+  if (!item) return null;
+  return {
+    ID: item.id,
+    JenisBahan: item.jenisBahan,
+    Kuantitas: item.kuantitas,
+    Unit: item.unit,
+    Rate: item.rate,
+    NonoId: item.bahanNonoId
+  };
+}
+
+function transformBahanNono(n: any) {
+  if (!n) return null;
+  return {
+    ID: n.id,
+    Tanggal: n.tanggal,
+    Notes: n.notes,
+    Tagihan: n.tagihan,
+    Nominal: n.nominal,
+    TotalHarga: n.totalHarga,
+    Items: (n.items || []).map(transformBahanNonoItem),
+    CreatedAt: n.createdAt
+  };
+}
+
+function transformEmployee(e: any) {
+  if (!e) return null;
+  return {
+    ID: e.id,
+    Name: e.name,
+    Position: e.position,
+    SalaryAmount: e.salaryAmount,
+    FingerprintPIN: e.fingerprintPIN,
+    IsActive: e.isActive,
+    CreatedAt: e.createdAt
+  };
+}
+
+function transformAttendanceLog(l: any) {
+  if (!l) return null;
+  return {
+    ID: l.id,
+    EmployeePIN: l.employeePIN,
+    LogTime: l.logTime,
+    CheckOutTime: l.checkOutTime,
+    VerifyState: l.verifyState,
+    LateMinutes: l.lateMinutes,
+    Alasan: l.alasan,
+    WorkDate: l.workDate,
+    CreatedAt: l.createdAt
+  };
+}
+
+function transformSettings(s: any) {
+  if (!s) return null;
+  return {
+    ID: s.id,
+    ClientName: s.clientName,
+    ClientLogo: s.clientLogo,
+    AddressLine1: s.addressLine1,
+    Province: s.province,
+    PostalCode: s.postalCode,
+    PhoneNumber: s.phoneNumber,
+    EmailAddress: s.emailAddress,
+    TaxNumber: s.taxNumber,
+    ListrikBulanan: s.listrikBulanan,
+    JumlahMesin: s.jumlahMesin,
+    JumlahKaryawan: s.jumlahKaryawan,
+    GajiHarian: s.gajiHarian,
+    HariKerjaSebulan: s.hariKerjaSebulan,
+    BiayaKarungPer1000: s.biayaKarungPer1000,
+    HoursPerDay: s.hoursPerDay,
+    UniqueID: s.uniqueID
+  };
+}
+
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 
 export function formatRp(amount: number): string {
@@ -192,7 +372,7 @@ export const getSettings = async (req: Request, res: Response) => {
         }
       });
     }
-    res.json({ success: true, data: settings });
+    res.json({ success: true, data: transformSettings(settings) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -291,7 +471,7 @@ export const getClients = async (req: Request, res: Response) => {
     const clients = await prisma.bmpClient.findMany({
       orderBy: { clientName: 'asc' }
     });
-    res.json({ success: true, data: clients });
+    res.json({ success: true, data: clients.map(transformClient) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -306,7 +486,7 @@ export const getClient = async (req: Request, res: Response) => {
     if (!client) {
       return res.status(404).json({ success: false, message: 'Client not found' });
     }
-    res.json({ success: true, data: client });
+    res.json({ success: true, data: transformClient(client) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -413,7 +593,7 @@ export const getProducts = async (req: Request, res: Response) => {
     const products = await prisma.bmpMasterProduct.findMany({
       orderBy: { title: 'asc' }
     });
-    res.json({ success: true, data: products });
+    res.json({ success: true, data: products.map(transformMasterProduct) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -428,7 +608,7 @@ export const getProduct = async (req: Request, res: Response) => {
     if (!product) {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
-    res.json({ success: true, data: product });
+    res.json({ success: true, data: transformMasterProduct(product) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -526,15 +706,7 @@ export const getInvoices = async (req: Request, res: Response) => {
       skip: offset
     });
 
-    const result = invoices.map((inv) => {
-      const total = inv.products.reduce((sum, p) => sum + p.quantity * p.jumlahLusin * p.price, 0);
-      const paidAmount = inv.payments.reduce((sum, p) => sum + p.paymentAmount, 0);
-      return {
-        ...inv,
-        Total: total,
-        PaidAmount: paidAmount
-      };
-    });
+    const result = invoices.map(transformInvoice);
 
     res.json({
       success: true,
@@ -564,11 +736,13 @@ export const getInvoice = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: 'Invoice not found' });
     }
 
+    const transformed = transformInvoice(invoice)!;
+
     res.json({
       success: true,
-      data: invoice,
-      products: invoice.products,
-      payments: invoice.payments
+      data: transformed,
+      products: transformed.Products,
+      payments: transformed.Payments
     });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -1035,7 +1209,7 @@ export const getCashFlows = async (req: Request, res: Response) => {
     const flows = await prisma.bmpCashFlow.findMany({
       orderBy: { transactionDate: 'desc' }
     });
-    res.json({ success: true, data: flows });
+    res.json({ success: true, data: flows.map(transformCashFlow) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -1098,6 +1272,7 @@ export const syncKas = async (req: Request, res: Response) => {
     });
 
     let syncCount = 0;
+    let synced_count = 0;
     for (const p of payments) {
       if (p.cashFlows.length === 0) {
         await prisma.bmpCashFlow.create({
@@ -1110,10 +1285,11 @@ export const syncKas = async (req: Request, res: Response) => {
           }
         });
         syncCount++;
+        synced_count++;
       }
     }
 
-    res.json({ success: true, message: `Synced ${syncCount} orphan payments into CashFlow` });
+    res.json({ success: true, message: `Synced ${syncCount} orphan payments into CashFlow`, synced_count });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -1134,25 +1310,45 @@ export const getAuditReport = async (req: Request, res: Response) => {
 
 export const cleanupOrphanPayments = async (req: Request, res: Response) => {
   try {
-    // We can filter orphans manually or using schema check
-    const cashflows = await prisma.bmpCashFlow.findMany({
-      where: { NOT: { paymentRefId: null } }
+    const payments = await prisma.bmpInvoicePayment.findMany({
+      include: { cashFlows: true, invoice: true }
     });
 
     let deletedCount = 0;
-    for (const cf of cashflows) {
-      if (cf.paymentRefId) {
-        const payExists = await prisma.bmpInvoicePayment.findUnique({
-          where: { id: cf.paymentRefId }
+    const details: any[] = [];
+
+    for (const pay of payments) {
+      if (pay.cashFlows.length === 0) {
+        // This payment has no cashflow reference — it is orphaned
+        details.push({
+          payment_id: pay.id,
+          invoice_id: pay.invoiceId,
+          payment_amount: pay.paymentAmount
         });
-        if (!payExists) {
-          await prisma.bmpCashFlow.delete({ where: { id: cf.id } });
-          deletedCount++;
+
+        await prisma.bmpInvoicePayment.delete({ where: { id: pay.id } });
+
+        // Recompute invoice status
+        const inv = await prisma.bmpInvoice.findUnique({
+          where: { id: pay.invoiceId },
+          include: { products: true, payments: true }
+        });
+        if (inv) {
+          const totalInv = inv.products.reduce((s, p) => s + p.quantity * p.jumlahLusin * p.price, 0);
+          const totalPaid = inv.payments.reduce((s, p) => s + p.paymentAmount, 0);
+          const newStatus = totalPaid >= totalInv ? 'PAID' : totalPaid > 0 ? 'PARTIAL' : 'UNPAID';
+          await prisma.bmpInvoice.update({ where: { id: inv.id }, data: { status: newStatus } });
         }
+        deletedCount++;
       }
     }
 
-    res.json({ success: true, message: `Cleaned up ${deletedCount} orphan cashflow records` });
+    res.json({
+      success: true,
+      message: deletedCount > 0 ? `Berhasil membersihkan ${deletedCount} data pembayaran ghost` : 'Tidak ada data ghost ditemukan. Semua data sudah bersih.',
+      cleaned: deletedCount,
+      details
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -1187,7 +1383,21 @@ export const getBahanNono = async (req: Request, res: Response) => {
       include: { items: true },
       orderBy: { tanggal: 'desc' }
     });
-    res.json({ success: true, data: nonos });
+
+    // Build summary
+    const totalCashIn = nonos.reduce((sum, n) => sum + n.totalHarga, 0);
+    const totalCashOut = nonos.reduce((sum, n) => sum + n.nominal, 0);
+    const balance = totalCashIn - totalCashOut;
+
+    res.json({
+      success: true,
+      data: {
+        transactions: nonos.map(transformBahanNono),
+        total_cash_in: totalCashIn,
+        total_cash_out: totalCashOut,
+        balance
+      }
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -1319,7 +1529,7 @@ export const getEmployees = async (req: Request, res: Response) => {
     const emps = await prisma.bmpEmployee.findMany({
       orderBy: { name: 'asc' }
     });
-    res.json({ success: true, data: emps });
+    res.json({ success: true, data: emps.map(transformEmployee) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -1327,17 +1537,18 @@ export const getEmployees = async (req: Request, res: Response) => {
 
 export const createEmployee = async (req: Request, res: Response) => {
   try {
-    const { name, position, salary_amount, fingerprint_pin, is_active } = req.body;
+    // Accept both PascalCase (from frontend) and snake_case
+    const body = req.body;
+    const name = body.Name || body.name;
+    const position = body.Position || body.position;
+    const salaryAmount = Number(body.SalaryAmount || body.salary_amount || 0);
+    const fingerprintPIN = body.FingerprintPIN || body.fingerprint_pin || null;
+    const isActive = body.IsActive ?? body.is_active ?? true;
+
     const emp = await prisma.bmpEmployee.create({
-      data: {
-        name,
-        position,
-        salaryAmount: Number(salary_amount),
-        fingerprintPIN: fingerprint_pin || null,
-        isActive: is_active ?? true
-      }
+      data: { name, position, salaryAmount, fingerprintPIN, isActive }
     });
-    res.status(201).json({ success: true, data: emp });
+    res.status(201).json({ success: true, data: transformEmployee(emp) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -1346,18 +1557,19 @@ export const createEmployee = async (req: Request, res: Response) => {
 export const updateEmployee = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, position, salary_amount, fingerprint_pin, is_active } = req.body;
+    // Accept both PascalCase (from frontend) and snake_case
+    const body = req.body;
+    const name = body.Name || body.name;
+    const position = body.Position || body.position;
+    const salaryAmount = Number(body.SalaryAmount || body.salary_amount || 0);
+    const fingerprintPIN = body.FingerprintPIN || body.fingerprint_pin || null;
+    const isActive = body.IsActive ?? body.is_active ?? true;
+
     const emp = await prisma.bmpEmployee.update({
       where: { id: Number(id) },
-      data: {
-        name,
-        position,
-        salaryAmount: Number(salary_amount),
-        fingerprintPIN: fingerprint_pin || null,
-        isActive: is_active ?? true
-      }
+      data: { name, position, salaryAmount, fingerprintPIN, isActive }
     });
-    res.json({ success: true, data: emp });
+    res.json({ success: true, data: transformEmployee(emp) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -1448,7 +1660,7 @@ export const getAttendanceLogs = async (req: Request, res: Response) => {
     const logs = await prisma.bmpAttendanceLog.findMany({
       orderBy: { logTime: 'desc' }
     });
-    res.json({ success: true, data: logs });
+    res.json({ success: true, data: logs.map(transformAttendanceLog) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -1456,19 +1668,45 @@ export const getAttendanceLogs = async (req: Request, res: Response) => {
 
 export const createAttendanceLog = async (req: Request, res: Response) => {
   try {
-    const { pin, status, time, check_out_time, alasan } = req.body;
+    // Accept both old format (pin/status/time) and new format (employee_pin/log_time/work_date)
+    const body = req.body;
+    const employeePIN = body.employee_pin || body.pin || '';
+    const logTimeStr = body.log_time || body.time || '';
+    const checkOutTimeStr = body.check_out_time;
+    const workDateStr = body.work_date;
+    const alasan = body.alasan || null;
+
+    // Build logTime from work_date + log_time if time includes only HH:MM
+    let logTime: Date;
+    if (logTimeStr && logTimeStr.includes(':') && !logTimeStr.includes('T') && workDateStr) {
+      logTime = new Date(`${workDateStr}T${logTimeStr}:00+07:00`);
+    } else {
+      logTime = new Date(logTimeStr || new Date());
+    }
+
+    let checkOutTime: Date | null = null;
+    if (checkOutTimeStr) {
+      if (checkOutTimeStr.includes(':') && !checkOutTimeStr.includes('T') && workDateStr) {
+        checkOutTime = new Date(`${workDateStr}T${checkOutTimeStr}:00+07:00`);
+      } else {
+        checkOutTime = new Date(checkOutTimeStr);
+      }
+    }
+
+    const workDate = workDateStr ? new Date(`${workDateStr}T00:00:00+07:00`) : logTime;
+
     const log = await prisma.bmpAttendanceLog.create({
       data: {
-        employeePIN: pin,
-        verifyState: status === 'pulang' ? 1 : 0,
-        verifyType: 1, // Fingerprint
-        logTime: new Date(time),
-        checkOutTime: check_out_time ? new Date(check_out_time) : null,
-        workDate: new Date(time),
+        employeePIN,
+        verifyState: 0,
+        verifyType: 1,
+        logTime,
+        checkOutTime,
+        workDate,
         alasan
       }
     });
-    res.json({ success: true, data: log });
+    res.json({ success: true, data: transformAttendanceLog(log) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -1477,18 +1715,34 @@ export const createAttendanceLog = async (req: Request, res: Response) => {
 export const updateAttendanceLog = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { pin, status, time, check_out_time, alasan } = req.body;
+    // Accept both old format and new format from Payroll.jsx
+    const body = req.body;
+    const logTimeStr = body.log_time || body.time;
+    const checkOutTimeStr = body.check_out_time;
+    const workDateStr = body.work_date;
+
+    const buildDateTime = (timeStr: string | undefined, dateStr: string | undefined): Date | undefined => {
+      if (!timeStr) return undefined;
+      if (timeStr.includes(':') && !timeStr.includes('T') && dateStr) {
+        return new Date(`${dateStr}T${timeStr}:00+07:00`);
+      }
+      return new Date(timeStr);
+    };
+
+    const updateData: any = {};
+    if (logTimeStr) updateData.logTime = buildDateTime(logTimeStr, workDateStr);
+    if (checkOutTimeStr !== undefined) {
+      updateData.checkOutTime = checkOutTimeStr ? buildDateTime(checkOutTimeStr, workDateStr) : null;
+    }
+    if (workDateStr) updateData.workDate = new Date(`${workDateStr}T00:00:00+07:00`);
+    if (body.alasan !== undefined) updateData.alasan = body.alasan;
+    if (body.pin) updateData.employeePIN = body.pin;
+
     const log = await prisma.bmpAttendanceLog.update({
       where: { id: Number(id) },
-      data: {
-        employeePIN: pin,
-        verifyState: status === 'pulang' ? 1 : 0,
-        logTime: new Date(time),
-        checkOutTime: check_out_time ? new Date(check_out_time) : null,
-        alasan
-      }
+      data: updateData
     });
-    res.json({ success: true, data: log });
+    res.json({ success: true, data: transformAttendanceLog(log) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
