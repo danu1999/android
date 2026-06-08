@@ -84,6 +84,20 @@ input, textarea {
   flex-direction: column;
   gap: 2rem;
   z-index: 50;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.1) transparent;
+}
+.sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+}
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
 }
 
 @media (min-width: 768px) {
@@ -1443,6 +1457,13 @@ body.dark-theme {
   .sidebar {
     background: #131b2e !important;
     border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent !important;
+  }
+  .sidebar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1) !important;
+  }
+  .sidebar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2) !important;
   }
   
   /* App header */

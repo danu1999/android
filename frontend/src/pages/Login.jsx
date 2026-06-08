@@ -33,35 +33,6 @@ export default function Login({ onLogin }) {
     setError('');
     try {
       const res = await api.post('/auth/login-email', { email: email.trim(), password });
-      
-      // Auto login to BMP in background (use fetch directly to avoid baseURL concatenation)
-      try {
-        const isCapacitor = (!!window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() !== 'web') || window.location.protocol === 'capacitor:';
-        const isLocalDev = !isCapacitor && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && window.location.port !== '';
-        
-        let bmpLoginUrl = '';
-        if (import.meta.env.VITE_API_URL_BMP) {
-          bmpLoginUrl = `${import.meta.env.VITE_API_URL_BMP}/login`;
-        } else if (isLocalDev) {
-          bmpLoginUrl = 'http://localhost:8080/api/login';
-        } else {
-          const base = isCapacitor ? 'https://www.zedmz.cloud' : '';
-          bmpLoginUrl = `${base}/api-bmp/login`;
-        }
-
-        const bmpRes = await fetch(bmpLoginUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: email.trim(), password })
-        });
-        const bmpData = await bmpRes.json();
-        if (bmpData && bmpData.success && bmpData.token) {
-          localStorage.setItem('token', bmpData.token);
-        }
-      } catch (bmpErr) {
-        console.warn('Background BMP login failed:', bmpErr);
-      }
-
       onLogin(res.data);
     } catch (err) {
       setError(err.response?.data?.error || 'Login email gagal, periksa akun Anda');

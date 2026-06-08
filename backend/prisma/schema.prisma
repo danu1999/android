@@ -326,3 +326,257 @@ model Outlet {
   laundryOrders LaundryOrder[]
 }
 
+// --- MODUL BMP (INVOICE & MANUFAKTUR) ---
+
+model BmpClient {
+  id           Int          @id @default(autoincrement())
+  saldoTitipan Float        @default(0)
+  clientName   String
+  addressLine1 String?
+  clientLogo   String?
+  province     String?
+  postalCode   String?
+  phoneNumber  String?
+  emailAddress String?
+  taxNumber    String?
+  uniqueID     String?
+  slug         String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  invoices     BmpInvoice[]
+}
+
+model BmpInvoice {
+  id           Int                 @id @default(autoincrement())
+  title        String
+  number       String
+  dueDate      DateTime?
+  paymentTerms String              @default("14 days")
+  status       String              @default("DRAFT") // DRAFT, PAID, UNPAID, PARTIAL, OVERDUE
+  notes        String?
+  
+  clientId     Int?
+  client       BmpClient?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  
+  uniqueID     String?
+  slug         String              @unique
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  products     BmpProduct[]
+  payments     BmpInvoicePayment[]
+  pembayarans  BmpPembayaran[]
+}
+
+model BmpSettings {
+  id                 Int      @id @default(autoincrement())
+  clientName         String
+  clientLogo         String?
+  addressLine1       String?
+  province           String?
+  postalCode         String?
+  phoneNumber        String?
+  emailAddress       String?
+  taxNumber          String?
+  listrikBulanan     Float    @default(30000000)
+  jumlahMesin        Int      @default(5)
+  jumlahKaryawan     Int      @default(19)
+  gajiHarian         Float    @default(80000)
+  hariKerjaSebulan   Int      @default(26)
+  biayaKarungPer1000 Float    @default(2100000)
+  hoursPerDay        Int      @default(24)
+  uniqueID           String?
+  slug               String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model BmpMasterProduct {
+  id          Int          @id @default(autoincrement())
+  title       String
+  description String?
+  unit        String       @default("Kg")
+  price       Float        @default(0)
+  beratGram   Float        @default(0)
+  cycleTime   Float        @default(0)
+  cavity      Int          @default(1)
+  rejectRate  Float        @default(0)
+  uniqueID    String?
+  slug        String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  products    BmpProduct[]
+}
+
+model BmpProduct {
+  id           Int               @id @default(autoincrement())
+  masterItemID Int?
+  masterItem   BmpMasterProduct? @relation(fields: [masterItemID], references: [id], onDelete: SetNull)
+  title        String
+  unit         String            @default("pcs")
+  price        Float             @default(0)
+  jumlahLusin  Float             @default(1)
+  quantity     Float             @default(0)
+  isKhusus     Boolean           @default(false)
+  hargaBeli    Float             @default(0)
+  currency     String            @default("Rp")
+
+  invoiceId    Int?
+  invoice      BmpInvoice?       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  uniqueID     String?
+  slug         String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+}
+
+model BmpInvoicePayment {
+  id            Int           @id @default(autoincrement())
+  invoiceId     Int
+  invoice       BmpInvoice    @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  paymentDate   DateTime
+  paymentAmount Float
+  paymentMethod String        @default("TRANSFER") // CASH, TRANSFER, QRIS
+  createdAt     DateTime      @default(now())
+
+  cashFlows     BmpCashFlow[]
+}
+
+model BmpCashFlow {
+  id              Int                @id @default(autoincrement())
+  transactionDate DateTime
+  transactionType String             // MASUK, KELUAR
+  description     String
+  amount          Float              @default(0)
+
+  paymentRefId    Int?
+  paymentRef      BmpInvoicePayment? @relation(fields: [paymentRefId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime           @default(now())
+}
+
+model BmpBahanNono {
+  id         Int                @id @default(autoincrement())
+  tanggal    DateTime
+  nominal    Float              @default(0)
+  notes      String?
+  tagihan    String
+  totalHarga Float              @default(0)
+  createdAt  DateTime           @default(now())
+
+  items      BmpBahanNonoItem[]
+}
+
+model BmpBahanNonoItem {
+  id          Int          @id @default(autoincrement())
+  bahanNonoId Int
+  bahanNono   BmpBahanNono @relation(fields: [bahanNonoId], references: [id], onDelete: Cascade)
+  jenisBahan  String
+  kuantitas   Float        @default(0)
+  unit        String       @default("Kg")
+  rate        Float        @default(0)
+}
+
+model BmpPembelianBarang {
+  id         Int                @id @default(autoincrement())
+  supplier   String
+  tanggal    DateTime
+  keterangan String?
+  totalHarga Float              @default(0)
+  caraBayar  String             @default("HUTANG")
+  createdAt  DateTime           @default(now())
+
+  items      BmpPembelianItem[]
+}
+
+model BmpPembelianItem {
+  id          Int                @id @default(autoincrement())
+  pembelianId Int
+  pembelian   BmpPembelianBarang @relation(fields: [pembelianId], references: [id], onDelete: Cascade)
+  namaBarang  String
+  jumlahLusin Float              @default(1)
+  kuantitas   Float              @default(0)
+  unit        String             @default("Pcs")
+  hargaSatuan Float              @default(0)
+}
+
+model BmpPembayaran {
+  id           Int        @id @default(autoincrement())
+  invoiceId    Int
+  invoice      BmpInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  tanggalBayar DateTime
+  jumlahBayar  Float
+  keterangan   String?
+}
+
+model BmpEmployee {
+  id             Int                  @id @default(autoincrement())
+  name           String
+  position       String?
+  salaryAmount   Float
+  isActive       Boolean              @default(true)
+  fingerprintPIN String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  payrolls       BmpPayroll[]
+  bonusLogs      BmpMachineBonusLog[]
+}
+
+model BmpPayroll {
+  id              Int         @id @default(autoincrement())
+  employeeId      Int
+  employee        BmpEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  paymentDate     DateTime
+  amount          Float
+  attendanceCount Int         @default(0)
+  dailyRate       Float
+  description     String?
+  createdAt       DateTime    @default(now())
+}
+
+model BmpAdmsDevice {
+  id           Int      @id @default(autoincrement())
+  serialNumber String   @unique
+  alias        String?
+  lastActivity DateTime
+  createdAt    DateTime @default(now())
+}
+
+model BmpAttendanceLog {
+  id           Int       @id @default(autoincrement())
+  deviceSN     String?
+  employeePIN  String?
+  verifyType   Int
+  verifyState  Int
+  logTime      DateTime
+  checkOutTime DateTime?
+  workDate     DateTime
+  lateMinutes  Int       @default(0)
+  alasan       String?
+  createdAt    DateTime  @default(now())
+}
+
+model BmpMachineBonusLog {
+  id              Int         @id @default(autoincrement())
+  employeeId      Int
+  employee        BmpEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  machineName     String
+  shiftType       String
+  bonusAmount     Float
+  jumlahPerolehan Int         @default(0)
+  date            DateTime
+  createdAt       DateTime    @default(now())
+}
+
+model BmpDeviceTenant {
+  id           Int      @id @default(autoincrement())
+  serialNumber String   @unique
+  tenantId     String
+  createdAt    DateTime @default(now())
+}
+
+
+

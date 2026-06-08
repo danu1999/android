@@ -6,9 +6,11 @@ import { AsyncLocalStorage } from 'async_hooks';
 import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
+import * as bmp from './controllers/bmpControllers';
 
-const mainPrisma = new PrismaClient();
-const prismaContext = new AsyncLocalStorage<PrismaClient>();
+
+export const mainPrisma = new PrismaClient();
+export const prismaContext = new AsyncLocalStorage<PrismaClient>();
 const tenantClients = new Map<string, { client: PrismaClient; lastAccessed: number }>();
 
 function getCleanTenantDbName(tenantId: string): string {
@@ -81,7 +83,7 @@ const getTenantPrisma = (tenantId: string): PrismaClient => {
 };
 
 // Global proxy to dynamically swap prisma connection on runtime based on AsyncLocalStorage context
-const prisma = new Proxy(mainPrisma, {
+export const prisma = new Proxy(mainPrisma, {
   get(target, prop, receiver) {
     const activePrisma = prismaContext.getStore();
     if (activePrisma) {
@@ -281,7 +283,7 @@ app.use(cors({
 app.use(express.json());
 
 // Multi-tenant database routing middleware
-app.use((req: Request, res: Response, next: NextFunction) => {
+app.use(async (req: Request, res: Response, next: NextFunction) => {
   const tenantId = req.headers['x-tenant-id'] as string;
   
   // Rute global yang tidak menggunakan tenant database (menggunakan main/global database)
@@ -295,6 +297,30 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   ].includes(req.path);
 
   if (isGlobalPath) {
+    return prismaContext.run(mainPrisma, () => {
+      next();
+    });
+  }
+
+  // Handle ADMS fingerprint routes (/iclock/cdata, /iclock/getrequest)
+  if (req.path.startsWith('/iclock/')) {
+    const sn = req.query.SN as string;
+    if (sn) {
+      try {
+        const mapping = await mainPrisma.bmpDeviceTenant.findUnique({
+          where: { serialNumber: sn }
+        });
+        if (mapping) {
+          const tenantPrisma = getTenantPrisma(mapping.tenantId);
+          return prismaContext.run(tenantPrisma, () => {
+            next();
+          });
+        }
+      } catch (err) {
+        console.error('Error mapping device SN to tenant database:', err);
+      }
+    }
+    // Fallback to mainPrisma if SN is missing or mapping is not found
     return prismaContext.run(mainPrisma, () => {
       next();
     });
@@ -4390,6 +4416,97 @@ setTimeout(() => {
     console.error('[BILLING] Startup pending deletion check error:', err)
   );
 }, 60 * 1000);
+
+// ─────────────────────────────────────────────────────────────
+// BMP Modul Routes (Invoice & Manufaktur)
+// ─────────────────────────────────────────────────────────────
+
+// Global ZKTeco Fingerprint Machine Endpoints (No Auth Headers required, mapped via SN in query)
+app.get('/iclock/cdata', bmp.handleCData);
+app.post('/iclock/cdata', bmp.handleCData);
+app.get('/iclock/getrequest', bmp.handleGetRequest);
+
+// Premium Owner/Admin APIs (protected by requireAdmin / requireOwner)
+app.get('/api/bmp/dashboard', requireAdmin, bmp.getDashboardSummary);
+app.get('/api/bmp/settings', requireAdmin, bmp.getSettings);
+app.put('/api/bmp/settings', requireAdmin, bmp.updateSettings);
+app.get('/api/bmp/hpp-calculator', requireAdmin, bmp.getHppCalculator);
+app.get('/api/bmp/pricelist', requireAdmin, bmp.getPricelist);
+
+// Clients CRUD
+app.get('/api/bmp/clients', requireAdmin, bmp.getClients);
+app.get('/api/bmp/clients/:id', requireAdmin, bmp.getClient);
+app.post('/api/bmp/clients', requireAdmin, bmp.createClient);
+app.put('/api/bmp/clients/:id', requireAdmin, bmp.updateClient);
+app.delete('/api/bmp/clients/:id', requireOwner, bmp.deleteClient);
+app.get('/api/bmp/clients/:id/summary', requireAdmin, bmp.getClientSummary);
+
+// Products CRUD
+app.get('/api/bmp/products', requireAdmin, bmp.getProducts);
+app.get('/api/bmp/products/:id', requireAdmin, bmp.getProduct);
+app.post('/api/bmp/products', requireAdmin, bmp.createProduct);
+app.put('/api/bmp/products/:id', requireAdmin, bmp.updateProduct);
+app.delete('/api/bmp/products/:id', requireOwner, bmp.deleteProduct);
+
+// Invoices CRUD
+app.get('/api/bmp/invoices', requireAdmin, bmp.getInvoices);
+app.get('/api/bmp/invoices/:id', requireAdmin, bmp.getInvoice);
+app.post('/api/bmp/invoices', requireAdmin, bmp.createInvoice);
+app.put('/api/bmp/invoices/:id', requireAdmin, bmp.updateInvoiceHeader);
+app.put('/api/bmp/invoices/:id/products', requireAdmin, bmp.updateInvoiceProducts);
+app.delete('/api/bmp/invoices/:id', requireOwner, bmp.deleteInvoice);
+app.post('/api/bmp/invoices/sync-overdue', requireAdmin, bmp.syncOverdueInvoices);
+app.post('/api/bmp/invoices/:id/pay', requireAdmin, bmp.paySingleInvoice);
+app.post('/api/bmp/invoices/pay-massal', requireAdmin, bmp.payMassal);
+app.put('/api/bmp/invoices/payment/:paymentId', requireAdmin, bmp.editPayment);
+app.delete('/api/bmp/invoices/payment/:paymentId', requireOwner, bmp.deletePayment);
+
+// Kas (CashFlow) CRUD
+app.get('/api/bmp/kas', requireAdmin, bmp.getCashFlows);
+app.post('/api/bmp/kas', requireAdmin, bmp.createCashFlow);
+app.put('/api/bmp/kas/:id', requireAdmin, bmp.updateCashFlow);
+app.delete('/api/bmp/kas/:id', requireOwner, bmp.deleteCashFlow);
+app.get('/api/bmp/kas/csv', requireAdmin, bmp.downloadCashFlowCSV);
+app.post('/api/bmp/kas/cleanup', requireOwner, bmp.cleanupOrphanPayments);
+app.post('/api/bmp/kas/sync', requireAdmin, bmp.syncKas);
+app.get('/api/bmp/kas/audit', requireAdmin, bmp.getAuditReport);
+
+// Bahan Nono CRUD
+app.get('/api/bmp/bahan-nono', requireAdmin, bmp.getBahanNono);
+app.post('/api/bmp/bahan-nono', requireAdmin, bmp.createBahanNono);
+app.put('/api/bmp/bahan-nono/:id', requireAdmin, bmp.updateBahanNono);
+app.delete('/api/bmp/bahan-nono/:id', requireOwner, bmp.deleteBahanNono);
+
+// Employees CRUD
+app.get('/api/bmp/employees', requireAdmin, bmp.getEmployees);
+app.post('/api/bmp/employees', requireAdmin, bmp.createEmployee);
+app.put('/api/bmp/employees/:id', requireAdmin, bmp.updateEmployee);
+app.delete('/api/bmp/employees/:id', requireOwner, bmp.deleteEmployee);
+
+// Attendance Logs CRUD
+app.get('/api/bmp/attendance', requireAdmin, bmp.getAttendanceLogs);
+app.post('/api/bmp/attendance', requireAdmin, bmp.createAttendanceLog);
+app.put('/api/bmp/attendance/:id', requireAdmin, bmp.updateAttendanceLog);
+app.delete('/api/bmp/attendance/:id', requireOwner, bmp.deleteAttendanceLog);
+app.post('/api/bmp/attendance/reason', requireAdmin, bmp.saveAttendanceReason);
+
+// Payroll CRUD
+app.get('/api/bmp/payroll', requireAdmin, bmp.getPayrollHistory);
+app.post('/api/bmp/payroll', requireAdmin, bmp.recordPayroll);
+app.delete('/api/bmp/payroll/:id', requireOwner, bmp.deletePayrollHistory);
+
+// Bonus Claims APIs
+app.get('/api/bmp/bonus', requireAdmin, bmp.getBonusLogs);
+app.get('/api/bmp/bonus/employee/:id', requireAdmin, bmp.getBonusByEmployee);
+app.post('/api/bmp/bonus/verify-pin', requireAdmin, bmp.verifyBonusPIN);
+app.post('/api/bmp/bonus/claim', requireAdmin, bmp.claimBonus);
+app.get('/api/bmp/bonus/pins', requireAdmin, bmp.getEmployeePINList);
+
+// PDF Export APIs (Rendered using EJS + wkhtmltopdf)
+app.get('/api/bmp/invoices/:id/pdf', requireAdmin, bmp.generateInvoicePDF);
+app.get('/api/bmp/invoices/:id/surat-jalan', requireAdmin, bmp.generateSuratJalanPDF);
+app.get('/api/bmp/pricelist/pdf', requireAdmin, bmp.generatePricelistProductPDF);
+app.get('/api/bmp/payroll/pdf', requireAdmin, bmp.generatePayrollPDF);
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);

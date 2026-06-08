@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Pricelist Produk - CV Bahtera Mulya Plastik</title>
+    <style>
+        @page {
+            size: 9.5in 11in;
+            margin: 0.5in 0.6in;
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 13px;
+            color: #000;
+            margin: 0;
+            padding: 0;
+            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact;
+        }
+
+        .header {
+            border-bottom: 3px solid #000;
+            padding-bottom: 14px;
+            margin-bottom: 18px;
+        }
+
+        .header h1 {
+            margin: 0 0 4px 0;
+            font-size: 20px;
+            font-weight: 900;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .header-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+
+        .header-sub {
+            font-size: 12px;
+            color: #444;
+            margin: 0;
+        }
+
+        .badge-date {
+            font-size: 12px;
+            font-weight: bold;
+            background: #000;
+            color: #fff;
+            padding: 4px 12px;
+            border-radius: 4px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead tr {
+            background-color: #000;
+            color: #fff;
+        }
+
+        thead th {
+            padding: 10px 12px;
+            text-align: left;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 700;
+        }
+
+        thead th.right { text-align: right; }
+        thead th.center { text-align: center; }
+
+        tbody tr:nth-child(even) {
+            background-color: #f5f5f5;
+        }
+
+        tbody tr {
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        tbody td {
+            padding: 9px 12px;
+            font-size: 13px;
+            vertical-align: middle;
+        }
+
+        td.no { text-align: center; width: 5%; font-weight: bold; color: #555; }
+        td.nama { font-weight: 700; text-transform: capitalize; width: 35%; }
+        td.satuan { text-align: center; width: 10%; color: #555; }
+        td.harga { text-align: right; font-weight: 800; font-size: 14px; width: 20%; }
+        td.tanggal { text-align: center; width: 15%; font-size: 12px; color: #666; }
+        td.faktur { text-align: center; width: 15%; font-size: 11px; color: #888; }
+
+        .footer {
+            margin-top: 20px;
+            border-top: 1px solid #ccc;
+            padding-top: 10px;
+            font-size: 11px;
+            color: #888;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .total-row {
+            font-size: 12px;
+            color: #555;
+            padding: 6px 12px;
+            text-align: right;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="header-meta">
+            <div>
+                <h1><%= Settings.clientName || "CV Bahtera Mulya Plastik" %></h1>
+                <p class="header-sub"><%= Settings.addressLine1 %> &nbsp;|&nbsp; <%= Settings.phoneNumber %></p>
+                <p class="header-sub" style="margin-top:4px; font-size: 14px; font-weight: bold; color: #000;">
+                    DAFTAR HARGA PRODUK TERBARU
+                </p>
+            </div>
+            <div class="badge-date">Dicetak: <%= new Date().toLocaleDateString('id-ID') %></div>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th class="center">#</th>
+                <th>Nama Produk</th>
+                <th class="center">Satuan</th>
+                <th class="right">Harga</th>
+                <th class="center">Tgl. Buat</th>
+                <th class="center">Kode</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% Products.forEach(function(p, index) { %>
+            <tr>
+                <td class="no"><%= index + 1 %></td>
+                <td class="nama"><%= p.title %></td>
+                <td class="satuan"><%= p.unit %></td>
+                <td class="harga">Rp<%= formatRpComma(p.price) %></td>
+                <td class="tanggal"><%= new Date(p.createdAt).toLocaleDateString('id-ID') %></td>
+                <td class="faktur"><%= p.uniqueID || '-' %></td>
+            </tr>
+            <% }) %>
+        </tbody>
+    </table>
+
+    <div class="total-row">Total: <%= Products.length %> produk</div>
+
+    <div class="footer">
+        <span>* Daftar harga master produk produksi</span>
+        <span><%= Settings.clientName || "CV Bahtera Mulya Plastik" %> &copy; <%= new Date().getFullYear() %></span>
+    </div>
+
+</body>
+</html>
