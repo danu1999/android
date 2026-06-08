@@ -3,6 +3,7 @@ package database
 import (
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"gorm.io/driver/postgres"
@@ -21,7 +22,7 @@ func ConnectDB() {
 	// 1. Deteksi Mode Demo
 	demoMode := os.Getenv("DEMO_MODE") == "true"
 
-	// 2. Ambil URL Database dari environment (Railway)
+	// 2. Ambil URL Database dari environment (PostgreSQL)
 	dbURL := os.Getenv("DATABASE_URL")
 
 	// 3. Logika Cerdas: Pilih Database
@@ -30,9 +31,18 @@ func ConnectDB() {
 		DB, err = gorm.Open(sqlite.Open("demo.db"), &gorm.Config{})
 		log.Println("🧪 MODE DEMO AKTIF: Menggunakan SQLite (demo.db)!")
 	} else if dbURL != "" {
-		// Jika ada DATABASE_URL, berarti kita di Railway -> Pakai PostgreSQL
+		// Jika ada DATABASE_URL, berarti kita di PostgreSQL -> Pakai PostgreSQL
+		// Enforce timezone=UTC agar GORM secara konsisten menulis timestamp dalam UTC,
+		// sehingga selaras dengan asumsi Prisma (Node.js) & mencegah deviasi timezone di frontend.
+		if !strings.Contains(dbURL, "timezone=") {
+			if strings.Contains(dbURL, "?") {
+				dbURL += "&timezone=UTC"
+			} else {
+				dbURL += "?timezone=UTC"
+			}
+		}
 		DB, err = gorm.Open(postgres.Open(dbURL), &gorm.Config{})
-		log.Println("🚀 Berhasil koneksi ke PostgreSQL (Railway)!")
+		log.Println("🚀 Berhasil koneksi ke PostgreSQL (Lokal/VPS) dengan timezone=UTC!")
 	} else {
 		// Jika kosong, berarti kita di laptop lokal -> Pakai SQLite
 		DB, err = gorm.Open(sqlite.Open("invoice.db"), &gorm.Config{})

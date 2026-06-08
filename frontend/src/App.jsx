@@ -606,7 +606,7 @@ const Navigation = ({ user, onLogout, appMode, setAppMode, theme, toggleTheme })
 
 // ─── App Content ───────────────────────────────────────────────
 function AppContent({ user, onLogout, appMode, setAppMode, theme, toggleTheme }) {
-  const [latestVer, setLatestVer] = useState("1.0.2");
+  const [latestVer, setLatestVer] = useState("1.0.3");
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
@@ -1084,7 +1084,7 @@ function BackButtonHandler({ setShowExitModal, user, showUpdateFullscreen, setSh
 
 // ─── Fullscreen Update Modal Component ──────────────────────────
 function FullscreenUpdateModal({ onClose, onDownload }) {
-  const [latestVer, setLatestVer] = useState("1.0.2");
+  const [latestVer, setLatestVer] = useState("1.0.3");
 
   useEffect(() => {
     const fetchVer = async () => {
@@ -1212,22 +1212,22 @@ function FullscreenUpdateModal({ onClose, onDownload }) {
             <div style={{ display: 'flex', gap: '10px' }}>
               <span style={{ color: '#10b981', fontSize: '1rem' }}>✓</span>
               <div>
-                <strong style={{ color: '#f1f5f9' }}>Manajemen Banyak Outlet (Multi-Outlet)</strong>
-                <p style={{ margin: '2px 0 0' }}>Kelola data, karyawan, dan laporan transaksi di seluruh cabang outlet secara terpusat.</p>
+                <strong style={{ color: '#f1f5f9' }}>Formula Dashboard Panel Utama</strong>
+                <p style={{ margin: '2px 0 0' }}>Mengoreksi perhitungan Saldo Kas Riil dan Estimasi Bersih Akhir di dashboard utama.</p>
               </div>
             </div>
             <div style={{ display: 'flex', gap: '10px' }}>
               <span style={{ color: '#10b981', fontSize: '1rem' }}>✓</span>
               <div>
-                <strong style={{ color: '#f1f5f9' }}>Badge Metrik Kinerja</strong>
-                <p style={{ margin: '2px 0 0' }}>Pantau perkembangan performa bisnis dengan indikator metrik yang intuitif.</p>
+                <strong style={{ color: '#f1f5f9' }}>Proteksi Isolasi Akun Demo vs Premium</strong>
+                <p style={{ margin: '2px 0 0' }}>Isolasi database yang ketat untuk memblokir akses silang (baca/edit/hapus) data antara Demo dan Premium.</p>
               </div>
             </div>
             <div style={{ display: 'flex', gap: '10px' }}>
               <span style={{ color: '#10b981', fontSize: '1rem' }}>✓</span>
               <div>
-                <strong style={{ color: '#f1f5f9' }}>Loader CSS Modern &amp; Firewall Keamanan</strong>
-                <p style={{ margin: '2px 0 0' }}>Navigasi lebih halus dengan loading baru dan proteksi keamanan database yang diperketat.</p>
+                <strong style={{ color: '#f1f5f9' }}>Peningkatan Firewall Keamanan</strong>
+                <p style={{ margin: '2px 0 0' }}>Menutup celah bypass identitas kosong atau anonymous (9999/0) pada routing database penyewa.</p>
               </div>
             </div>
           </div>

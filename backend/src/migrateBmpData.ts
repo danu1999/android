@@ -130,7 +130,11 @@ async function main() {
 
     // 5. Products
     console.log('Migrating BmpProduct...');
-    const products: any[] = await sourcePrisma.$queryRawUnsafe(`SELECT * FROM products WHERE deleted_at IS NULL;`);
+    const products: any[] = await sourcePrisma.$queryRawUnsafe(`
+      SELECT p.* FROM products p 
+      INNER JOIN invoices i ON p.invoice_id = i.id 
+      WHERE p.deleted_at IS NULL AND i.is_demo = false AND i.deleted_at IS NULL;
+    `);
     for (const p of products) {
       await insertRaw('BmpProduct', {
         id: Number(p.id),
@@ -153,7 +157,11 @@ async function main() {
 
     // 6. Invoice Payments
     console.log('Migrating BmpInvoicePayment...');
-    const payments: any[] = await sourcePrisma.$queryRawUnsafe(`SELECT * FROM invoice_payments WHERE deleted_at IS NULL;`);
+    const payments: any[] = await sourcePrisma.$queryRawUnsafe(`
+      SELECT ip.* FROM invoice_payments ip 
+      INNER JOIN invoices i ON ip.invoice_id = i.id 
+      WHERE ip.deleted_at IS NULL AND i.is_demo = false AND i.deleted_at IS NULL;
+    `);
     for (const pay of payments) {
       await insertRaw('BmpInvoicePayment', {
         id: Number(pay.id),
@@ -197,7 +205,11 @@ async function main() {
 
     // 9. Bahan Nono Items
     console.log('Migrating BmpBahanNonoItem...');
-    const nonoItems: any[] = await sourcePrisma.$queryRawUnsafe(`SELECT * FROM bahan_nono_items WHERE deleted_at IS NULL;`);
+    const nonoItems: any[] = await sourcePrisma.$queryRawUnsafe(`
+      SELECT ni.* FROM bahan_nono_items ni 
+      INNER JOIN bahan_nonos n ON ni.bahan_nono_id = n.id 
+      WHERE ni.deleted_at IS NULL AND n.is_demo = false AND n.deleted_at IS NULL;
+    `);
     for (const ni of nonoItems) {
       await insertRaw('BmpBahanNonoItem', {
         id: Number(ni.id),
@@ -211,7 +223,11 @@ async function main() {
 
     // 10. Pembayarans
     console.log('Migrating BmpPembayaran...');
-    const pembayarans: any[] = await sourcePrisma.$queryRawUnsafe(`SELECT * FROM pembayarans WHERE deleted_at IS NULL;`);
+    const pembayarans: any[] = await sourcePrisma.$queryRawUnsafe(`
+      SELECT p.* FROM pembayarans p 
+      INNER JOIN invoices i ON p.invoice_id = i.id 
+      WHERE p.deleted_at IS NULL AND i.is_demo = false AND i.deleted_at IS NULL;
+    `);
     for (const p of pembayarans) {
       await insertRaw('BmpPembayaran', {
         id: Number(p.id),

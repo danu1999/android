@@ -16,8 +16,8 @@ function transformClient(c: any) {
     ID: c.id,
     ClientName: c.clientName,
     PhoneNumber: c.phoneNumber || '',
-    Address: c.address || '',
-    Email: c.email || '',
+    Address: c.addressLine1 || '',
+    Email: c.emailAddress || '',
     SaldoTitipan: c.saldoTitipan || 0,
     UniqueID: c.uniqueID,
     Slug: c.slug,
@@ -390,7 +390,7 @@ export const updateSettings = async (req: Request, res: Response) => {
         data
       });
     }
-    res.json({ success: true, data: settings });
+    res.json({ success: true, data: transformSettings(settings) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -455,10 +455,85 @@ export const getHppCalculator = async (req: Request, res: Response) => {
 
 export const getPricelist = async (req: Request, res: Response) => {
   try {
-    const products = await prisma.bmpMasterProduct.findMany({
-      orderBy: { title: 'asc' }
+    const clientIdParam = req.query.client ? Number(req.query.client) : undefined;
+    
+    // Fetch all invoices with client and products
+    const invoices = await prisma.bmpInvoice.findMany({
+      where: {
+        status: { not: 'DRAFT' },
+        ...(clientIdParam ? { clientId: clientIdParam } : {})
+      },
+      include: {
+        client: true,
+        products: true
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
     });
-    res.json({ success: true, data: products });
+
+    const groups: { [key: string]: { client: string; item: string; prices: any[] } } = {};
+
+    for (const inv of invoices) {
+      if (!inv.client) continue;
+      const clientName = inv.client.clientName;
+      for (const prod of inv.products) {
+        const itemKey = `${inv.clientId}_${prod.masterItemID || prod.title}`;
+        if (!groups[itemKey]) {
+          groups[itemKey] = {
+            client: clientName,
+            item: prod.title,
+            prices: []
+          };
+        }
+        const exists = groups[itemKey].prices.some(p => p.invoiceNumber === inv.number);
+        if (!exists) {
+          groups[itemKey].prices.push({
+            price: prod.price,
+            date: inv.createdAt,
+            invoiceNumber: inv.number
+          });
+        }
+      }
+    }
+
+    const data = Object.values(groups).map((group) => {
+      group.prices.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      
+      const terbaru = group.prices[0];
+      const sebelumnya = group.prices[1] || null;
+      
+      let status = 'TETAP';
+      let selisih = 0;
+      
+      if (sebelumnya) {
+        if (terbaru.price > sebelumnya.price) {
+          status = 'NAIK';
+          selisih = terbaru.price - sebelumnya.price;
+        } else if (terbaru.price < sebelumnya.price) {
+          status = 'TURUN';
+          selisih = sebelumnya.price - terbaru.price;
+        }
+      }
+      
+      return {
+        client: group.client,
+        item: group.item,
+        terbaru: {
+          Harga: terbaru.price,
+          Tanggal: terbaru.date,
+          Faktur: terbaru.invoiceNumber
+        },
+        sebelumnya: sebelumnya ? {
+          Harga: sebelumnya.price,
+          Tanggal: sebelumnya.date
+        } : null,
+        status,
+        selisih
+      };
+    });
+
+    res.json({ success: true, data });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -494,18 +569,22 @@ export const getClient = async (req: Request, res: Response) => {
 
 export const createClient = async (req: Request, res: Response) => {
   try {
-    const data = req.body;
+    const body = req.body;
+    // Accept both PascalCase (from frontend) and camelCase
+    const clientName = body.ClientName || body.clientName || '';
+    const phoneNumber = body.PhoneNumber || body.phoneNumber || '';
+    const province = body.Province || body.province || '';
+    const address = body.Address || body.address || '';
+    const email = body.Email || body.email || '';
+    const saldoTitipan = Number(body.SaldoTitipan ?? body.saldoTitipan ?? 0);
+    const taxNumber = body.TaxNumber || body.taxNumber || '';
     const uniqueID = crypto.randomBytes(4).toString('hex');
-    const slug = `${(data.clientName || '').toLowerCase().replace(/[^a-z0-9]/g, '-')}-${uniqueID}`;
+    const slug = `${clientName.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${uniqueID}`;
 
     const client = await prisma.bmpClient.create({
-      data: {
-        ...data,
-        uniqueID,
-        slug
-      }
+      data: { clientName, phoneNumber, province, addressLine1: address, emailAddress: email, saldoTitipan, taxNumber, uniqueID, slug }
     });
-    res.status(201).json({ success: true, data: client });
+    res.status(201).json({ success: true, data: transformClient(client) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -514,16 +593,22 @@ export const createClient = async (req: Request, res: Response) => {
 export const updateClient = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const data = req.body;
-    // Omit fields that shouldn't be overwritten
-    delete data.id;
-    delete data.uniqueID;
+    const body = req.body;
+    // Accept both PascalCase (from frontend) and camelCase
+    const updateData: any = {};
+    if (body.ClientName !== undefined || body.clientName !== undefined) updateData.clientName = body.ClientName || body.clientName;
+    if (body.PhoneNumber !== undefined || body.phoneNumber !== undefined) updateData.phoneNumber = body.PhoneNumber || body.phoneNumber;
+    if (body.Province !== undefined || body.province !== undefined) updateData.province = body.Province || body.province;
+    if (body.Address !== undefined || body.address !== undefined) updateData.addressLine1 = body.Address || body.address;
+    if (body.Email !== undefined || body.email !== undefined) updateData.emailAddress = body.Email || body.email;
+    if (body.SaldoTitipan !== undefined || body.saldoTitipan !== undefined) updateData.saldoTitipan = Number(body.SaldoTitipan ?? body.saldoTitipan);
+    if (body.TaxNumber !== undefined || body.taxNumber !== undefined) updateData.taxNumber = body.TaxNumber || body.taxNumber;
 
     const client = await prisma.bmpClient.update({
       where: { id: Number(id) },
-      data
+      data: updateData
     });
-    res.json({ success: true, data: client });
+    res.json({ success: true, data: transformClient(client) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -616,18 +701,23 @@ export const getProduct = async (req: Request, res: Response) => {
 
 export const createProduct = async (req: Request, res: Response) => {
   try {
-    const data = req.body;
+    const body = req.body;
+    // Accept both PascalCase (from frontend) and camelCase
+    const title = body.Title || body.title || '';
+    const description = body.Description || body.description || '';
+    const unit = body.Unit || body.unit || 'pcs';
+    const price = Number(body.Price ?? body.price ?? 0);
+    const beratGram = Number(body.BeratGram ?? body.beratGram ?? 0);
+    const cycleTime = Number(body.CycleTime ?? body.cycleTime ?? 0);
+    const cavity = Number(body.Cavity ?? body.cavity ?? 1);
+    const rejectRate = Number(body.RejectRate ?? body.rejectRate ?? 0);
     const uniqueID = crypto.randomBytes(4).toString('hex');
-    const slug = `${(data.title || '').toLowerCase().replace(/[^a-z0-9]/g, '-')}-${uniqueID}`;
+    const slug = `${title.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${uniqueID}`;
 
     const product = await prisma.bmpMasterProduct.create({
-      data: {
-        ...data,
-        uniqueID,
-        slug
-      }
+      data: { title, description, unit, price, beratGram, cycleTime, cavity, rejectRate, uniqueID, slug }
     });
-    res.status(201).json({ success: true, data: product });
+    res.status(201).json({ success: true, data: transformMasterProduct(product) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -636,15 +726,22 @@ export const createProduct = async (req: Request, res: Response) => {
 export const updateProduct = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const data = req.body;
-    delete data.id;
-    delete data.uniqueID;
+    const body = req.body;
+    const updateData: any = {};
+    if (body.Title !== undefined || body.title !== undefined) updateData.title = body.Title || body.title;
+    if (body.Description !== undefined || body.description !== undefined) updateData.description = body.Description || body.description;
+    if (body.Unit !== undefined || body.unit !== undefined) updateData.unit = body.Unit || body.unit;
+    if (body.Price !== undefined || body.price !== undefined) updateData.price = Number(body.Price ?? body.price);
+    if (body.BeratGram !== undefined || body.beratGram !== undefined) updateData.beratGram = Number(body.BeratGram ?? body.beratGram);
+    if (body.CycleTime !== undefined || body.cycleTime !== undefined) updateData.cycleTime = Number(body.CycleTime ?? body.cycleTime);
+    if (body.Cavity !== undefined || body.cavity !== undefined) updateData.cavity = Number(body.Cavity ?? body.cavity);
+    if (body.RejectRate !== undefined || body.rejectRate !== undefined) updateData.rejectRate = Number(body.RejectRate ?? body.rejectRate);
 
     const product = await prisma.bmpMasterProduct.update({
       where: { id: Number(id) },
-      data
+      data: updateData
     });
-    res.json({ success: true, data: product });
+    res.json({ success: true, data: transformMasterProduct(product) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -833,10 +930,19 @@ export const createInvoice = async (req: Request, res: Response) => {
       return inv;
     });
 
+    const fullInvoice = await prisma.bmpInvoice.findUnique({
+      where: { id: invoice.id },
+      include: {
+        client: true,
+        products: { include: { masterItem: true } },
+        payments: true
+      }
+    });
+
     res.status(201).json({
       success: true,
       message: 'Invoice successfully created',
-      data: invoice
+      data: transformInvoice(fullInvoice)
     });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
@@ -855,10 +961,15 @@ export const updateInvoiceHeader = async (req: Request, res: Response) => {
         dueDate: due_date ? new Date(due_date) : null,
         paymentTerms: payment_terms,
         notes
+      },
+      include: {
+        client: true,
+        products: { include: { masterItem: true } },
+        payments: true
       }
     });
 
-    res.json({ success: true, data: invoice });
+    res.json({ success: true, data: transformInvoice(invoice) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -1226,7 +1337,7 @@ export const createCashFlow = async (req: Request, res: Response) => {
         description: keterangan
       }
     });
-    res.json({ success: true, data: flow });
+    res.json({ success: true, data: transformCashFlow(flow) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -1245,7 +1356,7 @@ export const updateCashFlow = async (req: Request, res: Response) => {
         description: keterangan
       }
     });
-    res.json({ success: true, data: flow });
+    res.json({ success: true, data: transformCashFlow(flow) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -1767,7 +1878,7 @@ export const saveAttendanceReason = async (req: Request, res: Response) => {
       where: { id: Number(id) },
       data: { alasan }
     });
-    res.json({ success: true, data: log });
+    res.json({ success: true, data: transformAttendanceLog(log) });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -1781,7 +1892,26 @@ export const getBonusLogs = async (req: Request, res: Response) => {
       include: { employee: true },
       orderBy: { date: 'desc' }
     });
-    res.json({ success: true, data: logs });
+
+    // Calculate Monday of current week in local server time
+    const now = new Date();
+    const day = now.getDay();
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(now.setDate(diff));
+    monday.setHours(0, 0, 0, 0);
+
+    const logsThisWeek = await prisma.bmpMachineBonusLog.findMany({
+      where: {
+        date: { gte: monday }
+      }
+    });
+
+    const totals: { [key: number]: number } = {};
+    for (const log of logsThisWeek) {
+      totals[log.employeeId] = (totals[log.employeeId] || 0) + log.bonusAmount;
+    }
+
+    res.json({ success: true, data: logs, totals });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -2203,9 +2333,15 @@ export const handleCData = async (req: Request, res: Response) => {
         verifyType = parseInt(parts[3].trim()) || 0;
       }
 
-      const logTime = new Date();
-      
-      console.log(`[ADMS] Scan received for PIN=${pin} | Machine Time: ${timeStr} | Override to Server Time: ${logTime.toISOString()}`);
+      let logTime: Date;
+      const parsedTime = new Date(timeStr.replace(' ', 'T') + '+07:00');
+      if (!isNaN(parsedTime.getTime()) && parsedTime.getFullYear() > 2020) {
+        logTime = parsedTime;
+        console.log(`[ADMS] Scan received for PIN=${pin} | Using Machine Time: ${timeStr} -> WIB: ${logTime.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}`);
+      } else {
+        logTime = new Date();
+        console.log(`[ADMS] Scan received for PIN=${pin} | Machine Time: ${timeStr} invalid. Override to Server Time: ${logTime.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}`);
+      }
 
       try {
         const lastLog = await prisma.bmpAttendanceLog.findFirst({

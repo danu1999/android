@@ -221,7 +221,7 @@ const CreateInvoice = () => {
     style={{ width: "100%", padding: "10px", border: p.master_item_id ? "1px solid #198754" : "1px solid #dee2e6", borderRadius: "6px", boxSizing: "border-box" }}
   />
                                     {showDropdown[i] && <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "white", border: "1px solid #dee2e6", borderRadius: "8px", zIndex: 200, maxHeight: "220px", overflowY: "auto", boxShadow: "0 8px 20px rgba(0,0,0,0.12)" }}>
-                                            {masterProducts.filter((mp) => mp.Title.toLowerCase().includes((productSearch[i] ?? "").toLowerCase())).map((mp) => <div
+                                            {masterProducts.filter((mp) => (mp.Title || "").toLowerCase().includes((productSearch[i] ?? "").toLowerCase())).map((mp) => <div
     key={mp.ID}
     onMouseDown={(e) => {
       e.preventDefault();
@@ -240,7 +240,7 @@ const CreateInvoice = () => {
                                                         <div style={{ fontWeight: "600", fontSize: "13px" }}>{mp.Title}</div>
                                                         <div style={{ fontSize: "12px", color: "#64748b" }}>Rp {mp.Price.toLocaleString("id-ID")}</div>
                                                     </div>)}
-                                            {masterProducts.filter((mp) => mp.Title.toLowerCase().includes((productSearch[i] ?? "").toLowerCase())).length === 0 && <div style={{ padding: "12px", color: "#94a3b8", textAlign: "center", fontSize: "13px" }}>Barang tidak ditemukan</div>}
+                                            {masterProducts.filter((mp) => (mp.Title || "").toLowerCase().includes((productSearch[i] ?? "").toLowerCase())).length === 0 && <div style={{ padding: "12px", color: "#94a3b8", textAlign: "center", fontSize: "13px" }}>Barang tidak ditemukan</div>}
                                         </div>}
                                 </div>
                                 <div style={{ flex: 1 }}>

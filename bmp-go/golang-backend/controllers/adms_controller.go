@@ -197,12 +197,21 @@ func AdmsCdata(c *fiber.Ctx) error {
 				fmt.Sscanf(strings.TrimSpace(parts[3]), "%d", &verifyType)
 			}
 
-			// Karena jam mesin sering error/tidak sinkron, kita override logTime menggunakan waktu server saat ini (WIB).
-			// Waktu asli dari mesin tetap dicatat di log untuk kebutuhan debugging.
-			logTime := time.Now().In(loc)
-			log.Printf("[ADMS] 🕒 Scan diterima untuk PIN=%s | Jam mesin: %q | Di-override ke jam server WIB: %s",
-				pin, timeStr, logTime.Format("2006-01-02 15:04:05"),
-			)
+			// Parse waktu asli dari mesin (format: 2006-01-02 15:04:05) menggunakan lokasi WIB.
+			// Jika format valid dan tahun masuk akal (> 2020), gunakan jam mesin agar scan tersimpan di jam riil saat fisik di-scan.
+			var logTime time.Time
+			parsedTime, err := time.ParseInLocation("2006-01-02 15:04:05", timeStr, loc)
+			if err == nil && parsedTime.Year() > 2020 {
+				logTime = parsedTime
+				log.Printf("[ADMS] 🕒 Scan diterima untuk PIN=%s | Menggunakan jam mesin WIB: %s",
+					pin, logTime.Format("2006-01-02 15:04:05"),
+				)
+			} else {
+				logTime = time.Now().In(loc)
+				log.Printf("[ADMS] 🕒 Scan diterima untuk PIN=%s | Jam mesin %q tidak valid/error. Di-override ke jam server WIB: %s",
+					pin, timeStr, logTime.Format("2006-01-02 15:04:05"),
+				)
+			}
 
 			if device.IsDemo {
 				// ── ALUR LAMA (KHUSUS DEMO / NON-BMP PRODUCTION) ──

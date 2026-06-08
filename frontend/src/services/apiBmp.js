@@ -20,33 +20,39 @@ const api = axios.create({
 
 // Interceptor to add auth token, dynamic headers, and dynamic baseURL
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token && config.headers) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  
+  // Pastikan headers selalu ada
+  if (!config.headers) config.headers = {};
+
+  try {
+    const token = localStorage.getItem('token');
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+  } catch (_) {}
+
   try {
     const stored = localStorage.getItem('posbah_user');
     if (stored) {
       const user = JSON.parse(stored);
-      if (user?.id !== undefined && user?.id !== null) config.headers['x-employee-id'] = String(user.id);
-      if (user?.role) config.headers['x-employee-role'] = user.role;
-      if (user?.name) config.headers['x-employee-name'] = encodeURIComponent(user.name);
-    }
-    const appMode = localStorage.getItem('posbah_app_mode') || 'FNB';
-    config.headers['x-app-mode'] = appMode;
-
-    const tenantId = localStorage.getItem('posbah_tenant_id');
-    if (tenantId) {
-      config.headers['x-tenant-id'] = tenantId;
-    }
-
-    const activeOutletId = localStorage.getItem('posbah_active_outlet_id');
-    if (activeOutletId) {
-      config.headers['x-outlet-id'] = activeOutletId;
+      try { if (user?.id !== undefined && user?.id !== null) config.headers['x-employee-id'] = String(user.id); } catch (_) {}
+      try { if (user?.role) config.headers['x-employee-role'] = user.role; } catch (_) {}
+      try { if (user?.name) config.headers['x-employee-name'] = encodeURIComponent(user.name); } catch (_) {}
     }
   } catch (_) {}
-  
+
+  try {
+    const appMode = localStorage.getItem('posbah_app_mode') || 'FNB';
+    config.headers['x-app-mode'] = appMode;
+  } catch (_) {}
+
+  try {
+    const tenantId = localStorage.getItem('posbah_tenant_id');
+    if (tenantId) config.headers['x-tenant-id'] = tenantId;
+  } catch (_) {}
+
+  try {
+    const activeOutletId = localStorage.getItem('posbah_active_outlet_id');
+    if (activeOutletId) config.headers['x-outlet-id'] = activeOutletId;
+  } catch (_) {}
+
   config.baseURL = getBmpApiUrl();
   return config;
 });

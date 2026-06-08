@@ -299,7 +299,7 @@ app.use((0, cors_1.default)({
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-employee-id', 'x-employee-role', 'x-employee-name', 'x-app-mode', 'x-offline-sync', 'x-tenant-id']
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-employee-id', 'x-employee-role', 'x-employee-name', 'x-app-mode', 'x-offline-sync', 'x-tenant-id', 'x-outlet-id']
 }));
 app.use(express_1.default.json());
 // Helper to determine if a route path is allowed for a given business mode
@@ -386,7 +386,8 @@ app.use((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
         '/api/admin/confirm-demo',
         '/api/confirm-expansion',
         '/api/reject-expansion',
-        '/api/auth/login'
+        '/api/auth/login',
+        '/api/employees/limit'
     ].includes(req.path);
     if (isGlobalPath) {
         return exports.prismaContext.run(exports.mainPrisma, () => {
@@ -424,61 +425,118 @@ app.use((req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
             next();
         });
     }
-    // 1. Tenancy Security: Verify x-employee-id has access to x-tenant-id
-    if (employeeIdHeader && employeeIdHeader !== '0' && employeeIdHeader !== '9999') {
-        try {
-            let employeeEmail = null;
-            if (employeeIdHeader.includes('@')) {
-                employeeEmail = employeeIdHeader.toLowerCase().trim();
-            }
-            else {
-                const numericId = Number(employeeIdHeader);
-                if (!isNaN(numericId)) {
-                    // Look up in the target tenant's database to resolve email
-                    const tenantPrisma = getTenantPrisma(tenantId);
-                    const emp = yield tenantPrisma.employee.findUnique({
-                        where: { id: numericId }
-                    });
-                    if (emp && emp.email) {
-                        employeeEmail = emp.email.toLowerCase().trim();
-                    }
+    // 1. Tenancy Security & Isolation Check
+    try {
+        const cleanTenantId = tenantId.toLowerCase().trim();
+        // Check if the requested tenant is premium
+        let isTenantPremium = false;
+        let tenantExists = false;
+        const premiumTenant = yield exports.mainPrisma.premiumUser.findUnique({
+            where: { email: cleanTenantId }
+        });
+        if (premiumTenant) {
+            isTenantPremium = true;
+            tenantExists = true;
+        }
+        else {
+            const googleTenant = yield exports.mainPrisma.googleUser.findUnique({
+                where: { email: cleanTenantId }
+            });
+            if (googleTenant) {
+                tenantExists = true;
+                if (googleTenant.isConfirmed) {
+                    isTenantPremium = true;
                 }
             }
-            if (employeeEmail) {
-                let isAuthorized = false;
-                const premiumUser = yield exports.mainPrisma.premiumUser.findUnique({
-                    where: { email: employeeEmail }
+        }
+        if (!tenantExists) {
+            console.warn(`Blocked request: Tenant ${cleanTenantId} is not registered.`);
+            return res.status(403).json({
+                error: 'Akses ditolak. Database penyewa tidak ditemukan.',
+                code: 'TENANT_NOT_FOUND'
+            });
+        }
+        // Reject demo users (0 or 9999 or missing headers) from accessing dynamic database connections
+        if (!employeeIdHeader || employeeIdHeader === '0' || employeeIdHeader === '9999') {
+            console.warn(`Blocked unauthorized access: employee ID ${employeeIdHeader || 'missing'} tried to access tenant database of ${cleanTenantId}`);
+            return res.status(403).json({
+                error: 'Akun demo tidak diizinkan mengakses data production. Semua data dikelola secara lokal di perangkat Anda.',
+                code: 'DEMO_ACCESS_DENIED',
+                isDemo: true
+            });
+        }
+        // Resolve employee email from x-employee-id
+        let employeeEmail = null;
+        if (employeeIdHeader.includes('@')) {
+            employeeEmail = employeeIdHeader.toLowerCase().trim();
+        }
+        else {
+            const numericId = Number(employeeIdHeader);
+            if (!isNaN(numericId)) {
+                // Look up in the target tenant's database to resolve email
+                const tenantPrisma = getTenantPrisma(tenantId);
+                const emp = yield tenantPrisma.employee.findUnique({
+                    where: { id: numericId }
                 });
-                if (premiumUser) {
-                    const allowedTenant = (premiumUser.tenantId || premiumUser.email).toLowerCase().trim();
-                    if (allowedTenant === tenantId.toLowerCase().trim()) {
-                        isAuthorized = true;
-                    }
-                }
-                else {
-                    const googleUser = yield exports.mainPrisma.googleUser.findUnique({
-                        where: { email: employeeEmail }
-                    });
-                    if (googleUser) {
-                        const allowedTenant = googleUser.email.toLowerCase().trim();
-                        if (allowedTenant === tenantId.toLowerCase().trim()) {
-                            isAuthorized = true;
-                        }
-                    }
-                }
-                if (!isAuthorized) {
-                    console.warn(`Unauthorized access attempt: employee ${employeeEmail} tried to access tenant ${tenantId}`);
-                    return res.status(403).json({
-                        error: 'Akses ditolak. Anda tidak memiliki akses ke database penyewa ini.',
-                        code: 'TENANT_ACCESS_DENIED'
-                    });
+                if (emp && emp.email) {
+                    employeeEmail = emp.email.toLowerCase().trim();
                 }
             }
         }
-        catch (authErr) {
-            console.error('Error verifying tenant access:', authErr);
-            return res.status(500).json({ error: 'Gagal melakukan verifikasi akses penyewa' });
+        if (!employeeEmail) {
+            console.warn(`Blocked request: employee email could not be resolved for ID ${employeeIdHeader} on tenant ${cleanTenantId}`);
+            return res.status(403).json({
+                error: 'Akses ditolak. Email karyawan tidak valid atau tidak ditemukan.',
+                code: 'TENANT_ACCESS_DENIED'
+            });
         }
+        // Resolve user's allowed tenant and premium status
+        let isUserPremium = false;
+        let allowedTenant = null;
+        const premiumUser = yield exports.mainPrisma.premiumUser.findUnique({
+            where: { email: employeeEmail }
+        });
+        if (premiumUser) {
+            isUserPremium = true;
+            allowedTenant = (premiumUser.tenantId || premiumUser.email).toLowerCase().trim();
+        }
+        else {
+            const googleUser = yield exports.mainPrisma.googleUser.findUnique({
+                where: { email: employeeEmail }
+            });
+            if (googleUser) {
+                isUserPremium = googleUser.isConfirmed;
+                allowedTenant = googleUser.email.toLowerCase().trim();
+            }
+        }
+        if (!allowedTenant) {
+            console.warn(`Blocked access: employee ${employeeEmail} is not registered in global user directories.`);
+            return res.status(403).json({
+                error: 'Akses ditolak. Pengguna tidak terdaftar.',
+                code: 'TENANT_ACCESS_DENIED'
+            });
+        }
+        // Enforce strict routing boundaries
+        // 1. Employee must belong to the requested tenantId
+        if (allowedTenant !== cleanTenantId) {
+            console.warn(`Unauthorized tenant access attempt: employee ${employeeEmail} (tenant: ${allowedTenant}) tried to access tenant ${cleanTenantId}`);
+            return res.status(403).json({
+                error: 'Akses ditolak. Anda tidak memiliki akses ke database penyewa ini.',
+                code: 'TENANT_ACCESS_DENIED'
+            });
+        }
+        // 2. Strict isolation: Premium user cannot access demo database and vice versa
+        if (isUserPremium !== isTenantPremium) {
+            console.warn(`Strict Isolation Violation: employee ${employeeEmail} (Premium: ${isUserPremium}) tried to access tenant ${cleanTenantId} (Premium: ${isTenantPremium})`);
+            return res.status(403).json({
+                error: 'Akses ditolak. Batasan keamanan memblokir akses silang antara akun Demo dan akun Premium.',
+                code: 'DEMO_PREMIUM_ISOLATION_VIOLATION'
+            });
+        }
+    }
+    catch (authErr) {
+        console.error('Error verifying tenant access:', authErr);
+        return res.status(500).json({ error: 'Gagal melakukan verifikasi akses penyewa' });
     }
     // 2. Business Mode Segregation: Enforce POS vs BMP and cross-POS mode boundaries
     try {
@@ -772,10 +830,13 @@ app.get('/api/auth/get-apk-download-token', (req, res) => __awaiter(void 0, void
         res.status(500).json({ error: 'Gagal memproses token unduhan.' });
     }
 }));
+const CURRENT_APK_VERSION = '1.0.3';
 // Route to download the latest APK (bypassed token verification for older APK client updates)
 app.get('/api/download-apk', (req, res) => {
-    // Check common paths for app-debug.apk
+    // Check common paths for the latest versioned APK or app-debug.apk
     const paths = [
+        path_1.default.join(__dirname, `../posbah-v${CURRENT_APK_VERSION}.apk`),
+        path_1.default.join(__dirname, `../../posbah-v${CURRENT_APK_VERSION}.apk`),
         path_1.default.join(__dirname, '../app-debug.apk'),
         path_1.default.join(__dirname, '../../app-debug.apk'),
         path_1.default.join(__dirname, '../../../app-debug.apk'),
@@ -785,7 +846,7 @@ app.get('/api/download-apk', (req, res) => {
     ];
     for (const p of paths) {
         if (fs_1.default.existsSync(p)) {
-            return res.download(p, 'POSBah.apk');
+            return res.download(p, `POSBah-v${CURRENT_APK_VERSION}.apk`);
         }
     }
     // Fallback redirect to Google Drive file
@@ -793,7 +854,7 @@ app.get('/api/download-apk', (req, res) => {
 });
 // Route to get the latest APK version name
 app.get('/api/apk-version', (req, res) => {
-    res.json({ version: '1.0.2' });
+    res.json({ version: CURRENT_APK_VERSION });
 });
 // Endpoint for centralized client error logging
 app.post('/api/logs/client-error', (req, res) => {
@@ -4205,6 +4266,44 @@ app.post('/api/bmp/payroll/pay', requireAdmin, bmp.recordPayroll);
 app.delete('/api/bmp/payroll/history/:id', requireOwner, bmp.deletePayrollHistory);
 app.get('/api/bmp/bonus/logs', requireAdmin, bmp.getBonusLogs);
 app.get('/api/bmp/bonus/pin-list', requireAdmin, bmp.getEmployeePINList);
+// Serve base64 images (logo / signature) for JPG export template compatibility
+app.get('/api/bmp/images/:filename', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const filename = req.params.filename;
+    if (filename !== 'logo.jpg' && filename !== 'signature.jpeg') {
+        return res.status(404).json({ success: false, message: 'File not found' });
+    }
+    const searchPaths = [
+        path_1.default.join(__dirname, '../../bmp-backend/public/images', filename),
+        path_1.default.join(__dirname, '../bmp-backend/public/images', filename),
+        path_1.default.join(__dirname, '../../bmp-go/golang-backend/public/images', filename),
+        path_1.default.join(__dirname, '../bmp-go/golang-backend/public/images', filename),
+        path_1.default.join('/home/muizz9900/bmp-backend/public/images', filename),
+        path_1.default.join(__dirname, 'public/images', filename),
+        path_1.default.join(__dirname, '../public/images', filename)
+    ];
+    for (const filePath of searchPaths) {
+        if (fs_1.default.existsSync(filePath)) {
+            try {
+                const fileBuffer = fs_1.default.readFileSync(filePath);
+                const ext = path_1.default.extname(filename).toLowerCase();
+                let mimeType = 'image/jpeg';
+                if (ext === '.png')
+                    mimeType = 'image/png';
+                else if (ext === '.gif')
+                    mimeType = 'image/gif';
+                const base64Data = fileBuffer.toString('base64');
+                return res.json({
+                    success: true,
+                    data: `data:${mimeType};base64,${base64Data}`
+                });
+            }
+            catch (err) {
+                console.error(`Error reading image file at ${filePath}:`, err);
+            }
+        }
+    }
+    return res.status(404).json({ success: false, message: 'File not found' });
+}));
 // File Upload to Cloudinary (replacing legacy Go upload endpoint)
 app.post('/api/bmp/upload', requireAdmin, upload.single('file'), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {

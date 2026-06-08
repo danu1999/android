@@ -11,8 +11,8 @@ $pemPath = "C:\Users\danus\Documents\muizz.pem"
 $ip = "103.93.163.227"
 $user = "muizz9900"
 
-Write-Host "Uploading dist/index.js to VPS..." -ForegroundColor Cyan
-scp -o StrictHostKeyChecking=no -i $pemPath backend/dist/index.js "${user}@${ip}:/home/muizz9900/posbah-backend/dist/index.js"
+Write-Host "Uploading dist folder recursively to VPS..." -ForegroundColor Cyan
+scp -o StrictHostKeyChecking=no -i $pemPath -r backend/dist/* "${user}@${ip}:/home/muizz9900/posbah-backend/dist/"
 
 Write-Host "Uploading BMP PDF templates to VPS..." -ForegroundColor Cyan
 scp -o StrictHostKeyChecking=no -i $pemPath -r backend/templates/* "${user}@${ip}:/home/muizz9900/posbah-backend/templates/"

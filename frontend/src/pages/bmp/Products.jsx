@@ -70,7 +70,7 @@ const Products = () => {
       <div style={{ color: "#6c757d" }}>Memuat daftar barang...</div>
     </div>;
   const filteredProducts = products.filter(
-    (p) => p.Title.toLowerCase().includes(searchTerm.toLowerCase())
+    (p) => (p.Title || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
   return <div style={{ padding: isMobile ? "15px" : "30px", background: "#f8f9fa", minHeight: "100%", maxWidth: "100vw", boxSizing: "border-box", overflowX: "hidden" }}>
       {
