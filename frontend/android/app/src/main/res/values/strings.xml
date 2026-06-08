@@ -1,7 +1,64 @@
-<?xml version='1.0' encoding='utf-8'?>
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">POSBah</string>
-    <string name="title_activity_main">POSBah</string>
-    <string name="package_name">com.posbah.app</string>
-    <string name="custom_url_scheme">com.posbah.app</string>
+    <string name="app_tagline">Solusi POS & Invoice untuk UMKM &amp; Manufaktur</string>
+
+    <!-- Auth -->
+    <string name="login_title">Masuk ke POSBah</string>
+    <string name="login_subtitle">Pilih metode login untuk melanjutkan</string>
+    <string name="login_with_google">Masuk dengan Google</string>
+    <string name="login_with_pin">Masuk dengan PIN Karyawan</string>
+    <string name="login_pin_hint">Masukkan PIN 6 digit</string>
+    <string name="login_pin_email">Email karyawan</string>
+    <string name="login_continue">Lanjutkan</string>
+    <string name="login_error_no_google">Tidak ada akun Google di perangkat</string>
+    <string name="login_error_cancelled">Login dibatalkan</string>
+    <string name="login_error_unknown">Gagal login: %1$s</string>
+
+    <!-- Biometric -->
+    <string name="biometric_prompt_title">Verifikasi Identitas</string>
+    <string name="biometric_prompt_subtitle">Gunakan biometrik untuk membuka POSBah</string>
+    <string name="biometric_prompt_negative">Gunakan PIN</string>
+    <string name="biometric_unavailable">Biometrik tidak tersedia. Daftarkan sidik jari/wajah di pengaturan device.</string>
+    <string name="biometric_not_enrolled">Belum ada biometrik terdaftar. Daftar dulu di pengaturan device.</string>
+
+    <!-- Security alerts -->
+    <string name="security_root_detected">Perangkat ini terdeteksi sebagai rooted. Demi keamanan, aplikasi tidak dapat dijalankan.</string>
+    <string name="security_emulator_detected">Aplikasi tidak dapat dijalankan di emulator demi keamanan data.</string>
+    <string name="security_tamper_detected">Aplikasi terdeteksi dimodifikasi (tidak resmi). Silakan unduh ulang dari Play Store.</string>
+    <string name="security_integrity_failed">Integrity Check gagal. Pastikan APK Anda asli dari Play Store.</string>
+
+    <!-- Tenant / Outlet -->
+    <string name="tenant_select_title">Pilih Tenant</string>
+    <string name="tenant_create_new">+ Tambah Tenant Baru</string>
+    <string name="outlet_select_title">Pilih Outlet</string>
+    <string name="outlet_create_new">+ Tambah Outlet Baru</string>
+    <string name="outlet_default_name">Outlet Utama</string>
+
+    <!-- BMP Module -->
+    <string name="bmp_dashboard">Dashboard BMP</string>
+    <string name="bmp_clients">Klien</string>
+    <string name="bmp_invoices">Invoice</string>
+    <string name="bmp_products">Produk</string>
+    <string name="bmp_pricelist">Daftar Harga</string>
+    <string name="bmp_payments">Pembayaran</string>
+    <string name="bmp_cashflow">Arus Kas</string>
+    <string name="bmp_employees">Karyawan</string>
+    <string name="bmp_payroll">Penggajian</string>
+    <string name="bmp_settings">Pengaturan</string>
+
+    <!-- Generic -->
+    <string name="action_save">Simpan</string>
+    <string name="action_cancel">Batal</string>
+    <string name="action_delete">Hapus</string>
+    <string name="action_edit">Edit</string>
+    <string name="action_add">Tambah</string>
+    <string name="action_back">Kembali</string>
+    <string name="action_logout">Keluar</string>
+    <string name="action_retry">Coba Lagi</string>
+    <string name="action_confirm">Konfirmasi</string>
+    <string name="action_close">Tutup</string>
+    <string name="action_search">Cari</string>
+    <string name="empty_state">Belum ada data</string>
+    <string name="loading">Memuat\u2026</string>
 </resources>

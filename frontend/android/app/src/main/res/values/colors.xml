@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand: Charcoal + Saffron -->
+    <color name="brand_charcoal">#0F1419</color>
+    <color name="brand_charcoal_2">#1A2028</color>
+    <color name="brand_saffron">#F5A524</color>
+    <color name="brand_saffron_soft">#FFC562</color>
+    <color name="brand_paper">#F7F4EE</color>
+    <color name="brand_ink">#0A0E13</color>
+    <color name="brand_muted">#8A93A6</color>
+
+    <color name="status_success">#1F8B4C</color>
+    <color name="status_warning">#E08A1B</color>
+    <color name="status_danger">#C5453B</color>
+    <color name="status_info">#2A6FB5</color>
+
+    <color name="splash_bg">#0F1419</color>
+</resources>

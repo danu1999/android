@@ -1,21 +1,92 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# POSBah ProGuard / R8 rules
+# Goal: Aggressive obfuscation while preserving Hilt, Room, Kotlinx serialization,
+# Compose runtime, Google Identity, and SQLCipher reflection-based APIs.
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Optimization passes
+-optimizationpasses 5
+-allowaccessmodification
+-mergeinterfacesaggressively
+-overloadaggressively
+-repackageclasses ''
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Preserve line numbers for stack traces but obfuscate file names
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# ===== Kotlin =====
+-keep class kotlin.Metadata { *; }
+-keep class kotlinx.coroutines.** { *; }
+-dontwarn kotlinx.coroutines.**
+
+# ===== Kotlinx Serialization =====
+-keepattributes *Annotation*, InnerClasses
+-dontnote kotlinx.serialization.AnnotationsKt
+-keepclassmembers class kotlinx.serialization.json.** {
+    *** Companion;
+}
+-keepclasseswithmembers class kotlinx.serialization.json.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+-keep,includedescriptorclasses class com.posbah.app.**$$serializer { *; }
+-keepclassmembers class com.posbah.app.** {
+    *** Companion;
+}
+-keepclasseswithmembers class com.posbah.app.** {
+    kotlinx.serialization.KSerializer serializer(...);
+}
+
+# ===== Hilt / Dagger =====
+-keep class dagger.hilt.** { *; }
+-keep class * extends dagger.hilt.android.lifecycle.HiltViewModel { *; }
+-keep,allowobfuscation @interface dagger.hilt.android.AndroidEntryPoint
+-keepclasseswithmembers class * {
+    @dagger.hilt.android.AndroidEntryPoint <methods>;
+}
+-keep,allowobfuscation,allowshrinking class * extends androidx.lifecycle.ViewModel
+
+# ===== Room =====
+-keep class androidx.room.** { *; }
+-keep class * extends androidx.room.RoomDatabase { *; }
+-keepclassmembers class * {
+    @androidx.room.* <methods>;
+    @androidx.room.* <fields>;
+}
+
+# ===== SQLCipher =====
+-keep class net.sqlcipher.** { *; }
+-keep class net.sqlcipher.database.** { *; }
+-dontwarn net.sqlcipher.**
+
+# ===== Compose =====
+-keep class androidx.compose.runtime.** { *; }
+-keepclassmembers class * {
+    @androidx.compose.runtime.Composable <methods>;
+}
+
+# ===== Google Identity / Credential Manager =====
+-keep class com.google.android.libraries.identity.googleid.** { *; }
+-keep class androidx.credentials.** { *; }
+-keep class com.google.android.gms.** { *; }
+-dontwarn com.google.android.gms.**
+
+# ===== Play Integrity =====
+-keep class com.google.android.play.core.integrity.** { *; }
+
+# ===== Auth0 JWTDecode =====
+-keep class com.auth0.android.jwt.** { *; }
+
+# ===== POSBah Domain Models (keep entity field names for Room) =====
+-keep class com.posbah.app.data.local.entities.** { *; }
+
+# Avoid noisy notes / strip BuildConfig debug strings
+-assumenosideeffects class android.util.Log {
+    public static *** v(...);
+    public static *** d(...);
+    public static *** i(...);
+}
+
+# Hide sensitive strings via constant removal in release
+-assumenosideeffects class com.posbah.app.util.DebugLog {
+    public static *** d(...);
+    public static *** v(...);
+}
