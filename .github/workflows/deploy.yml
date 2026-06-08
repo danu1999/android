@@ -34,6 +34,9 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Sync Capacitor Native Files
         run: |
           cd frontend
