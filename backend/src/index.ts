@@ -285,18 +285,85 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Multi-tenant database routing middleware
+// Helper to determine if a route path is allowed for a given business mode
+function isRouteAllowedForMode(path: string, mode: string): boolean {
+  // Shared utility paths that are allowed for any mode
+  const isShared = [
+    '/',
+    '/api/download-apk',
+    '/api/apk-version',
+    '/api/logs/client-error',
+    '/api/employees/limit',
+    '/api/request-expansion',
+    '/api/confirm-expansion',
+    '/api/reject-expansion',
+    '/api/auth/get-apk-download-token',
+    '/api/auth/register-email',
+    '/api/auth/login-email',
+    '/api/auth/google-register',
+    '/api/auth/email-register-demo',
+    '/api/admin/confirm-demo',
+    '/api/auth/me',
+    '/api/auth/login'
+  ].includes(path) || path.startsWith('/iclock/');
+
+  if (isShared) return true;
+
+  if (mode === 'BMP') {
+    // BMP can only access /api/bmp/*
+    return path.startsWith('/api/bmp/');
+  }
+
+  // POS Modes (FNB, RENTAL, LAUNDRY)
+  // POS tenants cannot access BMP routes
+  if (path.startsWith('/api/bmp/')) {
+    return false;
+  }
+
+  // Cross-POS boundary checks:
+  if (mode === 'RENTAL') {
+    // Rental cannot access laundry-specific routes
+    if (path.startsWith('/api/laundry/')) return false;
+    // Rental cannot access retail/fnb specific transaction/queue/product routes
+    if (path.startsWith('/api/queues/')) return false;
+    if (path.startsWith('/api/transactions')) return false;
+    if (path.startsWith('/api/products')) return false;
+  } else if (mode === 'LAUNDRY') {
+    // Laundry cannot access rental-specific routes
+    if (path.startsWith('/api/cars') || path.startsWith('/api/rentals')) return false;
+    // Laundry cannot access retail/fnb specific transaction/queue/product routes
+    if (path.startsWith('/api/queues/')) return false;
+    if (path.startsWith('/api/transactions')) return false;
+    if (path.startsWith('/api/products')) return false;
+  } else if (mode === 'FNB') {
+    // FNB cannot access rental-specific routes
+    if (path.startsWith('/api/cars') || path.startsWith('/api/rentals')) return false;
+    // FNB cannot access laundry-specific routes
+    if (path.startsWith('/api/laundry/')) return false;
+  }
+
+  return true;
+}
+
+// Multi-tenant database routing middleware with Tenancy Verification & Business Mode Segregation
 app.use(async (req: Request, res: Response, next: NextFunction) => {
   const tenantId = req.headers['x-tenant-id'] as string;
+  const employeeIdHeader = req.headers['x-employee-id'] as string;
   
   // Rute global yang tidak menggunakan tenant database (menggunakan main/global database)
   const isGlobalPath = [
     '/',
     '/api/download-apk',
+    '/api/apk-version',
+    '/api/logs/client-error',
     '/api/auth/register-email',
     '/api/auth/login-email',
     '/api/auth/google-register',
-    '/api/logs/client-error'
+    '/api/auth/email-register-demo',
+    '/api/admin/confirm-demo',
+    '/api/confirm-expansion',
+    '/api/reject-expansion',
+    '/api/auth/login'
   ].includes(req.path);
 
   if (isGlobalPath) {
@@ -335,6 +402,96 @@ app.use(async (req: Request, res: Response, next: NextFunction) => {
     return prismaContext.run(mainPrisma, () => {
       next();
     });
+  }
+
+  // 1. Tenancy Security: Verify x-employee-id has access to x-tenant-id
+  if (employeeIdHeader && employeeIdHeader !== '0' && employeeIdHeader !== '9999') {
+    try {
+      let employeeEmail: string | null = null;
+      if (employeeIdHeader.includes('@')) {
+        employeeEmail = employeeIdHeader.toLowerCase().trim();
+      } else {
+        const numericId = Number(employeeIdHeader);
+        if (!isNaN(numericId)) {
+          // Look up in the target tenant's database to resolve email
+          const tenantPrisma = getTenantPrisma(tenantId);
+          const emp = await tenantPrisma.employee.findUnique({
+            where: { id: numericId }
+          });
+          if (emp && emp.email) {
+            employeeEmail = emp.email.toLowerCase().trim();
+          }
+        }
+      }
+
+      if (employeeEmail) {
+        let isAuthorized = false;
+        const premiumUser = await mainPrisma.premiumUser.findUnique({
+          where: { email: employeeEmail }
+        });
+        if (premiumUser) {
+          const allowedTenant = (premiumUser.tenantId || premiumUser.email).toLowerCase().trim();
+          if (allowedTenant === tenantId.toLowerCase().trim()) {
+            isAuthorized = true;
+          }
+        } else {
+          const googleUser = await mainPrisma.googleUser.findUnique({
+            where: { email: employeeEmail }
+          });
+          if (googleUser) {
+            const allowedTenant = googleUser.email.toLowerCase().trim();
+            if (allowedTenant === tenantId.toLowerCase().trim()) {
+              isAuthorized = true;
+            }
+          }
+        }
+
+        if (!isAuthorized) {
+          console.warn(`Unauthorized access attempt: employee ${employeeEmail} tried to access tenant ${tenantId}`);
+          return res.status(403).json({
+            error: 'Akses ditolak. Anda tidak memiliki akses ke database penyewa ini.',
+            code: 'TENANT_ACCESS_DENIED'
+          });
+        }
+      }
+    } catch (authErr) {
+      console.error('Error verifying tenant access:', authErr);
+      return res.status(500).json({ error: 'Gagal melakukan verifikasi akses penyewa' });
+    }
+  }
+
+  // 2. Business Mode Segregation: Enforce POS vs BMP and cross-POS mode boundaries
+  try {
+    // Get authorized business mode of the tenant
+    let businessMode = 'FNB'; // Default fallback
+    const googleUser = await mainPrisma.googleUser.findUnique({
+      where: { email: tenantId.toLowerCase().trim() },
+      select: { businessMode: true }
+    });
+    if (googleUser) {
+      businessMode = googleUser.businessMode;
+    } else {
+      // Check if they are premium owner directly
+      const premiumOwner = await mainPrisma.premiumUser.findUnique({
+        where: { email: tenantId.toLowerCase().trim() }
+      });
+      if (premiumOwner) {
+        // Fallback for bahteramulyap@gmail.com is BMP (if googleUser record not yet created)
+        if (premiumOwner.email.toLowerCase().trim() === 'bahteramulyap@gmail.com') {
+          businessMode = 'BMP';
+        }
+      }
+    }
+
+    if (!isRouteAllowedForMode(req.path, businessMode)) {
+      console.warn(`Blocked restricted route access: tenant ${tenantId} (mode: ${businessMode}) tried to access ${req.path}`);
+      return res.status(403).json({
+        error: `Akses ditolak. Fitur ini tidak tersedia untuk mode bisnis ${businessMode} Anda.`,
+        code: 'ROUTE_RESTRICTED'
+      });
+    }
+  } catch (modeErr) {
+    console.error('Error checking business mode restrictions:', modeErr);
   }
 
   try {
