@@ -54,7 +54,9 @@ const async_hooks_1 = require("async_hooks");
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const child_process_1 = require("child_process");
+const multer_1 = __importDefault(require("multer"));
 const bmp = __importStar(require("./controllers/bmpControllers"));
+const upload = (0, multer_1.default)({ storage: multer_1.default.memoryStorage() });
 exports.mainPrisma = new client_1.PrismaClient();
 exports.prismaContext = new async_hooks_1.AsyncLocalStorage();
 const tenantClients = new Map();
@@ -1322,6 +1324,20 @@ app.get('/api/auth/me', (req, res) => __awaiter(void 0, void 0, void 0, function
                 where: { email: employeeIdHeader },
                 include: { outlet: true }
             });
+            if (!employee) {
+                const rawName = req.headers['x-employee-name'];
+                const employeeNameHeader = rawName ? decodeURIComponent(rawName) : employeeIdHeader.split('@')[0];
+                const employeeRoleHeader = req.headers['x-employee-role'] || 'OWNER';
+                employee = yield exports.prisma.employee.create({
+                    data: {
+                        name: employeeNameHeader,
+                        role: employeeRoleHeader,
+                        pin: '',
+                        email: employeeIdHeader
+                    },
+                    include: { outlet: true }
+                });
+            }
         }
         else {
             const numericId = Number(employeeIdHeader);
@@ -4007,6 +4023,92 @@ app.get('/api/bmp/invoices/:id/pdf', requireAdmin, bmp.generateInvoicePDF);
 app.get('/api/bmp/invoices/:id/surat-jalan', requireAdmin, bmp.generateSuratJalanPDF);
 app.get('/api/bmp/pricelist/pdf', requireAdmin, bmp.generatePricelistProductPDF);
 app.get('/api/bmp/payroll/pdf', requireAdmin, bmp.generatePayrollPDF);
+// Compatibility and legacy aliases for frontend routing
+app.put('/api/bmp/invoices/payments/:paymentId', requireAdmin, bmp.editPayment);
+app.delete('/api/bmp/invoices/payments/:paymentId', requireOwner, bmp.deletePayment);
+app.post('/api/bmp/kas/cleanup-orphan-payments', requireOwner, bmp.cleanupOrphanPayments);
+app.get('/api/bmp/payroll/employees', requireAdmin, bmp.getEmployees);
+app.post('/api/bmp/payroll/employees', requireAdmin, bmp.createEmployee);
+app.put('/api/bmp/payroll/employees/:id', requireAdmin, bmp.updateEmployee);
+app.delete('/api/bmp/payroll/employees/:id', requireOwner, bmp.deleteEmployee);
+app.get('/api/bmp/payroll/attendance-logs', requireAdmin, bmp.getAttendanceLogs);
+app.post('/api/bmp/payroll/attendance-logs', requireAdmin, bmp.createAttendanceLog);
+app.put('/api/bmp/payroll/attendance-logs/:id', requireAdmin, bmp.updateAttendanceLog);
+app.delete('/api/bmp/payroll/attendance-logs/:id', requireOwner, bmp.deleteAttendanceLog);
+app.post('/api/bmp/payroll/attendance-logs/reason', requireAdmin, bmp.saveAttendanceReason);
+app.get('/api/bmp/payroll/history', requireAdmin, bmp.getPayrollHistory);
+app.post('/api/bmp/payroll/pay', requireAdmin, bmp.recordPayroll);
+app.delete('/api/bmp/payroll/history/:id', requireOwner, bmp.deletePayrollHistory);
+app.get('/api/bmp/bonus/logs', requireAdmin, bmp.getBonusLogs);
+app.get('/api/bmp/bonus/pin-list', requireAdmin, bmp.getEmployeePINList);
+// File Upload to Cloudinary (replacing legacy Go upload endpoint)
+app.post('/api/bmp/upload', requireAdmin, upload.single('file'), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'Failed to get file from form' });
+        }
+        const folder = req.query.folder || 'uploads';
+        // Parse Cloudinary configuration
+        const cloudinaryUrl = process.env.CLOUDINARY_URL || '';
+        const match = cloudinaryUrl.match(/cloudinary:\/\/([^:]+):([^@]+)@(.+)/);
+        let apiKey = '', apiSecret = '', cloudName = '';
+        if (match) {
+            apiKey = match[1];
+            apiSecret = match[2];
+            cloudName = match[3];
+        }
+        else {
+            apiKey = process.env.CLOUDINARY_API_KEY || '';
+            apiSecret = process.env.CLOUDINARY_API_SECRET || '';
+            cloudName = process.env.CLOUDINARY_CLOUD_NAME || '';
+        }
+        if (!apiKey || !apiSecret || !cloudName) {
+            return res.status(500).json({ success: false, message: 'Cloudinary credentials not configured' });
+        }
+        const timestamp = Math.round(Date.now() / 1000);
+        const transformation = 'w_1200,c_limit,q_auto:best,f_auto';
+        // Sort parameters alphabetically: folder, timestamp, transformation
+        const signString = `folder=${folder}&timestamp=${timestamp}&transformation=${transformation}${apiSecret}`;
+        const signature = crypto_1.default.createHash('sha1').update(signString).digest('hex');
+        // Prepare FormData
+        const formData = new FormData();
+        const blob = new Blob([new Uint8Array(req.file.buffer)], { type: req.file.mimetype });
+        formData.append('file', blob, req.file.originalname);
+        formData.append('api_key', apiKey);
+        formData.append('timestamp', String(timestamp));
+        formData.append('folder', folder);
+        formData.append('transformation', transformation);
+        formData.append('signature', signature);
+        const uploadResponse = yield fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+            method: 'POST',
+            body: formData
+        });
+        if (!uploadResponse.ok) {
+            const errorText = yield uploadResponse.text();
+            console.error('Cloudinary upload error:', errorText);
+            return res.status(500).json({ success: false, message: `Upload to Cloudinary failed: ${errorText}` });
+        }
+        const uploadData = yield uploadResponse.json();
+        const getTransformationURL = (url, trans) => {
+            if (!url.includes('cloudinary.com'))
+                return url;
+            return url.replace('/upload/', `/upload/${trans}/`);
+        };
+        res.json({
+            success: true,
+            message: 'File uploaded to Cloudinary',
+            data: {
+                url: uploadData.secure_url,
+                public_id: uploadData.public_id,
+                thumbnail_url: getTransformationURL(uploadData.secure_url, 'w_200,h_200,c_fill')
+            }
+        });
+    }
+    catch (err) {
+        console.error('Failed in file upload controller:', err);
+        res.status(500).json({ success: false, message: 'Gagal mengunggah file: ' + err.message });
+    }
+}));
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 });

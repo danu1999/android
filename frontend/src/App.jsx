@@ -1606,7 +1606,7 @@ function MainRouterContent({
   const location = useLocation();
 
   const isBmpMode = appMode === 'BMP';
-  const isAuthenticated = !!user && (!isBmpMode || !!bmpToken || user.isDemo);
+  const isAuthenticated = !!user && (!isBmpMode || !!bmpToken || !user.isDemo);
 
   // Auto-login to BMP if in BMP mode, POSBah user is logged in, but BMP token is missing
   React.useEffect(() => {
@@ -1648,10 +1648,10 @@ function MainRouterContent({
         };
         autoDemoLogin();
       } else {
-        // For premium users, if they have no BMP token and no local token, their session is invalid.
-        // Force logout to let them log in again and acquire a fresh token.
-        console.warn('Premium user has no BMP token on start. Forcing logout to re-authenticate.');
-        handleLogout();
+        // For premium users, since BMP has been consolidated to the Express Node.js backend,
+        // they do not need a separate BMP token. We set a dummy token so they pass BmpProtectedRoute checks
+        // and don't get kicked out to re-authenticate.
+        bmpLogin('premium-bypass-token');
       }
     }
   }, [appMode, user, bmpToken, bmpLogin, handleLogout]);

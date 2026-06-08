@@ -15,7 +15,7 @@ Write-Host "Uploading dist/index.js to VPS..." -ForegroundColor Cyan
 scp -o StrictHostKeyChecking=no -i $pemPath backend/dist/index.js "${user}@${ip}:/home/muizz9900/posbah-backend/dist/index.js"
 
 Write-Host "Uploading BMP PDF templates to VPS..." -ForegroundColor Cyan
-scp -o StrictHostKeyChecking=no -i $pemPath -r bmp-go/golang-backend/templates/* "${user}@${ip}:/home/muizz9900/bmp-backend/templates/"
+scp -o StrictHostKeyChecking=no -i $pemPath -r backend/templates/* "${user}@${ip}:/home/muizz9900/posbah-backend/templates/"
 
 Write-Host "Reloading backend via PM2 on VPS (Zero-Downtime)..." -ForegroundColor Cyan
 ssh -o StrictHostKeyChecking=no -i $pemPath "${user}@${ip}" "pm2 reload posbah-backend && pm2 status"
