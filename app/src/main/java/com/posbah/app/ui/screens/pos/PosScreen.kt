@@ -1,0 +1,1890 @@
+package com.posbah.app.ui.screens.pos
+
+import android.content.Context
+import android.print.PrintAttributes
+import android.print.PrintManager
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Clear
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.CloudDownload
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.LocalOffer
+import androidx.compose.material.icons.outlined.Notes
+import androidx.compose.material.icons.outlined.People
+import androidx.compose.material.icons.outlined.Print
+import androidx.compose.material.icons.outlined.Queue
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.ShoppingCart
+import androidx.compose.material.icons.outlined.Storefront
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.posbah.app.data.local.entities.CustomerEntity
+import com.posbah.app.data.local.entities.ProductEntity
+import com.posbah.app.data.local.entities.TransactionEntity
+import com.posbah.app.data.local.entities.TransactionItemEntity
+import com.posbah.app.ui.components.EmptyState
+import com.posbah.app.ui.components.LoadingBlock
+import com.posbah.app.ui.components.PosBahTopBar
+import com.posbah.app.ui.components.PrimaryButton
+import com.posbah.app.util.Formatters
+import com.posbah.app.util.CameraUtils
+import com.posbah.app.util.OnlineStoreLinkGenerator
+import coil.compose.AsyncImage
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PosScreen(
+    onBack: () -> Unit,
+    viewModel: PosViewModel = hiltViewModel()
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    val ui by viewModel.uiState.collectAsState()
+    val productList by viewModel.products.collectAsState()
+    val customerList by viewModel.customers.collectAsState()
+    val queueList by viewModel.pendingQueues.collectAsState()
+
+    var activeProductForVariant by remember { mutableStateOf<ProductEntity?>(null) }
+    var showBluetoothDialog by remember { mutableStateOf(false) }
+    var bluetoothProgress by remember { mutableStateOf(0f) }
+
+    var showAddProductDialog by remember { mutableStateOf(false) }
+    var showAddCustomerDialog by remember { mutableStateOf(false) }
+    var newProdName by remember { mutableStateOf("") }
+    var newProdPrice by remember { mutableStateOf("") }
+    var newProdCostPrice by remember { mutableStateOf("") }
+    var newProdStock by remember { mutableStateOf("999") }
+    var newProdCategory by remember { mutableStateOf("Umum") }
+    var newProdBarcode by remember { mutableStateOf("") }
+    var newCustName by remember { mutableStateOf("") }
+    var newCustPhone by remember { mutableStateOf("") }
+    var newCustAddress by remember { mutableStateOf("") }
+
+    var showTransactionsHistoryDialog by remember { mutableStateOf(false) }
+    var showLogsDialog by remember { mutableStateOf(false) }
+    var showStoreShareDialog by remember { mutableStateOf(false) }
+    var showStoreSimulationDialog by remember { mutableStateOf(false) }
+    var activeStoreToken by remember { mutableStateOf<String?>(null) }
+    var txSearchQuery by remember { mutableStateOf("") }
+    var txFilterMethod by remember { mutableStateOf("SEMUA") }
+
+    var tempPhotoFile by remember { mutableStateOf<java.io.File?>(null) }
+    var capturedPhotoFile by remember { mutableStateOf<java.io.File?>(null) }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success && tempPhotoFile != null) {
+            capturedPhotoFile = tempPhotoFile
+        }
+    }
+
+    val launchCamera = {
+        try {
+            val file = CameraUtils.createTempCameraFile(context)
+            tempPhotoFile = file
+            val uri = CameraUtils.getFileProviderUri(context, file)
+            cameraLauncher.launch(uri)
+        } catch (e: Exception) {
+            Toast.makeText(context, "Gagal membuka kamera: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    val transactionHistoryList by viewModel.transactions.collectAsState()
+    val activityLogsList by viewModel.activityLogs.collectAsState()
+    val tenantId = viewModel.activeTenantId
+
+    val categories = remember(productList) {
+        listOf("Semua") + productList.map { it.category }.distinct().sorted()
+    }
+
+    val filteredProducts = remember(productList, ui.searchQuery, ui.activeCategory) {
+        productList.filter {
+            val matchesSearch = it.name.contains(ui.searchQuery, ignoreCase = true) || 
+                                (it.barcode?.contains(ui.searchQuery, ignoreCase = true) == true)
+            val matchesCategory = ui.activeCategory == "Semua" || it.category == ui.activeCategory
+            matchesSearch && matchesCategory
+        }
+    }
+
+    val subtotal = viewModel.getSubtotal()
+    val discountAmt = viewModel.getDiscountAmt()
+    val total = viewModel.getTotal()
+    val cartSize = viewModel.cart.sumOf { it.quantity }
+
+    val showBluetoothPrint = {
+        scope.launch {
+            showBluetoothDialog = true
+            bluetoothProgress = 0f
+            while (bluetoothProgress < 1.0f) {
+                delay(150)
+                bluetoothProgress += 0.1f
+            }
+            delay(300)
+            showBluetoothDialog = false
+            Toast.makeText(context, "Berhasil mencetak ke printer Bluetooth thermal!", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val triggerNativePrint = { tx: TransactionEntity, lines: List<TransactionItemEntity> ->
+        val html = com.posbah.app.ui.print.ReceiptPrinter.generateReceiptHtml(
+            context, tx, lines, viewModel.products.value, ui.printConfig
+        )
+        printHtmlReceipt(context, html)
+    }
+
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val isTablet = maxWidth >= 720.dp
+
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
+            topBar = {
+                PosBahTopBar(
+                    title = "Kasir F&B",
+                    subtitle = "Sistem Kasir Pintar",
+                    onBack = onBack,
+                    actions = {
+                        if (isTablet) {
+                            IconButton(onClick = {
+                                scope.launch {
+                                    viewModel.toggleQueueModal(true)
+                                }
+                            }) {
+                                Icon(Icons.Outlined.Queue, contentDescription = "Daftar Antrian")
+                            }
+                        }
+                        IconButton(onClick = {
+                            activeStoreToken = OnlineStoreLinkGenerator.generateShareLink(tenantId)
+                            showStoreShareDialog = true
+                        }) {
+                            Icon(Icons.Outlined.Share, contentDescription = "Toko Online")
+                        }
+                        IconButton(onClick = { showTransactionsHistoryDialog = true }) {
+                            Icon(Icons.Outlined.History, contentDescription = "Riwayat Transaksi")
+                        }
+                        if (ui.isOwner) {
+                            IconButton(onClick = { showLogsDialog = true }) {
+                                Icon(Icons.Outlined.Notes, contentDescription = "Log Aktivitas")
+                            }
+                        }
+                        IconButton(onClick = {
+                            newProdName = ""
+                            newProdPrice = ""
+                            newProdCostPrice = ""
+                            newProdStock = "999"
+                            newProdCategory = "Umum"
+                            newProdBarcode = ""
+                            capturedPhotoFile = null
+                            showAddProductDialog = true
+                        }) {
+                            Icon(Icons.Outlined.Storefront, contentDescription = "Tambah Produk")
+                        }
+                        IconButton(onClick = {
+                            newCustName = ""
+                            newCustPhone = ""
+                            newCustAddress = ""
+                            showAddCustomerDialog = true
+                        }) {
+                            Icon(Icons.Outlined.People, contentDescription = "Tambah Pelanggan")
+                        }
+                        IconButton(onClick = viewModel::importDemoData) {
+                            Icon(Icons.Outlined.CloudDownload, contentDescription = "Impor Backup")
+                        }
+                    }
+                )
+            }
+        ) { paddingValues ->
+            Row(
+                modifier = Modifier
+                    .padding(paddingValues)
+                    .fillMaxSize()
+            ) {
+                // Left pane: Search, categories, and products grid
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                ) {
+                    // Search bar
+                    OutlinedTextField(
+                        value = ui.searchQuery,
+                        onValueChange = viewModel::updateSearchQuery,
+                        leadingIcon = { Icon(Icons.Outlined.Search, null) },
+                        trailingIcon = {
+                            if (ui.searchQuery.isNotEmpty()) {
+                                IconButton(onClick = { viewModel.updateSearchQuery("") }) {
+                                    Icon(Icons.Outlined.Clear, null)
+                                }
+                            }
+                        },
+                        placeholder = { Text("Cari produk atau scan barcode...") },
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .testTag("pos-search")
+                    )
+
+                    // Categories Horizontal Row
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(categories) { cat ->
+                            val active = ui.activeCategory == cat
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                                contentColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier
+                                    .clickable { viewModel.updateCategory(cat) }
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (active) Color.Transparent else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                            ) {
+                                Text(
+                                    text = cat,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Product Grid
+                    if (filteredProducts.isEmpty()) {
+                        if (productList.isEmpty()) {
+                            EmptyState(
+                                title = "Katalog Produk Kosong",
+                                description = "Database Anda belum terisi data F&B. Klik impor di kanan atas atau tombol di bawah untuk mengisi data backup demo.",
+                                actionLabel = "Impor Backup Sekarang",
+                                onAction = viewModel::importDemoData
+                            )
+                        } else {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("Produk tidak ditemukan", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    } else {
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 130.dp),
+                            contentPadding = PaddingValues(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                        ) {
+                            items(filteredProducts, key = { it.id }) { p ->
+                                val vars = viewModel.parseVariants(p)
+                                ProductCard(
+                                    product = p,
+                                    hasVariants = vars.isNotEmpty(),
+                                    onClick = {
+                                        if (vars.isNotEmpty()) {
+                                            activeProductForVariant = p
+                                        } else {
+                                            viewModel.addToCart(p)
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Mobile view bottom navigation bar showing cart items count and total
+                    if (!isTablet && viewModel.cart.isNotEmpty()) {
+                        Surface(
+                            shadowElevation = 8.dp,
+                            color = MaterialTheme.colorScheme.surface,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                BadgedBox(badge = { Badge { Text(cartSize.toString()) } }) {
+                                    Icon(
+                                        Icons.Outlined.ShoppingCart,
+                                        contentDescription = "Keranjang",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text("Total", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(Formatters.rupiah(total), fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary, fontSize = 16.sp)
+                                }
+                                Button(
+                                    onClick = { viewModel.togglePayModal(true) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                                ) {
+                                    Text("Bayar", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Right pane: Cart sidebar (for Tablet layouts)
+                if (isTablet) {
+                    Surface(
+                        modifier = Modifier
+                            .width(360.dp)
+                            .fillMaxHeight(),
+                        tonalElevation = 1.dp,
+                        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                    ) {
+                        CartSidebarContent(
+                            viewModel = viewModel,
+                            ui = ui,
+                            customerList = customerList,
+                            subtotal = subtotal,
+                            discountAmt = discountAmt,
+                            total = total,
+                            onPayClick = { viewModel.togglePayModal(true) }
+                        )
+                    }
+                }
+            }
+        }
+
+        // Mobile cart sheet modal
+        if (!isTablet && ui.showPayModal && viewModel.cart.isNotEmpty()) {
+            var isCheckingOut by remember { mutableStateOf(false) }
+            ModalBottomSheet(
+                onDismissRequest = { 
+                    viewModel.togglePayModal(false)
+                    isCheckingOut = false
+                },
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.9f)
+                ) {
+                    if (!isCheckingOut) {
+                        CartSidebarContent(
+                            viewModel = viewModel,
+                            ui = ui,
+                            customerList = customerList,
+                            subtotal = subtotal,
+                            discountAmt = discountAmt,
+                            total = total,
+                            onPayClick = { isCheckingOut = true }
+                        )
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    TextButton(onClick = { isCheckingOut = false }) {
+                                        Text("← Kembali")
+                                    }
+                                    Text("Pembayaran POS", fontWeight = FontWeight.Bold)
+                                }
+                                PaymentDialogContent(
+                                    viewModel = viewModel,
+                                    ui = ui,
+                                    total = total
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = { viewModel.checkout(isQueue = true) },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Antrian")
+                                }
+                                Button(
+                                    onClick = { viewModel.checkout(isQueue = false) },
+                                    modifier = Modifier.weight(1.5f)
+                                ) {
+                                    Text("Bayar Sekarang")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Active queues modal sheet
+        if (ui.showQueueModal) {
+            AlertDialog(
+                onDismissRequest = { viewModel.toggleQueueModal(false) },
+                title = { Text("Daftar Antrian Aktif") },
+                text = {
+                    if (queueList.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxWidth().height(100.dp), contentAlignment = Alignment.Center) {
+                            Text("Tidak ada antrian tertunda", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    } else {
+                        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(queueList, key = { it.id }) { q ->
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text("No. Antrian: #${q.queueNumber ?: q.id}", fontWeight = FontWeight.Bold)
+                                            Text("Pelanggan: ${q.customerName ?: "-"}", fontSize = 12.sp)
+                                            Text("Total: ${Formatters.rupiah(q.total)}", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                        }
+                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            TextButton(onClick = { viewModel.resumeQueue(q) }) {
+                                                Text("Panggil")
+                                            }
+                                            IconButton(onClick = { viewModel.cancelQueue(q.id) }) {
+                                                Icon(Icons.Outlined.Delete, "Batal", tint = MaterialTheme.colorScheme.error)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.toggleQueueModal(false) }) { Text("Tutup") }
+                }
+            )
+        }
+
+        // Product Variant dialog picker
+        if (activeProductForVariant != null) {
+            val p = activeProductForVariant!!
+            val vars = viewModel.parseVariants(p)
+            AlertDialog(
+                onDismissRequest = { activeProductForVariant = null },
+                title = { Text("Pilih Varian: ${p.name}") },
+                text = {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(vars) { v ->
+                            val vStock = v.stock ?: p.stock
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(enabled = vStock > 0) {
+                                        viewModel.addToCart(p, v)
+                                        activeProductForVariant = null
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(14.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(v.name, fontWeight = FontWeight.Bold)
+                                        Text("Stok: ${if (vStock > 0) vStock else "Habis"}", fontSize = 12.sp, color = if (vStock > 0) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error)
+                                    }
+                                    Text(Formatters.rupiah(v.price ?: p.price), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { activeProductForVariant = null }) { Text("Batal") }
+                }
+            )
+        }
+
+        // Payment modal dialog
+        if (ui.showPayModal && !isTablet) {
+            // Already handled via ModalBottomSheet in mobile view
+        } else if (ui.showPayModal && isTablet) {
+            AlertDialog(
+                onDismissRequest = { viewModel.togglePayModal(false) },
+                title = { Text("Pembayaran POS") },
+                text = {
+                    PaymentDialogContent(
+                        viewModel = viewModel,
+                        ui = ui,
+                        total = total
+                    )
+                },
+                confirmButton = {
+                    Button(onClick = { viewModel.checkout(isQueue = false) }) {
+                        Text("Selesaikan Bayar")
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { viewModel.checkout(isQueue = true) }) {
+                        Text("Simpan Antrian")
+                    }
+                }
+            )
+        }
+
+        // Receipt dialog modal showing thermal receipt print mockup
+        if (ui.showReceiptDialog && ui.activeReceipt != null) {
+            val r = ui.activeReceipt!!
+            val rItems = ui.activeReceiptItems
+            AlertDialog(
+                onDismissRequest = viewModel::closeReceiptDialog,
+                title = { Text("Pembayaran Berhasil") },
+                text = {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                        Text("Transaksi berhasil disimpan secara lokal offline.", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 12.dp))
+                        
+                        // Scrollable receipt mock
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color(0xFFFFFFF8),
+                            border = BorderStroke(0.5.dp, Color.Gray),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(260.dp)
+                                .padding(horizontal = 4.dp)
+                        ) {
+                            LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                item {
+                                    Text("PISANG KEJU RAMAYANA", fontWeight = FontWeight.Bold, fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                                    Text("Struk Pembayaran Offline", fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                                    Spacer(Modifier.height(4.dp))
+                                    Text("No: ${r.receiptNumber}", fontSize = 10.sp)
+                                    Text("Metode: ${r.paymentMethod}", fontSize = 10.sp)
+                                    r.customerName?.let { Text("Pelanggan: $it", fontSize = 10.sp) }
+                                    Text("-".repeat(34), fontSize = 10.sp, color = Color.Gray)
+                                }
+                                items(rItems) { item ->
+                                    val name = item.variantName?.let { "${item.productId} ($it)" } ?: "${item.productId}"
+                                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                        Text("$name x${item.quantity}", fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                        Text(Formatters.rupiah(item.price * item.quantity), fontSize = 11.sp)
+                                    }
+                                }
+                                item {
+                                    Text("-".repeat(34), fontSize = 10.sp, color = Color.Gray)
+                                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                        Text("Subtotal", fontSize = 11.sp)
+                                        Text(Formatters.rupiah(r.subtotal), fontSize = 11.sp)
+                                    }
+                                    if (r.discountAmt > 0) {
+                                        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                            Text("Diskon", fontSize = 11.sp)
+                                            Text("-${Formatters.rupiah(r.discountAmt)}", fontSize = 11.sp)
+                                        }
+                                    }
+                                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                        Text("TOTAL", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        Text(Formatters.rupiah(r.total), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    }
+                                    r.amountPaid?.let {
+                                        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                            Text("Tunai", fontSize = 11.sp)
+                                            Text(Formatters.rupiah(it), fontSize = 11.sp)
+                                        }
+                                    }
+                                    r.change?.let {
+                                        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                            Text("Kembali", fontSize = 11.sp)
+                                            Text(Formatters.rupiah(it), fontSize = 11.sp)
+                                        }
+                                    }
+                                    Spacer(Modifier.height(10.dp))
+                                    Text("Terima Kasih! 🙏", fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = viewModel::closeReceiptDialog) { Text("Transaksi Baru") }
+                },
+                dismissButton = {
+                    Row {
+                        IconButton(onClick = { triggerNativePrint(r, rItems) }) {
+                            Icon(Icons.Outlined.Print, "Print System")
+                        }
+                        Spacer(Modifier.width(4.dp))
+                        IconButton(onClick = { showBluetoothPrint() }) {
+                            Icon(Icons.Outlined.Storefront, "Print Bluetooth")
+                        }
+                    }
+                }
+            )
+        }
+
+        // Simulated Bluetooth printing dialog spinner
+        if (showBluetoothDialog) {
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text("Mencetak Struk Bluetooth") },
+                text = {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                        Text("Mengirimkan file ESC/POS via Bluetooth...", modifier = Modifier.padding(bottom = 12.dp))
+                        LinearProgressIndicator(progress = bluetoothProgress, modifier = Modifier.fillMaxWidth())
+                    }
+                },
+                confirmButton = {}
+            )
+        }
+
+        // Database seeding status banner overlay
+        if (ui.isSeeding) {
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text("Mengimpor Database Backup") },
+                text = {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                        CircularProgressIndicator(modifier = Modifier.size(44.dp))
+                        Spacer(Modifier.height(12.dp))
+                        Text("Harap tunggu, memproses dan mengimpor file dump SQL...")
+                    }
+                },
+                confirmButton = {}
+            )
+        }
+
+        // Dialog: Tambah Produk Baru
+        if (showAddProductDialog) {
+            AlertDialog(
+                onDismissRequest = { showAddProductDialog = false },
+                title = { Text("Tambah Produk Baru") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = newProdName,
+                            onValueChange = { nameVal -> newProdName = nameVal },
+                            label = { Text("Nama Produk") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().testTag("add-product-name")
+                        )
+                        OutlinedTextField(
+                            value = newProdPrice,
+                            onValueChange = { priceVal -> newProdPrice = priceVal },
+                            label = { Text("Harga Jual (Rp)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().testTag("add-product-price")
+                        )
+                        OutlinedTextField(
+                            value = newProdCostPrice,
+                            onValueChange = { costVal -> newProdCostPrice = costVal },
+                            label = { Text("Harga Beli (Rp)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Real-time margin calculator
+                        val jual = newProdPrice.toDoubleOrNull() ?: 0.0
+                        val beli = newProdCostPrice.toDoubleOrNull() ?: 0.0
+                        val margin = if (jual > 0) ((jual - beli) / jual) * 100 else 0.0
+                        Text(
+                            text = "Margin Keuntungan: ${String.format("%.1f", margin)}%",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (margin >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(vertical = 2.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = newProdStock,
+                            onValueChange = { stockVal -> newProdStock = stockVal },
+                            label = { Text("Stok Awal") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().testTag("add-product-stock")
+                        )
+                        OutlinedTextField(
+                            value = newProdCategory,
+                            onValueChange = { catVal -> newProdCategory = catVal },
+                            label = { Text("Kategori") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().testTag("add-product-category")
+                        )
+                        OutlinedTextField(
+                            value = newProdBarcode,
+                            onValueChange = { barcodeVal -> newProdBarcode = barcodeVal },
+                            label = { Text("Barcode (Opsional)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().testTag("add-product-barcode")
+                        )
+
+                        // Camera & Image Section
+                        if (capturedPhotoFile != null) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(100.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.Gray.copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AsyncImage(
+                                    model = capturedPhotoFile,
+                                    contentDescription = "Preview Foto",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                )
+                                IconButton(
+                                    onClick = { capturedPhotoFile = null },
+                                    modifier = Modifier.align(Alignment.TopEnd)
+                                ) {
+                                    Icon(Icons.Outlined.Close, contentDescription = "Hapus Foto", tint = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = launchCamera,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Ambil Foto Produk")
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val price = newProdPrice.toDoubleOrNull() ?: 0.0
+                            val costPrice = newProdCostPrice.toDoubleOrNull() ?: 0.0
+                            val stock = newProdStock.toIntOrNull() ?: 0
+                            if (newProdName.isNotBlank() && price > 0) {
+                                viewModel.addProduct(newProdName, price, costPrice, stock, newProdCategory, newProdBarcode, capturedPhotoFile) {
+                                    showAddProductDialog = false
+                                    Toast.makeText(context, "Produk berhasil ditambahkan!", Toast.LENGTH_SHORT).show()
+                                }
+                            } else {
+                                Toast.makeText(context, "Nama produk dan harga wajib diisi dengan benar!", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.testTag("btn-save-new-product")
+                    ) { Text("Simpan") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showAddProductDialog = false }) { Text("Batal") }
+                }
+            )
+        }
+
+        // Dialog: Tambah Pelanggan Baru
+        if (showAddCustomerDialog) {
+            AlertDialog(
+                onDismissRequest = { showAddCustomerDialog = false },
+                title = { Text("Tambah Pelanggan Baru") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = newCustName,
+                            onValueChange = { nameVal -> newCustName = nameVal },
+                            label = { Text("Nama Pelanggan") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().testTag("add-customer-name")
+                        )
+                        OutlinedTextField(
+                            value = newCustPhone,
+                            onValueChange = { phoneVal -> newCustPhone = phoneVal },
+                            label = { Text("No. WhatsApp") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().testTag("add-customer-phone")
+                        )
+                        OutlinedTextField(
+                            value = newCustAddress,
+                            onValueChange = { addrVal -> newCustAddress = addrVal },
+                            label = { Text("Alamat") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().testTag("add-customer-address")
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            if (newCustName.isNotBlank()) {
+                                viewModel.addCustomer(newCustName, newCustPhone, newCustAddress) {
+                                    showAddCustomerDialog = false
+                                    Toast.makeText(context, "Pelanggan berhasil ditambahkan!", Toast.LENGTH_SHORT).show()
+                                }
+                            } else {
+                                Toast.makeText(context, "Nama pelanggan wajib diisi!", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.testTag("btn-save-new-customer")
+                    ) { Text("Simpan") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showAddCustomerDialog = false }) { Text("Batal") }
+                }
+            )
+        }
+
+        // Dialog: Riwayat Transaksi & Pelunasan Piutang
+        if (showTransactionsHistoryDialog) {
+            AlertDialog(
+                onDismissRequest = { showTransactionsHistoryDialog = false },
+                title = { Text("Riwayat Transaksi POS") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().height(450.dp)) {
+                        OutlinedTextField(
+                            value = txSearchQuery,
+                            onValueChange = { txSearchQuery = it },
+                            placeholder = { Text("Cari No. Struk atau Pelanggan...") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            val filters = listOf("SEMUA", "CASH", "QRIS", "HUTANG")
+                            filters.forEach { filter ->
+                                val active = txFilterMethod == filter
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable { txFilterMethod = filter }
+                                ) {
+                                    Text(
+                                        text = filter,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 10.sp,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(vertical = 8.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(4.dp))
+
+                        val filteredList = transactionHistoryList.filter {
+                            val matchesSearch = it.receiptNumber.contains(txSearchQuery, ignoreCase = true) ||
+                                                (it.customerName?.contains(txSearchQuery, ignoreCase = true) == true)
+                            val matchesMethod = txFilterMethod == "SEMUA" || it.paymentMethod == txFilterMethod
+                            matchesSearch && matchesMethod
+                        }
+
+                        if (filteredList.isEmpty()) {
+                            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                Text("Tidak ada transaksi ditemukan", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.weight(1f).fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(filteredList, key = { it.id }) { tx ->
+                                    val sdf = SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault())
+                                    val dateStr = sdf.format(Date(tx.date))
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(tx.receiptNumber, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                                    Text(dateStr, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                    Text("Pelanggan: ${tx.customerName ?: "Umum"}", fontSize = 11.sp)
+                                                }
+                                                Column(horizontalAlignment = Alignment.End) {
+                                                    Text(Formatters.rupiah(tx.total), fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
+                                                    Surface(
+                                                        shape = RoundedCornerShape(6.dp),
+                                                        color = if (tx.paymentMethod == "HUTANG") MaterialTheme.colorScheme.error.copy(alpha = 0.1f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                                    ) {
+                                                        Text(
+                                                            text = tx.paymentMethod,
+                                                            color = if (tx.paymentMethod == "HUTANG") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                                            fontSize = 9.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+
+                                            Spacer(Modifier.height(8.dp))
+
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.End,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                if (tx.paymentMethod == "HUTANG" && tx.status != "CANCELLED") {
+                                                    Button(
+                                                        onClick = { viewModel.settlePiutang(tx.id) },
+                                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                                        modifier = Modifier.height(28.dp)
+                                                    ) {
+                                                        Text("Pelunasan Piutang", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                    Spacer(Modifier.width(8.dp))
+                                                }
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        scope.launch {
+                                                            val items = viewModel.getTransactionItems(tx.id)
+                                                            triggerNativePrint(tx, items)
+                                                        }
+                                                    },
+                                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                                    modifier = Modifier.height(28.dp)
+                                                ) {
+                                                    Icon(Icons.Outlined.Print, null, modifier = Modifier.size(12.dp))
+                                                    Spacer(Modifier.width(4.dp))
+                                                    Text("Cetak Nota", fontSize = 10.sp)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showTransactionsHistoryDialog = false }) { Text("Tutup") }
+                }
+            )
+        }
+
+        // Dialog: Log Aktivitas (Owner Only)
+        if (showLogsDialog) {
+            AlertDialog(
+                onDismissRequest = { showLogsDialog = false },
+                title = { Text("Log Aktivitas Kasir (Owner Only)") },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth().height(450.dp)) {
+                        if (activityLogsList.isEmpty()) {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("Belum ada log aktivitas tercatat.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        } else {
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(activityLogsList, key = { it.id }) { log ->
+                                    val sdf = SimpleDateFormat("dd MMM yyyy HH:mm:ss", Locale.getDefault())
+                                    val dateStr = sdf.format(Date(log.date))
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text(
+                                                    text = log.action,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 11.sp,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                                Text(
+                                                    text = dateStr,
+                                                    fontSize = 9.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            Spacer(Modifier.height(4.dp))
+                                            Text(log.description, fontSize = 12.sp)
+                                            Spacer(Modifier.height(4.dp))
+                                            Text("Oleh: ${log.employeeName}", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showLogsDialog = false }) { Text("Tutup") }
+                }
+            )
+        }
+
+        // Dialog: Bagikan Toko Online
+        if (showStoreShareDialog && activeStoreToken != null) {
+            AlertDialog(
+                onDismissRequest = { showStoreShareDialog = false },
+                title = { Text("Bagikan Toko Online") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                        Text("Gunakan link di bawah ini untuk membagikan toko online Anda ke pelanggan. Link ini akan kedaluwarsa secara otomatis dalam 5 menit demi keamanan stock.", fontSize = 12.sp)
+                        OutlinedTextField(
+                            value = activeStoreToken!!,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Link Toko Online (Expired 5m)") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Button(
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                val clip = android.content.ClipData.newPlainText("Link Toko Online", activeStoreToken)
+                                clipboard.setPrimaryClip(clip)
+                                Toast.makeText(context, "Link disalin ke clipboard!", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Salin Link Toko")
+                        }
+                        Spacer(Modifier.height(1.dp).fillMaxWidth().background(MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)))
+                        Text("Uji coba alur toko online:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Button(
+                            onClick = {
+                                showStoreShareDialog = false
+                                showStoreSimulationDialog = true
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Buka Simulasi Toko Online")
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showStoreShareDialog = false }) { Text("Batal") }
+                }
+            )
+        }
+
+        // Dialog: Simulasi Toko Online (Masa Berlaku 5 Menit & Real-time Stock)
+        if (showStoreSimulationDialog && activeStoreToken != null) {
+            val tokenStr = activeStoreToken!!.removePrefix(OnlineStoreLinkGenerator.BASE_URL)
+            val validatedTenant = OnlineStoreLinkGenerator.validateToken(tokenStr)
+            var remainingSeconds by remember { mutableStateOf(300L) }
+
+            LaunchedEffect(tokenStr) {
+                while (true) {
+                    try {
+                        val decodedBytes = android.util.Base64.decode(tokenStr, android.util.Base64.NO_WRAP or android.util.Base64.URL_SAFE or android.util.Base64.NO_PADDING)
+                        val parts = String(decodedBytes, java.nio.charset.StandardCharsets.UTF_8).split(":")
+                        val expiry = parts[1].toLong()
+                        remainingSeconds = ((expiry - System.currentTimeMillis()) / 1000).coerceAtLeast(0)
+                    } catch (e: Exception) {
+                        remainingSeconds = 0
+                    }
+                    delay(1000)
+                }
+            }
+
+            AlertDialog(
+                onDismissRequest = { showStoreSimulationDialog = false },
+                title = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Browser: Toko Online")
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (validatedTenant != null && remainingSeconds > 0) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else MaterialTheme.colorScheme.error.copy(alpha = 0.1f)
+                        ) {
+                            val timeStr = String.format("%02d:%02d", remainingSeconds / 60, remainingSeconds % 60)
+                            Text(
+                                text = if (validatedTenant != null && remainingSeconds > 0) "Masa Berlaku: $timeStr" else "Expired",
+                                color = if (validatedTenant != null && remainingSeconds > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                },
+                text = {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth().height(400.dp)
+                    ) {
+                        if (validatedTenant == null || remainingSeconds <= 0) {
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text("🚫 Link Toko Online Kedaluwarsa", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error, fontSize = 16.sp)
+                                Spacer(Modifier.height(8.dp))
+                                Text("Link toko online ini hanya berlaku selama 5 menit. Silakan generate link baru di kasir POS.", textAlign = TextAlign.Center, fontSize = 12.sp)
+                            }
+                        } else {
+                            Text("Selamat Datang di Katalog Online Kami!", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text("Berikut adalah daftar produk dan stok real-time saat ini:", fontSize = 11.sp)
+                            Spacer(Modifier.height(4.dp))
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.weight(1f).fillMaxWidth()
+                            ) {
+                                items(productList, key = { it.id }) { product ->
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(10.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(44.dp)
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    if (!product.image.isNullOrBlank()) {
+                                                        AsyncImage(
+                                                            model = product.image,
+                                                            contentDescription = product.name,
+                                                            modifier = Modifier.fillMaxSize(),
+                                                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                                        )
+                                                    } else {
+                                                        Text(
+                                                            text = product.name.take(1).uppercase(),
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = MaterialTheme.colorScheme.primary
+                                                        )
+                                                    }
+                                                }
+                                                Column {
+                                                    Text(product.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                                    Text("Stok Real-time: ${product.stock} pcs", fontSize = 11.sp, color = if (product.stock > 0) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error)
+                                                }
+                                            }
+                                            Text(Formatters.rupiah(product.price), fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = { showStoreSimulationDialog = false }) { Text("Tutup Simulasi") }
+                }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CartSidebarContent(
+    viewModel: PosViewModel,
+    ui: PosUiState,
+    customerList: List<CustomerEntity>,
+    subtotal: Double,
+    discountAmt: Double,
+    total: Double,
+    onPayClick: () -> Unit
+) {
+    var isCustomerDropdownExpanded by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Keranjang Belanja", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+            TextButton(onClick = viewModel::clearCart) {
+                Text("Bersihkan", color = MaterialTheme.colorScheme.error)
+            }
+        }
+
+        // Cart items list
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(vertical = 8.dp)
+        ) {
+            if (viewModel.cart.isEmpty()) {
+                item {
+                    Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Keranjang kosong. Pilih produk di sebelah kiri.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            } else {
+                items(viewModel.cart, key = { it.cartKey }) { item ->
+                    val unitPrice = viewModel.getItemUnitPrice(item)
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(item.product.name, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                    item.variantName?.let {
+                                        Text(it, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                                IconButton(
+                                    onClick = { viewModel.removeFromCart(item.cartKey) },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(Icons.Outlined.Close, "Hapus", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                                }
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(Formatters.rupiah(unitPrice * item.quantity), fontWeight = FontWeight.Black, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                                
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    IconButton(
+                                        onClick = { viewModel.updateQty(item.cartKey, -1) },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Text("-", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                    }
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = MaterialTheme.colorScheme.surface,
+                                        modifier = Modifier.border(width = 0.5.dp, color = MaterialTheme.colorScheme.outline, shape = RoundedCornerShape(6.dp))
+                                    ) {
+                                        Text(
+                                            item.quantity.toString(),
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { viewModel.updateQty(item.cartKey, 1) },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Text("+", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Linking customer & adding invoice notes
+        ExposedDropdownMenuBox(
+            expanded = isCustomerDropdownExpanded,
+            onExpandedChange = { isCustomerDropdownExpanded = it },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedTextField(
+                readOnly = true,
+                value = ui.customerName ?: "Pilih Pelanggan (Umum)",
+                onValueChange = {},
+                label = { Text("Pelanggan") },
+                leadingIcon = { Icon(Icons.Outlined.People, null) },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isCustomerDropdownExpanded) },
+                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor()
+            )
+            ExposedDropdownMenu(
+                expanded = isCustomerDropdownExpanded,
+                onDismissRequest = { isCustomerDropdownExpanded = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Pelanggan Umum") },
+                    onClick = {
+                        viewModel.selectCustomer(null, null)
+                        isCustomerDropdownExpanded = false
+                    }
+                )
+                customerList.forEach { cust ->
+                    DropdownMenuItem(
+                        text = { Text(cust.name) },
+                        onClick = {
+                            viewModel.selectCustomer(cust.id, cust.name)
+                            isCustomerDropdownExpanded = false
+                        }
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = ui.queueNumber,
+                onValueChange = viewModel::updateQueueNumber,
+                label = { Text("No Antrian") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.weight(1f)
+            )
+            OutlinedTextField(
+                value = ui.notes,
+                onValueChange = viewModel::updateNotes,
+                label = { Text("Catatan Struk") },
+                leadingIcon = { Icon(Icons.Outlined.Notes, null) },
+                singleLine = true,
+                modifier = Modifier.weight(1.8f)
+            )
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        // Smart Discount Settings
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.LocalOffer, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Diskon Pintar", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (ui.discountType == "percent") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (ui.discountType == "percent") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.clickable { viewModel.updateDiscountType("percent") }
+                ) {
+                    Text("%", fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                }
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (ui.discountType == "nominal") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (ui.discountType == "nominal") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.clickable { viewModel.updateDiscountType("nominal") }
+                ) {
+                    Text("Rp", fontWeight = FontWeight.Bold, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp))
+                }
+            }
+        }
+
+        OutlinedTextField(
+            value = ui.discountInput,
+            onValueChange = viewModel::updateDiscountInput,
+            placeholder = { Text(if (ui.discountType == "percent") "Contoh: 10 untuk 10%" else "Contoh: 5000 untuk Rp 5.000") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            singleLine = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp)
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        // Cost calculation details
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                Text("Subtotal", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(Formatters.rupiah(subtotal), fontSize = 13.sp)
+            }
+            if (discountAmt > 0) {
+                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                    Text(if (ui.discountType == "percent") "Diskon (${ui.discountInput}%)" else "Diskon", fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
+                    Text("-${Formatters.rupiah(discountAmt)}", fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
+                }
+            }
+            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("TOTAL", fontWeight = FontWeight.Black, fontSize = 15.sp, color = MaterialTheme.colorScheme.onBackground)
+                Text(Formatters.rupiah(total), fontWeight = FontWeight.Black, fontSize = 18.sp, color = MaterialTheme.colorScheme.primary)
+            }
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        PrimaryButton(
+            label = "Bayar sekarang",
+            onClick = onPayClick,
+            enabled = viewModel.cart.isNotEmpty(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("btn-checkout")
+        )
+    }
+}
+
+@Composable
+private fun PaymentDialogContent(
+    viewModel: PosViewModel,
+    ui: PosUiState,
+    total: Double
+) {
+    val context = LocalContext.current
+    val quickCashOptions = remember(total) {
+        val list = mutableListOf(total)
+        val roundedOptions = listOf(5000.0, 10000.0, 20000.0, 50000.0, 100000.0)
+        for (opt in roundedOptions) {
+            if (opt > total) {
+                list.add(opt)
+            }
+            val modulo = total % opt
+            if (modulo > 0) {
+                val roundUp = total + (opt - modulo)
+                if (!list.contains(roundUp)) {
+                    list.add(roundUp)
+                }
+            }
+        }
+        list.distinct().sorted().take(5)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Payment methods row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            val methods = listOf("CASH", "QRIS", "TRANSFER", "HUTANG")
+            methods.forEach { m ->
+                val active = ui.paymentMethod == m
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { viewModel.updatePaymentMethod(m) }
+                ) {
+                    Text(
+                        text = m,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(vertical = 12.dp)
+                    )
+                }
+            }
+        }
+
+        // Date selection (Backdate)
+        val calendar = java.util.Calendar.getInstance()
+        if (ui.selectedTransactionDate != null) {
+            calendar.timeInMillis = ui.selectedTransactionDate
+        }
+        val datePickerDialog = android.app.DatePickerDialog(
+            context,
+            { _, year, month, dayOfMonth ->
+                val selectedCal = java.util.Calendar.getInstance()
+                selectedCal.set(year, month, dayOfMonth)
+                viewModel.updateTransactionDate(selectedCal.timeInMillis)
+            },
+            calendar.get(java.util.Calendar.YEAR),
+            calendar.get(java.util.Calendar.MONTH),
+            calendar.get(java.util.Calendar.DAY_OF_MONTH)
+        )
+
+        val dateText = if (ui.selectedTransactionDate != null) {
+            val sdf = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+            sdf.format(Date(ui.selectedTransactionDate))
+        } else {
+            "Hari Ini (Real-time)"
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Tanggal Transaksi:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            OutlinedButton(onClick = { datePickerDialog.show() }) {
+                Text(dateText, fontSize = 12.sp)
+            }
+        }
+
+        if (ui.paymentMethod == "HUTANG") {
+            OutlinedTextField(
+                value = ui.debtDueDate,
+                onValueChange = viewModel::updateDebtDueDate,
+                label = { Text("Jatuh Tempo (yyyy-mm-dd)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+        } else {
+            // Amount Paid input
+            OutlinedTextField(
+                value = ui.amountPaid,
+                onValueChange = viewModel::updateAmountPaid,
+                label = { Text("Nominal Tunai yang Dibayar") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            // Quick cash buttons
+            Text("Uang Pas & Saran Pecahan:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                quickCashOptions.forEach { opt ->
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { viewModel.updateAmountPaid(opt.toInt().toString()) }
+                    ) {
+                        Text(
+                            text = Formatters.rupiah(opt).replace("Rp", "").trim(),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
+                }
+            }
+
+            // Calculation result
+            val amtPaid = ui.amountPaid.toDoubleOrNull() ?: 0.0
+            val change = (amtPaid - total).coerceAtLeast(0.0)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Uang Kembali:", fontWeight = FontWeight.Bold)
+                Text(
+                    Formatters.rupiah(change),
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 18.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProductCard(
+    product: ProductEntity,
+    hasVariants: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .shadow(elevation = 2.dp, shape = RoundedCornerShape(16.dp))
+            .testTag("prod-card-${product.id}")
+    ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(90.dp)
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                MaterialTheme.colorScheme.secondary.copy(alpha = 0.8f)
+                            )
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (!product.image.isNullOrBlank()) {
+                    AsyncImage(
+                        model = product.image,
+                        contentDescription = product.name,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                } else {
+                    Text(
+                        text = product.name.take(2).uppercase(),
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 28.sp
+                    )
+                }
+                if (hasVariants) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        contentColor = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(6.dp)
+                    ) {
+                        Text(
+                            "Varian",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
+
+            // Content
+            Column(
+                modifier = Modifier.padding(8.dp)
+            ) {
+                Text(
+                    text = product.name,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 15.sp,
+                    modifier = Modifier.height(30.dp)
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = Formatters.rupiah(product.price),
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = 13.sp
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Stok: ${product.stock}",
+                        fontSize = 10.sp,
+                        color = if (product.stock > 0) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    val profit = product.price - product.costPrice
+                    val marginPercent = if (product.price > 0) (profit / product.price) * 100 else 0.0
+                    Text(
+                        text = "${String.format("%.0f", marginPercent)}% mg",
+                        fontSize = 9.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+// Receipt helper HTML builder
+private fun buildReceiptHtml(
+    context: Context,
+    t: TransactionEntity,
+    items: List<TransactionItemEntity>,
+    products: List<ProductEntity>
+): String {
+    val storeName = "PISANG KEJU RAMAYANA"
+    val subheader = "Struk Pembayaran POS"
+    val footer = "Terima Kasih! 🙏"
+
+    val qLine = t.queueNumber?.let { "<div class=\"b c\" style=\"font-size:16px;border:2px solid #000;padding:4px;margin:4px 0\">No. Antrian: #$it</div>" } ?: ""
+    val cLine = t.customerName?.let { "<div>Pelanggan: $it</div>" } ?: ""
+    val notesLine = t.notes?.let { "<div>Catatan: $it</div>" } ?: ""
+
+    val itemsHtml = items.map { item ->
+        val prod = products.find { it.id == item.productId }
+        val name = item.variantName?.let { "${prod?.name ?: "Item"} ($it)" } ?: (prod?.name ?: "Item")
+        val note = item.note?.let { "<tr><td colspan=\"3\" class=\"indent\">&#8627; $it</td></tr>" } ?: ""
+        val lineTotal = item.quantity * item.price - item.discount
+        "<tr><td colspan=\"3\">$name</td></tr>$note<tr><td>${item.quantity}x</td><td>Rp${item.price.toLocaleString()}</td><td class=\"r\">Rp${lineTotal.toLocaleString()}</td></tr>"
+    }.joinToString("")
+
+    val dAmt = t.discountAmt
+    val dLabel = if (t.discountType == "percent") "Diskon (${t.discountInput}%)" else "Diskon"
+    val discRow = if (dAmt > 0) "<tr><td colspan=\"2\">$dLabel</td><td class=\"r\">-Rp${dAmt.toLocaleString()}</td></tr>" else ""
+    val subRow = if (dAmt > 0) "<tr><td colspan=\"2\">Subtotal</td><td class=\"r\">Rp${t.subtotal.toLocaleString()}</td></tr>" else ""
+    val paidRow = t.amountPaid?.let {
+        "<tr><td colspan=\"2\">Tunai</td><td class=\"r\">Rp${it.toLocaleString()}</td></tr><tr><td colspan=\"2\">Kembali</td><td class=\"r\">Rp${(t.change ?: 0.0).toLocaleString()}</td></tr>"
+    } ?: ""
+
+    return """
+        <html><head><style>
+            @page { margin: 0; }
+            body { font-family: monospace; width: 58mm; margin: 0 auto; padding: 0.6cm; font-size: 12px; }
+            .c { text-align: center; }
+            .b { font-weight: bold; }
+            .r { text-align: right; }
+            hr { border-top: 1px dashed #000; }
+            td { vertical-align: top; padding: 1px 2px; }
+            .indent { padding-left: 8px; color: #555; font-size: 11px; }
+        </style></head><body>
+            <div class="c b" style="font-size:16px">$storeName</div>
+            <div class="c">$subheader</div><hr>
+            <div>No: ${t.receiptNumber}</div><div>Metode: ${t.paymentMethod}</div>$cLine$notesLine<hr>
+            $qLine
+            <table width="100%">$itemsHtml</table><hr>
+            <table width="100%">$subRow$discRow<tr><td colspan="2" class="b">TOTAL</td><td class="r b">Rp${t.total.toLocaleString()}</td></tr>$paidRow</table><hr>
+            <div class="c">$footer</div>
+            <script>window.print();window.onafterprint=()=>window.close()</script>
+        </body></html>
+    """.trimIndent()
+}
+
+private fun Number.toLocaleString(): String {
+    return String.format("%,d", this.toLong()).replace(",", ".")
+}
+
+private fun printHtmlReceipt(context: Context, html: String) {
+    val webView = WebView(context)
+    webView.webViewClient = object : WebViewClient() {
+        override fun onPageFinished(view: WebView?, url: String?) {
+            val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
+            val printAdapter = webView.createPrintDocumentAdapter("POS_Receipt_${System.currentTimeMillis()}")
+            printManager.print("POS Receipt", printAdapter, PrintAttributes.Builder().build())
+        }
+    }
+    webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+}
