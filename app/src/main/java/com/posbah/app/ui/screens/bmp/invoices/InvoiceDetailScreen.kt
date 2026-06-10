@@ -91,6 +91,20 @@ fun InvoiceDetailScreen(
 
     var showLocalSignDialog by remember { mutableStateOf(false) }
     var showShareLinkDialog by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    // Auto-dismiss dialog dan tampil toast saat tanda tangan berhasil diterima via link
+    LaunchedEffect(ui.signatureReceivedRemotely) {
+        if (ui.signatureReceivedRemotely) {
+            viewModel.stopSignaturePolling()
+            showShareLinkDialog = false
+            Toast.makeText(
+                context,
+                "✅ Tanda tangan berhasil diterima!",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -109,6 +123,16 @@ fun InvoiceDetailScreen(
                             modifier = Modifier.testTag("btn-print-top")
                         ) {
                             Icon(Icons.Outlined.Print, contentDescription = "Cetak")
+                        }
+                        IconButton(
+                            onClick = { showDeleteConfirm = true },
+                            modifier = Modifier.testTag("btn-delete-invoice")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Delete,
+                                contentDescription = "Hapus",
+                                tint = MaterialTheme.colorScheme.error
+                            )
                         }
                         TextButton(onClick = { onEdit(inv.id) }, modifier = Modifier.testTag("btn-edit-invoice")) {
                             Text("Edit")
@@ -164,7 +188,7 @@ fun InvoiceDetailScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(Modifier.height(8.dp))
-                        InfoRow("Status", inv.status)
+                        InfoRow("Status", Formatters.invoiceStatus(inv.status))
                         InfoRow("Klien", ui.client?.clientName ?: "—")
                         InfoRow("Term Pembayaran", inv.paymentTerms)
                         inv.dueDate?.let { InfoRow("Jatuh Tempo", Formatters.dateLong(it)) }
@@ -526,6 +550,32 @@ fun InvoiceDetailScreen(
             }
         )
     }
+
+    if (showDeleteConfirm && inv != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Hapus Invoice") },
+            text = { Text("Apakah Anda yakin ingin menghapus invoice ini? Tindakan ini juga akan menghapus data pembayaran dan menyesuaikan kas terkait secara otomatis.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteInvoice {
+                            showDeleteConfirm = false
+                            onBack()
+                        }
+                    },
+                    modifier = Modifier.testTag("btn-confirm-delete")
+                ) {
+                    Text("Hapus", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -671,7 +721,7 @@ private fun generateInvoiceHtml(
                 <td style="text-align: right; vertical-align: top;">
                     <span class="doc-title">Faktur</span><br>
                     No: <strong>${invoice.number}</strong><br>
-                    Status: <span class="status-badge">${invoice.status}</span>
+                    Status: <span class="status-badge">${Formatters.invoiceStatus(invoice.status).uppercase()}</span>
                     ${if (!isColor) """
                     <br>
                     <span style="font-size: 13px;">
@@ -697,7 +747,7 @@ private fun generateInvoiceHtml(
                 <tr>
                     <td style="text-align: center; padding-top: 15px;">
                         <span class="doc-title" style="text-align: center; display: block; width: 100%;">Faktur</span>
-                        No: <strong>${invoice.number}</strong> | Status: <span class="status-badge">${invoice.status}</span>
+                        No: <strong>${invoice.number}</strong> | Status: <span class="status-badge">${Formatters.invoiceStatus(invoice.status).uppercase()}</span>
                         ${if (!isColor) """
                         <br>
                         <span style="font-size: 13px;">
@@ -720,7 +770,7 @@ private fun generateInvoiceHtml(
                     <td style="text-align: right; vertical-align: top;">
                         <span class="doc-title">Faktur</span><br>
                         No: <strong>${invoice.number}</strong><br>
-                        Status: <span class="status-badge">${invoice.status}</span>
+                        Status: <span class="status-badge">${Formatters.invoiceStatus(invoice.status).uppercase()}</span>
                         ${if (!isColor) """
                         <br>
                         <span style="font-size: 13px;">
@@ -1128,7 +1178,9 @@ private fun printHtml(context: Context, html: String, jobName: String, isColor: 
             printManager.print(jobName, printAdapter, printAttributes)
         }
     }
-    webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+    // Gunakan base URL agar gambar dari https://www.zedmz.cloud bisa dimuat
+    // sebagai fallback jika file lokal tanda tangan tidak tersedia
+    webView.loadDataWithBaseURL("https://www.zedmz.cloud", html, "text/html", "UTF-8", null)
 }
 
 private fun printColoredJpg(context: Context, html: String, fileName: String) {
@@ -1150,7 +1202,9 @@ private fun printColoredJpg(context: Context, html: String, fileName: String) {
         javaScriptEnabled = false
         useWideViewPort = true
         loadWithOverviewMode = true
-        blockNetworkLoads = true // pastikan tidak ada request jaringan
+        // Jangan blokir network: tanda tangan penerima mungkin perlu load dari URL
+        // jika file lokal tidak tersedia (fallback). Base64 tetap prioritas utama.
+        blockNetworkLoads = false
     }
 
     // Set ukuran awal sebelum load agar WebView tahu dimensinya saat render

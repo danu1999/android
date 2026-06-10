@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
@@ -31,12 +32,90 @@ import java.io.FileOutputStream
 @HiltViewModel
 class InvoicesListViewModel @Inject constructor(
     private val invoiceRepo: BmpInvoiceRepository,
+    private val clientRepo: BmpClientRepository,
     private val authRepository: AuthRepository
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
 
     val invoices = invoiceRepo.observe(tenantId)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val clients = clientRepo.observe(tenantId)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val _filterClientId = MutableStateFlow<Long?>(null)
+    val filterClientId = _filterClientId.asStateFlow()
+
+    private val _filterStartDate = MutableStateFlow<Long?>(null)
+    val filterStartDate = _filterStartDate.asStateFlow()
+
+    private val _filterEndDate = MutableStateFlow<Long?>(null)
+    val filterEndDate = _filterEndDate.asStateFlow()
+
+    private val _filterPaid = MutableStateFlow(false)
+    val filterPaid = _filterPaid.asStateFlow()
+
+    private val _filterBelumBayar = MutableStateFlow(false)
+    val filterBelumBayar = _filterBelumBayar.asStateFlow()
+
+    private val _filterPartial = MutableStateFlow(false)
+    val filterPartial = _filterPartial.asStateFlow()
+
+    val filteredInvoices = combine(
+        invoiceRepo.observe(tenantId),
+        _filterClientId,
+        _filterStartDate,
+        _filterEndDate
+    ) { rawList, clientId, start, end ->
+        var list = rawList
+        if (clientId != null) {
+            list = list.filter { it.clientId == clientId }
+        }
+        if (start != null) {
+            list = list.filter { it.createdAt >= start }
+        }
+        if (end != null) {
+            list = list.filter { it.createdAt <= end + 24 * 60 * 60 * 1000L - 1 }
+        }
+        list
+    }.combine(
+        combine(
+            _filterPaid,
+            _filterBelumBayar,
+            _filterPartial
+        ) { paid, belumBayar, partial -> Triple(paid, belumBayar, partial) }
+    ) { list, (showPaid, showBelumBayar, showPartial) ->
+        var res = list
+        if (showPaid || showBelumBayar || showPartial) {
+            res = res.filter { inv ->
+                (showPaid && inv.status == "PAID") ||
+                (showBelumBayar && (inv.status == "UNPAID" || inv.status == "OVERDUE" || inv.status == "DRAFT")) ||
+                (showPartial && inv.status == "PARTIAL")
+            }
+        }
+        res
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun setClientFilter(clientId: Long?) {
+        _filterClientId.value = clientId
+    }
+
+    fun setDateRange(start: Long?, end: Long?) {
+        _filterStartDate.value = start
+        _filterEndDate.value = end
+    }
+
+    fun toggleFilterPaid(enabled: Boolean) {
+        _filterPaid.value = enabled
+    }
+
+    fun toggleFilterBelumBayar(enabled: Boolean) {
+        _filterBelumBayar.value = enabled
+    }
+
+    fun toggleFilterPartial(enabled: Boolean) {
+        _filterPartial.value = enabled
+    }
 
     fun delete(id: Long) = viewModelScope.launch { invoiceRepo.deleteInvoice(id) }
 }
@@ -54,11 +133,14 @@ data class InvoiceDetailUi(
     val editingPayment: BmpInvoicePaymentEntity? = null,
     val isPollingSignature: Boolean = false,
     val pollingCountdown: Int = 180,
-    val pollingError: String? = null
+    val pollingError: String? = null,
+    // true sesaat setelah tanda tangan berhasil diterima via link — UI harus dismiss dialog
+    val signatureReceivedRemotely: Boolean = false
 )
 
 @HiltViewModel
 class InvoiceDetailViewModel @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context,
     private val invoiceRepo: BmpInvoiceRepository,
     private val clientRepo: BmpClientRepository,
     private val settingsRepo: BmpSettingsRepository,
@@ -77,6 +159,36 @@ class InvoiceDetailViewModel @Inject constructor(
             val inv = invoiceRepo.getById(invoiceId)
             _ui.update { it.copy(invoice = inv) }
             inv?.clientId?.let { _ui.update { st -> st.copy(client = clientRepo.getById(it)) } }
+
+            if (inv != null) {
+                val hasUrl = !inv.receiverSignatureUrl.isNullOrBlank()
+                val fileExists = inv.receiverSignaturePath?.let { java.io.File(it).exists() } == true
+
+                when {
+                    // Skenario A: Ada URL di Room tapi file lokal tidak ada → re-download
+                    hasUrl && !fileExists -> {
+                        val localPath = downloadSignatureToLocal(context, inv.receiverSignatureUrl!!, invoiceId)
+                        if (localPath != null) {
+                            invoiceRepo.saveReceiverSignature(invoiceId, localPath, inv.receiverSignatureUrl, inv.receiverNameActual ?: "")
+                            val updated = invoiceRepo.getById(invoiceId)
+                            _ui.update { it.copy(invoice = updated) }
+                        }
+                    }
+                    // Skenario B: Tidak ada URL di Room DB sama sekali
+                    // → cek Supabase langsung (polling mungkin dibatalkan/timeout sebelum detect)
+                    !hasUrl -> {
+                        val remoteResult = invoiceRepo.checkReceiverSignatureRemote(invoiceId)
+                        if (remoteResult is BmpInvoiceRepository.RemoteSignatureResult.Success) {
+                            val localPath = downloadSignatureToLocal(context, remoteResult.url, invoiceId)
+                            invoiceRepo.saveReceiverSignature(invoiceId, localPath, remoteResult.url, remoteResult.name)
+                            val updated = invoiceRepo.getById(invoiceId)
+                            _ui.update { it.copy(invoice = updated) }
+                        }
+                    }
+                    // Skenario C: URL ada dan file lokal ada → sudah siap cetak
+                    else -> { /* tidak perlu tindakan */ }
+                }
+            }
         }
         viewModelScope.launch {
             val settings = settingsRepo.get(tenantId)
@@ -199,9 +311,10 @@ class InvoiceDetailViewModel @Inject constructor(
                 
                 val result = invoiceRepo.checkReceiverSignatureRemote(invoiceId)
                 if (result is BmpInvoiceRepository.RemoteSignatureResult.Success) {
-                    invoiceRepo.saveReceiverSignature(invoiceId, null, result.url, result.name)
+                    val localPath = downloadSignatureToLocal(context, result.url, invoiceId)
+                    invoiceRepo.saveReceiverSignature(invoiceId, localPath, result.url, result.name)
                     val updated = invoiceRepo.getById(invoiceId)
-                    _ui.update { it.copy(invoice = updated, isPollingSignature = false) }
+                    _ui.update { it.copy(invoice = updated, isPollingSignature = false, signatureReceivedRemotely = true) }
                     break
                 } else if (result is BmpInvoiceRepository.RemoteSignatureResult.Error) {
                     _ui.update { it.copy(isPollingSignature = false, pollingError = result.message) }
@@ -214,10 +327,47 @@ class InvoiceDetailViewModel @Inject constructor(
         }
     }
 
+    private suspend fun downloadSignatureToLocal(context: Context, urlStr: String, invoiceId: Long): String? {
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            var conn: java.net.HttpURLConnection? = null
+            try {
+                val url = java.net.URL(urlStr)
+                conn = url.openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 10000
+                conn.readTimeout = 10000
+                val code = conn.responseCode
+                if (code in 200..299) {
+                    val dir = File(context.filesDir, "signatures").apply { mkdirs() }
+                    val file = File(dir, "sig_${invoiceId}.png")
+                    conn.inputStream.use { input ->
+                        FileOutputStream(file).use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    file.absolutePath
+                } else {
+                    null
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
+            } finally {
+                conn?.disconnect()
+            }
+        }
+    }
+
     fun stopSignaturePolling() {
         pollingJob?.cancel()
         pollingJob = null
         _ui.update { it.copy(isPollingSignature = false) }
+    }
+
+    fun deleteInvoice(onDone: () -> Unit) {
+        viewModelScope.launch {
+            invoiceRepo.deleteInvoice(invoiceId)
+            onDone()
+        }
     }
 
     override fun onCleared() {
@@ -291,12 +441,28 @@ class InvoiceFormViewModel @Inject constructor(
         updateInvoice { it.copy(clientId = client?.id) }
     }
 
-    fun addProductLine() {
+    fun addProductLine(masterProduct: BmpMasterProductEntity) {
+        _ui.update {
+            it.copy(productLines = it.productLines + BmpProductEntity(
+                tenantId = tenantId,
+                masterItemID = masterProduct.id,
+                title = masterProduct.title,
+                quantity = 1.0,
+                jumlahLusin = 1.0,
+                unit = masterProduct.unit,
+                price = masterProduct.price
+            ))
+        }
+    }
+
+    fun addBlankProductLine() {
         _ui.update {
             it.copy(productLines = it.productLines + BmpProductEntity(
                 tenantId = tenantId,
                 title = "Item baru",
                 quantity = 1.0,
+                jumlahLusin = 1.0,
+                unit = "pcs",
                 price = 0.0
             ))
         }
