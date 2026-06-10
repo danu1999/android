@@ -30,6 +30,8 @@ import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material.icons.outlined.Notes
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Receipt
+import androidx.compose.material.icons.outlined.History
+import com.posbah.app.ui.navigation.Screen
 import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
@@ -86,7 +88,8 @@ data class LaundryServiceItem(
     val price: Double,
     val costPrice: Double = 0.0,
     val image: String? = null,
-    val unit: String // Kg | Pcs
+    val unit: String, // Kg | Pcs
+    val monthlyMaintenance: Double = 0.0
 )
 
 data class CartItem(
@@ -109,6 +112,7 @@ data class LaundryOrder(
 @Composable
 fun LaundryScreen(
     onBack: () -> Unit,
+    onNavigate: (String) -> Unit,
     viewModel: LaundryViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -116,6 +120,8 @@ fun LaundryScreen(
     val services by viewModel.services.collectAsState()
     val orders by viewModel.orders.collectAsState()
     val cart = viewModel.cart
+    val customerList by viewModel.customers.collectAsState(emptyList())
+    val transactionList by viewModel.transactions.collectAsState(emptyList())
 
     val isOwner by viewModel.isOwner.collectAsState()
     val activityLogsList by viewModel.activityLogs.collectAsState()
@@ -125,6 +131,7 @@ fun LaundryScreen(
     var customerName by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
+    var showCustomerSelectionDialog by remember { mutableStateOf(false) }
 
     var showActiveOrders by remember { mutableStateOf(false) }
     var activeReceiptOrder by remember { mutableStateOf<LaundryOrder?>(null) }
@@ -135,6 +142,7 @@ fun LaundryScreen(
     var newServiceCategory by remember { mutableStateOf("KILOAN") }
     var newServicePrice by remember { mutableStateOf("") }
     var newServiceCost by remember { mutableStateOf("") }
+    var newServiceMonthlyMaintenance by remember { mutableStateOf("") }
     var newServiceUnit by remember { mutableStateOf("Kg") }
     var rentDateMillis by remember { mutableStateOf<Long?>(null) }
 
@@ -176,6 +184,9 @@ fun LaundryScreen(
                 subtitle = "Sistem Kasir Jasa Laundry",
                 onBack = onBack,
                 actions = {
+                    IconButton(onClick = { onNavigate(Screen.MarginAnalysis.route) }) {
+                        Icon(Icons.Outlined.History, contentDescription = "Analisis Margin & Riwayat")
+                    }
                     if (isOwner) {
                         IconButton(onClick = { showLogsDialog = true }) {
                             Icon(Icons.Outlined.Notes, contentDescription = "Log Aktivitas")
@@ -186,6 +197,7 @@ fun LaundryScreen(
                         newServiceCategory = "KILOAN"
                         newServicePrice = ""
                         newServiceCost = ""
+                        newServiceMonthlyMaintenance = ""
                         newServiceUnit = "Kg"
                         capturedPhotoFile = null
                         showAddServiceDialog = true
@@ -430,6 +442,42 @@ fun LaundryScreen(
                     }
 
                     Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val isUmum = customerName == "Umum" && phone == ""
+                        Button(
+                            onClick = {
+                                customerName = "Umum"
+                                phone = ""
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isUmum) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (isUmum) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Umum (Walk-in)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            onClick = {
+                                showCustomerSelectionDialog = true
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (!isUmum) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (!isUmum) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Pilih/Tambah Pelanggan", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Spacer(Modifier.height(4.dp))
+
                     OutlinedTextField(
                         value = customerName,
                         onValueChange = { customerName = it },
@@ -766,6 +814,14 @@ fun LaundryScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+                    OutlinedTextField(
+                        value = newServiceMonthlyMaintenance,
+                        onValueChange = { mmVal -> newServiceMonthlyMaintenance = mmVal },
+                        label = { Text("Biaya Operasional Bulanan (Rp)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
 
                     // Real-time margin calculator
                     val jual = newServicePrice.toDoubleOrNull() ?: 0.0
@@ -851,8 +907,9 @@ fun LaundryScreen(
                     onClick = {
                         val rate = newServicePrice.toDoubleOrNull() ?: 0.0
                         val cost = newServiceCost.toDoubleOrNull() ?: 0.0
+                        val monthlyMaint = newServiceMonthlyMaintenance.toDoubleOrNull() ?: 0.0
                         if (newServiceName.isNotBlank() && rate > 0) {
-                            viewModel.addService(newServiceName, rate, cost, newServiceCategory, newServiceUnit, capturedPhotoFile) {
+                            viewModel.addService(newServiceName, rate, cost, monthlyMaint, newServiceCategory, newServiceUnit, capturedPhotoFile) {
                                 showAddServiceDialog = false
                                 Toast.makeText(context, "Layanan baru berhasil ditambahkan!", Toast.LENGTH_SHORT).show()
                             }
@@ -914,6 +971,131 @@ fun LaundryScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showLogsDialog = false }) { Text("Tutup") }
+            }
+        )
+    }
+
+    // Dialog: Pilih / Tambah Pelanggan
+    if (showCustomerSelectionDialog) {
+        var custNameInput by remember { mutableStateOf("") }
+        var custPhoneInput by remember { mutableStateOf("") }
+        var custAddressInput by remember { mutableStateOf("") }
+
+        AlertDialog(
+            onDismissRequest = { showCustomerSelectionDialog = false },
+            title = { Text("Pilih / Tambah Pelanggan") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Tambah Pelanggan Baru", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                    OutlinedTextField(
+                        value = custNameInput,
+                        onValueChange = { custNameInput = it },
+                        label = { Text("Nama Pelanggan") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = custPhoneInput,
+                        onValueChange = { custPhoneInput = it },
+                        label = { Text("No. WhatsApp") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = custAddressInput,
+                        onValueChange = { custAddressInput = it },
+                        label = { Text("Alamat") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Button(
+                        onClick = {
+                            if (custNameInput.isNotBlank()) {
+                                viewModel.addCustomer(custNameInput, custPhoneInput, custAddressInput) {
+                                    Toast.makeText(context, "Pelanggan berhasil ditambahkan!", Toast.LENGTH_SHORT).show()
+                                    custNameInput = ""
+                                    custPhoneInput = ""
+                                    custAddressInput = ""
+                                }
+                            } else {
+                                Toast.makeText(context, "Nama wajib diisi!", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Simpan Pelanggan Baru")
+                    }
+
+                    androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    Text("Daftar Pelanggan Terdaftar", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                    
+                    Box(modifier = Modifier.fillMaxWidth().height(160.dp)) {
+                        if (customerList.isEmpty()) {
+                            Text(
+                                "Belum ada pelanggan terdaftar",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.align(Alignment.Center)
+                            )
+                        } else {
+                            LazyColumn(
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(customerList) { cust ->
+                                    val custTx = transactionList.filter {
+                                        it.customerName.equals(cust.name, ignoreCase = true)
+                                    }
+                                    val totalSpent = custTx.sumOf { it.total }
+                                    val lastTx = custTx.maxByOrNull { it.date }
+                                    val lastTxDateStr = if (lastTx != null) {
+                                        SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(lastTx.date))
+                                    } else {
+                                        "Belum ada transaksi"
+                                    }
+
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                customerName = cust.name
+                                                phone = cust.phone.orEmpty()
+                                                showCustomerSelectionDialog = false
+                                            }
+                                    ) {
+                                        Column(modifier = Modifier.padding(8.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(cust.name, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                                Text("Pilih", color = MaterialTheme.colorScheme.primary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                            Text("WhatsApp: ${cust.phone ?: "-"}", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text("Alamat: ${cust.address ?: "-"}", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Spacer(Modifier.height(4.dp))
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text("Total: ${Formatters.rupiah(totalSpent)}", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                                Text("Terakhir: $lastTxDateStr", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showCustomerSelectionDialog = false }) { Text("Tutup") }
             }
         )
     }

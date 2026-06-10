@@ -27,4 +27,13 @@ object Formatters {
     fun iso(epochMs: Long): String = iso.format(Date(epochMs))
 
     fun parseIso(s: String): Long? = runCatching { iso.parse(s)?.time }.getOrNull()
+
+    fun invoiceStatus(status: String): String = when (status.uppercase()) {
+        "PAID" -> "Lunas"
+        "UNPAID" -> "Belum Bayar"
+        "PARTIAL" -> "Cicil"
+        "OVERDUE" -> "Jatuh Tempo"
+        "DRAFT" -> "Draft"
+        else -> status
+    }
 }

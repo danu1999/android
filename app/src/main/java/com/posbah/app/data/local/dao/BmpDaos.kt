@@ -35,6 +35,12 @@ interface BmpClientDao {
     @Query("DELETE FROM bmp_clients WHERE id = :id")
     suspend fun delete(id: Long)
 
+    @Query("SELECT * FROM bmp_clients")
+    suspend fun getAll(): List<BmpClientEntity>
+
+    @Query("UPDATE bmp_clients SET isSynced = 1 WHERE id = :id")
+    suspend fun markSynced(id: Long)
+
     @Query("SELECT COUNT(*) FROM bmp_clients WHERE tenantId = :tenantId")
     fun count(tenantId: String): Flow<Int>
 }
@@ -71,6 +77,12 @@ interface BmpInvoiceDao {
     @Query("DELETE FROM bmp_invoices WHERE id = :id")
     suspend fun delete(id: Long)
 
+    @Query("SELECT * FROM bmp_invoices")
+    suspend fun getAll(): List<BmpInvoiceEntity>
+
+    @Query("UPDATE bmp_invoices SET isSynced = 1 WHERE id = :id")
+    suspend fun markSynced(id: Long)
+
     @Query("SELECT COUNT(*) FROM bmp_invoices WHERE tenantId = :tenantId")
     fun count(tenantId: String): Flow<Int>
 
@@ -106,6 +118,9 @@ interface BmpProductDao {
     @Query("DELETE FROM bmp_products WHERE id = :id")
     suspend fun delete(id: Long)
 
+    @Query("SELECT * FROM bmp_products")
+    suspend fun getAll(): List<BmpProductEntity>
+
     @Query("DELETE FROM bmp_products WHERE invoiceId = :invoiceId")
     suspend fun deleteByInvoice(invoiceId: Long)
 }
@@ -125,6 +140,9 @@ interface BmpMasterProductDao {
 
     @Query("DELETE FROM bmp_master_products WHERE id = :id")
     suspend fun delete(id: Long)
+
+    @Query("SELECT * FROM bmp_master_products")
+    suspend fun getAll(): List<BmpMasterProductEntity>
 }
 
 @Dao
@@ -149,6 +167,18 @@ interface BmpPaymentDao {
 
     @Query("DELETE FROM bmp_invoice_payments WHERE id = :id")
     suspend fun delete(id: Long)
+
+    @Query("SELECT * FROM bmp_invoice_payments WHERE invoiceId = :invoiceId")
+    suspend fun listForInvoice(invoiceId: Long): List<BmpInvoicePaymentEntity>
+
+    @Query("DELETE FROM bmp_invoice_payments WHERE invoiceId = :invoiceId")
+    suspend fun deleteByInvoice(invoiceId: Long)
+
+    @Query("SELECT * FROM bmp_invoice_payments")
+    suspend fun getAll(): List<BmpInvoicePaymentEntity>
+
+    @Query("UPDATE bmp_invoice_payments SET isSynced = 1 WHERE id = :id")
+    suspend fun markSynced(id: Long)
 }
 
 @Dao
@@ -161,6 +191,12 @@ interface BmpCashFlowDao {
 
     @Query("DELETE FROM bmp_cashflow WHERE id = :id")
     suspend fun delete(id: Long)
+
+    @Query("SELECT * FROM bmp_cashflow")
+    suspend fun getAll(): List<BmpCashFlowEntity>
+
+    @Query("UPDATE bmp_cashflow SET isSynced = 1 WHERE id = :id")
+    suspend fun markSynced(id: Long)
 
     @Query("DELETE FROM bmp_cashflow WHERE paymentRefId = :paymentRefId")
     suspend fun deleteByPaymentRefId(paymentRefId: Long)
@@ -191,6 +227,9 @@ interface BmpSettingsDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(settings: BmpSettingsEntity)
+
+    @Query("SELECT * FROM bmp_settings")
+    suspend fun getAll(): List<BmpSettingsEntity>
 }
 
 @Dao
@@ -208,6 +247,9 @@ interface BmpEmployeeDao {
 
     @Query("UPDATE bmp_employees SET isActive = 0 WHERE id = :id")
     suspend fun softDelete(id: Long)
+
+    @Query("SELECT * FROM bmp_employees")
+    suspend fun getAll(): List<BmpEmployeeEntity>
 }
 
 @Dao
@@ -223,6 +265,12 @@ interface BmpPayrollDao {
 
     @Query("DELETE FROM bmp_payrolls WHERE id = :id")
     suspend fun delete(id: Long)
+
+    @Query("SELECT * FROM bmp_payrolls")
+    suspend fun getAll(): List<BmpPayrollEntity>
+
+    @Query("UPDATE bmp_payrolls SET isSynced = 1 WHERE id = :id")
+    suspend fun markSynced(id: Long)
 }
 
 /**
@@ -249,6 +297,12 @@ interface BmpBahanBakuDao {
     @Query("DELETE FROM bmp_bahan_baku WHERE id = :id")
     suspend fun delete(id: Long)
 
+    @Query("SELECT * FROM bmp_bahan_baku")
+    suspend fun getAll(): List<com.posbah.app.data.local.entities.BmpBahanBakuEntity>
+
+    @Query("UPDATE bmp_bahan_baku SET isSynced = 1 WHERE id = :id")
+    suspend fun markSynced(id: Long)
+
     /** Untuk saldo simulasi: total semua nilai bahan baku yang pernah masuk */
     @Query("SELECT IFNULL(SUM(totalHarga), 0) FROM bmp_bahan_baku WHERE tenantId = :tenantId")
     fun totalHarga(tenantId: String): Flow<Double>
@@ -272,6 +326,12 @@ interface BmpBahanBakuItemDao {
     @Query("DELETE FROM bmp_bahan_baku_item WHERE bahanBakuId = :bahanBakuId")
     suspend fun deleteByBahanBaku(bahanBakuId: Long)
 
+    @Query("SELECT * FROM bmp_bahan_baku_item")
+    suspend fun getAll(): List<com.posbah.app.data.local.entities.BmpBahanBakuItemEntity>
+
+    @Query("UPDATE bmp_bahan_baku_item SET isSynced = 1 WHERE id = :id")
+    suspend fun markSynced(id: Long)
+
     /** Ambil rate terbaru untuk jenis bahan tertentu — dipakai kalkulator HPP */
     @Query("SELECT rate FROM bmp_bahan_baku_item WHERE tenantId = :tenantId AND jenisBahan = :jenisBahan ORDER BY createdAt DESC LIMIT 1")
     suspend fun getLatestRate(tenantId: String, jenisBahan: String): Double?
@@ -287,4 +347,7 @@ interface PrintSettingsDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(settings: com.posbah.app.data.local.entities.PrintSettingsEntity)
+
+    @Query("SELECT * FROM print_settings")
+    suspend fun getAll(): List<com.posbah.app.data.local.entities.PrintSettingsEntity>
 }

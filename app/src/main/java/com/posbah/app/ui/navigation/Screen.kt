@@ -12,6 +12,7 @@ sealed class Screen(val route: String) {
     object RentalDashboard : Screen("rental/dashboard")
     object LaundryDashboard : Screen("laundry/dashboard")
     object SystemSelection : Screen("system_selection")
+    object MarginAnalysis : Screen("margin_analysis")
 
     object BmpDashboard : Screen("bmp/dashboard")
     object BmpClients : Screen("bmp/clients")
@@ -42,4 +43,9 @@ sealed class Screen(val route: String) {
     object BmpBahanBakuForm : Screen("bmp/bahanbaku/form?id={id}") {
         fun build(id: Long? = null) = "bmp/bahanbaku/form?id=${id ?: -1}"
     }
+    object AdminPanel : Screen("admin/panel")
+
+    object OutletControl : Screen("owner/outlet_control")
+    object EmployeeManagement : Screen("owner/employees")
+    object QrScanner : Screen("qr_scanner")
 }

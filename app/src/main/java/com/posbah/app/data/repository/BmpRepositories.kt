@@ -148,8 +148,26 @@ class BmpInvoiceRepository @Inject constructor(
     }
 
     suspend fun deleteInvoice(id: Long) {
-        productDao.deleteByInvoice(id)
-        invoiceDao.delete(id)
+        db.withTransaction {
+            val invoice = invoiceDao.getById(id)
+            if (invoice != null) {
+                // Delete cash flow exits for special items (isKhusus)
+                cashFlowDao.deleteExitsForInvoice(invoice.number)
+            }
+            
+            // Delete payments and their associated cashflow entries
+            val payments = paymentDao.listForInvoice(id)
+            for (payment in payments) {
+                cashFlowDao.deleteByPaymentRefId(payment.id)
+            }
+            paymentDao.deleteByInvoice(id)
+            
+            // Delete product lines
+            productDao.deleteByInvoice(id)
+            
+            // Delete invoice
+            invoiceDao.delete(id)
+        }
     }
 
     suspend fun saveReceiverSignature(
@@ -175,18 +193,38 @@ class BmpInvoiceRepository @Inject constructor(
         data class Error(val message: String) : RemoteSignatureResult()
     }
 
-    /**
-     * Mengecek status tanda tangan penerima di server backend.
-     * Saat ini disiapkan untuk sinkronisasi namun diprogram lokal-first.
-     */
-    suspend fun checkReceiverSignatureRemote(invoiceId: Long): RemoteSignatureResult {
-        // Mode offline/mocking untuk pengujian:
-        // Jika server Anda sudah siap, ganti dengan request jaringan sesungguhnya (HTTP GET)
-        // val response = httpClient.get("https://your-server.com/api/invoice/signature-status?id=$invoiceId")
-        // Dan parse hasilnya.
-        
-        kotlinx.coroutines.delay(1000) // simulasi jaringan
-        return RemoteSignatureResult.Pending
+    suspend fun checkReceiverSignatureRemote(tenantId: String, invoiceId: Long): RemoteSignatureResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        var conn: java.net.HttpURLConnection? = null
+        try {
+            val url = java.net.URL("https://etustetneufkfilndimy.supabase.co/rest/v1/bmp_invoices?id=eq.$invoiceId&select=receiverSignatureUrl,receiverNameActual")
+            conn = url.openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+            conn.setRequestProperty("apikey", "sb_publishable_X_BhY3R3kKLp4wEpNX4giQ_U9xKDg2R")
+            conn.setRequestProperty("Authorization", "Bearer sb_publishable_X_BhY3R3kKLp4wEpNX4giQ_U9xKDg2R")
+            conn.setRequestProperty("x-tenant-id", tenantId)
+
+            val code = conn.responseCode
+            if (code in 200..299) {
+                val response = conn.inputStream.bufferedReader().use { it.readText() }
+                val array = org.json.JSONArray(response)
+                if (array.length() > 0) {
+                    val obj = array.getJSONObject(0)
+                    val urlStr = obj.optString("receiverSignatureUrl", "")
+                    val nameStr = obj.optString("receiverNameActual", "")
+                    if (!urlStr.isNullOrBlank() && urlStr != "null") {
+                        return@withContext RemoteSignatureResult.Success(urlStr, nameStr)
+                    }
+                }
+            }
+            RemoteSignatureResult.Pending
+        } catch (e: Exception) {
+            e.printStackTrace()
+            RemoteSignatureResult.Error(e.message ?: "Koneksi gagal")
+        } finally {
+            conn?.disconnect()
+        }
     }
 
     /**

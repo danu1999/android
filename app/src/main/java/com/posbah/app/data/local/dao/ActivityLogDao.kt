@@ -14,4 +14,7 @@ interface ActivityLogDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLog(log: ActivityLogEntity)
+
+    @Query("SELECT * FROM activity_logs")
+    suspend fun getAll(): List<ActivityLogEntity>
 }

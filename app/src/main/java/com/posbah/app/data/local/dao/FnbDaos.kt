@@ -42,6 +42,9 @@ interface ProductDao {
     @Query("DELETE FROM products WHERE id = :id")
     suspend fun delete(id: Long)
 
+    @Query("SELECT * FROM products")
+    suspend fun getAll(): List<ProductEntity>
+
     @Query("DELETE FROM products WHERE tenantId = :tenantId")
     suspend fun clearTenantProducts(tenantId: String)
 }
@@ -62,6 +65,9 @@ interface CustomerDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(customers: List<CustomerEntity>)
+
+    @Query("SELECT * FROM customers")
+    suspend fun getAll(): List<CustomerEntity>
 
     @Query("DELETE FROM customers WHERE id = :id")
     suspend fun delete(id: Long)
@@ -99,6 +105,9 @@ interface TransactionDao {
     @Query("SELECT receiptNumber FROM transactions WHERE tenantId = :tenantId ORDER BY id DESC LIMIT 1")
     suspend fun getLastReceiptNumber(tenantId: String): String?
 
+    @Query("SELECT * FROM transactions")
+    suspend fun getAll(): List<TransactionEntity>
+
     @Query("DELETE FROM transactions WHERE id = :id")
     suspend fun delete(id: Long)
 }
@@ -113,6 +122,9 @@ interface TransactionItemDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(items: List<TransactionItemEntity>)
+
+    @Query("SELECT * FROM transaction_items")
+    suspend fun getAll(): List<TransactionItemEntity>
 
     @Query("DELETE FROM transaction_items WHERE transactionId = :transactionId")
     suspend fun deleteForTransaction(transactionId: Long)

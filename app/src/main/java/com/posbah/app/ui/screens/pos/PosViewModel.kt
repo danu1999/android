@@ -86,7 +86,8 @@ class PosViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val printSettingsRepository: PrintSettingsRepository,
     private val sessionState: SessionState,
-    private val activityLogDao: ActivityLogDao
+    private val activityLogDao: ActivityLogDao,
+    private val db: com.posbah.app.data.local.PosBahDatabase
 ) : ViewModel() {
 
     private val tenantId = authRepository.activeTenantId().orEmpty()
@@ -281,17 +282,27 @@ class PosViewModel @Inject constructor(
     fun checkout(isQueue: Boolean = false) {
         if (cart.isEmpty()) return
         val currentUi = _uiState.value
-        val empId = 1L // Default owner employee ID
 
         viewModelScope.launch {
             val txDate = currentUi.selectedTransactionDate ?: System.currentTimeMillis()
+            val dueDateMs = if (currentUi.paymentMethod == "HUTANG" && currentUi.debtDueDate.isNotBlank()) {
+                try {
+                    val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                    sdf.parse(currentUi.debtDueDate.trim())?.time
+                } catch (e: Exception) {
+                    null
+                }
+            } else {
+                null
+            }
+
             val tx = TransactionEntity(
                 tenantId = tenantId,
                 outletId = outletId,
-                employeeId = empId,
+                employeeId = 1L,
                 customerId = currentUi.customerId,
-                customerName = currentUi.customerName,
-                receiptNumber = "", // Generated sequentially
+                customerName = currentUi.customerName ?: "Umum",
+                receiptNumber = "",
                 date = txDate,
                 subtotal = getSubtotal(),
                 discountType = if (getDiscountAmt() > 0) currentUi.discountType else null,
@@ -304,7 +315,8 @@ class PosViewModel @Inject constructor(
                 change = if (isQueue) null else (currentUi.amountPaid.toDoubleOrNull() ?: getTotal()) - getTotal(),
                 status = if (isQueue) "PENDING" else "COMPLETED",
                 notes = currentUi.notes.takeIf { it.isNotBlank() },
-                queueNumber = currentUi.queueNumber.toIntOrNull()
+                queueNumber = currentUi.queueNumber.toIntOrNull(),
+                deliveryDate = dueDateMs
             )
 
             val lines = cart.map {
@@ -340,6 +352,9 @@ class PosViewModel @Inject constructor(
                     activeReceiptItems = savedItems,
                     showReceiptDialog = !isQueue
                 )
+            }
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
             }
         }
     }
@@ -402,6 +417,9 @@ class PosViewModel @Inject constructor(
                     activeReceiptItems = items,
                     showReceiptDialog = true
                 )
+            }
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
             }
         }
     }
@@ -527,6 +545,37 @@ class PosViewModel @Inject constructor(
             Json.decodeFromString<List<ProductVariant>>(p.variants)
         } catch (e: Exception) {
             emptyList()
+        }
+    }
+
+    fun updateReceipt(
+        id: Long,
+        customerName: String?,
+        paymentMethod: String,
+        date: Long,
+        amountPaid: Double?,
+        change: Double?,
+        notes: String?,
+        total: Double
+    ) {
+        viewModelScope.launch {
+            val tx = transactionRepository.getById(id) ?: return@launch
+            val updated = tx.copy(
+                customerName = customerName,
+                paymentMethod = paymentMethod,
+                date = date,
+                amountPaid = amountPaid,
+                change = change,
+                notes = notes,
+                total = total,
+                subtotal = total,
+                updatedAt = System.currentTimeMillis()
+            )
+            transactionRepository.update(updated)
+            logActivity("EDIT STRUK", "Mengedit struk ${tx.receiptNumber} (${tx.paymentMethod} -> $paymentMethod, Total: Rp $total)")
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
+            }
         }
     }
 }

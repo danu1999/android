@@ -75,14 +75,16 @@ fun TenantPickerScreen(
                     viewModel.selectTenant(tenant.id, onSelected)
                 })
             }
-            item {
-                Spacer(Modifier.height(8.dp))
-                Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    PrimaryButton(
-                        label = "+ Tambah Tenant Baru",
-                        onClick = { viewModel.toggleCreate(true) },
-                        modifier = Modifier.testTag("btn-add-tenant")
-                    )
+            if (ui.canAddTenant) {
+                item {
+                    Spacer(Modifier.height(8.dp))
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        PrimaryButton(
+                            label = "+ Tambah Tenant Baru",
+                            onClick = { viewModel.toggleCreate(true) },
+                            modifier = Modifier.testTag("btn-add-tenant")
+                        )
+                    }
                 }
             }
         }

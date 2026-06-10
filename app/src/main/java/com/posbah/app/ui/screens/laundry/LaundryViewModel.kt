@@ -31,6 +31,11 @@ data class LaundryTransactionMetadata(
     val summary: String
 )
 
+@Serializable
+data class ProductWholesaleMetadata(
+    val monthlyMaintenance: Double = 0.0
+)
+
 @HiltViewModel
 class LaundryViewModel @Inject constructor(
     private val authRepository: AuthRepository,
@@ -38,7 +43,9 @@ class LaundryViewModel @Inject constructor(
     private val productRepository: ProductRepository,
     private val transactionRepository: TransactionRepository,
     private val localDataSeeder: LocalDataSeeder,
-    private val activityLogDao: ActivityLogDao
+    private val activityLogDao: ActivityLogDao,
+    private val db: com.posbah.app.data.local.PosBahDatabase,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context
 ) : ViewModel() {
 
     private val tenantId = authRepository.activeTenantId().orEmpty()
@@ -46,6 +53,7 @@ class LaundryViewModel @Inject constructor(
 
     val products = productRepository.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val transactions = transactionRepository.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val customers = db.customerDao().observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val isOwner = flow {
         val user = authRepository.getActiveUser()
@@ -63,6 +71,16 @@ class LaundryViewModel @Inject constructor(
             }
         }
         filtered.map { p ->
+            val monthlyMaint = if (!p.wholesalePrices.isNullOrBlank()) {
+                try {
+                    val meta = Json.decodeFromString(ProductWholesaleMetadata.serializer(), p.wholesalePrices)
+                    meta.monthlyMaintenance
+                } catch (e: Exception) {
+                    0.0
+                }
+            } else {
+                0.0
+            }
             LaundryServiceItem(
                 id = p.id.toString(),
                 name = p.name,
@@ -70,7 +88,8 @@ class LaundryViewModel @Inject constructor(
                 price = p.price,
                 costPrice = p.costPrice,
                 image = p.image,
-                unit = p.unit
+                unit = p.unit,
+                monthlyMaintenance = monthlyMaint
             )
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -107,6 +126,7 @@ class LaundryViewModel @Inject constructor(
         name: String,
         price: Double,
         costPrice: Double,
+        monthlyMaintenance: Double,
         category: String,
         unit: String,
         imageFile: java.io.File?,
@@ -118,6 +138,10 @@ class LaundryViewModel @Inject constructor(
                 val compressed = CameraUtils.compressToMaxSize(imageFile, 100)
                 compressedPath = compressed.absolutePath
             }
+            val metadataStr = Json.encodeToString(
+                ProductWholesaleMetadata.serializer(),
+                ProductWholesaleMetadata(monthlyMaintenance)
+            )
             val p = ProductEntity(
                 tenantId = tenantId,
                 outletId = outletId,
@@ -128,6 +152,7 @@ class LaundryViewModel @Inject constructor(
                 unit = unit,
                 barcode = "LD-SRV-${System.currentTimeMillis()}",
                 category = category,
+                wholesalePrices = metadataStr,
                 image = compressedPath
             )
             productRepository.upsert(p)
@@ -150,6 +175,14 @@ class LaundryViewModel @Inject constructor(
 
     fun checkout(customerName: String, phone: String, rentDate: Long?, onDone: (LaundryOrder) -> Unit) {
         viewModelScope.launch {
+            val c = com.posbah.app.data.local.entities.CustomerEntity(
+                tenantId = tenantId,
+                name = customerName,
+                phone = phone.takeIf { it.isNotBlank() },
+                address = ""
+            )
+            db.customerDao().upsert(c)
+
             val subtotal = cart.sumOf { it.service.price * it.quantity }
             val receiptNum = transactionRepository.generateReceiptNumberForType(tenantId, "LD")
             val txDate = rentDate ?: System.currentTimeMillis()
@@ -171,7 +204,8 @@ class LaundryViewModel @Inject constructor(
                 paymentMethod = "HUTANG",
                 status = "COMPLETED",
                 orderStatus = "BARU",
-                notes = metaJson
+                notes = metaJson,
+                deliveryDate = txDate + 3 * 24 * 60 * 60 * 1000L
             )
 
             val lines = cart.map { item ->
@@ -203,6 +237,9 @@ class LaundryViewModel @Inject constructor(
             )
             cart.clear()
             onDone(order)
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
+            }
         }
     }
 
@@ -211,6 +248,9 @@ class LaundryViewModel @Inject constructor(
             val tx = transactions.value.find { it.receiptNumber == orderId } ?: return@launch
             transactionRepository.update(tx.copy(orderStatus = newStatus))
             logActivity("UPDATE STATUS LAUNDRY", "Update status transaksi $orderId menjadi $newStatus")
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
+            }
         }
     }
 
@@ -220,6 +260,9 @@ class LaundryViewModel @Inject constructor(
             val method = if (newStatus == "LUNAS") "CASH" else "HUTANG"
             transactionRepository.update(tx.copy(paymentMethod = method))
             logActivity("UPDATE PEMBAYARAN LAUNDRY", "Update pembayaran transaksi $orderId menjadi $newStatus")
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
+            }
         }
     }
 
@@ -262,6 +305,20 @@ class LaundryViewModel @Inject constructor(
                     appMode = "LAUNDRY"
                 )
             )
+        }
+    }
+
+    fun addCustomer(name: String, phone: String, address: String, onDone: () -> Unit) {
+        viewModelScope.launch {
+            val c = com.posbah.app.data.local.entities.CustomerEntity(
+                tenantId = tenantId,
+                name = name,
+                phone = phone.takeIf { it.isNotBlank() },
+                address = address.takeIf { it.isNotBlank() }
+            )
+            db.customerDao().upsert(c)
+            logActivity("TAMBAH PELANGGAN", "Menambahkan pelanggan baru: $name")
+            onDone()
         }
     }
 }

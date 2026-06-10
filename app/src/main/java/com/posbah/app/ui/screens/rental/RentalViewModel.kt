@@ -32,6 +32,11 @@ data class VehicleRentalInfo(
     val receiptNumber: String
 )
 
+@Serializable
+data class ProductWholesaleMetadata(
+    val monthlyMaintenance: Double = 0.0
+)
+
 @HiltViewModel
 class RentalViewModel @Inject constructor(
     private val authRepository: AuthRepository,
@@ -39,7 +44,9 @@ class RentalViewModel @Inject constructor(
     private val productRepository: ProductRepository,
     private val transactionRepository: TransactionRepository,
     private val localDataSeeder: LocalDataSeeder,
-    private val activityLogDao: ActivityLogDao
+    private val activityLogDao: ActivityLogDao,
+    private val db: com.posbah.app.data.local.PosBahDatabase,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context
 ) : ViewModel() {
 
     private val tenantId = authRepository.activeTenantId().orEmpty()
@@ -47,6 +54,7 @@ class RentalViewModel @Inject constructor(
 
     val products = productRepository.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val transactions = transactionRepository.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val customers = db.customerDao().observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val isOwner = flow {
         val user = authRepository.getActiveUser()
@@ -78,6 +86,17 @@ class RentalViewModel @Inject constructor(
                     // parse fallback
                 }
             }
+
+            val monthlyMaint = if (!p.wholesalePrices.isNullOrBlank()) {
+                try {
+                    val meta = Json.decodeFromString(ProductWholesaleMetadata.serializer(), p.wholesalePrices)
+                    meta.monthlyMaintenance
+                } catch (e: Exception) {
+                    0.0
+                }
+            } else {
+                0.0
+            }
             
             Vehicle(
                 id = p.id.toString(),
@@ -89,7 +108,8 @@ class RentalViewModel @Inject constructor(
                 image = p.image,
                 isRented = p.stock == 0,
                 activeRenterName = activeRenter,
-                rentExpiry = expiry
+                rentExpiry = expiry,
+                monthlyMaintenance = monthlyMaint
             )
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -118,6 +138,7 @@ class RentalViewModel @Inject constructor(
         type: String,
         pricePerDay: Double,
         costPrice: Double,
+        monthlyMaintenance: Double,
         imageFile: java.io.File?,
         onDone: () -> Unit
     ) {
@@ -127,6 +148,10 @@ class RentalViewModel @Inject constructor(
                 val compressed = CameraUtils.compressToMaxSize(imageFile, 100)
                 compressedPath = compressed.absolutePath
             }
+            val metadataStr = Json.encodeToString(
+                ProductWholesaleMetadata.serializer(),
+                ProductWholesaleMetadata(monthlyMaintenance)
+            )
             val p = ProductEntity(
                 tenantId = tenantId,
                 outletId = outletId,
@@ -137,6 +162,7 @@ class RentalViewModel @Inject constructor(
                 unit = "hari",
                 barcode = plateNumber,
                 category = type,
+                wholesalePrices = metadataStr,
                 image = compressedPath
             )
             productRepository.upsert(p)
@@ -167,6 +193,14 @@ class RentalViewModel @Inject constructor(
         onDone: (RentalOrder) -> Unit
     ) {
         viewModelScope.launch {
+            val c = com.posbah.app.data.local.entities.CustomerEntity(
+                tenantId = tenantId,
+                name = customerName,
+                phone = whatsapp.takeIf { it.isNotBlank() },
+                address = ""
+            )
+            db.customerDao().upsert(c)
+
             val total = vehicle.pricePerDay * days
             val receiptNum = transactionRepository.generateReceiptNumberForType(tenantId, "RN")
             val txDate = rentDate ?: System.currentTimeMillis()
@@ -230,6 +264,9 @@ class RentalViewModel @Inject constructor(
                 status = "ACTIVE"
             )
             onDone(mappedOrder)
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
+            }
         }
     }
 
@@ -253,6 +290,9 @@ class RentalViewModel @Inject constructor(
             }
             logActivity("PENGEMBALIAN KENDARAAN", "Pengembalian kendaraan ${order.vehicleName} (Terlambat: $lateDays hari, Denda: $lateFee)")
             onDone()
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
+            }
         }
     }
 
@@ -269,6 +309,20 @@ class RentalViewModel @Inject constructor(
                     appMode = "RENTAL"
                 )
             )
+        }
+    }
+
+    fun addCustomer(name: String, phone: String, address: String, onDone: () -> Unit) {
+        viewModelScope.launch {
+            val c = com.posbah.app.data.local.entities.CustomerEntity(
+                tenantId = tenantId,
+                name = name,
+                phone = phone.takeIf { it.isNotBlank() },
+                address = address.takeIf { it.isNotBlank() }
+            )
+            db.customerDao().upsert(c)
+            logActivity("TAMBAH PELANGGAN", "Menambahkan pelanggan baru: $name")
+            onDone()
         }
     }
 }

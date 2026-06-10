@@ -266,7 +266,7 @@ fun PrintSettingsScreen(
                                         onValueChange = { v -> viewModel.update { it.copy(bankAccountNumber = v) } },
                                         label = { Text(inputLabel) },
                                         singleLine = true,
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        keyboardOptions =   KeyboardOptions(keyboardType = KeyboardType.Number),
                                         modifier = Modifier.fillMaxWidth().testTag("inv-bank-number")
                                     )
                                 }

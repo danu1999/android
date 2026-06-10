@@ -1,0 +1,232 @@
+package com.posbah.app.ui.screens.owner.outlet
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.posbah.app.data.local.PosBahDatabase
+import com.posbah.app.data.local.entities.Outlet
+import com.posbah.app.data.local.entities.Employee
+import com.posbah.app.data.repository.AuthRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import javax.inject.Inject
+
+data class OutletSummary(
+    val outlet: Outlet,
+    val totalStock: Int,
+    val activeEmployeeName: String,
+    val totalMargin: Double
+)
+
+data class MarginDataPoint(
+    val dateStr: String,
+    val marginA: Double,
+    val marginB: Double,
+    val marginC: Double
+)
+
+data class OutletControlUiState(
+    val outlets: List<OutletSummary> = emptyList(),
+    val employees: List<Employee> = emptyList(),
+    val marginHistory: List<MarginDataPoint> = emptyList(),
+    val isLoading: Boolean = false,
+    val error: String? = null
+)
+
+@HiltViewModel
+class OutletControlViewModel @Inject constructor(
+    private val authRepository: AuthRepository,
+    private val db: PosBahDatabase
+) : ViewModel() {
+
+    private val tenantId = authRepository.activeTenantId().orEmpty()
+
+    private val _uiState = MutableStateFlow(OutletControlUiState())
+    val uiState = _uiState.asStateFlow()
+
+    init {
+        loadData()
+    }
+
+    fun loadData() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null) }
+            try {
+                // Fetch outlets
+                val rawOutlets = db.outletDao().listForTenant(tenantId)
+                
+                // Fetch products to calculate stock
+                val allProducts = db.productDao().list(tenantId)
+                
+                // Fetch employees for assignment list
+                val allEmployees = db.employeeDao().getAll().filter { it.tenantId == tenantId && it.isActive }
+
+                // Fetch transactions and items for margin calculation
+                val completedTransactions = db.transactionDao().getAll()
+                    .filter { it.tenantId == tenantId && it.status == "COMPLETED" }
+                val transactionItems = db.transactionItemDao().getAll()
+                val itemsByTxId = transactionItems.groupBy { it.transactionId }
+
+                // Map outlets to summary
+                val summaries = rawOutlets.map { outlet ->
+                    val isDefaultOutlet = outlet.isDefault
+                    // Count stock. If product outletId is null, map it to the default outlet.
+                    val outletProducts = allProducts.filter { p ->
+                        p.outletId == outlet.id || (isDefaultOutlet && p.outletId == null)
+                    }
+                    val stockCount = outletProducts.sumOf { it.stock }
+
+                    // Find active employee name
+                    val employeeName = outlet.currentEmployee 
+                        ?: allEmployees.firstOrNull { it.outletId == outlet.id }?.name 
+                        ?: "-"
+
+                    // Calculate total margin for this outlet
+                    val outletTxs = completedTransactions.filter { tx ->
+                        tx.outletId == outlet.id || (isDefaultOutlet && tx.outletId == null)
+                    }
+                    val outletMargin = outletTxs.sumOf { tx ->
+                        val items = itemsByTxId[tx.id] ?: emptyList()
+                        val cost = items.sumOf { it.costPrice * it.quantity }
+                        tx.total - cost
+                    }
+
+                    OutletSummary(
+                        outlet = outlet,
+                        totalStock = stockCount,
+                        activeEmployeeName = employeeName,
+                        totalMargin = outletMargin
+                    )
+                }
+
+                // Generate 7 Days Margin history comparison
+                val sdf = SimpleDateFormat("dd MMM", Locale.US)
+                val cal = Calendar.getInstance()
+                val history = mutableListOf<MarginDataPoint>()
+
+                // We want the last 7 days
+                val days = (0..6).map { i ->
+                    val dCal = Calendar.getInstance()
+                    dCal.add(Calendar.DAY_OF_YEAR, -i)
+                    dCal
+                }.reversed()
+
+                // Identify Outlet IDs corresponding to Outlet A, B, C (first 3 outlets)
+                val outletAId = rawOutlets.getOrNull(0)?.id
+                val outletBId = rawOutlets.getOrNull(1)?.id
+                val outletCId = rawOutlets.getOrNull(2)?.id
+                
+                val defaultOutletId = rawOutlets.firstOrNull { it.isDefault }?.id
+
+                days.forEach { day ->
+                    val dayStart = day.apply {
+                        set(Calendar.HOUR_OF_DAY, 0)
+                        set(Calendar.MINUTE, 0)
+                        set(Calendar.SECOND, 0)
+                        set(Calendar.MILLISECOND, 0)
+                    }.timeInMillis
+
+                    val dayEnd = day.apply {
+                        set(Calendar.HOUR_OF_DAY, 23)
+                        set(Calendar.MINUTE, 59)
+                        set(Calendar.SECOND, 59)
+                        set(Calendar.MILLISECOND, 999)
+                    }.timeInMillis
+
+                    val dateLabel = sdf.format(Date(dayStart))
+
+                    val dayTxs = completedTransactions.filter { it.date in dayStart..dayEnd }
+
+                    // Function to calculate margin for a list of transactions
+                    fun calcMargin(txs: List<com.posbah.app.data.local.entities.TransactionEntity>): Double {
+                        return txs.sumOf { tx ->
+                            val items = itemsByTxId[tx.id] ?: emptyList()
+                            val cost = items.sumOf { it.costPrice * it.quantity }
+                            tx.total - cost
+                        }
+                    }
+
+                    val marginA = calcMargin(dayTxs.filter { tx ->
+                        tx.outletId == outletAId || (outletAId == defaultOutletId && tx.outletId == null)
+                    })
+
+                    val marginB = calcMargin(dayTxs.filter { tx ->
+                        tx.outletId == outletBId || (outletBId == defaultOutletId && tx.outletId == null)
+                    })
+
+                    val marginC = calcMargin(dayTxs.filter { tx ->
+                        tx.outletId == outletCId || (outletCId == defaultOutletId && tx.outletId == null)
+                    })
+
+                    history.add(
+                        MarginDataPoint(
+                            dateStr = dateLabel,
+                            marginA = marginA,
+                            marginB = marginB,
+                            marginC = marginC
+                        )
+                    )
+                }
+
+                _uiState.update { 
+                    it.copy(
+                        outlets = summaries,
+                        employees = allEmployees,
+                        marginHistory = history,
+                        isLoading = false
+                    ) 
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoading = false, error = e.localizedMessage ?: "Failed to load data") }
+            }
+        }
+    }
+
+    fun toggleOutletStatus(outletId: Long) {
+        viewModelScope.launch {
+            val outlet = db.outletDao().getById(outletId) ?: return@launch
+            val updated = outlet.copy(isOpen = !outlet.isOpen, updatedAt = System.currentTimeMillis())
+            db.outletDao().update(updated)
+            loadData()
+        }
+    }
+
+    fun assignEmployee(outletId: Long, employeeName: String) {
+        viewModelScope.launch {
+            val outlet = db.outletDao().getById(outletId) ?: return@launch
+            val updated = outlet.copy(currentEmployee = employeeName.ifBlank { null }, updatedAt = System.currentTimeMillis())
+            db.outletDao().update(updated)
+            loadData()
+        }
+    }
+
+    fun createOutlet(name: String, address: String?, phone: String?) {
+        viewModelScope.launch {
+            val existing = db.outletDao().listForTenant(tenantId)
+            if (existing.size >= 3) {
+                _uiState.update { it.copy(error = "Maksimum outlet dibatasi 3.") }
+                return@launch
+            }
+            if (name.isBlank()) {
+                _uiState.update { it.copy(error = "Nama outlet tidak boleh kosong.") }
+                return@launch
+            }
+
+            val newOutlet = Outlet(
+                tenantId = tenantId,
+                name = name,
+                address = address,
+                phone = phone,
+                isOpen = true
+            )
+            db.outletDao().insert(newOutlet)
+            loadData()
+        }
+    }
+}

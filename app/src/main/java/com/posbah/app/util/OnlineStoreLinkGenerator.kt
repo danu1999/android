@@ -11,7 +11,7 @@ import javax.crypto.spec.SecretKeySpec
 object OnlineStoreLinkGenerator {
 
     private const val SECRET_KEY = "PosBahStoreSecretKey123!"
-    const val BASE_URL = "https://posbah.com/store/"
+    const val BASE_URL = "https://www.zedmz.cloud/store/"
 
     fun generateShareLink(tenantId: String, durationMinutes: Int = 5): String {
         val expiry = System.currentTimeMillis() + (durationMinutes * 60 * 1000L)

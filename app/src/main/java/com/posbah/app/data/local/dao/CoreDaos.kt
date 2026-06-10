@@ -27,6 +27,9 @@ interface LocalUserDao {
     @Query("SELECT * FROM local_users")
     fun observeAll(): Flow<List<LocalUser>>
 
+    @Query("SELECT * FROM local_users")
+    suspend fun getAll(): List<LocalUser>
+
     @Query("UPDATE local_users SET tenantId = :tenantId, updatedAt = :ts WHERE googleSub = :sub")
     suspend fun setTenant(sub: String, tenantId: String, ts: Long = System.currentTimeMillis())
 }
@@ -42,11 +45,17 @@ interface TenantDao {
     @Query("SELECT * FROM tenants WHERE ownerEmail = :email COLLATE NOCASE")
     suspend fun listForOwner(email: String): List<Tenant>
 
+    @Query("SELECT * FROM tenants")
+    suspend fun getAll(): List<Tenant>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(tenant: Tenant)
 
     @Query("UPDATE tenants SET isActive = :active, updatedAt = :ts WHERE id = :id")
     suspend fun setActive(id: String, active: Boolean, ts: Long = System.currentTimeMillis())
+
+    @Query("DELETE FROM tenants WHERE id = :id")
+    suspend fun deleteById(id: String)
 }
 
 @Dao
@@ -64,6 +73,9 @@ interface OutletDao {
     suspend fun insert(outlet: Outlet): Long
 
     @Update suspend fun update(outlet: Outlet)
+
+    @Query("SELECT * FROM outlets")
+    suspend fun getAll(): List<Outlet>
 
     @Query("DELETE FROM outlets WHERE id = :id")
     suspend fun delete(id: Long)
@@ -88,6 +100,12 @@ interface EmployeeDao {
 
     @Update suspend fun update(employee: Employee)
 
+    @Query("SELECT * FROM employees")
+    suspend fun getAll(): List<Employee>
+
     @Query("UPDATE employees SET isActive = 0 WHERE id = :id")
     suspend fun softDelete(id: Long)
+
+    @Query("DELETE FROM employees WHERE email IN (:emails) AND tenantId NOT IN (:allowedTenants)")
+    suspend fun deleteIncorrectEmployees(emails: List<String>, allowedTenants: List<String>)
 }

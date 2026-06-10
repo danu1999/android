@@ -15,6 +15,12 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+data class BmpCashFlowDataPoint(
+    val dateLabel: String,
+    val inAmount: Double,
+    val outAmount: Double
+)
+
 data class BmpDashboardUiState(
     val tenantId: String? = null,
     val tenantName: String? = null,
@@ -29,6 +35,7 @@ data class BmpDashboardUiState(
     val nonoTotalNominal: Double = 0.0,  // Total kas yang dibayarkan ke supplier
     val saldoKasRiil: Double = 0.0,      // totalIn - totalOut - nonoTotalNominal
     val simulasiSaldo: Double = 0.0,     // totalAmount - nonoTotalHarga - totalOut
+    val cashFlowHistory: List<BmpCashFlowDataPoint> = emptyList(),
     val isLoading: Boolean = true
 )
 
@@ -48,12 +55,13 @@ class BmpDashboardViewModel @Inject constructor(
 
     init {
         val tenantId = authRepository.activeTenantId()
+        val userEmail = authRepository.activeUserEmail()
         if (tenantId != null) {
-            _ui.value = _ui.value.copy(tenantId = tenantId, isLoading = false)
+            _ui.value = _ui.value.copy(tenantId = tenantId, ownerEmail = userEmail, isLoading = false)
             viewModelScope.launch {
                 try {
                     val list = bahanBakuRepo.observe(tenantId).first()
-                    if (list.isEmpty() && (tenantId == "bahteramulyap@gmail.com" || tenantId == "demo_tenant")) {
+                    if (list.isEmpty() && (tenantId == "bahteramulyap@gmail.com" || tenantId == "ten_premium_bahteramulyap_gmail_com" || tenantId == "demo_tenant")) {
                         localDataSeeder.seedFromSqlDump(context, tenantId, null)
                     }
                 } catch (e: Exception) {
@@ -63,26 +71,47 @@ class BmpDashboardViewModel @Inject constructor(
             viewModelScope.launch {
                 combine(
                     clientRepo.count(tenantId),
-                    invoiceRepo.count(tenantId),
-                    invoiceRepo.totalAmount(tenantId),
-                    invoiceRepo.totalOutstanding(tenantId),
-                ) { cc, ic, total, out -> listOf(cc, ic, total, out) }
-                    .collect { values ->
-                        _ui.value = _ui.value.copy(
-                            clientCount = values[0] as Int,
-                            invoiceCount = values[1] as Int,
-                            totalAmount = values[2] as Double,
-                            totalOutstanding = values[3] as Double
-                        )
-                        recalcSaldo()
+                    invoiceRepo.observe(tenantId)
+                ) { cc, invoices ->
+                    val nonDraftInvoices = invoices.filter { it.status != "DRAFT" }
+                    val total = if (userEmail == "bahteramulyap@gmail.com") {
+                        nonDraftInvoices.sumOf { it.totalAmount }
+                    } else {
+                        invoices.sumOf { it.totalAmount }
                     }
+                    val out = if (userEmail == "bahteramulyap@gmail.com") {
+                        nonDraftInvoices.filter { it.status != "PAID" }.sumOf { it.totalAmount - it.paidAmount }
+                    } else {
+                        invoices.filter { it.status != "PAID" }.sumOf { it.totalAmount - it.paidAmount }
+                    }
+                    val invCount = if (userEmail == "bahteramulyap@gmail.com") {
+                        nonDraftInvoices.size
+                    } else {
+                        invoices.size
+                    }
+                    Triple(cc, invCount, total to out)
+                }.collect { (cc, invCount, totals) ->
+                    _ui.value = _ui.value.copy(
+                        clientCount = cc,
+                        invoiceCount = invCount,
+                        totalAmount = totals.first,
+                        totalOutstanding = totals.second
+                    )
+                    recalcSaldo()
+                }
             }
             viewModelScope.launch {
-                combine(
-                    cashFlowRepo.totalIn(tenantId),
-                    cashFlowRepo.totalOut(tenantId)
-                ) { a, b -> a to b }.collect { (i, o) ->
-                    _ui.value = _ui.value.copy(totalIn = i, totalOut = o)
+                cashFlowRepo.observe(tenantId).collect { cashflows ->
+                    val totalIn = cashflows.filter { it.transactionType == "MASUK" }.sumOf { it.amount }
+                    val totalOut = if (userEmail == "bahteramulyap@gmail.com") {
+                        cashflows.filter { 
+                            it.transactionType == "KELUAR" && 
+                            !it.description.contains("Nono", ignoreCase = true) 
+                        }.sumOf { it.amount }
+                    } else {
+                        cashflows.filter { it.transactionType == "KELUAR" }.sumOf { it.amount }
+                    }
+                    _ui.value = _ui.value.copy(totalIn = totalIn, totalOut = totalOut)
                     recalcSaldo()
                 }
             }
@@ -93,6 +122,32 @@ class BmpDashboardViewModel @Inject constructor(
                 ) { h, n -> h to n }.collect { (h, n) ->
                     _ui.value = _ui.value.copy(nonoTotalHarga = h, nonoTotalNominal = n)
                     recalcSaldo()
+                }
+            }
+            viewModelScope.launch {
+                cashFlowRepo.observe(tenantId).collect { cashflows ->
+                    val sdfKey = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                    val sdfLabel = java.text.SimpleDateFormat("dd/MM", java.util.Locale.getDefault())
+                    val last7Days = (0..6).map { offset ->
+                        val cal = java.util.Calendar.getInstance()
+                        cal.add(java.util.Calendar.DAY_OF_YEAR, -offset)
+                        cal.time
+                    }.reversed()
+                    
+                    val grouped = cashflows.groupBy { sdfKey.format(java.util.Date(it.transactionDate)) }
+                    val points = last7Days.map { date ->
+                        val key = sdfKey.format(date)
+                        val label = sdfLabel.format(date)
+                        val entries = grouped[key] ?: emptyList()
+                        val inAmt = entries.filter { it.transactionType == "MASUK" }.sumOf { it.amount }
+                        val outAmt = entries.filter { it.transactionType == "KELUAR" }.sumOf { it.amount }
+                        BmpCashFlowDataPoint(
+                            dateLabel = label,
+                            inAmount = inAmt,
+                            outAmount = outAmt
+                        )
+                    }
+                    _ui.value = _ui.value.copy(cashFlowHistory = points)
                 }
             }
         }

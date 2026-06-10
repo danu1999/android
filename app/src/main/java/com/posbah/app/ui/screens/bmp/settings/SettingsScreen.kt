@@ -1,5 +1,8 @@
 package com.posbah.app.ui.screens.bmp.settings
 
+import android.content.Context
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -38,6 +41,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -45,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import coil.compose.AsyncImage
 import com.posbah.app.data.local.entities.BmpSettingsEntity
 import com.posbah.app.data.local.entities.Outlet
 import com.posbah.app.data.repository.AuthRepository
@@ -66,9 +71,13 @@ import kotlinx.coroutines.launch
 class SettingsViewModel @Inject constructor(
     private val settingsRepo: BmpSettingsRepository,
     private val outletRepo: OutletRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val db: com.posbah.app.data.local.PosBahDatabase
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
+
+    private val _syncStatus = MutableStateFlow<String?>(null)
+    val syncStatus = _syncStatus.asStateFlow()
 
     private val _draft = MutableStateFlow<BmpSettingsEntity?>(null)
     val draft = _draft.asStateFlow()
@@ -101,6 +110,16 @@ class SettingsViewModel @Inject constructor(
     }
     fun updateOutlet(o: Outlet) = viewModelScope.launch { outletRepo.update(o) }
     fun deleteOutlet(id: Long) = viewModelScope.launch { outletRepo.delete(id) }
+
+    fun performSync(context: Context) = viewModelScope.launch {
+        _syncStatus.value = "Sedang mensinkronisasikan..."
+        val result = com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+        _syncStatus.value = when (result) {
+            is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Success -> "Sinkronisasi berhasil!"
+            is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.NoConnection -> "Koneksi internet tidak tersedia."
+            is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Error -> "Gagal: ${result.message}"
+        }
+    }
 }
 
 @Composable
@@ -116,6 +135,14 @@ fun SettingsScreen(
     var outletAddress by remember { mutableStateOf("") }
     var outletPhone by remember { mutableStateOf("") }
 
+    val logoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            viewModel.update { entity -> entity.copy(clientLogo = it.toString()) }
+        }
+    }
+
     val d = draft ?: return
 
     Scaffold(
@@ -130,6 +157,56 @@ fun SettingsScreen(
             item {
                 Text("PROFIL PERUSAHAAN", style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(100.dp, 60.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .clickable { logoPickerLauncher.launch("image/*") }
+                            .padding(4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (!d.clientLogo.isNullOrBlank()) {
+                            AsyncImage(
+                                model = d.clientLogo,
+                                contentDescription = "Logo Perusahaan",
+                                contentScale = ContentScale.Inside,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Text(
+                                text = "Pilih Logo",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Column {
+                        TextButton(
+                            onClick = { logoPickerLauncher.launch("image/*") },
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Text("Unggah Logo")
+                        }
+                        Text(
+                            text = "Rekomendasi: 240 x 120 px\nFormat PNG/JPG",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
             item {
                 OutlinedTextField(
@@ -285,6 +362,28 @@ fun SettingsScreen(
                     onClick = onNavigateToPrintSettings,
                     modifier = Modifier.fillMaxWidth().testTag("btn-print-settings")
                 )
+            }
+            item {
+                Spacer(Modifier.height(8.dp))
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val syncStatus by viewModel.syncStatus.collectAsState()
+
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    PrimaryButton(
+                        label = "Sinkronisasi Cloud (Supabase)",
+                        onClick = { viewModel.performSync(context) },
+                        modifier = Modifier.fillMaxWidth().testTag("btn-cloud-sync")
+                    )
+                    if (syncStatus != null) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = syncStatus!!,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (syncStatus!!.contains("berhasil")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                            modifier = Modifier.align(Alignment.CenterHorizontally).testTag("sync-status-text")
+                        )
+                    }
+                }
             }
             item {
                 Spacer(Modifier.height(20.dp))

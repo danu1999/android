@@ -62,6 +62,7 @@ fun InvoiceFormScreen(
     LaunchedEffect(ui.saved) { if (ui.saved) onDone() }
 
     var showClientPicker by remember { mutableStateOf(false) }
+    var showNewProductPicker by remember { mutableStateOf(false) }
     val selectedClient = ui.clients.firstOrNull { it.id == invoice.clientId }
 
     Scaffold(
@@ -150,7 +151,7 @@ fun InvoiceFormScreen(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    TextButton(onClick = viewModel::addProductLine, modifier = Modifier.testTag("btn-add-line")) {
+                    TextButton(onClick = { showNewProductPicker = true }, modifier = Modifier.testTag("btn-add-line")) {
                         Icon(Icons.Outlined.Add, contentDescription = null)
                         Spacer(Modifier.size(4.dp))
                         Text("Tambah baris")
@@ -219,6 +220,73 @@ fun InvoiceFormScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showClientPicker = false }) { Text("Tutup") }
+            }
+        )
+    }
+
+    if (showNewProductPicker) {
+        AlertDialog(
+            onDismissRequest = { showNewProductPicker = false },
+            title = { Text("Pilih Produk") },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth().height(360.dp)) {
+                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        item {
+                            Surface(
+                                color = MaterialTheme.colorScheme.surface,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        viewModel.addBlankProductLine()
+                                        showNewProductPicker = false
+                                    }
+                                    .padding(vertical = 12.dp, horizontal = 4.dp)
+                                    .testTag("picker-product-custom")
+                            ) {
+                                Column {
+                                    Text(
+                                        "Item Kosong / Kustom",
+                                        style = MaterialTheme.typography.titleMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    )
+                                    Text(
+                                        "Tambah baris kosong baru",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                        
+                        items(ui.masterProducts, key = { it.id }) { mp ->
+                            Surface(
+                                color = MaterialTheme.colorScheme.surface,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        viewModel.addProductLine(mp)
+                                        showNewProductPicker = false
+                                    }
+                                    .padding(vertical = 10.dp, horizontal = 4.dp)
+                                    .testTag("picker-product-${mp.id}")
+                            ) {
+                                Column {
+                                    Text(mp.title, style = MaterialTheme.typography.titleMedium)
+                                    Text(
+                                        "${Formatters.rupiah(mp.price)} / ${mp.unit}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showNewProductPicker = false }) { Text("Tutup") }
             }
         )
     }

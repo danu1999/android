@@ -57,6 +57,8 @@ data class Outlet(
     val address: String? = null,
     val phone: String? = null,
     val isDefault: Boolean = false,
+    val isOpen: Boolean = true,
+    val currentEmployee: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
@@ -79,6 +81,9 @@ data class Employee(
     val pinHash: String,
     val salary: Double = 0.0,
     val isActive: Boolean = true,
+    val payPeriod: String = "MONTHLY",
+    val lastPaidAt: Long? = null,
+    val emailVerified: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

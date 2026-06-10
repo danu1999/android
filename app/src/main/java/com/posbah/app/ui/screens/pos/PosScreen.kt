@@ -31,8 +31,11 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Check
@@ -104,6 +107,7 @@ import com.posbah.app.ui.components.EmptyState
 import com.posbah.app.ui.components.LoadingBlock
 import com.posbah.app.ui.components.PosBahTopBar
 import com.posbah.app.ui.components.PrimaryButton
+import com.posbah.app.ui.navigation.Screen
 import com.posbah.app.util.Formatters
 import com.posbah.app.util.CameraUtils
 import com.posbah.app.util.OnlineStoreLinkGenerator
@@ -116,10 +120,24 @@ import java.util.Locale
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+private fun decodeBase64Image(imageStr: String?): Any? {
+    if (imageStr.isNullOrBlank()) return null
+    if (imageStr.startsWith("data:image")) {
+        val base64Data = imageStr.substringAfter("base64,")
+        return try {
+            android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT)
+        } catch (e: Exception) {
+            imageStr
+        }
+    }
+    return imageStr
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PosScreen(
     onBack: () -> Unit,
+    onNavigate: (String) -> Unit,
     viewModel: PosViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -147,6 +165,15 @@ fun PosScreen(
     var newCustAddress by remember { mutableStateOf("") }
 
     var showTransactionsHistoryDialog by remember { mutableStateOf(false) }
+    var showEditReceiptDialog by remember { mutableStateOf(false) }
+    var selectedTxForEdit by remember { mutableStateOf<TransactionEntity?>(null) }
+    var editCustName by remember { mutableStateOf("") }
+    var editPaymentMethod by remember { mutableStateOf("") }
+    var editDate by remember { mutableStateOf(0L) }
+    var editTotalAmount by remember { mutableStateOf("") }
+    var editAmountPaid by remember { mutableStateOf("") }
+    var editChange by remember { mutableStateOf("") }
+    var editNotes by remember { mutableStateOf("") }
     var showLogsDialog by remember { mutableStateOf(false) }
     var showStoreShareDialog by remember { mutableStateOf(false) }
     var showStoreSimulationDialog by remember { mutableStateOf(false) }
@@ -230,54 +257,116 @@ fun PosScreen(
                     subtitle = "Sistem Kasir Pintar",
                     onBack = onBack,
                     actions = {
-                        if (isTablet) {
-                            IconButton(onClick = {
-                                scope.launch {
-                                    viewModel.toggleQueueModal(true)
-                                }
-                            }) {
-                                Icon(Icons.Outlined.Queue, contentDescription = "Daftar Antrian")
-                            }
-                        }
-                        IconButton(onClick = {
-                            activeStoreToken = OnlineStoreLinkGenerator.generateShareLink(tenantId)
-                            showStoreShareDialog = true
-                        }) {
-                            Icon(Icons.Outlined.Share, contentDescription = "Toko Online")
-                        }
-                        IconButton(onClick = { showTransactionsHistoryDialog = true }) {
-                            Icon(Icons.Outlined.History, contentDescription = "Riwayat Transaksi")
-                        }
-                        if (ui.isOwner) {
-                            IconButton(onClick = { showLogsDialog = true }) {
-                                Icon(Icons.Outlined.Notes, contentDescription = "Log Aktivitas")
-                            }
-                        }
-                        IconButton(onClick = {
-                            newProdName = ""
-                            newProdPrice = ""
-                            newProdCostPrice = ""
-                            newProdStock = "999"
-                            newProdCategory = "Umum"
-                            newProdBarcode = ""
-                            capturedPhotoFile = null
-                            showAddProductDialog = true
-                        }) {
-                            Icon(Icons.Outlined.Storefront, contentDescription = "Tambah Produk")
-                        }
-                        IconButton(onClick = {
-                            newCustName = ""
-                            newCustPhone = ""
-                            newCustAddress = ""
-                            showAddCustomerDialog = true
-                        }) {
-                            Icon(Icons.Outlined.People, contentDescription = "Tambah Pelanggan")
-                        }
-                        IconButton(onClick = viewModel::importDemoData) {
-                            Icon(Icons.Outlined.CloudDownload, contentDescription = "Impor Backup")
+                        IconButton(onClick = { onNavigate(Screen.MarginAnalysis.route) }) {
+                            Icon(Icons.Outlined.History, contentDescription = "Analisis Margin & Riwayat")
                         }
                     }
                 )
+            },
+            bottomBar = {
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 8.dp,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    LazyRow(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp, horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        item {
+                            FooterButton(
+                                icon = Icons.Outlined.Queue,
+                                label = "Antrian",
+                                onClick = {
+                                    scope.launch {
+                                        viewModel.toggleQueueModal(true)
+                                    }
+                                }
+                            )
+                        }
+                        item {
+                            FooterButton(
+                                icon = Icons.Outlined.Share,
+                                label = "Toko Online",
+                                onClick = {
+                                    activeStoreToken = OnlineStoreLinkGenerator.generateShareLink(tenantId)
+                                    showStoreShareDialog = true
+                                }
+                            )
+                        }
+                        item {
+                            FooterButton(
+                                icon = Icons.Outlined.History,
+                                label = "Riwayat",
+                                onClick = { showTransactionsHistoryDialog = true }
+                            )
+                        }
+                        if (ui.isOwner) {
+                            item {
+                                FooterButton(
+                                    icon = Icons.Outlined.Notes,
+                                    label = "Log Aktivitas",
+                                    onClick = { showLogsDialog = true }
+                                )
+                            }
+                        }
+                        item {
+                            FooterButton(
+                                icon = Icons.Outlined.Storefront,
+                                label = "Tambah Produk",
+                                onClick = {
+                                    newProdName = ""
+                                    newProdPrice = ""
+                                    newProdCostPrice = ""
+                                    newProdStock = "999"
+                                    newProdCategory = "Umum"
+                                    newProdBarcode = ""
+                                    capturedPhotoFile = null
+                                    showAddProductDialog = true
+                                }
+                            )
+                        }
+                        item {
+                            FooterButton(
+                                icon = Icons.Outlined.People,
+                                label = "Tambah Pelanggan",
+                                onClick = {
+                                    newCustName = ""
+                                    newCustPhone = ""
+                                    newCustAddress = ""
+                                    showAddCustomerDialog = true
+                                }
+                            )
+                        }
+                        item {
+                            FooterButton(
+                                icon = Icons.Outlined.CloudDownload,
+                                label = "Backup",
+                                onClick = viewModel::importDemoData
+                            )
+                        }
+                        if (ui.isOwner) {
+                            item {
+                                FooterButton(
+                                    icon = Icons.Outlined.Storefront,
+                                    label = "Kontrol Outlet",
+                                    onClick = { onNavigate("owner/outlet_control") }
+                                )
+                            }
+                            item {
+                                FooterButton(
+                                    icon = Icons.Outlined.People,
+                                    label = "Kelola Karyawan",
+                                    onClick = { onNavigate("owner/employees") }
+                                )
+                            }
+                        }
+                    }
+                }
             }
         ) { paddingValues ->
             Row(
@@ -906,6 +995,63 @@ fun PosScreen(
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth().testTag("add-customer-address")
                         )
+
+                        androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                        Text(
+                            text = "Daftar Pelanggan & Riwayat Belanja",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Box(modifier = Modifier.fillMaxWidth().height(140.dp)) {
+                            if (customerList.isEmpty()) {
+                                Text(
+                                    "Belum ada pelanggan terdaftar",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.align(Alignment.Center)
+                                )
+                            } else {
+                                LazyColumn(
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    items(customerList) { cust ->
+                                        val custTx = transactionHistoryList.filter {
+                                            it.customerId == cust.id || it.customerName.equals(cust.name, ignoreCase = true)
+                                        }
+                                        val totalSpent = custTx.sumOf { it.total }
+                                        val lastTx = custTx.maxByOrNull { it.date }
+                                        val lastTxDateStr = if (lastTx != null) {
+                                            SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(lastTx.date))
+                                        } else {
+                                            "Belum ada transaksi"
+                                        }
+
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Column(modifier = Modifier.padding(8.dp)) {
+                                                Text(cust.name, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                                Text("WhatsApp: ${cust.phone ?: "-"}", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                Text("Alamat: ${cust.address ?: "-"}", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                Spacer(Modifier.height(4.dp))
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                ) {
+                                                    Text("Total: ${Formatters.rupiah(totalSpent)}", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                                    Text("Terakhir: $lastTxDateStr", fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 },
                 confirmButton = {
@@ -1055,6 +1201,26 @@ fun PosScreen(
                                                     Spacer(Modifier.width(4.dp))
                                                     Text("Cetak Nota", fontSize = 10.sp)
                                                 }
+                                                Spacer(Modifier.width(8.dp))
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        selectedTxForEdit = tx
+                                                        editCustName = tx.customerName.orEmpty()
+                                                        editPaymentMethod = tx.paymentMethod
+                                                        editDate = tx.date
+                                                        editTotalAmount = tx.total.toString()
+                                                        editAmountPaid = tx.amountPaid?.toString().orEmpty()
+                                                        editChange = tx.change?.toString().orEmpty()
+                                                        editNotes = tx.notes.orEmpty()
+                                                        showEditReceiptDialog = true
+                                                    },
+                                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                                    modifier = Modifier.height(28.dp)
+                                                ) {
+                                                    Icon(Icons.Outlined.Edit, null, modifier = Modifier.size(12.dp))
+                                                    Spacer(Modifier.width(4.dp))
+                                                    Text("Edit", fontSize = 10.sp)
+                                                }
                                             }
                                         }
                                     }
@@ -1065,6 +1231,152 @@ fun PosScreen(
                 },
                 confirmButton = {
                     TextButton(onClick = { showTransactionsHistoryDialog = false }) { Text("Tutup") }
+                }
+            )
+        }
+
+        // Dialog: Edit Struk / Transaksi
+        if (showEditReceiptDialog && selectedTxForEdit != null) {
+            val tx = selectedTxForEdit!!
+            AlertDialog(
+                onDismissRequest = { showEditReceiptDialog = false },
+                title = { Text("Edit Struk #${tx.receiptNumber}") },
+                text = {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                    ) {
+                        OutlinedTextField(
+                            value = editCustName,
+                            onValueChange = { editCustName = it },
+                            label = { Text("Nama Pelanggan") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Date Picker Button
+                        val calendar = java.util.Calendar.getInstance()
+                        calendar.timeInMillis = editDate
+                        val datePickerDialog = android.app.DatePickerDialog(
+                            context,
+                            { _, year, month, dayOfMonth ->
+                                val selectedCal = java.util.Calendar.getInstance()
+                                selectedCal.timeInMillis = editDate
+                                selectedCal.set(java.util.Calendar.YEAR, year)
+                                selectedCal.set(java.util.Calendar.MONTH, month)
+                                selectedCal.set(java.util.Calendar.DAY_OF_MONTH, dayOfMonth)
+                                editDate = selectedCal.timeInMillis
+                            },
+                            calendar.get(java.util.Calendar.YEAR),
+                            calendar.get(java.util.Calendar.MONTH),
+                            calendar.get(java.util.Calendar.DAY_OF_MONTH)
+                        )
+                        val sdf = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+                        val dateStr = sdf.format(Date(editDate))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Tanggal:", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                            OutlinedButton(onClick = { datePickerDialog.show() }) {
+                                Text(dateStr, fontSize = 12.sp)
+                            }
+                        }
+
+                        // Payment Method
+                        Text("Metode Pembayaran:", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            val methods = listOf("CASH", "QRIS", "TRANSFER", "HUTANG")
+                            methods.forEach { m ->
+                                val active = editPaymentMethod == m
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable { editPaymentMethod = m }
+                                ) {
+                                    Text(
+                                        text = m,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 10.sp,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(vertical = 8.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        OutlinedTextField(
+                            value = editTotalAmount,
+                            onValueChange = { editTotalAmount = it },
+                            label = { Text("Total Belanja (Rp)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = editAmountPaid,
+                            onValueChange = { editAmountPaid = it },
+                            label = { Text("Jumlah Bayar (Rp)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = editChange,
+                            onValueChange = { editChange = it },
+                            label = { Text("Uang Kembali (Rp)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        OutlinedTextField(
+                            value = editNotes,
+                            onValueChange = { editNotes = it },
+                            label = { Text("Catatan / Notes") },
+                            singleLine = false,
+                            maxLines = 3,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val totalVal = editTotalAmount.toDoubleOrNull() ?: tx.total
+                            val paidVal = editAmountPaid.toDoubleOrNull()
+                            val changeVal = editChange.toDoubleOrNull()
+                            viewModel.updateReceipt(
+                                id = tx.id,
+                                customerName = editCustName.takeIf { it.isNotBlank() },
+                                paymentMethod = editPaymentMethod,
+                                date = editDate,
+                                amountPaid = paidVal,
+                                change = changeVal,
+                                notes = editNotes.takeIf { it.isNotBlank() },
+                                total = totalVal
+                            )
+                            showEditReceiptDialog = false
+                            Toast.makeText(context, "Struk berhasil diperbarui!", Toast.LENGTH_SHORT).show()
+                        }
+                    ) {
+                        Text("Simpan")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showEditReceiptDialog = false }) {
+                        Text("Batal")
+                    }
                 }
             )
         }
@@ -1262,7 +1574,7 @@ fun PosScreen(
                                                 ) {
                                                     if (!product.image.isNullOrBlank()) {
                                                         AsyncImage(
-                                                            model = product.image,
+                                                            model = decodeBase64Image(product.image),
                                                             contentDescription = product.name,
                                                             modifier = Modifier.fillMaxSize(),
                                                             contentScale = androidx.compose.ui.layout.ContentScale.Crop
@@ -1412,6 +1724,37 @@ private fun CartSidebarContent(
         }
 
         // Linking customer & adding invoice notes
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            val isUmum = ui.customerId == null
+            Button(
+                onClick = { viewModel.selectCustomer(null, null) },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isUmum) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (isUmum) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                ),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Umum (Walk-in)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+            Button(
+                onClick = { isCustomerDropdownExpanded = true },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (!isUmum) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (!isUmum) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                ),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Pilih Pelanggan", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+
+        Spacer(Modifier.height(4.dp))
+
         ExposedDropdownMenuBox(
             expanded = isCustomerDropdownExpanded,
             onExpandedChange = { isCustomerDropdownExpanded = it },
@@ -1742,7 +2085,7 @@ private fun ProductCard(
             ) {
                 if (!product.image.isNullOrBlank()) {
                     AsyncImage(
-                        model = product.image,
+                        model = decodeBase64Image(product.image),
                         contentDescription = product.name,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = androidx.compose.ui.layout.ContentScale.Crop
@@ -1887,4 +2230,33 @@ private fun printHtmlReceipt(context: Context, html: String) {
         }
     }
     webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+}
+
+@Composable
+fun FooterButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = label,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }

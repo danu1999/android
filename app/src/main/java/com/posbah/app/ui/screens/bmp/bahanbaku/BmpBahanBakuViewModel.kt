@@ -22,6 +22,8 @@ import kotlinx.coroutines.launch
 
 @HiltViewModel
 class BahanBakuListViewModel @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
+    private val db: com.posbah.app.data.local.PosBahDatabase,
     private val repo: BmpBahanBakuRepository,
     private val authRepo: AuthRepository
 ) : ViewModel() {
@@ -36,9 +38,63 @@ class BahanBakuListViewModel @Inject constructor(
     val totalNominal = repo.totalNominal(tenantId)
         .stateIn(viewModelScope, SharingStarted.Eagerly, 0.0)
 
-    fun delete(id: Long) = viewModelScope.launch { repo.delete(id) }
+    private val _filterStartDate = MutableStateFlow<Long?>(null)
+    val filterStartDate = _filterStartDate.asStateFlow()
 
-    fun payDebt(id: Long, amount: Double) = viewModelScope.launch { repo.payDebt(id, amount) }
+    private val _filterEndDate = MutableStateFlow<Long?>(null)
+    val filterEndDate = _filterEndDate.asStateFlow()
+
+    private val _filterHutang = MutableStateFlow(false)
+    val filterHutang = _filterHutang.asStateFlow()
+
+    private val _filterDibayar = MutableStateFlow(false)
+    val filterDibayar = _filterDibayar.asStateFlow()
+
+    val filteredList = kotlinx.coroutines.flow.combine(
+        repo.observe(tenantId),
+        _filterStartDate,
+        _filterEndDate,
+        _filterHutang,
+        _filterDibayar
+    ) { rawList, start, end, showHutang, showPaid ->
+        var list = rawList
+        if (start != null) {
+            list = list.filter { it.tanggal >= start }
+        }
+        if (end != null) {
+            list = list.filter { it.tanggal <= end + 24 * 60 * 60 * 1000L - 1 }
+        }
+        if (showHutang && !showPaid) {
+            list = list.filter { it.totalHarga - it.nominal > 0 }
+        }
+        if (showPaid && !showHutang) {
+            list = list.filter { it.totalHarga - it.nominal <= 0 }
+        }
+        list
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun setDateRange(start: Long?, end: Long?) {
+        _filterStartDate.value = start
+        _filterEndDate.value = end
+    }
+
+    fun toggleFilterHutang(enabled: Boolean) {
+        _filterHutang.value = enabled
+    }
+
+    fun toggleFilterDibayar(enabled: Boolean) {
+        _filterDibayar.value = enabled
+    }
+
+    fun delete(id: Long) = viewModelScope.launch { 
+        repo.delete(id) 
+        com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+    }
+ 
+    fun payDebt(id: Long, amount: Double) = viewModelScope.launch { 
+        repo.payDebt(id, amount) 
+        com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+    }
 }
 
 // ─────────────────────────────────────────────
@@ -87,6 +143,8 @@ data class BahanBakuFormUiState(
 
 @HiltViewModel
 class BahanBakuFormViewModel @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
+    private val db: com.posbah.app.data.local.PosBahDatabase,
     private val repo: BmpBahanBakuRepository,
     private val authRepo: AuthRepository,
     savedState: SavedStateHandle
@@ -293,6 +351,7 @@ class BahanBakuFormViewModel @Inject constructor(
             } else {
                 repo.update(originalNominal, finalHeader, entities)
             }
+            com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
             _ui.update { it.copy(isLoading = false, saved = true) }
         }
     }

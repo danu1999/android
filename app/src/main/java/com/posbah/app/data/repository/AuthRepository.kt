@@ -17,6 +17,9 @@ import com.posbah.app.security.SecurePreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -32,6 +35,23 @@ class AuthRepository @Inject constructor(
     private val localDataSeeder: LocalDataSeeder,
     @ApplicationContext private val context: Context
 ) {
+
+    init {
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            try {
+                // Delete duplicate tenant created under email-key
+                tenantDao.deleteById("hanafiariful@gmail.com")
+                
+                // Delete wrong employees seeded from CV Bahtera dump
+                employeeDao.deleteIncorrectEmployees(
+                    emails = listOf("bahteramulyap@gmail.com", "syerlirahma7@gmail.com"),
+                    allowedTenants = listOf("bahteramulyap@gmail.com", "ten_premium_bahteramulyap_gmail_com")
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
 
     sealed class LoginOutcome {
         data class Success(val user: LocalUser, val tenant: Tenant) : LoginOutcome()
@@ -157,13 +177,20 @@ class AuthRepository @Inject constructor(
         if (securePrefs.lockoutUntil > now) return@withContext LoginOutcome.Locked
 
         val cleanEmail = email.lowercase().trim()
+
+        // Enforce: Demo users must use Google Login
+        val dbUser = userDao.getByEmail(cleanEmail)
+        if (dbUser != null && !dbUser.isPremium) {
+            return@withContext LoginOutcome.Error("Akun demo wajib menggunakan Google Login. Hubungi muhammadmuizz8@gmail.com jika sudah melakukan pembayaran premium.")
+        }
+
         val staticPremiumUsers = mapOf(
-            "bahteramulyap@gmail.com" to Triple("8a0ff1f8926195dfde55af7e68c028591602dacc30dc3c7caef27a949ca45142b25514004cf4540c46eca830100d06517c6facc0faf77fc57140e9df5fe5ffc7", "CV Bahtera Mulya Plastik", "bahteramulyap@gmail.com"),
-            "hanafiariful@gmail.com" to Triple("20710a82f8d6b458af10d49fbb1f985ac8aaf696e6b32e776d4f4ebbc30d08565e2bb5e1902ace18297d8db47ad35e49c086669125b1d6ac867c0d2d7e265e50", "PISANG KEJU RAMAYANA", "hanafiariful@gmail.com"),
-            "fahrup22@gmail.com" to Triple("63e71711d1481b6da8b756e114aa2ac71a704929c0accf46f419706a5c1416ae1a312899ae84d3d8e33d255811e98fd4d17e59371a08e2f9c21c01d1b1c13a8d", "FahriP", "hanafiariful@gmail.com"),
-            "alfarisirosi40@gmail.com" to Triple("a10301e4a133374bddc5f4f246aead30ba95b4f60c65df80418df2c6338141c9606262b07348fb0ee75964d460de3a459377217afa4b85b7bde3f8572d3b791c", "Mamet PKR", "hanafiariful@gmail.com"),
-            "alfarisirosi04@gmail.com" to Triple("a10301e4a133374bddc5f4f246aead30ba95b4f60c65df80418df2c6338141c9606262b07348fb0ee75964d460de3a459377217afa4b85b7bde3f8572d3b791c", "Mamet PKR", "hanafiariful@gmail.com"),
-            "syerlirahma7@gmail.com" to Triple("5819ef0d24208780b75c18009f0f69400eb933916f800ae980b778820cda595e3151de8600a0c325711f0e9641b5a72f393008868913578601ba0fa0d4c9ad93", "syerli", "bahteramulyap@gmail.com")
+            "bahteramulyap@gmail.com" to Triple("8a0ff1f8926195dfde55af7e68c028591602dacc30dc3c7caef27a949ca45142b25514004cf4540c46eca830100d06517c6facc0faf77fc57140e9df5fe5ffc7", "CV Bahtera Mulya Plastik", "ten_premium_bahteramulyap_gmail_com"),
+            "hanafiariful@gmail.com" to Triple("20710a82f8d6b458af10d49fbb1f985ac8aaf696e6b32e776d4f4ebbc30d08565e2bb5e1902ace18297d8db47ad35e49c086669125b1d6ac867c0d2d7e265e50", "PISANG KEJU RAMAYANA", "ten_premium_hanafiariful_gmail_com"),
+            "fahrup22@gmail.com" to Triple("63e71711d1481b6da8b756e114aa2ac71a704929c0accf46f419706a5c1416ae1a312899ae84d3d8e33d255811e98fd4d17e59371a08e2f9c21c01d1b1c13a8d", "FahriP", "ten_premium_hanafiariful_gmail_com"),
+            "alfarisirosi40@gmail.com" to Triple("a10301e4a133374bddc5f4f246aead30ba95b4f60c65df80418df2c6338141c9606262b07348fb0ee75964d460de3a459377217afa4b85b7bde3f8572d3b791c", "Mamet PKR", "ten_premium_hanafiariful_gmail_com"),
+            "alfarisirosi04@gmail.com" to Triple("a10301e4a133374bddc5f4f246aead30ba95b4f60c65df80418df2c6338141c9606262b07348fb0ee75964d460de3a459377217afa4b85b7bde3f8572d3b791c", "Mamet PKR", "ten_premium_hanafiariful_gmail_com"),
+            "syerlirahma7@gmail.com" to Triple("5819ef0d24208780b75c18009f0f69400eb933916f800ae980b778820cda595e3151de8600a0c325711f0e9641b5a72f393008868913578601ba0fa0d4c9ad93", "syerli", "ten_premium_bahteramulyap_gmail_com")
         )
 
         val successUser: LocalUser
@@ -181,11 +208,12 @@ class AuthRepository @Inject constructor(
             securePrefs.lockoutUntil = 0L
 
             // Ensure tenant exists in database
+            val isBmpTenant = tenantId.contains("bahteramulyap")
             val tenant = tenantDao.getById(tenantId) ?: Tenant(
                 id = tenantId,
-                name = if (tenantId == "bahteramulyap@gmail.com") "CV. BAHTERA MULYA PLASTIK" else "PISANG KEJU RAMAYANA",
-                ownerEmail = tenantId,
-                businessMode = if (tenantId == "bahteramulyap@gmail.com") "BMP" else "FNB"
+                name = if (isBmpTenant) "CV. BAHTERA MULYA PLASTIK" else "PISANG KEJU RAMAYANA",
+                ownerEmail = if (isBmpTenant) "bahteramulyap@gmail.com" else "hanafiariful@gmail.com",
+                businessMode = if (isBmpTenant) "BMP" else "FNB"
             ).also { tenantDao.upsert(it) }
 
             // Ensure outlet exists
@@ -225,8 +253,147 @@ class AuthRepository @Inject constructor(
             successTenant = tenant
         } else {
             // Check employees table in database
-            val emp = employeeDao.findByEmail(cleanEmail)
-                ?: return@withContext LoginOutcome.Error("Email atau password tidak ditemukan")
+            var emp = employeeDao.findByEmail(cleanEmail)
+            if (emp == null) {
+                // Fetch from Supabase remote database
+                var conn: java.net.HttpURLConnection? = null
+                try {
+                    val url = java.net.URL("https://etustetneufkfilndimy.supabase.co/rest/v1/employees?email=eq.$cleanEmail")
+                    conn = url.openConnection() as java.net.HttpURLConnection
+                    conn.requestMethod = "GET"
+                    conn.connectTimeout = 10000
+                    conn.readTimeout = 10000
+                    conn.setRequestProperty("apikey", "sb_publishable_X_BhY3R3kKLp4wEpNX4giQ_U9xKDg2R")
+                    conn.setRequestProperty("Authorization", "Bearer sb_publishable_X_BhY3R3kKLp4wEpNX4giQ_U9xKDg2R")
+
+                    val code = conn.responseCode
+                    if (code in 200..299) {
+                        val response = conn.inputStream.bufferedReader().use { it.readText() }
+                        val array = org.json.JSONArray(response)
+                        if (array.length() > 0) {
+                            val obj = array.getJSONObject(0)
+                            val tenantId = obj.getString("tenantId")
+                            
+                            // Let's first make sure the Tenant exists locally! If not, create it or query from Supabase.
+                            var tenantName = "CV. Premium Owner (Premium)"
+                            var tenantBusinessMode = "BMP"
+                            var tenantConn: java.net.HttpURLConnection? = null
+                            try {
+                                val tUrl = java.net.URL("https://etustetneufkfilndimy.supabase.co/rest/v1/tenants?id=eq.$tenantId")
+                                tenantConn = tUrl.openConnection() as java.net.HttpURLConnection
+                                tenantConn.requestMethod = "GET"
+                                tenantConn.setRequestProperty("apikey", "sb_publishable_X_BhY3R3kKLp4wEpNX4giQ_U9xKDg2R")
+                                tenantConn.setRequestProperty("Authorization", "Bearer sb_publishable_X_BhY3R3kKLp4wEpNX4giQ_U9xKDg2R")
+                                if (tenantConn.responseCode in 200..299) {
+                                    val tResponse = tenantConn.inputStream.bufferedReader().use { it.readText() }
+                                    val tArray = org.json.JSONArray(tResponse)
+                                    if (tArray.length() > 0) {
+                                        val tObj = tArray.getJSONObject(0)
+                                        tenantName = tObj.getString("name")
+                                        tenantBusinessMode = tObj.getString("businessMode")
+                                    }
+                                }
+                            } catch (e: java.lang.Exception) {
+                                e.printStackTrace()
+                            } finally {
+                                tenantConn?.disconnect()
+                            }
+
+                            // Upsert the tenant locally
+                            val tenant = Tenant(
+                                id = tenantId,
+                                name = tenantName,
+                                ownerEmail = cleanEmail,
+                                businessMode = tenantBusinessMode
+                            )
+                            tenantDao.upsert(tenant)
+
+                            // Ensure an outlet exists locally for this tenant
+                            val outlets = outletDao.listForTenant(tenantId)
+                            val outletId = if (outlets.isEmpty()) {
+                                outletDao.insert(
+                                    Outlet(
+                                        tenantId = tenantId,
+                                        name = "Outlet Utama",
+                                        isDefault = true
+                                    )
+                                )
+                            } else {
+                                outlets.first().id
+                            }
+
+                            // Build the Employee entity
+                            val fetchedEmp = Employee(
+                                id = obj.getLong("id"),
+                                tenantId = tenantId,
+                                outletId = outletId,
+                                name = obj.getString("name"),
+                                email = cleanEmail,
+                                role = obj.getString("role"),
+                                pinHash = obj.getString("pinHash"),
+                                salary = obj.optDouble("salary", 0.0),
+                                isActive = obj.optBoolean("isActive", true),
+                                createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
+                                updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                            )
+                            // Save to local database
+                            employeeDao.insert(fetchedEmp)
+                            emp = fetchedEmp
+
+                            // We should also check if the user is in local_users table locally, if not create them.
+                            val existingUser = userDao.getByEmail(cleanEmail)
+                            if (existingUser == null) {
+                                val user = LocalUser(
+                                    googleSub = obj.optString("googleSub", "emp:${fetchedEmp.id}"),
+                                    email = cleanEmail,
+                                    displayName = fetchedEmp.name,
+                                    photoUrl = null,
+                                    role = fetchedEmp.role,
+                                    isPremium = true,
+                                    tenantId = tenantId
+                                )
+                                userDao.upsert(user)
+                            }
+                        }
+                    }
+                } catch (e: java.lang.Exception) {
+                    e.printStackTrace()
+                } finally {
+                    conn?.disconnect()
+                }
+            }
+
+            if (emp == null) {
+                // Query Supabase local_users table to see if they are an unactivated demo user
+                var isDemo = false
+                var conn2: java.net.HttpURLConnection? = null
+                try {
+                    val url2 = java.net.URL("https://etustetneufkfilndimy.supabase.co/rest/v1/local_users?email=eq.$cleanEmail")
+                    conn2 = url2.openConnection() as java.net.HttpURLConnection
+                    conn2.requestMethod = "GET"
+                    conn2.setRequestProperty("apikey", "sb_publishable_X_BhY3R3kKLp4wEpNX4giQ_U9xKDg2R")
+                    conn2.setRequestProperty("Authorization", "Bearer sb_publishable_X_BhY3R3kKLp4wEpNX4giQ_U9xKDg2R")
+                    if (conn2.responseCode in 200..299) {
+                        val res = conn2.inputStream.bufferedReader().use { it.readText() }
+                        val arr = org.json.JSONArray(res)
+                        if (arr.length() > 0) {
+                            val uObj = arr.getJSONObject(0)
+                            if (!uObj.optBoolean("isPremium", false)) {
+                                isDemo = true
+                            }
+                        }
+                    }
+                } catch (e: java.lang.Exception) {
+                    e.printStackTrace()
+                } finally {
+                    conn2?.disconnect()
+                }
+
+                if (isDemo) {
+                    return@withContext LoginOutcome.Error("Akun demo wajib menggunakan Google Login. Hubungi muhammadmuizz8@gmail.com jika sudah melakukan pembayaran premium.")
+                }
+                return@withContext LoginOutcome.Error("Email atau password tidak ditemukan")
+            }
 
             val isPasswordValid = if (emp.pinHash.startsWith("v1$")) {
                 PinHasher.verify(password, emp.pinHash)
@@ -414,6 +581,7 @@ class AuthRepository @Inject constructor(
     }
 
     fun activeUserSub(): String? = securePrefs.currentGoogleSub
+    fun activeUserEmail(): String? = securePrefs.currentEmail
     fun activeTenantId(): String? = securePrefs.currentTenantId
 
     suspend fun getActiveUser(): LocalUser? = withContext(Dispatchers.IO) {

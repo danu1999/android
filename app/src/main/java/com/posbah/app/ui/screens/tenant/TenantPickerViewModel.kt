@@ -19,6 +19,7 @@ data class TenantPickerUiState(
     val selectedId: String? = null,
     val showCreateDialog: Boolean = false,
     val newTenantName: String = "",
+    val canAddTenant: Boolean = false,
     val error: String? = null
 )
 
@@ -38,7 +39,13 @@ class TenantPickerViewModel @Inject constructor(
         val email = securePrefs.currentEmail ?: return
         viewModelScope.launch {
             tenantRepository.observeForOwner(email).collect { list ->
-                _ui.update { it.copy(isLoading = false, tenants = list) }
+                _ui.update { 
+                    it.copy(
+                        isLoading = false, 
+                        tenants = list,
+                        canAddTenant = email == "muhammadmuizz8@gmail.com"
+                    ) 
+                }
             }
         }
     }

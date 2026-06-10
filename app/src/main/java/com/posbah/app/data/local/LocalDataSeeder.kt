@@ -7,6 +7,8 @@ import com.posbah.app.data.local.dao.ProductDao
 import com.posbah.app.data.local.entities.CustomerEntity
 import com.posbah.app.data.local.entities.Employee
 import com.posbah.app.data.local.entities.ProductEntity
+import com.posbah.app.data.local.entities.TransactionEntity
+import com.posbah.app.data.local.entities.TransactionItemEntity
 import com.posbah.app.data.local.entities.BmpClientEntity
 import com.posbah.app.data.local.entities.BmpInvoiceEntity
 import com.posbah.app.data.local.entities.BmpProductEntity
@@ -69,17 +71,28 @@ class LocalDataSeeder @Inject constructor(
      * Specific database dumps are only seeded for "bahteramulyap@gmail.com" and "demo_tenant".
      */
     suspend fun seedFromSqlDump(context: Context, tenantId: String, outletId: Long?) = withContext(Dispatchers.IO) {
-        // Only seed SQL dump data for bahteramulyap@gmail.com and demo_tenant.
+        // Only seed SQL dump data for bahteramulyap@gmail.com, hanafiariful@gmail.com, and demo_tenant accounts.
         // Other new premium accounts will start with a fresh/empty database space.
         if (tenantId != "bahteramulyap@gmail.com" && 
+            tenantId != "ten_premium_bahteramulyap_gmail_com" && 
             tenantId != "demo_tenant" && 
             !tenantId.contains("hanafiariful_gmail_com") && 
-            tenantId != "hanafiariful@gmail.com") {
+            tenantId != "hanafiariful@gmail.com" &&
+            !tenantId.startsWith("demo_tenant_")) {
             return@withContext
         }
 
+        val tenant = db.tenantDao().getById(tenantId)
+        val isBmpMode = tenant?.businessMode == "BMP"
+
         val assetManager = context.assets
-        val inputStream = assetManager.open("posbah_tenant_bahteramulyap_gmail_com.sql")
+        // Select the right seed SQL file based on tenantId
+        val sqlFileName = when {
+            tenantId == "hanafiariful@gmail.com" || tenantId.contains("hanafiariful_gmail_com") ->
+                "posbah_tenant_hanafiariful_gmail_com.sql"
+            else -> "posbah_tenant_bahteramulyap_gmail_com.sql"
+        }
+        val inputStream = assetManager.open(sqlFileName)
         val reader = BufferedReader(InputStreamReader(inputStream, "UTF-8"))
 
         var currentTable: String? = null
@@ -87,6 +100,8 @@ class LocalDataSeeder @Inject constructor(
         val productList = mutableListOf<ProductEntity>()
         val customerList = mutableListOf<CustomerEntity>()
         val employeeList = mutableListOf<Employee>()
+        val transactionList = mutableListOf<TransactionEntity>()
+        val transactionItemList = mutableListOf<TransactionItemEntity>()
 
         // BMP lists
         val bmpClientList = mutableListOf<BmpClientEntity>()
@@ -120,8 +135,18 @@ class LocalDataSeeder @Inject constructor(
                     if (parts.size >= columns.size) {
                         val rowMap = columns.zip(parts).toMap()
 
+                        val isPosTable = currentTable in listOf("Product", "Customer", "Employee", "Transaction", "TransactionItem")
+                        val isBmpTable = currentTable in listOf(
+                            "BmpClient", "BmpInvoice", "BmpProduct", "BmpMasterProduct",
+                            "BmpInvoicePayment", "BmpCashFlow", "BmpSettings", "BmpEmployee",
+                            "BmpPayroll", "BmpBahanNono", "BmpBahanNonoItem"
+                        )
+                        if (isPosTable && isBmpMode) continue
+                        if (isBmpTable && !isBmpMode) continue
+
                         when (currentTable) {
                             "Product" -> {
+                                val id = rowMap["id"]?.toLongOrNull() ?: 0L
                                 val name = rowMap["name"]
                                 if (name.isNullOrBlank() || name == "\\N") continue
                                 val price = rowMap["price"]?.toDoubleOrNull() ?: 0.0
@@ -137,6 +162,7 @@ class LocalDataSeeder @Inject constructor(
 
                                 productList.add(
                                     ProductEntity(
+                                        id = id,
                                         tenantId = tenantId,
                                         outletId = outletId,
                                         name = name,
@@ -154,6 +180,7 @@ class LocalDataSeeder @Inject constructor(
                                 )
                             }
                             "Customer" -> {
+                                val id = rowMap["id"]?.toLongOrNull() ?: 0L
                                 val name = rowMap["name"]
                                 if (name.isNullOrBlank() || name == "\\N") continue
                                 val phone = rowMap["phone"]?.takeIf { it != "\\N" }
@@ -161,6 +188,7 @@ class LocalDataSeeder @Inject constructor(
 
                                 customerList.add(
                                     CustomerEntity(
+                                        id = id,
                                         tenantId = tenantId,
                                         name = name,
                                         phone = phone,
@@ -169,6 +197,7 @@ class LocalDataSeeder @Inject constructor(
                                 )
                             }
                             "Employee" -> {
+                                val id = rowMap["id"]?.toLongOrNull() ?: 0L
                                 val name = rowMap["name"]
                                 if (name.isNullOrBlank() || name == "\\N") continue
                                 val role = rowMap["role"]?.takeIf { it != "\\N" } ?: "KASIR"
@@ -176,8 +205,16 @@ class LocalDataSeeder @Inject constructor(
                                 val salary = rowMap["salary"]?.toDoubleOrNull() ?: 0.0
                                 val email = rowMap["email"]?.takeIf { it != "\\N" }
 
+                                // Skip CV Bahtera Mulya Plastik employees if seeding into another tenant (e.g. FNB or demo)
+                                val isBmpEmployee = email == "bahteramulyap@gmail.com" || email == "syerlirahma7@gmail.com"
+                                val isBmpTenant = tenantId == "bahteramulyap@gmail.com" || tenantId == "ten_premium_bahteramulyap_gmail_com"
+                                if (isBmpEmployee && !isBmpTenant) {
+                                    continue
+                                }
+
                                 employeeList.add(
                                     Employee(
+                                        id = id,
                                         tenantId = tenantId,
                                         outletId = outletId,
                                         name = name,
@@ -185,6 +222,67 @@ class LocalDataSeeder @Inject constructor(
                                         role = role,
                                         pinHash = pinHash,
                                         salary = salary
+                                    )
+                                )
+                            }
+                            "Transaction" -> {
+                                val id = rowMap["id"]?.toLongOrNull() ?: 0L
+                                val receiptNumber = rowMap["receiptNumber"] ?: continue
+                                if (receiptNumber.isBlank() || receiptNumber == "\\N") continue
+                                val dateMs = rowMap["date"]?.toLongOrNull() ?: System.currentTimeMillis()
+                                val subtotal = rowMap["subtotal"]?.toDoubleOrNull() ?: 0.0
+                                val discountAmt = rowMap["discountAmt"]?.toDoubleOrNull() ?: 0.0
+                                val total = rowMap["total"]?.toDoubleOrNull() ?: subtotal
+                                val discount = rowMap["discount"]?.toDoubleOrNull() ?: 0.0
+                                val paymentMethod = rowMap["paymentMethod"]?.takeIf { it != "\\N" } ?: "CASH"
+                                val type = rowMap["type"]?.takeIf { it != "\\N" } ?: "SALES"
+                                val status = rowMap["status"]?.takeIf { it != "\\N" } ?: "COMPLETED"
+                                val employeeId = rowMap["employeeId"]?.toLongOrNull() ?: 1L
+
+                                transactionList.add(
+                                    TransactionEntity(
+                                        id = id,
+                                        tenantId = tenantId,
+                                        outletId = outletId,
+                                        employeeId = employeeId,
+                                        receiptNumber = receiptNumber,
+                                        date = dateMs,
+                                        subtotal = subtotal,
+                                        discountAmt = discountAmt,
+                                        total = total,
+                                        discount = discount,
+                                        paymentMethod = paymentMethod,
+                                        type = type,
+                                        status = status,
+                                        createdAt = dateMs,
+                                        updatedAt = dateMs
+                                    )
+                                )
+                            }
+                            "TransactionItem" -> {
+                                val id = rowMap["id"]?.toLongOrNull() ?: continue
+                                val transactionId = rowMap["transactionId"]?.toLongOrNull() ?: continue
+                                val productId = rowMap["productId"]?.toLongOrNull() ?: continue
+                                val variantId = rowMap["variantId"]?.toLongOrNull()
+                                val variantName = rowMap["variantName"]?.takeIf { it != "\\N" }
+                                val quantity = rowMap["quantity"]?.toIntOrNull() ?: 1
+                                val price = rowMap["price"]?.toDoubleOrNull() ?: 0.0
+                                val costPrice = rowMap["costPrice"]?.toDoubleOrNull() ?: 0.0
+                                val discount = rowMap["discount"]?.toDoubleOrNull() ?: 0.0
+                                val note = rowMap["note"]?.takeIf { it != "\\N" }
+
+                                transactionItemList.add(
+                                    TransactionItemEntity(
+                                        id = id,
+                                        transactionId = transactionId,
+                                        productId = productId,
+                                        variantId = variantId,
+                                        variantName = variantName,
+                                        quantity = quantity,
+                                        price = price,
+                                        costPrice = costPrice,
+                                        discount = discount,
+                                        note = note
                                     )
                                 )
                             }
@@ -537,6 +635,18 @@ class LocalDataSeeder @Inject constructor(
             for (emp in employeeList) {
                 employeeDao.insert(emp)
             }
+        }
+        if (transactionList.isNotEmpty()) {
+            for (tx in transactionList) {
+                try {
+                    db.transactionDao().insert(tx)
+                } catch (e: Exception) {
+                    // Skip duplicate receiptNumber on conflict
+                }
+            }
+        }
+        if (transactionItemList.isNotEmpty()) {
+            db.transactionItemDao().insertAll(transactionItemList)
         }
 
         // Commit BMP seeded data

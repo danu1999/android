@@ -29,9 +29,14 @@ import com.posbah.app.ui.screens.login.LoginScreen
 import com.posbah.app.ui.screens.splash.SplashScreen
 import com.posbah.app.ui.screens.tenant.TenantPickerScreen
 import com.posbah.app.ui.screens.pos.PosScreen
+import com.posbah.app.ui.screens.pos.MarginAnalysisScreen
+import com.posbah.app.ui.screens.owner.outlet.OutletControlScreen
+import com.posbah.app.ui.screens.owner.employee.EmployeeManagementScreen
 import com.posbah.app.ui.screens.rental.RentalScreen
 import com.posbah.app.ui.screens.laundry.LaundryScreen
 import com.posbah.app.ui.screens.tenant.SystemSelectionScreen
+import com.posbah.app.ui.screens.admin.AdminPanelScreen
+import com.posbah.app.ui.screens.bmp.qr.QrScannerScreen
 import kotlinx.coroutines.launch
 
 @Composable
@@ -126,8 +131,17 @@ fun PosBahRoot(
                     nav.navigate(Screen.TenantPicker.route) {
                         popUpTo(Screen.PosDashboard.route) { inclusive = true }
                     }
-                }
+                },
+                onNavigate = { route -> nav.navigate(route) }
             )
+        }
+
+        composable(Screen.OutletControl.route) {
+            OutletControlScreen(onBack = { nav.popBackStack() })
+        }
+
+        composable(Screen.EmployeeManagement.route) {
+            EmployeeManagementScreen(onBack = { nav.popBackStack() })
         }
 
         composable(Screen.RentalDashboard.route) {
@@ -136,7 +150,8 @@ fun PosBahRoot(
                     nav.navigate(Screen.TenantPicker.route) {
                         popUpTo(Screen.RentalDashboard.route) { inclusive = true }
                     }
-                }
+                },
+                onNavigate = { route -> nav.navigate(route) }
             )
         }
 
@@ -146,7 +161,14 @@ fun PosBahRoot(
                     nav.navigate(Screen.TenantPicker.route) {
                         popUpTo(Screen.LaundryDashboard.route) { inclusive = true }
                     }
-                }
+                },
+                onNavigate = { route -> nav.navigate(route) }
+            )
+        }
+
+        composable(Screen.MarginAnalysis.route) {
+            MarginAnalysisScreen(
+                onBack = { nav.popBackStack() }
             )
         }
 
@@ -244,6 +266,16 @@ fun PosBahRoot(
             arguments = listOf(navArgument("id") { type = NavType.StringType; defaultValue = "-1" })
         ) {
             BahanBakuFormScreen(onDone = { nav.popBackStack() })
+        }
+
+        composable(Screen.AdminPanel.route) {
+            AdminPanelScreen(onBack = { nav.popBackStack() })
+        }
+
+        composable(Screen.QrScanner.route) {
+            QrScannerScreen(
+                onBack = { nav.popBackStack() }
+            )
         }
     }
 }
