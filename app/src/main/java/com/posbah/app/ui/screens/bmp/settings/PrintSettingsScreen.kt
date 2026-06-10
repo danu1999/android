@@ -1,6 +1,8 @@
 package com.posbah.app.ui.screens.bmp.settings
 
 import android.widget.Toast
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -150,6 +152,8 @@ fun PrintSettingsScreen(
                                 onSignatureSaved = { viewModel.update { e -> e.copy(jpgSignatureDrawnBase64 = it) } },
                                 isColor = d.jpgIsColor,
                                 onIsColorChange = { viewModel.update { e -> e.copy(jpgIsColor = it) } },
+                                templateType = d.jpgTemplateType,
+                                onTemplateTypeChange = { viewModel.update { e -> e.copy(jpgTemplateType = it) } },
                                 tagPrefix = "jpg",
                                 context = context
                             )
@@ -174,6 +178,8 @@ fun PrintSettingsScreen(
                                 onSignatureSaved = { viewModel.update { e -> e.copy(sjSignatureDrawnBase64 = it) } },
                                 isColor = d.sjIsColor,
                                 onIsColorChange = { viewModel.update { e -> e.copy(sjIsColor = it) } },
+                                templateType = d.sjTemplateType,
+                                onTemplateTypeChange = { viewModel.update { e -> e.copy(sjTemplateType = it) } },
                                 tagPrefix = "sj",
                                 context = context
                             )
@@ -198,9 +204,73 @@ fun PrintSettingsScreen(
                                 onSignatureSaved = { viewModel.update { e -> e.copy(invoiceSignatureDrawnBase64 = it) } },
                                 isColor = d.invoiceIsColor,
                                 onIsColorChange = { viewModel.update { e -> e.copy(invoiceIsColor = it) } },
+                                templateType = d.invoiceTemplateType,
+                                onTemplateTypeChange = { viewModel.update { e -> e.copy(invoiceTemplateType = it) } },
                                 tagPrefix = "inv",
                                 context = context
                             )
+                        }
+                        item {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text("Informasi Pembayaran", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                                    Text(
+                                        "Informasi bank/e-wallet untuk dicetak di invoice",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+
+                                    Text("Bank / E-Wallet", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        listOf("BCA", "BRI", "MANDIRI", "DANA", "SHOPE").forEach { bank ->
+                                            val selected = d.bankName == bank
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent)
+                                                    .border(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
+                                                    .clickable { viewModel.update { it.copy(bankName = bank) } }
+                                                    .padding(vertical = 8.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(bank, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface, fontSize = 12.sp)
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(16.dp))
+
+                                    OutlinedTextField(
+                                        value = d.bankOwnerName,
+                                        onValueChange = { v -> viewModel.update { it.copy(bankOwnerName = v) } },
+                                        label = { Text("Atas Nama Pemilik") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth().testTag("inv-bank-owner")
+                                    )
+
+                                    Spacer(modifier = Modifier.height(16.dp))
+
+                                    val inputLabel = if (d.bankName == "DANA" || d.bankName == "SHOPE") "Nomor Akun Dana/Shopee" else "Nomor Rekening"
+                                    OutlinedTextField(
+                                        value = d.bankAccountNumber,
+                                        onValueChange = { v -> viewModel.update { it.copy(bankAccountNumber = v) } },
+                                        label = { Text(inputLabel) },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        modifier = Modifier.fillMaxWidth().testTag("inv-bank-number")
+                                    )
+                                }
+                            }
                         }
                     }
                     TAB_POS -> {
@@ -385,10 +455,15 @@ fun PrintSettingsScreen(
                 PrimaryButton(
                     label = "Simpan Pengaturan Cetak",
                     onClick = {
-                        viewModel.save {
-                            Toast.makeText(context, "Pengaturan cetak berhasil disimpan!", Toast.LENGTH_SHORT).show()
-                            onBack()
-                        }
+                        viewModel.save(
+                            onError = { err ->
+                                Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+                            },
+                            onDone = {
+                                Toast.makeText(context, "Pengaturan cetak berhasil disimpan!", Toast.LENGTH_SHORT).show()
+                                onBack()
+                            }
+                        )
                     },
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -419,6 +494,8 @@ private fun DocPrintSettingsCard(
     onSignatureSaved: (String?) -> Unit,
     isColor: Boolean,
     onIsColorChange: (Boolean) -> Unit,
+    templateType: String,
+    onTemplateTypeChange: (String) -> Unit,
     tagPrefix: String,
     context: android.content.Context
 ) {
@@ -434,6 +511,36 @@ private fun DocPrintSettingsCard(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
+        // ── Desain Template card ──────────────────────────────────────────────
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Desain Template", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Pilih ukuran dan desain template dokumen",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(
+                        selected = templateType == "MODERN",
+                        onClick = { onTemplateTypeChange("MODERN") }
+                    )
+                    Text("Modern (A4 / Standar)", modifier = Modifier.clickable { onTemplateTypeChange("MODERN") })
+                    Spacer(modifier = Modifier.width(24.dp))
+                    RadioButton(
+                        selected = templateType == "TRADITIONAL",
+                        onClick = { onTemplateTypeChange("TRADITIONAL") }
+                    )
+                    Text("Tradisional (9.5x11 / Continuous Form)", modifier = Modifier.clickable { onTemplateTypeChange("TRADITIONAL") })
+                }
+            }
+        }
 
         // ── Logo card ────────────────────────────────────────────────────────
         Card(
@@ -562,17 +669,6 @@ private fun DocPrintSettingsCard(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    OutlinedTextField(
-                        value = receiverName,
-                        onValueChange = onReceiverNameChange,
-                        label = { Text("Nama Terang Penerima") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
                     Spacer(modifier = Modifier.height(16.dp))
                     Text("Gambar Tanda Tangan Anda (Pengirim)", fontWeight = FontWeight.SemiBold)
                     Text(

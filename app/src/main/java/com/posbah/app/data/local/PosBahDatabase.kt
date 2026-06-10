@@ -74,7 +74,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
         TransactionItemEntity::class,
         ActivityLogEntity::class
     ],
-    version = 10,
+    version = 13,
     exportSchema = true
 )
 abstract class PosBahDatabase : RoomDatabase() {
@@ -185,6 +185,32 @@ abstract class PosBahDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `outlets` ADD COLUMN `isOpen` INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE `outlets` ADD COLUMN `currentEmployee` TEXT")
+                db.execSQL("ALTER TABLE `employees` ADD COLUMN `payPeriod` TEXT NOT NULL DEFAULT 'MONTHLY'")
+                db.execSQL("ALTER TABLE `employees` ADD COLUMN `lastPaidAt` INTEGER")
+                db.execSQL("ALTER TABLE `employees` ADD COLUMN `emailVerified` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `print_settings` ADD COLUMN `jpgTemplateType` TEXT NOT NULL DEFAULT 'MODERN'")
+                db.execSQL("ALTER TABLE `print_settings` ADD COLUMN `sjTemplateType` TEXT NOT NULL DEFAULT 'MODERN'")
+                db.execSQL("ALTER TABLE `print_settings` ADD COLUMN `invoiceTemplateType` TEXT NOT NULL DEFAULT 'MODERN'")
+            }
+        }
+
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `print_settings` ADD COLUMN `bankOwnerName` TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE `print_settings` ADD COLUMN `bankName` TEXT NOT NULL DEFAULT 'BCA'")
+                db.execSQL("ALTER TABLE `print_settings` ADD COLUMN `bankAccountNumber` TEXT NOT NULL DEFAULT ''")
+            }
+        }
+
         fun build(context: Context, passphrase: ByteArray): PosBahDatabase {
             // Load SQLCipher native library
             System.loadLibrary("sqlcipher")
@@ -197,7 +223,7 @@ abstract class PosBahDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10) // ← Data AMAN, tidak terhapus
+                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13) // ← Data AMAN, tidak terhapus
                 .fallbackToDestructiveMigration()      // ← Fallback jika dari versi < 5 (install baru)
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {

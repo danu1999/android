@@ -319,6 +319,15 @@ data class PrintSettingsEntity(
     /** Teks footer struk (misal: terima kasih, wifi password, dsb.) */
     val receiptFooterText: String = "Terima kasih sudah berbelanja!",
 
+    // ─── Desain Template Cetak ────────────────────────────────────────────────
+    val jpgTemplateType: String = "MODERN",
+    val sjTemplateType: String = "MODERN",
+    val invoiceTemplateType: String = "MODERN",
+
+    val bankOwnerName: String = "",
+    val bankName: String = "BCA",
+    val bankAccountNumber: String = "",
+
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

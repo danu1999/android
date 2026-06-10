@@ -103,7 +103,7 @@ fun InvoiceDetailScreen(
                     if (inv != null) {
                         IconButton(
                             onClick = {
-                                val html = generateInvoiceHtml(context, inv, ui.products, ui.client, ui.settings, ui.printConfig.invoice)
+                                val html = generateInvoiceHtml(context, inv, ui.products, ui.client, ui.settings, ui.printConfig.invoice, ui.printConfig)
                                 printHtml(context, html, "Invoice_${inv.number}", ui.printConfig.invoice.isColor)
                             },
                             modifier = Modifier.testTag("btn-print-top")
@@ -201,7 +201,7 @@ fun InvoiceDetailScreen(
                             },
                             modifier = Modifier
                                 .clickable {
-                                    val html = generateInvoiceHtml(context, inv, ui.products, ui.client, ui.settings, ui.printConfig.jpg)
+                                    val html = generateInvoiceHtml(context, inv, ui.products, ui.client, ui.settings, ui.printConfig.jpg, ui.printConfig)
                                     printColoredJpg(context, html, "Invoice_${inv.number}")
                                 }
                                 .background(Color.Transparent)
@@ -222,7 +222,7 @@ fun InvoiceDetailScreen(
                             },
                             modifier = Modifier
                                 .clickable {
-                                    val html = generateInvoiceHtml(context, inv, ui.products, ui.client, ui.settings, ui.printConfig.invoice)
+                                    val html = generateInvoiceHtml(context, inv, ui.products, ui.client, ui.settings, ui.printConfig.invoice, ui.printConfig)
                                     printHtml(context, html, "Invoice_${inv.number}", ui.printConfig.invoice.isColor)
                                 }
                                 .background(Color.Transparent)
@@ -616,7 +616,8 @@ private fun generateInvoiceHtml(
     products: List<com.posbah.app.data.local.entities.BmpProductEntity>,
     client: com.posbah.app.data.local.entities.BmpClientEntity?,
     settings: com.posbah.app.data.local.entities.BmpSettingsEntity?,
-    printConfig: DocPrintConfig
+    printConfig: DocPrintConfig,
+    globalConfig: PrintConfig
 ): String {
     val logoBase64 = if (printConfig.useLogo) getAssetBase64(context, "logo.jpg") else ""
 
@@ -632,15 +633,13 @@ private fun generateInvoiceHtml(
     val itemsHtml = StringBuilder()
     products.forEachIndexed { index, p ->
         val subtotal = p.price * p.quantity * p.jumlahLusin
-        val lineDesc = if (p.jumlahLusin > 1.0) {
-            "${Formatters.number(p.quantity)} ${p.unit} &times; ${Formatters.number(p.jumlahLusin)} lusin"
-        } else {
-            "${Formatters.number(p.quantity)} ${p.unit}"
-        }
+        val satuanVal = "${Formatters.number(p.jumlahLusin)} ${if (p.unit.lowercase() == "lusin" || p.unit == "-") "Lusin" else p.unit}"
         itemsHtml.append("""
             <tr>
                 <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${index + 1}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;"><strong>${p.title}</strong><br><span style="font-size: 11px; color: #555;">$lineDesc</span></td>
+                <td style="border: 1px solid #ddd; padding: 8px;"><strong>${p.title}</strong></td>
+                <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${Formatters.number(p.quantity)}</td>
+                <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">$satuanVal</td>
                 <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${Formatters.rupiah(p.price)}</td>
                 <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${Formatters.rupiah(subtotal)}</td>
             </tr>
@@ -648,13 +647,13 @@ private fun generateInvoiceHtml(
     }
 
     val isColor = printConfig.isColor
-    val themeColor = if (isColor) "#1E3A8A" else "#333333"
-    val accentBg = if (isColor) "#EFF6FF" else "#F3F4F6"
+    val themeColor = if (isColor) "#1E3A8A" else "#000000"
+    val accentBg = if (isColor) "#EFF6FF" else "#ffffff"
     val statusColor = when (invoice.status) {
-        "PAID" -> if (isColor) "#10B981" else "#4B5563"
-        "PARTIAL" -> if (isColor) "#3B82F6" else "#4B5563"
+        "PAID" -> if (isColor) "#10B981" else "#000000"
+        "PARTIAL" -> if (isColor) "#3B82F6" else "#000000"
         "OVERDUE" -> if (isColor) "#EF4444" else "#000000"
-        else -> if (isColor) "#6B7280" else "#4B5563"
+        else -> if (isColor) "#6B7280" else "#000000"
     }
 
     val headerHtml = if (logoBase64.isNotEmpty()) {
@@ -673,6 +672,13 @@ private fun generateInvoiceHtml(
                     <span class="doc-title">Faktur</span><br>
                     No: <strong>${invoice.number}</strong><br>
                     Status: <span class="status-badge">${invoice.status}</span>
+                    ${if (!isColor) """
+                    <br>
+                    <span style="font-size: 13px;">
+                        TGL: ${Formatters.dateLong(invoice.createdAt)}<br>
+                        TEMPO: ${invoice.dueDate?.let { Formatters.dateLong(it) } ?: "-"}
+                    </span>
+                    """ else ""}
                 </td>
             </tr>
         </table>
@@ -692,6 +698,12 @@ private fun generateInvoiceHtml(
                     <td style="text-align: center; padding-top: 15px;">
                         <span class="doc-title" style="text-align: center; display: block; width: 100%;">Faktur</span>
                         No: <strong>${invoice.number}</strong> | Status: <span class="status-badge">${invoice.status}</span>
+                        ${if (!isColor) """
+                        <br>
+                        <span style="font-size: 13px;">
+                            TGL: ${Formatters.dateLong(invoice.createdAt)} | TEMPO: ${invoice.dueDate?.let { Formatters.dateLong(it) } ?: "-"}
+                        </span>
+                        """ else ""}
                     </td>
                 </tr>
             </table>
@@ -709,6 +721,13 @@ private fun generateInvoiceHtml(
                         <span class="doc-title">Faktur</span><br>
                         No: <strong>${invoice.number}</strong><br>
                         Status: <span class="status-badge">${invoice.status}</span>
+                        ${if (!isColor) """
+                        <br>
+                        <span style="font-size: 13px;">
+                            TGL: ${Formatters.dateLong(invoice.createdAt)}<br>
+                            TEMPO: ${invoice.dueDate?.let { Formatters.dateLong(it) } ?: "-"}
+                        </span>
+                        """ else ""}
                     </td>
                 </tr>
             </table>
@@ -717,7 +736,8 @@ private fun generateInvoiceHtml(
     }
 
     val signatureHtml = if (printConfig.useSignature) {
-        val receiverSig = invoice.receiverSignatureUrl ?: invoice.receiverSignaturePath
+        val localSigBase64 = getFileBase64(invoice.receiverSignaturePath)
+        val receiverSig = if (localSigBase64.isNotEmpty()) localSigBase64 else (invoice.receiverSignatureUrl ?: "")
         val receiverName = invoice.receiverNameActual ?: printConfig.signatureReceiverName
         """
         <table class="signature-section">
@@ -760,12 +780,29 @@ private fun generateInvoiceHtml(
                 .info-box { padding: 10px; border: 1px solid #eee; background-color: #FAFAFA; border-radius: 4px; margin-right: 10px; }
                 .info-box-right { padding: 10px; border: 1px solid #eee; background-color: #FAFAFA; border-radius: 4px; margin-left: 10px; }
                 .details-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
-                .details-table th { background-color: $themeColor; color: white; padding: 10px; font-weight: bold; text-align: left; }
+                .details-table th {
+                    background-color: ${if (isColor) themeColor else "white"};
+                    color: ${if (isColor) "white" else "black"};
+                    padding: 10px;
+                    font-weight: bold;
+                    text-align: left;
+                    ${if (isColor) "" else "border-top: 2px solid black; border-bottom: 2px solid black;"}
+                }
                 .details-table td { padding: 10px; border-bottom: 1px solid #eee; }
                 .totals-table { width: 40%; margin-left: auto; border-collapse: collapse; margin-top: 15px; }
                 .totals-table td { padding: 6px 10px; }
                 .totals-table tr.grand-total { font-size: 15px; font-weight: bold; background-color: $accentBg; }
-                .status-badge { display: inline-block; padding: 3px 8px; font-weight: bold; color: white; background-color: $statusColor; border-radius: 3px; font-size: 11px; text-transform: uppercase; }
+                .status-badge {
+                    display: inline-block;
+                    padding: 3px 8px;
+                    font-weight: bold;
+                    color: ${if (isColor) "white" else "black"};
+                    background-color: ${if (isColor) statusColor else "white"};
+                    border: ${if (isColor) "none" else "1px solid black"};
+                    border-radius: 3px;
+                    font-size: 11px;
+                    text-transform: uppercase;
+                }
                 .footer { margin-top: 50px; text-align: center; color: #777; font-size: 11px; border-top: 1px solid #eee; padding-top: 15px; }
                 .signature-section { width: 100%; margin-top: 50px; border-collapse: collapse; }
                 .signature-col { width: 50%; text-align: center; }
@@ -773,20 +810,21 @@ private fun generateInvoiceHtml(
         </head>
         <body>
             $headerHtml
-
+ 
             <hr style="border: none; border-top: 2px solid $themeColor; margin-bottom: 20px;">
-
+ 
             <table class="info-table">
                 <tr>
-                    <td class="info-col">
-                        <div class="info-box">
+                    <td class="info-col" style="${if (isColor) "width: 50%;" else "width: 100%;"}">
+                        <div class="info-box" style="${if (isColor) "" else "background-color: white; border: none; padding-left: 0;"}">
                             <strong>DITAGIHKAN KEPADA:</strong><br>
                             <span style="font-size: 14px; font-weight: bold;">$clientName</span><br>
                             Alamat: $clientAddress<br>
                             Telp: $clientPhone
                         </div>
                     </td>
-                    <td class="info-col">
+                    ${if (isColor) """
+                    <td class="info-col" style="width: 50%;">
                         <div class="info-box-right">
                             <strong>Rincian Pembayaran:</strong><br>
                             Tanggal Faktur: ${Formatters.dateLong(invoice.createdAt)}<br>
@@ -794,23 +832,26 @@ private fun generateInvoiceHtml(
                             Termin: ${invoice.paymentTerms}
                         </div>
                     </td>
+                    """ else ""}
                 </tr>
             </table>
-
+ 
             <table class="details-table" style="border: 1px solid #ddd; width: 100%;">
                 <thead>
                     <tr>
-                        <th style="width: 8%; text-align: center; background-color: $themeColor;">No</th>
-                        <th style="width: 52%; background-color: $themeColor;">Deskripsi Item</th>
-                        <th style="width: 20%; text-align: right; background-color: $themeColor;">Harga Satuan</th>
-                        <th style="width: 20%; text-align: right; background-color: $themeColor;">Total</th>
+                        <th style="width: 5%; text-align: center;">No</th>
+                        <th style="width: 45%;">Deskripsi Item</th>
+                        <th style="width: 10%; text-align: center;">QTY</th>
+                        <th style="width: 15%; text-align: center;">Satuan</th>
+                        <th style="width: 12%; text-align: right;">Harga</th>
+                        <th style="width: 13%; text-align: right;">Total</th>
                     </tr>
                 </thead>
                 <tbody>
                     $itemsHtml
                 </tbody>
             </table>
-
+ 
             <table class="totals-table">
                 <tr>
                     <td>Subtotal:</td>
@@ -818,16 +859,31 @@ private fun generateInvoiceHtml(
                 </tr>
                 <tr>
                     <td>Telah Dibayar:</td>
-                    <td style="text-align: right; color: #10B981;">${Formatters.rupiah(invoice.paidAmount)}</td>
+                    <td style="text-align: right; color: ${if (isColor) "#10B981" else "#000000"};">${Formatters.rupiah(invoice.paidAmount)}</td>
                 </tr>
                 <tr class="grand-total">
                     <td style="border-top: 1px solid #ccc;">Sisa Tagihan:</td>
-                    <td style="text-align: right; border-top: 1px solid #ccc; color: #EF4444;">${Formatters.rupiah(invoice.totalAmount - invoice.paidAmount)}</td>
+                    <td style="text-align: right; border-top: 1px solid #ccc; color: ${if (isColor) "#EF4444" else "#000000"};">${Formatters.rupiah(invoice.totalAmount - invoice.paidAmount)}</td>
                 </tr>
             </table>
+ 
+            ${if (globalConfig.bankOwnerName.isNotBlank() && globalConfig.bankAccountNumber.isNotBlank()) """
+            <table style="width: 100%; margin-top: 20px;">
+                <tr>
+                    <td style="width: 60%; vertical-align: top;">
+                        <div style="font-size: 13px; border-top: 1px solid #000; padding-top: 8px; margin-bottom: 15px;">
+                            <strong>Info Pembayaran :</strong><br>
+                            bank : ${globalConfig.bankName} : ${globalConfig.bankAccountNumber}<br>
+                            atas nama : ${globalConfig.bankOwnerName}
+                        </div>
+                    </td>
+                    <td style="width: 40%;"></td>
+                </tr>
+            </table>
+            """ else ""}
 
             $signatureHtml
-
+ 
             <div class="footer">
                 Terima kasih atas kerja sama Anda.<br>
                 Faktur ini dihasilkan secara luring (offline) oleh POSBah.
@@ -846,6 +902,7 @@ private fun generateSuratJalanHtml(
     printConfig: DocPrintConfig
 ): String {
     val logoBase64 = if (printConfig.useLogo) getAssetBase64(context, "logo.jpg") else ""
+    val isColor = printConfig.isColor
 
     val companyName = settings?.clientName ?: "CV. Bahtera Mulya Plastik"
     val companyAddress = settings?.addressLine1 ?: "Sidoarjo, Jawa Timur"
@@ -857,17 +914,13 @@ private fun generateSuratJalanHtml(
 
     val itemsHtml = StringBuilder()
     products.forEachIndexed { index, p ->
-        val lineDesc = if (p.jumlahLusin > 1.0) {
-            "${Formatters.number(p.quantity)} ${p.unit} &times; ${Formatters.number(p.jumlahLusin)} lusin"
-        } else {
-            "${Formatters.number(p.quantity)} ${p.unit}"
-        }
+        val satuanVal = "${Formatters.number(p.jumlahLusin)} ${if (p.unit.lowercase() == "lusin" || p.unit == "-") "Lusin" else p.unit}"
         itemsHtml.append("""
             <tr>
                 <td style="border: 1px solid #333; padding: 8px; text-align: center;">${index + 1}</td>
                 <td style="border: 1px solid #333; padding: 8px;"><strong>${p.title}</strong></td>
-                <td style="border: 1px solid #333; padding: 8px; text-align: center;">$lineDesc</td>
-                <td style="border: 1px solid #333; padding: 8px;"></td>
+                <td style="border: 1px solid #333; padding: 8px; text-align: center;">$satuanVal</td>
+                <td style="border: 1px solid #333; padding: 8px; text-align: center;">${Formatters.number(p.quantity)}</td>
             </tr>
         """.trimIndent())
     }
@@ -932,7 +985,8 @@ private fun generateSuratJalanHtml(
     }
 
     val signatureHtml = if (printConfig.useSignature) {
-        val receiverSig = invoice.receiverSignatureUrl ?: invoice.receiverSignaturePath
+        val localSigBase64 = getFileBase64(invoice.receiverSignaturePath)
+        val receiverSig = if (localSigBase64.isNotEmpty()) localSigBase64 else (invoice.receiverSignatureUrl ?: "")
         val receiverName = invoice.receiverNameActual ?: printConfig.signatureReceiverName
         """
         <table class="signature-section">
@@ -980,7 +1034,14 @@ private fun generateSuratJalanHtml(
                 .info-box { padding: 10px; border: 1px solid #333; border-radius: 4px; margin-right: 10px; }
                 .info-box-right { padding: 10px; border: 1px solid #333; border-radius: 4px; margin-left: 10px; }
                 .details-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
-                .details-table th { background-color: #333; color: white; padding: 8px; font-weight: bold; text-align: left; border: 1px solid #333; }
+                .details-table th {
+                    background-color: ${if (isColor) "#333" else "white"};
+                    color: ${if (isColor) "white" else "black"};
+                    padding: 8px;
+                    font-weight: bold;
+                    text-align: left;
+                    border: 1px solid #333;
+                }
                 .details-table td { padding: 8px; border: 1px solid #333; }
                 .footer { margin-top: 30px; text-align: center; color: #555; font-size: 11px; }
                 .signature-section { width: 100%; margin-top: 40px; border-collapse: collapse; }
@@ -994,21 +1055,23 @@ private fun generateSuratJalanHtml(
 
             <table class="info-table">
                 <tr>
-                    <td class="info-col">
-                        <div class="info-box">
+                    <td class="info-col" style="${if (isColor) "width: 50%;" else "width: 100%;"}">
+                        <div class="info-box" style="${if (isColor) "" else "background-color: white; border: none; padding-left: 0;"}">
                             <strong>Kirim Kepada:</strong><br>
                             <span style="font-size: 14px; font-weight: bold;">$clientName</span><br>
                             Alamat: $clientAddress<br>
                             Telp: $clientPhone
                         </div>
                     </td>
-                    <td class="info-col">
+                    ${if (isColor) """
+                    <td class="info-col" style="width: 50%;">
                         <div class="info-box-right">
                             <strong>Keterangan:</strong><br>
                             Dokumen ini adalah bukti penyerahan barang secara sah.<br>
                             No. Faktur Rujukan: <strong>${invoice.number}</strong>
                         </div>
                     </td>
+                    """ else ""}
                 </tr>
             </table>
 
@@ -1017,8 +1080,8 @@ private fun generateSuratJalanHtml(
                     <tr>
                         <th style="width: 8%; text-align: center;">No</th>
                         <th style="width: 52%;">Nama Barang / Deskripsi</th>
-                        <th style="width: 25%; text-align: center;">Kuantitas / Unit</th>
-                        <th style="width: 15%;">Catatan</th>
+                        <th style="width: 20%; text-align: center;">Satuan</th>
+                        <th style="width: 20%; text-align: center;">QTY</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1249,6 +1312,19 @@ private fun ReceiverSignatureSection(
                         )
                     }
                 }
+                Spacer(modifier = Modifier.height(12.dp))
+                val context = androidx.compose.ui.platform.LocalContext.current
+                PrimaryButton(
+                    label = "Konfirmasi TTD",
+                    onClick = {
+                        android.widget.Toast.makeText(
+                            context,
+                            "Tanda tangan penerima (${receiverName.ifBlank { "-" }}) telah dikonfirmasi secara sah.",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    },
+                    modifier = Modifier.fillMaxWidth().testTag("btn-confirm-signature")
+                )
             } else {
                 Text(
                     text = "Minta penerima menandatangani bukti penyerahan barang secara digital luring di HP ini atau share link unik berdurasi 3 menit.",
@@ -1278,6 +1354,24 @@ private fun ReceiverSignatureSection(
                 }
             }
         }
+    }
+}
+
+private fun getFileBase64(filePath: String?): String {
+    if (filePath.isNullOrBlank()) return ""
+    return try {
+        val file = File(filePath)
+        if (!file.exists()) return ""
+        val bytes = file.readBytes()
+        val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+        val extension = when {
+            filePath.endsWith(".png", true) -> "png"
+            filePath.endsWith(".jpg", true) || filePath.endsWith(".jpeg", true) -> "jpeg"
+            else -> "png"
+        }
+        "data:image/$extension;base64,$base64"
+    } catch (e: Exception) {
+        ""
     }
 }
 

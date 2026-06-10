@@ -12,15 +12,20 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+import com.posbah.app.data.local.PosBahDatabase
+
 @HiltViewModel
 class PrintSettingsViewModel @Inject constructor(
     private val printSettingsRepo: PrintSettingsRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val db: PosBahDatabase
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
 
     private val _draft = MutableStateFlow<PrintSettingsEntity?>(null)
     val draft = _draft.asStateFlow()
+
+    private var businessMode: String = "BMP"
 
     init {
         viewModelScope.launch {
@@ -28,6 +33,8 @@ class PrintSettingsViewModel @Inject constructor(
             _draft.value = existing ?: PrintSettingsEntity(
                 tenantId = tenantId
             )
+            val tenant = db.tenantDao().getById(tenantId)
+            businessMode = tenant?.businessMode ?: "BMP"
         }
     }
 
@@ -36,8 +43,18 @@ class PrintSettingsViewModel @Inject constructor(
         _draft.update { transform(cur) }
     }
 
-    fun save(onDone: () -> Unit = {}) = viewModelScope.launch {
+    fun save(onError: (String) -> Unit = {}, onDone: () -> Unit = {}) = viewModelScope.launch {
         val d = _draft.value ?: return@launch
+        if (businessMode == "BMP") {
+            if (d.bankOwnerName.isBlank()) {
+                onError("Kolom Atas Nama info pembayaran wajib diisi untuk Invoice & Manufaktur!")
+                return@launch
+            }
+            if (d.bankAccountNumber.isBlank()) {
+                onError("Kolom Nomor Rekening / Dana / Shopee wajib diisi untuk Invoice & Manufaktur!")
+                return@launch
+            }
+        }
         printSettingsRepo.upsert(d)
         onDone()
     }

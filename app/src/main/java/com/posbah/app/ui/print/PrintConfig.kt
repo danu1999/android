@@ -13,7 +13,8 @@ data class DocPrintConfig(
     val signatureSenderName: String = "Admin",
     val signatureReceiverName: String = "",
     val signatureDrawnBase64: String? = null,
-    val isColor: Boolean = true
+    val isColor: Boolean = true,
+    val templateType: String = "MODERN"
 )
 
 data class PrintConfig(
@@ -30,7 +31,12 @@ data class PrintConfig(
     val receiptHeaderAlign: HeaderAlign = HeaderAlign.CENTER,
     val receiptIsColor: Boolean = false,
     val receiptShowItemPrice: Boolean = true,
-    val receiptFooterText: String = "Terima kasih sudah berbelanja!"
+    val receiptFooterText: String = "Terima kasih sudah berbelanja!",
+
+    // ─── Info Pembayaran Bank/Wallet (Dinamis) ──────────────────────────────────
+    val bankOwnerName: String = "",
+    val bankName: String = "BCA",
+    val bankAccountNumber: String = ""
 ) {
     companion object {
         fun fromEntity(entity: PrintSettingsEntity?): PrintConfig {
@@ -43,7 +49,8 @@ data class PrintConfig(
                     signatureSenderName = entity.jpgSignatureSenderName,
                     signatureReceiverName = entity.jpgSignatureReceiverName,
                     signatureDrawnBase64 = entity.jpgSignatureDrawnBase64,
-                    isColor = entity.jpgIsColor
+                    isColor = entity.jpgIsColor,
+                    templateType = entity.jpgTemplateType
                 ),
                 sj = DocPrintConfig(
                     useLogo = entity.sjUseLogo,
@@ -52,7 +59,8 @@ data class PrintConfig(
                     signatureSenderName = entity.sjSignatureSenderName,
                     signatureReceiverName = entity.sjSignatureReceiverName,
                     signatureDrawnBase64 = entity.sjSignatureDrawnBase64,
-                    isColor = entity.sjIsColor
+                    isColor = entity.sjIsColor,
+                    templateType = entity.sjTemplateType
                 ),
                 invoice = DocPrintConfig(
                     useLogo = entity.invoiceUseLogo,
@@ -61,14 +69,18 @@ data class PrintConfig(
                     signatureSenderName = entity.invoiceSignatureSenderName,
                     signatureReceiverName = entity.invoiceSignatureReceiverName,
                     signatureDrawnBase64 = entity.invoiceSignatureDrawnBase64,
-                    isColor = entity.invoiceIsColor
+                    isColor = entity.invoiceIsColor,
+                    templateType = entity.invoiceTemplateType
                 ),
                 receiptPaperWidth = if (entity.receiptPaperWidth == "MM58") PaperWidth.MM58 else PaperWidth.MM80,
                 receiptUseLogo = entity.receiptUseLogo,
                 receiptHeaderAlign = if (entity.receiptHeaderAlign == "LEFT") HeaderAlign.LEFT else HeaderAlign.CENTER,
                 receiptIsColor = entity.receiptIsColor,
                 receiptShowItemPrice = entity.receiptShowItemPrice,
-                receiptFooterText = entity.receiptFooterText
+                receiptFooterText = entity.receiptFooterText,
+                bankOwnerName = entity.bankOwnerName,
+                bankName = entity.bankName,
+                bankAccountNumber = entity.bankAccountNumber
             )
         }
     }
