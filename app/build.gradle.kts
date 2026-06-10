@@ -15,8 +15,8 @@ android {
         applicationId = "com.posbah.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 2
-        versionName = "2.0.0"
+        versionCode = 4
+        versionName = "2.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -162,6 +162,14 @@ dependencies {
 
     // ExifInterface — baca rotasi EXIF foto kamera (orientasi portrait/landscape)
     implementation(libs.androidx.exifinterface)
+
+    // CameraX
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+
+    // Google ML Kit Barcode Scanning
+    implementation(libs.mlkit.barcode.scanning)
 
     // Test
     testImplementation(libs.junit)
