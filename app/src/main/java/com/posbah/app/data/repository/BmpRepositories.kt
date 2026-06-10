@@ -170,6 +170,10 @@ class BmpInvoiceRepository @Inject constructor(
         }
     }
 
+    suspend fun markAsUnsynced(id: Long) {
+        invoiceDao.markUnsynced(id)
+    }
+
     suspend fun saveReceiverSignature(
         invoiceId: Long,
         signaturePath: String?,

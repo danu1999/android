@@ -83,6 +83,9 @@ interface BmpInvoiceDao {
     @Query("UPDATE bmp_invoices SET isSynced = 1 WHERE id = :id")
     suspend fun markSynced(id: Long)
 
+    @Query("UPDATE bmp_invoices SET isSynced = 0 WHERE id = :id")
+    suspend fun markUnsynced(id: Long)
+
     @Query("SELECT COUNT(*) FROM bmp_invoices WHERE tenantId = :tenantId")
     fun count(tenantId: String): Flow<Int>
 

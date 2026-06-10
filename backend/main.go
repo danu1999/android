@@ -915,7 +915,7 @@ const signatureHtmlPage = `<!DOCTYPE html>
 
                 hideLoader();
 
-                if (apiRes.ok || apiRes.status === 404) {
+                if (apiRes.ok) {
                     formContainer.style.display = "none";
                     expiryTag.style.display = "none";
                     showStatus("Tanda terima berhasil dikirim! Terima kasih, " + name + ".");

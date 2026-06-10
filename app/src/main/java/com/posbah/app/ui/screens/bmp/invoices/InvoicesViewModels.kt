@@ -313,6 +313,7 @@ class InvoiceDetailViewModel @Inject constructor(
         stopSignaturePolling()
         _ui.update { it.copy(isPollingSignature = true, pollingCountdown = 3600, pollingError = null) }
         pollingJob = viewModelScope.launch {
+            invoiceRepo.markAsUnsynced(invoiceId)
             com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
             var secondsLeft = 3600
             while (secondsLeft > 0) {
