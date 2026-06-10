@@ -465,7 +465,7 @@ fun InvoiceDetailScreen(
 
     if (showShareLinkDialog && inv != null) {
         val shareUrl = remember(inv.id) {
-            com.posbah.app.util.SignatureLinkGenerator.generateShareLink(inv.id, durationMinutes = 3)
+            com.posbah.app.util.SignatureLinkGenerator.generateShareLink(viewModel.tenantId, inv.id, durationMinutes = 3)
         }
         
         LaunchedEffect(Unit) {

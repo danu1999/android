@@ -31,6 +31,8 @@ import java.io.FileOutputStream
 
 @HiltViewModel
 class InvoicesListViewModel @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context,
+    private val db: com.posbah.app.data.local.PosBahDatabase,
     private val invoiceRepo: BmpInvoiceRepository,
     private val clientRepo: BmpClientRepository,
     private val authRepository: AuthRepository
@@ -117,7 +119,10 @@ class InvoicesListViewModel @Inject constructor(
         _filterPartial.value = enabled
     }
 
-    fun delete(id: Long) = viewModelScope.launch { invoiceRepo.deleteInvoice(id) }
+    fun delete(id: Long) = viewModelScope.launch { 
+        invoiceRepo.deleteInvoice(id) 
+        com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+    }
 }
 
 data class InvoiceDetailUi(
@@ -141,6 +146,7 @@ data class InvoiceDetailUi(
 @HiltViewModel
 class InvoiceDetailViewModel @Inject constructor(
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context,
+    private val db: com.posbah.app.data.local.PosBahDatabase,
     private val invoiceRepo: BmpInvoiceRepository,
     private val clientRepo: BmpClientRepository,
     private val settingsRepo: BmpSettingsRepository,
@@ -148,7 +154,7 @@ class InvoiceDetailViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     savedState: SavedStateHandle
 ) : ViewModel() {
-    private val tenantId = authRepository.activeTenantId().orEmpty()
+    val tenantId = authRepository.activeTenantId().orEmpty()
     private val invoiceId: Long = savedState.get<String>("id")?.toLongOrNull() ?: -1L
 
     private val _ui = MutableStateFlow(InvoiceDetailUi())
@@ -177,7 +183,7 @@ class InvoiceDetailViewModel @Inject constructor(
                     // Skenario B: Tidak ada URL di Room DB sama sekali
                     // → cek Supabase langsung (polling mungkin dibatalkan/timeout sebelum detect)
                     !hasUrl -> {
-                        val remoteResult = invoiceRepo.checkReceiverSignatureRemote(invoiceId)
+                        val remoteResult = invoiceRepo.checkReceiverSignatureRemote(tenantId, invoiceId)
                         if (remoteResult is BmpInvoiceRepository.RemoteSignatureResult.Success) {
                             val localPath = downloadSignatureToLocal(context, remoteResult.url, invoiceId)
                             invoiceRepo.saveReceiverSignature(invoiceId, localPath, remoteResult.url, remoteResult.name)
@@ -226,7 +232,7 @@ class InvoiceDetailViewModel @Inject constructor(
         if (amt <= 0) return
         viewModelScope.launch {
             invoiceRepo.recordPayment(tenantId, invoiceId, amt, method, notes = null)
-            // refresh invoice header to show new status
+            com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
             val inv = invoiceRepo.getById(invoiceId)
             _ui.update { it.copy(invoice = inv, showAddPayment = false, newPaymentAmount = "") }
         }
@@ -245,6 +251,7 @@ class InvoiceDetailViewModel @Inject constructor(
         if (amt <= 0) return
         viewModelScope.launch {
             invoiceRepo.editPayment(tenantId, editing.id, amt, method, notes = editing.notes)
+            com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
             val inv = invoiceRepo.getById(invoiceId)
             _ui.update { it.copy(invoice = inv, editingPayment = null, newPaymentAmount = "", newPaymentMethod = "TRANSFER") }
         }
@@ -253,6 +260,7 @@ class InvoiceDetailViewModel @Inject constructor(
     fun deletePayment(paymentId: Long) {
         viewModelScope.launch {
             invoiceRepo.deletePayment(paymentId)
+            com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
             val inv = invoiceRepo.getById(invoiceId)
             _ui.update { it.copy(invoice = inv) }
         }
@@ -277,6 +285,7 @@ class InvoiceDetailViewModel @Inject constructor(
             }
             if (path != null) {
                 invoiceRepo.saveReceiverSignature(invoiceId, path, null, receiverName)
+                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
                 val inv = invoiceRepo.getById(invoiceId)
                 _ui.update { it.copy(invoice = inv, isPollingSignature = false) }
             } else {
@@ -294,6 +303,7 @@ class InvoiceDetailViewModel @Inject constructor(
                 }
             }
             invoiceRepo.saveReceiverSignature(invoiceId, null, null, "")
+            com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
             val updated = invoiceRepo.getById(invoiceId)
             _ui.update { it.copy(invoice = updated) }
         }
@@ -303,13 +313,14 @@ class InvoiceDetailViewModel @Inject constructor(
         stopSignaturePolling()
         _ui.update { it.copy(isPollingSignature = true, pollingCountdown = 180, pollingError = null) }
         pollingJob = viewModelScope.launch {
+            com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
             var secondsLeft = 180
             while (secondsLeft > 0) {
                 kotlinx.coroutines.delay(5000) // check every 5s
                 secondsLeft -= 5
                 _ui.update { it.copy(pollingCountdown = secondsLeft) }
                 
-                val result = invoiceRepo.checkReceiverSignatureRemote(invoiceId)
+                val result = invoiceRepo.checkReceiverSignatureRemote(tenantId, invoiceId)
                 if (result is BmpInvoiceRepository.RemoteSignatureResult.Success) {
                     val localPath = downloadSignatureToLocal(context, result.url, invoiceId)
                     invoiceRepo.saveReceiverSignature(invoiceId, localPath, result.url, result.name)
@@ -366,6 +377,7 @@ class InvoiceDetailViewModel @Inject constructor(
     fun deleteInvoice(onDone: () -> Unit) {
         viewModelScope.launch {
             invoiceRepo.deleteInvoice(invoiceId)
+            com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
             onDone()
         }
     }
@@ -389,6 +401,8 @@ data class InvoiceFormUi(
 
 @HiltViewModel
 class InvoiceFormViewModel @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context,
+    private val db: com.posbah.app.data.local.PosBahDatabase,
     private val invoiceRepo: BmpInvoiceRepository,
     private val clientRepo: BmpClientRepository,
     private val masterRepo: BmpMasterProductRepository,
@@ -493,6 +507,7 @@ class InvoiceFormViewModel @Inject constructor(
             } else {
                 invoiceRepo.updateInvoice(inv, _ui.value.productLines)
             }
+            com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
             _ui.update { it.copy(isLoading = false, saved = true) }
         }
     }

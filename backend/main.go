@@ -231,6 +231,7 @@ func handleManualLockoutCheck(w http.ResponseWriter, r *http.Request) {
 type SignatureRequest struct {
 	InvoiceIdRaw    json.RawMessage `json:"invoiceId"`
 	InvoiceId       int64           `json:"-"` // hasil parse dari InvoiceIdRaw
+	TenantId        string          `json:"tenantId"`
 	Token           string          `json:"token"`
 	SignatureUrl    string          `json:"signatureUrl"`
 	SignatureBase64 string          `json:"signatureBase64"`
@@ -336,6 +337,9 @@ func handleSaveSignature(w http.ResponseWriter, r *http.Request) {
 	req.Header.Set("apikey", supabaseSecretKey)
 	req.Header.Set("Authorization", "Bearer "+supabaseSecretKey)
 	req.Header.Set("Content-Type", "application/json")
+	if reqData.TenantId != "" {
+		req.Header.Set("x-tenant-id", reqData.TenantId)
+	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
@@ -706,6 +710,7 @@ const signatureHtmlPage = `<!DOCTYPE html>
         let isDrawing = false;
         let drawnSomething = false;
         let invoiceId = null;
+        let tenantId = "";
         let tokenStr = null;
 
         // Setup responsivitas canvas
@@ -823,8 +828,16 @@ const signatureHtmlPage = `<!DOCTYPE html>
                     return;
                 }
 
-                invoiceId = parts[0];
-                const expiry = parseInt(parts[1]);
+                let expiry = 0;
+                if (parts.length >= 4) {
+                    tenantId = parts[0];
+                    invoiceId = parts[1];
+                    expiry = parseInt(parts[2]);
+                } else {
+                    tenantId = "";
+                    invoiceId = parts[0];
+                    expiry = parseInt(parts[1]);
+                }
                 
                 // Cek kadaluarsa
                 const now = Date.now();
@@ -893,6 +906,7 @@ const signatureHtmlPage = `<!DOCTYPE html>
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         invoiceId: invoiceId,
+                        tenantId: tenantId,
                         token: tokenStr,
                         signatureBase64: signatureBase64,
                         receiverName: name

@@ -14,7 +14,7 @@ import javax.crypto.spec.SecretKeySpec
 object SignatureLinkGenerator {
 
     private const val SECRET_KEY = "PosBahSignatureSecretKey123!" // Secret shared with server
-    const val BASE_URL = "https://posbah.com/sign/"
+    const val BASE_URL = "https://www.zedmz.cloud/api/sign/"
 
     /**
      * Membuat URL share untuk tanda tangan penerima.
@@ -23,13 +23,13 @@ object SignatureLinkGenerator {
      * @param durationMinutes Durasi link aktif dalam menit (default 3 menit).
      * @return URL lengkap dengan token Base64 aman.
      */
-    fun generateShareLink(invoiceId: Long, durationMinutes: Int = 3): String {
+    fun generateShareLink(tenantId: String, invoiceId: Long, durationMinutes: Int = 3): String {
         val expiry = System.currentTimeMillis() + (durationMinutes * 60 * 1000L)
-        val dataToSign = "$invoiceId:$expiry"
+        val dataToSign = "$tenantId:$invoiceId:$expiry"
         val signature = computeHmacSha256(dataToSign, SECRET_KEY)
         
-        // Token format: "invoiceId:expiry:signature"
-        val tokenRaw = "$invoiceId:$expiry:$signature"
+        // Token format: "tenantId:invoiceId:expiry:signature"
+        val tokenRaw = "$tenantId:$invoiceId:$expiry:$signature"
         val tokenEncoded = Base64.encodeToString(
             tokenRaw.toByteArray(StandardCharsets.UTF_8),
             Base64.NO_WRAP or Base64.URL_SAFE or Base64.NO_PADDING
@@ -49,17 +49,31 @@ object SignatureLinkGenerator {
             val decodedBytes = Base64.decode(tokenEncoded, Base64.NO_WRAP or Base64.URL_SAFE or Base64.NO_PADDING)
             val tokenRaw = String(decodedBytes, StandardCharsets.UTF_8)
             val parts = tokenRaw.split(":")
-            if (parts.size != 3) return null
-
-            val invoiceId = parts[0].toLongOrNull() ?: return null
-            val expiry = parts[1].toLongOrNull() ?: return null
-            val signature = parts[2]
+            
+            val tenantId: String
+            val invoiceId: Long
+            val expiry: Long
+            val signature: String
+            
+            if (parts.size == 4) {
+                tenantId = parts[0]
+                invoiceId = parts[1].toLongOrNull() ?: return null
+                expiry = parts[2].toLongOrNull() ?: return null
+                signature = parts[3]
+            } else if (parts.size == 3) {
+                tenantId = ""
+                invoiceId = parts[0].toLongOrNull() ?: return null
+                expiry = parts[1].toLongOrNull() ?: return null
+                signature = parts[2]
+            } else {
+                return null
+            }
 
             // Cek kadaluarsa
             if (System.currentTimeMillis() > expiry) return null
 
             // Cek kecocokan signature
-            val dataToSign = "$invoiceId:$expiry"
+            val dataToSign = if (tenantId.isNotEmpty()) "$tenantId:$invoiceId:$expiry" else "$invoiceId:$expiry"
             val expectedSignature = computeHmacSha256(dataToSign, SECRET_KEY)
             
             if (expectedSignature == signature) invoiceId else null
