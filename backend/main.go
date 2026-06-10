@@ -54,6 +54,7 @@ func main() {
 	http.HandleFunc("/status", handleStatus)
 	http.HandleFunc("/api/admin/check-demo-lockout", handleManualLockoutCheck)
 	http.HandleFunc("/api/invoice/signature", handleSaveSignature)
+	http.HandleFunc("/api/invoice/signature-status", handleSignatureStatus)
 	http.HandleFunc("/sign/", handleSignPage)
 	http.HandleFunc("/api/sign/", handleSignPage)
 	http.HandleFunc("/api/ai/classify", handleAiClassify)
@@ -314,7 +315,7 @@ func handleSaveSignature(w http.ResponseWriter, r *http.Request) {
 		savedUrl = fmt.Sprintf("https://www.zedmz.cloud/api/signatures/%s", fileName)
 	}
 
-	// Update Supabase bmp_invoices table
+	// Update Supabase bmp_invoices table (non-blocking / optional)
 	reqUrl := fmt.Sprintf("%s/rest/v1/bmp_invoices?id=eq.%d", supabaseURL, reqData.InvoiceId)
 	
 	updateFields := map[string]interface{}{
@@ -323,36 +324,34 @@ func handleSaveSignature(w http.ResponseWriter, r *http.Request) {
 		"updatedAt":            time.Now().UnixNano() / int64(time.Millisecond),
 	}
 	
-	bodyBytes, err := json.Marshal(updateFields)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	req, err := http.NewRequest("PATCH", reqUrl, bytes.NewBuffer(bodyBytes))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	req.Header.Set("apikey", supabaseSecretKey)
-	req.Header.Set("Authorization", "Bearer "+supabaseSecretKey)
-	req.Header.Set("Content-Type", "application/json")
-	if reqData.TenantId != "" {
-		req.Header.Set("x-tenant-id", reqData.TenantId)
-	}
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		http.Error(w, "Supabase connection error: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
-		http.Error(w, fmt.Sprintf("Supabase error [%d]: %s", resp.StatusCode, string(respBody)), resp.StatusCode)
-		return
+	if bodyBytes, err := json.Marshal(updateFields); err == nil {
+		req, err := http.NewRequest("PATCH", reqUrl, bytes.NewBuffer(bodyBytes))
+		if err == nil {
+			req.Header.Set("apikey", supabaseSecretKey)
+			req.Header.Set("Authorization", "Bearer "+supabaseSecretKey)
+			req.Header.Set("Content-Type", "application/json")
+			if reqData.TenantId != "" {
+				req.Header.Set("x-tenant-id", reqData.TenantId)
+			}
+			
+			client := &http.Client{Timeout: 5 * time.Second}
+			resp, err := client.Do(req)
+			if err != nil {
+				log.Printf("[Warning] Supabase connection failed during signature sync: %v", err)
+			} else {
+				defer resp.Body.Close()
+				if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+					respBody, _ := io.ReadAll(resp.Body)
+					log.Printf("[Warning] Supabase returned status %d on signature sync: %s", resp.StatusCode, string(respBody))
+				} else {
+					log.Printf("[Signature] Successfully synced signature to Supabase for invoice %d", reqData.InvoiceId)
+				}
+			}
+		} else {
+			log.Printf("[Warning] Failed to create Supabase sync request: %v", err)
+		}
+	} else {
+		log.Printf("[Warning] Failed to marshal Supabase sync body: %v", err)
 	}
 
 	log.Printf("[Signature] Successfully saved receiver signature for invoice %d (URL: %s)", reqData.InvoiceId, savedUrl)
@@ -362,6 +361,56 @@ func handleSaveSignature(w http.ResponseWriter, r *http.Request) {
 		"message":      "Signature saved successfully",
 		"signatureUrl": savedUrl,
 	})
+}
+
+// Handler: GET /api/invoice/signature-status?id=<invoiceId>
+func handleSignatureStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	invoiceIdStr := r.URL.Query().Get("id")
+	if invoiceIdStr == "" {
+		http.Error(w, "Missing invoice id", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+
+	// Scan TTD folder
+	files, err := os.ReadDir("./TTD")
+	if err != nil {
+		// TTD folder doesn't exist yet or other error, return empty array
+		w.Write([]byte("[]"))
+		return
+	}
+
+	prefix := fmt.Sprintf("sig_%s_", invoiceIdStr)
+	for _, file := range files {
+		if !file.IsDir() && strings.HasPrefix(file.Name(), prefix) && strings.HasSuffix(file.Name(), ".png") {
+			fileName := file.Name()
+			// Extract receiver name
+			// Format: sig_<invoiceId>_<receiverName>.png
+			temp := strings.TrimPrefix(fileName, prefix)
+			receiverName := strings.TrimSuffix(temp, ".png")
+			receiverName = strings.ReplaceAll(receiverName, "_", " ")
+
+			savedUrl := fmt.Sprintf("https://www.zedmz.cloud/api/signatures/%s", fileName)
+
+			response := []map[string]interface{}{
+				{
+					"receiverSignatureUrl": savedUrl,
+					"receiverNameActual":   receiverName,
+				},
+			}
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
+	// No signature found
+	w.Write([]byte("[]"))
 }
 
 type AiClassifyRequest struct {

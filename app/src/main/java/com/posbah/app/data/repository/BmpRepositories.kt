@@ -200,14 +200,11 @@ class BmpInvoiceRepository @Inject constructor(
     suspend fun checkReceiverSignatureRemote(tenantId: String, invoiceId: Long): RemoteSignatureResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         var conn: java.net.HttpURLConnection? = null
         try {
-            val url = java.net.URL("https://etustetneufkfilndimy.supabase.co/rest/v1/bmp_invoices?id=eq.$invoiceId&select=receiverSignatureUrl,receiverNameActual")
+            val url = java.net.URL("https://www.zedmz.cloud/api/invoice/signature-status?id=$invoiceId")
             conn = url.openConnection() as java.net.HttpURLConnection
             conn.requestMethod = "GET"
             conn.connectTimeout = 8000
             conn.readTimeout = 8000
-            conn.setRequestProperty("apikey", "sb_publishable_X_BhY3R3kKLp4wEpNX4giQ_U9xKDg2R")
-            conn.setRequestProperty("Authorization", "Bearer sb_publishable_X_BhY3R3kKLp4wEpNX4giQ_U9xKDg2R")
-            conn.setRequestProperty("x-tenant-id", tenantId)
 
             val code = conn.responseCode
             if (code in 200..299) {
