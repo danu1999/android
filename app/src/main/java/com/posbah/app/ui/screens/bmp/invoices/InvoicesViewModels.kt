@@ -311,10 +311,10 @@ class InvoiceDetailViewModel @Inject constructor(
 
     fun startSignaturePolling() {
         stopSignaturePolling()
-        _ui.update { it.copy(isPollingSignature = true, pollingCountdown = 180, pollingError = null) }
+        _ui.update { it.copy(isPollingSignature = true, pollingCountdown = 3600, pollingError = null) }
         pollingJob = viewModelScope.launch {
             com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-            var secondsLeft = 180
+            var secondsLeft = 3600
             while (secondsLeft > 0) {
                 kotlinx.coroutines.delay(5000) // check every 5s
                 secondsLeft -= 5

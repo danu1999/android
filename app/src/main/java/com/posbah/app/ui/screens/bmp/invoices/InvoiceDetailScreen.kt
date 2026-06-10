@@ -465,7 +465,7 @@ fun InvoiceDetailScreen(
 
     if (showShareLinkDialog && inv != null) {
         val shareUrl = remember(inv.id) {
-            com.posbah.app.util.SignatureLinkGenerator.generateShareLink(viewModel.tenantId, inv.id, durationMinutes = 3)
+            com.posbah.app.util.SignatureLinkGenerator.generateShareLink(viewModel.tenantId, inv.id, durationMinutes = 60)
         }
         
         LaunchedEffect(Unit) {
@@ -484,7 +484,7 @@ fun InvoiceDetailScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "Bagikan link di bawah ke WhatsApp penerima. Link hanya berlaku selama 3 menit dan akan kadaluarsa.",
+                        text = "Bagikan link di bawah ke WhatsApp penerima. Link hanya berlaku selama 60 menit dan akan kadaluarsa.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
@@ -1381,7 +1381,7 @@ private fun ReceiverSignatureSection(
                 )
             } else {
                 Text(
-                    text = "Minta penerima menandatangani bukti penyerahan barang secara digital luring di HP ini atau share link unik berdurasi 3 menit.",
+                    text = "Minta penerima menandatangani bukti penyerahan barang secara digital luring di HP ini atau share link unik berdurasi 60 menit.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
