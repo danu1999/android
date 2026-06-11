@@ -258,13 +258,11 @@ class AuthRepository @Inject constructor(
                 // Fetch from Supabase remote database
                 var conn: java.net.HttpURLConnection? = null
                 try {
-                    val url = java.net.URL("https://etustetneufkfilndimy.supabase.co/rest/v1/employees?email=eq.$cleanEmail")
+                    val url = java.net.URL("https://www.zedmz.cloud/api/sync/employees?email=eq.$cleanEmail")
                     conn = url.openConnection() as java.net.HttpURLConnection
                     conn.requestMethod = "GET"
                     conn.connectTimeout = 10000
                     conn.readTimeout = 10000
-                    conn.setRequestProperty("apikey", "sb_publishable_X_BhY3R3kKLp4wEpNX4giQ_U9xKDg2R")
-                    conn.setRequestProperty("Authorization", "Bearer sb_publishable_X_BhY3R3kKLp4wEpNX4giQ_U9xKDg2R")
 
                     val code = conn.responseCode
                     if (code in 200..299) {
@@ -279,11 +277,9 @@ class AuthRepository @Inject constructor(
                             var tenantBusinessMode = "BMP"
                             var tenantConn: java.net.HttpURLConnection? = null
                             try {
-                                val tUrl = java.net.URL("https://etustetneufkfilndimy.supabase.co/rest/v1/tenants?id=eq.$tenantId")
+                                val tUrl = java.net.URL("https://www.zedmz.cloud/api/sync/tenants?id=eq.$tenantId")
                                 tenantConn = tUrl.openConnection() as java.net.HttpURLConnection
                                 tenantConn.requestMethod = "GET"
-                                tenantConn.setRequestProperty("apikey", "sb_publishable_X_BhY3R3kKLp4wEpNX4giQ_U9xKDg2R")
-                                tenantConn.setRequestProperty("Authorization", "Bearer sb_publishable_X_BhY3R3kKLp4wEpNX4giQ_U9xKDg2R")
                                 if (tenantConn.responseCode in 200..299) {
                                     val tResponse = tenantConn.inputStream.bufferedReader().use { it.readText() }
                                     val tArray = org.json.JSONArray(tResponse)
@@ -368,11 +364,9 @@ class AuthRepository @Inject constructor(
                 var isDemo = false
                 var conn2: java.net.HttpURLConnection? = null
                 try {
-                    val url2 = java.net.URL("https://etustetneufkfilndimy.supabase.co/rest/v1/local_users?email=eq.$cleanEmail")
+                    val url2 = java.net.URL("https://www.zedmz.cloud/api/sync/local_users?email=eq.$cleanEmail")
                     conn2 = url2.openConnection() as java.net.HttpURLConnection
                     conn2.requestMethod = "GET"
-                    conn2.setRequestProperty("apikey", "sb_publishable_X_BhY3R3kKLp4wEpNX4giQ_U9xKDg2R")
-                    conn2.setRequestProperty("Authorization", "Bearer sb_publishable_X_BhY3R3kKLp4wEpNX4giQ_U9xKDg2R")
                     if (conn2.responseCode in 200..299) {
                         val res = conn2.inputStream.bufferedReader().use { it.readText() }
                         val arr = org.json.JSONArray(res)

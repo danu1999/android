@@ -23,8 +23,8 @@ import java.net.URL
 object SupabaseSyncManager {
 
     private const val TAG = "SupabaseSyncManager"
-    private const val SUPABASE_URL = "https://etustetneufkfilndimy.supabase.co"
-    private const val API_KEY = "sb_publishable_X_BhY3R3kKLp4wEpNX4giQ_U9xKDg2R"
+    private const val SUPABASE_URL = "https://www.zedmz.cloud"
+    private const val API_KEY = ""
 
     @Volatile
     private var currentTenantId: String = ""
@@ -610,7 +610,7 @@ object SupabaseSyncManager {
     private fun uploadTable(tableName: String, jsonArray: JSONArray): Boolean {
         var conn: HttpURLConnection? = null
         return try {
-            val endpointUrl = "$SUPABASE_URL/rest/v1/$tableName"
+            val endpointUrl = "$SUPABASE_URL/api/sync/$tableName"
             val url = URL(endpointUrl)
 
             conn = (url.openConnection() as HttpURLConnection).apply {
@@ -618,10 +618,7 @@ object SupabaseSyncManager {
                 doOutput = true
                 connectTimeout = 15_000
                 readTimeout = 30_000
-                setRequestProperty("apikey", API_KEY)
-                setRequestProperty("Authorization", "Bearer $API_KEY")
                 setRequestProperty("Content-Type", "application/json")
-                setRequestProperty("Prefer", "resolution=merge-duplicates")
                 setRequestProperty("x-tenant-id", currentTenantId)
             }
 
