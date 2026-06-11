@@ -87,20 +87,29 @@ class LoginViewModel @Inject constructor(
         }
         _uiState.update { it.copy(isLoading = true, errorMessage = null) }
         viewModelScope.launch {
-            when (val outcome = authRepository.loginWithEmailPassword(s.email, s.pin)) {
-                is AuthRepository.LoginOutcome.Success ->
-                    _uiState.update { it.copy(isLoading = false, signedInUser = outcome.user) }
-                is AuthRepository.LoginOutcome.Error ->
-                    _uiState.update { it.copy(isLoading = false, errorMessage = outcome.message) }
-                AuthRepository.LoginOutcome.Locked ->
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            locked = true,
-                            errorMessage = "Terkunci 5 menit karena 5 kali gagal."
-                        )
-                    }
-                else -> _uiState.update { it.copy(isLoading = false) }
+            try {
+                when (val outcome = authRepository.loginWithEmailPassword(s.email, s.pin)) {
+                    is AuthRepository.LoginOutcome.Success ->
+                        _uiState.update { it.copy(isLoading = false, signedInUser = outcome.user) }
+                    is AuthRepository.LoginOutcome.Error ->
+                        _uiState.update { it.copy(isLoading = false, errorMessage = outcome.message) }
+                    AuthRepository.LoginOutcome.Locked ->
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                locked = true,
+                                errorMessage = "Terkunci 5 menit karena 5 kali gagal."
+                            )
+                        }
+                    else -> _uiState.update { it.copy(isLoading = false) }
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = "Gagal memproses masuk: ${e.localizedMessage}"
+                    )
+                }
             }
         }
     }

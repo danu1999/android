@@ -199,7 +199,8 @@ class AuthRepository @Inject constructor(
         email: String,
         password: String
     ): LoginOutcome = withContext(Dispatchers.IO) {
-        val now = System.currentTimeMillis()
+        try {
+            val now = System.currentTimeMillis()
         if (securePrefs.lockoutUntil > now) return@withContext LoginOutcome.Locked
 
         val cleanEmail = email.lowercase().trim()
@@ -450,9 +451,13 @@ class AuthRepository @Inject constructor(
             successTenant = tenant
         }
 
-        securePrefs.setActiveSession(successUser.googleSub, successUser.email)
-        securePrefs.currentTenantId = successUser.tenantId
-        return@withContext LoginOutcome.Success(successUser, successTenant)
+            securePrefs.setActiveSession(successUser.googleSub, successUser.email)
+            securePrefs.currentTenantId = successUser.tenantId
+            return@withContext LoginOutcome.Success(successUser, successTenant)
+        } catch (e: Exception) {
+            android.util.Log.e("AuthRepository", "Error in loginWithEmailPassword", e)
+            return@withContext LoginOutcome.Error("Gagal masuk: ${e.localizedMessage}")
+        }
     }
 
     private fun incrementFailedAttempts(now: Long): LoginOutcome {
