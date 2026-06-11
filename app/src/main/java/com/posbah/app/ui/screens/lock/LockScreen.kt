@@ -75,7 +75,10 @@ fun LockScreen(
         )
         attempting = false
         when (r) {
-            BiometricHelper.Result.Success -> onUnlocked()
+            BiometricHelper.Result.Success -> {
+                kotlinx.coroutines.delay(400)
+                onUnlocked()
+            }
             BiometricHelper.Result.Cancelled -> error = "Dibatalkan"
             else -> error = "Verifikasi gagal"
         }
