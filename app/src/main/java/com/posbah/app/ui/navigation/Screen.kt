@@ -38,7 +38,10 @@ sealed class Screen(val route: String) {
     }
     object BmpPayroll : Screen("bmp/payroll")
     object BmpSettings : Screen("bmp/settings")
-    object PrintSettings : Screen("print/settings")
+    object PrintSettings : Screen("print/settings/{moduleKey}") {
+        fun build(moduleKey: String) = "print/settings/$moduleKey"
+    }
+
     object BmpBahanBaku : Screen("bmp/bahanbaku")
     object BmpBahanBakuForm : Screen("bmp/bahanbaku/form?id={id}") {
         fun build(id: Long? = null) = "bmp/bahanbaku/form?id=${id ?: -1}"

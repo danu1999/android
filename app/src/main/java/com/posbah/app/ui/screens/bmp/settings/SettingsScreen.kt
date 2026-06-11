@@ -370,7 +370,7 @@ fun SettingsScreen(
 
                 Column(modifier = Modifier.fillMaxWidth()) {
                     PrimaryButton(
-                        label = "Sinkronisasi Cloud (Supabase)",
+                        label = "Sinkronisasi Cloud (VPS)",
                         onClick = { viewModel.performSync(context) },
                         modifier = Modifier.fillMaxWidth().testTag("btn-cloud-sync")
                     )

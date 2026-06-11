@@ -50,10 +50,40 @@ class RentalViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val tenantId = authRepository.activeTenantId().orEmpty()
-    private val outletId = sessionState.outletId.value
+    private val currentOutletId get() = sessionState.outletId.value
 
-    val products = productRepository.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-    val transactions = transactionRepository.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val availableOutlets = db.outletDao().observeForTenant(tenantId)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val activeOutletId = sessionState.outletId
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    fun selectOutlet(id: Long?) {
+        sessionState.setOutlet(id)
+    }
+
+    val products = kotlinx.coroutines.flow.combine(
+        productRepository.observe(tenantId),
+        sessionState.outletId,
+        db.outletDao().observeForTenant(tenantId)
+    ) { allProducts, activeOutletId, outlets ->
+        val defaultOutletId = outlets.firstOrNull { it.isDefault }?.id
+        allProducts.filter { p ->
+            p.outletId == activeOutletId || (activeOutletId == defaultOutletId && p.outletId == null)
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val transactions = kotlinx.coroutines.flow.combine(
+        transactionRepository.observe(tenantId),
+        sessionState.outletId,
+        db.outletDao().observeForTenant(tenantId)
+    ) { allTransactions, activeOutletId, outlets ->
+        val defaultOutletId = outlets.firstOrNull { it.isDefault }?.id
+        allTransactions.filter { t ->
+            t.outletId == activeOutletId || (activeOutletId == defaultOutletId && t.outletId == null)
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     val customers = db.customerDao().observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val isOwner = flow {
@@ -69,7 +99,7 @@ class RentalViewModel @Inject constructor(
         
         if (filtered.isEmpty() && prodList.isEmpty()) {
             viewModelScope.launch {
-                localDataSeeder.seedDefaultVehicles(tenantId, outletId)
+                localDataSeeder.seedDefaultVehicles(tenantId, currentOutletId)
             }
         }
         
@@ -154,7 +184,7 @@ class RentalViewModel @Inject constructor(
             )
             val p = ProductEntity(
                 tenantId = tenantId,
-                outletId = outletId,
+                outletId = currentOutletId,
                 name = name,
                 price = pricePerDay,
                 costPrice = costPrice,
@@ -207,7 +237,7 @@ class RentalViewModel @Inject constructor(
             
             val tx = TransactionEntity(
                 tenantId = tenantId,
-                outletId = outletId,
+                outletId = currentOutletId,
                 employeeId = 1L,
                 customerId = vehicle.id.toLongOrNull(), // Store vehicle ID in customerId
                 customerName = customerName,

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -31,21 +32,38 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
+import androidx.compose.foundation.clickable
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PosBahTopBar(
     title: String,
     subtitle: String? = null,
     onBack: (() -> Unit)? = null,
+    onTitleClick: (() -> Unit)? = null,
     actions: @Composable () -> Unit = {}
 ) {
     TopAppBar(
         title = {
-            Column {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
-                )
+            Column(
+                modifier = if (onTitleClick != null) {
+                    androidx.compose.ui.Modifier.clickable { onTitleClick() }
+                } else {
+                    androidx.compose.ui.Modifier
+                }
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                    )
+                    if (onTitleClick != null) {
+                        Icon(
+                            imageVector = androidx.compose.material.icons.Icons.Filled.ArrowDropDown,
+                            contentDescription = "Pilih Outlet"
+                        )
+                    }
+                }
                 subtitle?.let {
                     Text(
                         it,

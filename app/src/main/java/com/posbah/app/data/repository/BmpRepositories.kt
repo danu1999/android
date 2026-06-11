@@ -189,6 +189,19 @@ class BmpInvoiceRepository @Inject constructor(
                 updatedAt = System.currentTimeMillis()
             )
         )
+        invoice.clientId?.let { cId ->
+            val client = clientDao.getById(cId)
+            if (client != null) {
+                clientDao.update(
+                    client.copy(
+                        receiverSignatureUrl = signatureUrl ?: client.receiverSignatureUrl,
+                        receiverNameActual = if (receiverName.isNotEmpty()) receiverName else client.receiverNameActual,
+                        isSynced = false,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                )
+            }
+        }
     }
 
     sealed class RemoteSignatureResult {
@@ -602,7 +615,11 @@ class BmpBahanBakuRepository @Inject constructor(
 class PrintSettingsRepository @Inject constructor(
     private val dao: PrintSettingsDao
 ) {
-    fun observe(tenantId: String): Flow<PrintSettingsEntity?> = dao.observe(tenantId)
-    suspend fun get(tenantId: String): PrintSettingsEntity? = dao.get(tenantId)
+    fun observe(tenantId: String, moduleKey: String): Flow<PrintSettingsEntity?> =
+        dao.observe(tenantId, moduleKey)
+
+    suspend fun get(tenantId: String, moduleKey: String): PrintSettingsEntity? =
+        dao.get(tenantId, moduleKey)
+
     suspend fun upsert(settings: PrintSettingsEntity) = dao.upsert(settings)
 }

@@ -7,6 +7,8 @@ import com.posbah.app.data.local.dao.EmployeeDao
 import com.posbah.app.data.local.dao.LocalUserDao
 import com.posbah.app.data.local.dao.OutletDao
 import com.posbah.app.data.local.dao.TenantDao
+import com.posbah.app.data.local.dao.BmpSettingsDao
+import com.posbah.app.data.local.dao.PrintSettingsDao
 import com.posbah.app.data.local.entities.Employee
 import com.posbah.app.data.local.entities.LocalUser
 import com.posbah.app.data.local.entities.Outlet
@@ -33,6 +35,8 @@ class AuthRepository @Inject constructor(
     private val employeeDao: EmployeeDao,
     private val securePrefs: SecurePreferences,
     private val localDataSeeder: LocalDataSeeder,
+    private val bmpSettingsDao: BmpSettingsDao,
+    private val printSettingsDao: PrintSettingsDao,
     @ApplicationContext private val context: Context
 ) {
 
@@ -41,6 +45,23 @@ class AuthRepository @Inject constructor(
             try {
                 // Delete duplicate tenant created under email-key
                 tenantDao.deleteById("hanafiariful@gmail.com")
+
+                // ── Hapus data PrintSettings & BmpSettings orphan dengan tenantId email lama ──
+                // Dulu, tenantId memakai email langsung (misal "hanafiariful@gmail.com").
+                // Setelah migrasi ke format "ten_premium_...", data lama perlu dibersihkan
+                // agar tidak terbaca oleh akun lain yang query-nya filter by tenantId.
+                val legacyEmailTenantIds = listOf(
+                    "hanafiariful@gmail.com",
+                    "bahteramulyap@gmail.com",
+                    "fahrup22@gmail.com",
+                    "alfarisirosi40@gmail.com",
+                    "alfarisirosi04@gmail.com",
+                    "syerlirahma7@gmail.com"
+                )
+                for (legacyId in legacyEmailTenantIds) {
+                    bmpSettingsDao.deleteByTenantId(legacyId)
+                    printSettingsDao.deleteByTenantId(legacyId)
+                }
                 
                 // Delete wrong employees seeded from CV Bahtera dump
                 employeeDao.deleteIncorrectEmployees(
@@ -52,6 +73,7 @@ class AuthRepository @Inject constructor(
             }
         }
     }
+
 
     sealed class LoginOutcome {
         data class Success(val user: LocalUser, val tenant: Tenant) : LoginOutcome()
@@ -255,7 +277,7 @@ class AuthRepository @Inject constructor(
             // Check employees table in database
             var emp = employeeDao.findByEmail(cleanEmail)
             if (emp == null) {
-                // Fetch from Supabase remote database
+                // Fetch from VPS remote database
                 var conn: java.net.HttpURLConnection? = null
                 try {
                     val url = java.net.URL("https://www.zedmz.cloud/api/sync/employees?email=eq.$cleanEmail")
@@ -272,7 +294,7 @@ class AuthRepository @Inject constructor(
                             val obj = array.getJSONObject(0)
                             val tenantId = obj.getString("tenantId")
                             
-                            // Let's first make sure the Tenant exists locally! If not, create it or query from Supabase.
+                             // Let's first make sure the Tenant exists locally! If not, create it or query from VPS.
                             var tenantName = "CV. Premium Owner (Premium)"
                             var tenantBusinessMode = "BMP"
                             var tenantConn: java.net.HttpURLConnection? = null
@@ -360,7 +382,7 @@ class AuthRepository @Inject constructor(
             }
 
             if (emp == null) {
-                // Query Supabase local_users table to see if they are an unactivated demo user
+                // Query VPS local_users table to see if they are an unactivated demo user
                 var isDemo = false
                 var conn2: java.net.HttpURLConnection? = null
                 try {

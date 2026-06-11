@@ -53,6 +53,10 @@ import com.posbah.app.data.local.entities.PrintSettingsEntity
 import com.posbah.app.ui.components.PosBahTopBar
 import com.posbah.app.ui.components.PrimaryButton
 import com.posbah.app.ui.components.SignatureCanvas
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.size
 
 // Tab indices
 private const val TAB_JPG = 0
@@ -68,16 +72,28 @@ fun PrintSettingsScreen(
 ) {
     val context = LocalContext.current
     val draft by viewModel.draft.collectAsState()
-    var selectedTab by remember { mutableStateOf(TAB_JPG) }
+    val isBmp = viewModel.moduleKey == "BMP"
+    var selectedTab by remember { mutableStateOf(if (isBmp) TAB_JPG else TAB_POS) }
 
     val d = draft ?: return
+
+    val titleText = when (viewModel.moduleKey) {
+        "FNB" -> "Pengaturan Struk FnB"
+        "LAUNDRY" -> "Pengaturan Struk Laundry"
+        "RENTAL" -> "Pengaturan Struk Rental"
+        else -> "Pengaturan Cetak"
+    }
+    val subtitleText = when (viewModel.moduleKey) {
+        "BMP" -> "JPG • Surat Jalan • Invoice • POS"
+        else -> "Ukuran Kertas • Logo • Harga • Warna • Footer"
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             PosBahTopBar(
-                title = "Pengaturan Cetak",
-                subtitle = "JPG • Surat Jalan • Invoice • POS",
+                title = titleText,
+                subtitle = subtitleText,
                 onBack = onBack
             )
         }
@@ -87,42 +103,44 @@ fun PrintSettingsScreen(
                 .padding(padding)
                 .fillMaxSize()
         ) {
-            ScrollableTabRow(
-                selectedTabIndex = selectedTab,
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.primary,
-                edgePadding = 0.dp,
-                indicator = { tabPositions ->
-                    TabRowDefaults.SecondaryIndicator(
-                        Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                        color = MaterialTheme.colorScheme.primary
+            if (isBmp) {
+                ScrollableTabRow(
+                    selectedTabIndex = selectedTab,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    edgePadding = 0.dp,
+                    indicator = { tabPositions ->
+                        TabRowDefaults.SecondaryIndicator(
+                            Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                ) {
+                    Tab(
+                        selected = selectedTab == TAB_JPG,
+                        onClick = { selectedTab = TAB_JPG },
+                        text = { Text("Cetak JPG", fontWeight = FontWeight.Bold) },
+                        modifier = Modifier.testTag("tab-jpg")
+                    )
+                    Tab(
+                        selected = selectedTab == TAB_SJ,
+                        onClick = { selectedTab = TAB_SJ },
+                        text = { Text("Surat Jalan", fontWeight = FontWeight.Bold) },
+                        modifier = Modifier.testTag("tab-sj")
+                    )
+                    Tab(
+                        selected = selectedTab == TAB_INVOICE,
+                        onClick = { selectedTab = TAB_INVOICE },
+                        text = { Text("Cetak Invoice", fontWeight = FontWeight.Bold) },
+                        modifier = Modifier.testTag("tab-invoice")
+                    )
+                    Tab(
+                        selected = selectedTab == TAB_POS,
+                        onClick = { selectedTab = TAB_POS },
+                        text = { Text("Struk POS", fontWeight = FontWeight.Bold) },
+                        modifier = Modifier.testTag("tab-pos")
                     )
                 }
-            ) {
-                Tab(
-                    selected = selectedTab == TAB_JPG,
-                    onClick = { selectedTab = TAB_JPG },
-                    text = { Text("Cetak JPG", fontWeight = FontWeight.Bold) },
-                    modifier = Modifier.testTag("tab-jpg")
-                )
-                Tab(
-                    selected = selectedTab == TAB_SJ,
-                    onClick = { selectedTab = TAB_SJ },
-                    text = { Text("Surat Jalan", fontWeight = FontWeight.Bold) },
-                    modifier = Modifier.testTag("tab-sj")
-                )
-                Tab(
-                    selected = selectedTab == TAB_INVOICE,
-                    onClick = { selectedTab = TAB_INVOICE },
-                    text = { Text("Cetak Invoice", fontWeight = FontWeight.Bold) },
-                    modifier = Modifier.testTag("tab-invoice")
-                )
-                Tab(
-                    selected = selectedTab == TAB_POS,
-                    onClick = { selectedTab = TAB_POS },
-                    text = { Text("Struk POS", fontWeight = FontWeight.Bold) },
-                    modifier = Modifier.testTag("tab-pos")
-                )
             }
 
             LazyColumn(
@@ -465,7 +483,7 @@ fun PrintSettingsScreen(
                             }
                         )
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().testTag("btn-save-print-settings")
                 )
             }
         }

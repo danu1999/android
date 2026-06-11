@@ -181,7 +181,7 @@ class InvoiceDetailViewModel @Inject constructor(
                         }
                     }
                     // Skenario B: Tidak ada URL di Room DB sama sekali
-                    // → cek Supabase langsung (polling mungkin dibatalkan/timeout sebelum detect)
+                    // → cek VPS langsung (polling mungkin dibatalkan/timeout sebelum detect)
                     !hasUrl -> {
                         val remoteResult = invoiceRepo.checkReceiverSignatureRemote(tenantId, invoiceId)
                         if (remoteResult is BmpInvoiceRepository.RemoteSignatureResult.Success) {
@@ -201,7 +201,7 @@ class InvoiceDetailViewModel @Inject constructor(
             _ui.update { it.copy(settings = settings) }
         }
         viewModelScope.launch {
-            printSettingsRepo.observe(tenantId).collect { printSettings ->
+            printSettingsRepo.observe(tenantId, "BMP").collect { printSettings ->
                 _ui.update { it.copy(printConfig = PrintConfig.fromEntity(printSettings)) }
             }
         }

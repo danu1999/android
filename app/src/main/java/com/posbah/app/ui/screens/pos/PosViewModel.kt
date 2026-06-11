@@ -91,7 +91,7 @@ class PosViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val tenantId = authRepository.activeTenantId().orEmpty()
-    private val outletId = sessionState.outletId.value
+    private val currentOutletId get() = sessionState.outletId.value
     val activeTenantId get() = tenantId
 
     private val _uiState = MutableStateFlow(PosUiState())
@@ -99,7 +99,7 @@ class PosViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            printSettingsRepository.observe(tenantId).collect { entity ->
+            printSettingsRepository.observe(tenantId, "FNB").collect { entity ->
                 _uiState.update { it.copy(printConfig = PrintConfig.fromEntity(entity)) }
             }
         }
@@ -110,10 +110,51 @@ class PosViewModel @Inject constructor(
     }
 
     // Reactive streams from database
-    val products = productRepository.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val availableOutlets = db.outletDao().observeForTenant(tenantId)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val activeOutletId = sessionState.outletId
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    fun selectOutlet(id: Long?) {
+        sessionState.setOutlet(id)
+    }
+
+    val products = kotlinx.coroutines.flow.combine(
+        productRepository.observe(tenantId),
+        sessionState.outletId,
+        db.outletDao().observeForTenant(tenantId)
+    ) { allProducts, activeOutletId, outlets ->
+        val defaultOutletId = outlets.firstOrNull { it.isDefault }?.id
+        allProducts.filter { p ->
+            p.outletId == activeOutletId || (activeOutletId == defaultOutletId && p.outletId == null)
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     val customers = customerRepository.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-    val pendingQueues = transactionRepository.observePendingQueues(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-    val transactions = transactionRepository.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val pendingQueues = kotlinx.coroutines.flow.combine(
+        transactionRepository.observePendingQueues(tenantId),
+        sessionState.outletId,
+        db.outletDao().observeForTenant(tenantId)
+    ) { allQueues, activeOutletId, outlets ->
+        val defaultOutletId = outlets.firstOrNull { it.isDefault }?.id
+        allQueues.filter { t ->
+            t.outletId == activeOutletId || (activeOutletId == defaultOutletId && t.outletId == null)
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val transactions = kotlinx.coroutines.flow.combine(
+        transactionRepository.observe(tenantId),
+        sessionState.outletId,
+        db.outletDao().observeForTenant(tenantId)
+    ) { allTransactions, activeOutletId, outlets ->
+        val defaultOutletId = outlets.firstOrNull { it.isDefault }?.id
+        allTransactions.filter { t ->
+            t.outletId == activeOutletId || (activeOutletId == defaultOutletId && t.outletId == null)
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     val activityLogs = activityLogDao.observeLogs(tenantId, "FNB").stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // Cart list managed locally
@@ -298,7 +339,7 @@ class PosViewModel @Inject constructor(
 
             val tx = TransactionEntity(
                 tenantId = tenantId,
-                outletId = outletId,
+                outletId = currentOutletId,
                 employeeId = 1L,
                 customerId = currentUi.customerId,
                 customerName = currentUi.customerName ?: "Umum",
@@ -448,7 +489,7 @@ class PosViewModel @Inject constructor(
             }
             val p = ProductEntity(
                 tenantId = tenantId,
-                outletId = outletId,
+                outletId = currentOutletId,
                 name = name,
                 price = price,
                 costPrice = costPrice,
@@ -530,7 +571,7 @@ class PosViewModel @Inject constructor(
         _uiState.update { it.copy(isSeeding = true, seedError = null) }
         viewModelScope.launch {
             try {
-                localDataSeeder.seedFromSqlDump(appContext, tenantId, outletId)
+                localDataSeeder.seedFromSqlDump(appContext, tenantId, currentOutletId)
                 _uiState.update { it.copy(isSeeding = false) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isSeeding = false, seedError = e.localizedMessage) }

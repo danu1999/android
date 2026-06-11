@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.CarRental
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Clear
@@ -82,6 +83,8 @@ import java.util.Date
 import java.util.Locale
 import com.posbah.app.util.CameraUtils
 
+import androidx.compose.material.icons.outlined.Print
+
 data class Vehicle(
     val id: String,
     val name: String,
@@ -113,6 +116,7 @@ data class RentalOrder(
 fun RentalScreen(
     onBack: () -> Unit,
     onNavigate: (String) -> Unit,
+    onNavigateToPrintSettings: () -> Unit,
     viewModel: RentalViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -123,6 +127,15 @@ fun RentalScreen(
     val activityLogsList by viewModel.activityLogs.collectAsState()
     val customerList by viewModel.customers.collectAsState(emptyList())
     val transactionList by viewModel.transactions.collectAsState(emptyList())
+
+    val outletList by viewModel.availableOutlets.collectAsState()
+    val activeOutletId by viewModel.activeOutletId.collectAsState()
+    val activeOutlet = remember(outletList, activeOutletId) {
+        outletList.find { it.id == activeOutletId }
+    }
+    val activeOutletName = activeOutlet?.name ?: "Outlet Utama"
+    var showOutletDropdown by remember { mutableStateOf(false) }
+    var showOwnerMenuDropdown by remember { mutableStateOf(false) }
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedVehicleForRent by remember { mutableStateOf<Vehicle?>(null) }
@@ -178,33 +191,84 @@ fun RentalScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            PosBahTopBar(
-                title = "Rental POS",
-                subtitle = "Sistem Kasir Rental Kendaraan",
-                onBack = onBack,
-                actions = {
-                    IconButton(onClick = { onNavigate(Screen.MarginAnalysis.route) }) {
-                        Icon(Icons.Outlined.History, contentDescription = "Analisis Margin & Riwayat")
-                    }
-                    if (isOwner) {
-                        IconButton(onClick = { showLogsDialog = true }) {
-                            Icon(Icons.Outlined.Notes, contentDescription = "Log Aktivitas")
+            Box {
+                PosBahTopBar(
+                    title = "Rental POS",
+                    subtitle = "Outlet: $activeOutletName",
+                    onBack = onBack,
+                    onTitleClick = { showOutletDropdown = true },
+                    actions = {
+                        IconButton(onClick = { onNavigate(Screen.MarginAnalysis.route) }) {
+                            Icon(Icons.Outlined.History, contentDescription = "Analisis Margin & Riwayat")
+                        }
+                        IconButton(onClick = onNavigateToPrintSettings) {
+                            Icon(Icons.Outlined.Print, contentDescription = "Pengaturan Struk")
+                        }
+                        if (isOwner) {
+                            Box {
+                                IconButton(onClick = { showOwnerMenuDropdown = true }) {
+                                    Icon(
+                                        imageVector = androidx.compose.material.icons.Icons.Default.MoreVert,
+                                        contentDescription = "Menu Owner"
+                                    )
+                                }
+                                androidx.compose.material3.DropdownMenu(
+                                    expanded = showOwnerMenuDropdown,
+                                    onDismissRequest = { showOwnerMenuDropdown = false }
+                                ) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Kontrol Outlet") },
+                                        onClick = {
+                                            onNavigate("owner/outlet_control")
+                                            showOwnerMenuDropdown = false
+                                        }
+                                    )
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Kelola Karyawan") },
+                                        onClick = {
+                                            onNavigate("owner/employees")
+                                            showOwnerMenuDropdown = false
+                                        }
+                                    )
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Log Aktivitas") },
+                                        onClick = {
+                                            showLogsDialog = true
+                                            showOwnerMenuDropdown = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                        IconButton(onClick = {
+                            newVehicleName = ""
+                            newVehiclePlate = ""
+                            newVehicleType = "MOBIL"
+                            newVehiclePrice = ""
+                            newVehicleCost = ""
+                            newVehicleMonthlyMaintenance = ""
+                            capturedPhotoFile = null
+                            showAddVehicleDialog = true
+                        }) {
+                            Icon(Icons.Outlined.DirectionsCar, contentDescription = "Tambah Armada")
                         }
                     }
-                    IconButton(onClick = {
-                        newVehicleName = ""
-                        newVehiclePlate = ""
-                        newVehicleType = "MOBIL"
-                        newVehiclePrice = ""
-                        newVehicleCost = ""
-                        newVehicleMonthlyMaintenance = ""
-                        capturedPhotoFile = null
-                        showAddVehicleDialog = true
-                    }) {
-                        Icon(Icons.Outlined.DirectionsCar, contentDescription = "Tambah Armada")
+                )
+                androidx.compose.material3.DropdownMenu(
+                    expanded = showOutletDropdown,
+                    onDismissRequest = { showOutletDropdown = false }
+                ) {
+                    outletList.forEach { outlet ->
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text(outlet.name) },
+                            onClick = {
+                                viewModel.selectOutlet(outlet.id)
+                                showOutletDropdown = false
+                            }
+                        )
                     }
                 }
-            )
+            }
         }
     ) { paddingValues ->
         Row(

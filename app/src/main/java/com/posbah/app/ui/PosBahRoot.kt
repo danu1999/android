@@ -132,7 +132,8 @@ fun PosBahRoot(
                         popUpTo(Screen.PosDashboard.route) { inclusive = true }
                     }
                 },
-                onNavigate = { route -> nav.navigate(route) }
+                onNavigate = { route -> nav.navigate(route) },
+                onNavigateToPrintSettings = { nav.navigate(Screen.PrintSettings.build("FNB")) }
             )
         }
 
@@ -151,7 +152,8 @@ fun PosBahRoot(
                         popUpTo(Screen.RentalDashboard.route) { inclusive = true }
                     }
                 },
-                onNavigate = { route -> nav.navigate(route) }
+                onNavigate = { route -> nav.navigate(route) },
+                onNavigateToPrintSettings = { nav.navigate(Screen.PrintSettings.build("RENTAL")) }
             )
         }
 
@@ -162,7 +164,8 @@ fun PosBahRoot(
                         popUpTo(Screen.LaundryDashboard.route) { inclusive = true }
                     }
                 },
-                onNavigate = { route -> nav.navigate(route) }
+                onNavigate = { route -> nav.navigate(route) },
+                onNavigateToPrintSettings = { nav.navigate(Screen.PrintSettings.build("LAUNDRY")) }
             )
         }
 
@@ -245,11 +248,19 @@ fun PosBahRoot(
         composable(Screen.BmpSettings.route) {
             SettingsScreen(
                 onBack = { nav.popBackStack() },
-                onNavigateToPrintSettings = { nav.navigate(Screen.PrintSettings.route) }
+                onNavigateToPrintSettings = { nav.navigate(Screen.PrintSettings.build("BMP")) }
             )
         }
 
-        composable(Screen.PrintSettings.route) {
+        composable(
+            route = Screen.PrintSettings.route,
+            arguments = listOf(
+                navArgument("moduleKey") {
+                    type = NavType.StringType
+                    defaultValue = "BMP"
+                }
+            )
+        ) {
             PrintSettingsScreen(onBack = { nav.popBackStack() })
         }
 

@@ -787,8 +787,20 @@ private fun generateInvoiceHtml(
 
     val signatureHtml = if (printConfig.useSignature) {
         val localSigBase64 = getFileBase64(invoice.receiverSignaturePath)
-        val receiverSig = if (localSigBase64.isNotEmpty()) localSigBase64 else (invoice.receiverSignatureUrl ?: "")
-        val receiverName = invoice.receiverNameActual ?: printConfig.signatureReceiverName
+        val receiverSig = if (localSigBase64.isNotEmpty()) {
+            localSigBase64
+        } else if (!invoice.receiverSignatureUrl.isNullOrBlank()) {
+            invoice.receiverSignatureUrl
+        } else {
+            client?.receiverSignatureUrl ?: ""
+        }
+        val receiverName = if (!invoice.receiverNameActual.isNullOrBlank()) {
+            invoice.receiverNameActual
+        } else if (!client?.receiverNameActual.isNullOrBlank()) {
+            client.receiverNameActual
+        } else {
+            printConfig.signatureReceiverName
+        }
         """
         <table class="signature-section">
             <tr>
@@ -1036,8 +1048,20 @@ private fun generateSuratJalanHtml(
 
     val signatureHtml = if (printConfig.useSignature) {
         val localSigBase64 = getFileBase64(invoice.receiverSignaturePath)
-        val receiverSig = if (localSigBase64.isNotEmpty()) localSigBase64 else (invoice.receiverSignatureUrl ?: "")
-        val receiverName = invoice.receiverNameActual ?: printConfig.signatureReceiverName
+        val receiverSig = if (localSigBase64.isNotEmpty()) {
+            localSigBase64
+        } else if (!invoice.receiverSignatureUrl.isNullOrBlank()) {
+            invoice.receiverSignatureUrl
+        } else {
+            client?.receiverSignatureUrl ?: ""
+        }
+        val receiverName = if (!invoice.receiverNameActual.isNullOrBlank()) {
+            invoice.receiverNameActual
+        } else if (!client?.receiverNameActual.isNullOrBlank()) {
+            client.receiverNameActual
+        } else {
+            printConfig.signatureReceiverName
+        }
         """
         <table class="signature-section">
             <tr>
@@ -1291,8 +1315,19 @@ private fun ReceiverSignatureSection(
     onShareLink: () -> Unit,
     onDeleteSignature: () -> Unit
 ) {
-    val isSigned = !invoice.receiverSignaturePath.isNullOrBlank() || !invoice.receiverSignatureUrl.isNullOrBlank()
-    val receiverName = invoice.receiverNameActual ?: ""
+    val isInvoiceSigned = !invoice.receiverSignaturePath.isNullOrBlank() || !invoice.receiverSignatureUrl.isNullOrBlank()
+    val isClientSigned = !uiState.client?.receiverSignatureUrl.isNullOrBlank()
+    val isSigned = isInvoiceSigned || isClientSigned
+
+    val receiverName = if (!invoice.receiverNameActual.isNullOrBlank()) {
+        invoice.receiverNameActual
+    } else if (isClientSigned) {
+        uiState.client?.receiverNameActual ?: ""
+    } else {
+        ""
+    }
+
+    val badgeText = if (isInvoiceSigned) "SUDAH DITANDATANGANI" else if (isClientSigned) "SUDAH DITANDATANGANI (KLIEN)" else "BELUM DITANDATANGANI"
 
     Card(
         shape = RoundedCornerShape(16.dp),
@@ -1317,7 +1352,7 @@ private fun ReceiverSignatureSection(
                     modifier = Modifier.testTag("sig-status-badge")
                 ) {
                     Text(
-                        text = if (isSigned) "SUDAH DITANDATANGANI" else "BELUM DITANDATANGANI",
+                        text = badgeText,
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = if (isSigned) Color(0xFF065F46) else Color(0xFF991B1B),
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -1328,7 +1363,13 @@ private fun ReceiverSignatureSection(
             Spacer(modifier = Modifier.height(12.dp))
             
             if (isSigned) {
-                val signatureModel = invoice.receiverSignatureUrl ?: invoice.receiverSignaturePath
+                val signatureModel = if (!invoice.receiverSignatureUrl.isNullOrBlank()) {
+                    invoice.receiverSignatureUrl
+                } else if (!invoice.receiverSignaturePath.isNullOrBlank()) {
+                    invoice.receiverSignaturePath
+                } else {
+                    uiState.client?.receiverSignatureUrl
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically

@@ -74,7 +74,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
         TransactionItemEntity::class,
         ActivityLogEntity::class
     ],
-    version = 13,
+    version = 15,
     exportSchema = true
 )
 abstract class PosBahDatabase : RoomDatabase() {
@@ -211,6 +211,90 @@ abstract class PosBahDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `bmp_clients` ADD COLUMN `receiverSignatureUrl` TEXT")
+                db.execSQL("ALTER TABLE `bmp_clients` ADD COLUMN `receiverNameActual` TEXT")
+            }
+        }
+
+        /**
+         * Migration v14 → v15: Isolasi pengaturan cetak per modul bisnis.
+         *
+         * Sebelumnya hanya ada 1 record PrintSettings per tenant (unique pada tenantId).
+         * Sekarang setiap modul (BMP, FNB, LAUNDRY, RENTAL) punya record sendiri,
+         * sehingga unique index berubah menjadi (tenantId, moduleKey).
+         *
+         * Langkah migrasi:
+         * 1. Tambah kolom `moduleKey` TEXT NOT NULL DEFAULT 'BMP'
+         * 2. Recreate tabel dengan index baru (tenantId, moduleKey)
+         *    SQLite tidak mendukung DROP INDEX + CREATE UNIQUE INDEX pada tabel yang sama,
+         *    jadi kita gunakan strategi copy-alter-drop.
+         */
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Step 1: Tambah kolom moduleKey dengan default 'BMP' (data lama tetap ada)
+                db.execSQL("ALTER TABLE `print_settings` ADD COLUMN `moduleKey` TEXT NOT NULL DEFAULT 'BMP'")
+
+                // Step 2: Buat tabel baru dengan index unik (tenantId, moduleKey)
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `print_settings_new` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `tenantId` TEXT NOT NULL,
+                        `moduleKey` TEXT NOT NULL DEFAULT 'BMP',
+                        `jpgUseLogo` INTEGER NOT NULL DEFAULT 1,
+                        `jpgHeaderAlign` TEXT NOT NULL DEFAULT 'LEFT',
+                        `jpgUseSignature` INTEGER NOT NULL DEFAULT 1,
+                        `jpgSignatureSenderName` TEXT NOT NULL DEFAULT 'Admin',
+                        `jpgSignatureReceiverName` TEXT NOT NULL DEFAULT '',
+                        `jpgSignatureDrawnBase64` TEXT,
+                        `jpgIsColor` INTEGER NOT NULL DEFAULT 1,
+                        `sjUseLogo` INTEGER NOT NULL DEFAULT 1,
+                        `sjHeaderAlign` TEXT NOT NULL DEFAULT 'LEFT',
+                        `sjUseSignature` INTEGER NOT NULL DEFAULT 1,
+                        `sjSignatureSenderName` TEXT NOT NULL DEFAULT 'Admin',
+                        `sjSignatureReceiverName` TEXT NOT NULL DEFAULT '',
+                        `sjSignatureDrawnBase64` TEXT,
+                        `sjIsColor` INTEGER NOT NULL DEFAULT 0,
+                        `invoiceUseLogo` INTEGER NOT NULL DEFAULT 1,
+                        `invoiceHeaderAlign` TEXT NOT NULL DEFAULT 'LEFT',
+                        `invoiceUseSignature` INTEGER NOT NULL DEFAULT 1,
+                        `invoiceSignatureSenderName` TEXT NOT NULL DEFAULT 'Admin',
+                        `invoiceSignatureReceiverName` TEXT NOT NULL DEFAULT '',
+                        `invoiceSignatureDrawnBase64` TEXT,
+                        `invoiceIsColor` INTEGER NOT NULL DEFAULT 1,
+                        `receiptPaperWidth` TEXT NOT NULL DEFAULT 'MM80',
+                        `receiptUseLogo` INTEGER NOT NULL DEFAULT 1,
+                        `receiptHeaderAlign` TEXT NOT NULL DEFAULT 'CENTER',
+                        `receiptIsColor` INTEGER NOT NULL DEFAULT 0,
+                        `receiptShowItemPrice` INTEGER NOT NULL DEFAULT 1,
+                        `receiptFooterText` TEXT NOT NULL DEFAULT 'Terima kasih sudah berbelanja!',
+                        `jpgTemplateType` TEXT NOT NULL DEFAULT 'MODERN',
+                        `sjTemplateType` TEXT NOT NULL DEFAULT 'MODERN',
+                        `invoiceTemplateType` TEXT NOT NULL DEFAULT 'MODERN',
+                        `bankOwnerName` TEXT NOT NULL DEFAULT '',
+                        `bankName` TEXT NOT NULL DEFAULT 'BCA',
+                        `bankAccountNumber` TEXT NOT NULL DEFAULT '',
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL
+                    )
+                """.trimIndent())
+
+                // Step 3: Copy data lama ke tabel baru (semua jadi moduleKey='BMP')
+                db.execSQL("""
+                    INSERT INTO `print_settings_new` 
+                    SELECT * FROM `print_settings`
+                """.trimIndent())
+
+                // Step 4: Drop tabel lama dan rename tabel baru
+                db.execSQL("DROP TABLE `print_settings`")
+                db.execSQL("ALTER TABLE `print_settings_new` RENAME TO `print_settings`")
+
+                // Step 5: Buat unique index baru
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_print_settings_tenantId_moduleKey` ON `print_settings` (`tenantId`, `moduleKey`)")
+            }
+        }
+
         fun build(context: Context, passphrase: ByteArray): PosBahDatabase {
             // Load SQLCipher native library
             System.loadLibrary("sqlcipher")
@@ -223,7 +307,7 @@ abstract class PosBahDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13) // ← Data AMAN, tidak terhapus
+                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15) // ← Data AMAN, tidak terhapus
                 .fallbackToDestructiveMigration()      // ← Fallback jika dari versi < 5 (install baru)
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {

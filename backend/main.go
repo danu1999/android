@@ -1,18 +1,22 @@
 package main
 
 import (
-	"bytes"
+	"crypto/sha1"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"math"
+	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -24,40 +28,61 @@ type LocalUser struct {
 }
 
 var (
-	supabaseURL       string
-	supabaseSecretKey string
 	port              string
 )
 
 func main() {
 	// Load environment variables
-	supabaseURL = os.Getenv("SUPABASE_URL")
-	if supabaseURL == "" {
-		supabaseURL = "https://etustetneufkfilndimy.supabase.co"
-	}
-	supabaseSecretKey = os.Getenv("SUPABASE_SECRET_KEY")
-	if supabaseSecretKey == "" {
-		supabaseSecretKey = "YOUR_SUPABASE_SECRET_KEY"
-	}
 	port = os.Getenv("PORT")
 	if port == "" {
 		port = "3000"
 	}
 
 	log.Printf("Starting PosBah Go backend...")
-	log.Printf("Supabase URL: %s", supabaseURL)
+
+	// Initialize local PostgreSQL database
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		dbURL = "postgres://postgres:Bahtera1!@localhost:5432/posbah?sslmode=disable"
+	}
+	if err := initDatabase(dbURL); err != nil {
+		log.Printf("Warning: local database initialization failed: %v", err)
+	}
 
 	// Start background cron worker (runs check every hour)
 	go startCronWorker()
 
 	// Setup endpoints
+	http.Handle("/", http.FileServer(http.Dir("./web")))
 	http.HandleFunc("/status", handleStatus)
 	http.HandleFunc("/api/admin/check-demo-lockout", handleManualLockoutCheck)
+	http.HandleFunc("/api/admin/demo-users", handleGetDemoUsers)
+	http.HandleFunc("/api/admin/approve-user", handleApproveUser)
+	http.HandleFunc("/api/admin/reject-user", handleRejectUser)
+	http.HandleFunc("/api/auth/qr-session", handleQrSession)
+	http.HandleFunc("/api/auth/qr-authorize", handleQrAuthorize)
+	http.HandleFunc("/api/auth/qr-confirm", handleQrConfirm)
+	http.HandleFunc("/api/auth/qr-check", handleQrCheck)
+	http.HandleFunc("/ws", handleWS)
 	http.HandleFunc("/api/invoice/signature", handleSaveSignature)
 	http.HandleFunc("/api/invoice/signature-status", handleSignatureStatus)
+	http.HandleFunc("/api/invoice/delete-signature", handleDeleteSignature)
 	http.HandleFunc("/sign/", handleSignPage)
 	http.HandleFunc("/api/sign/", handleSignPage)
 	http.HandleFunc("/api/ai/classify", handleAiClassify)
+
+	// APK download & version endpoints
+	http.HandleFunc("/api/auth/get-apk-download-token", handleGetApkDownloadToken)
+	http.HandleFunc("/api/download-apk", handleDownloadApk)
+	http.HandleFunc("/api/dowload-apk", handleDownloadApk) // Typo compatibility
+	http.HandleFunc("/api/apk-version", handleApkVersion)
+
+	// ADMS Fingerprint machine endpoints
+	http.HandleFunc("/iclock/cdata", handleCData)
+	http.HandleFunc("/iclock/getrequest", handleGetRequest)
+
+	// Sync API for Android client
+	http.HandleFunc("/api/sync/", handleSyncRoute)
 	
 	// Serve static files from TTD
 	http.Handle("/api/signatures/", http.StripPrefix("/api/signatures/", http.FileServer(http.Dir("./TTD"))))
@@ -89,34 +114,28 @@ func startCronWorker() {
 
 // Performs core logic of querying and deleting expired demo users
 func checkAndLockoutDemoUsers() error {
+	if db == nil {
+		return fmt.Errorf("local database not initialized")
+	}
 	twoDaysAgoMillis := time.Now().UnixNano()/int64(time.Millisecond) - (2 * 24 * 60 * 60 * 1000)
 
-	// Query Supabase for demo users who registered more than 2 days ago
-	reqUrl := fmt.Sprintf("%s/rest/v1/local_users?isPremium=eq.false&registeredAt=lt.%d", supabaseURL, twoDaysAgoMillis)
-	req, err := http.NewRequest("GET", reqUrl, nil)
+	// Query local database for demo users who registered more than 2 days ago
+	rows, err := db.Query(`SELECT "googleSub", "email", "registeredAt" FROM "local_users" WHERE "isPremium" = FALSE AND "registeredAt" < $1`, twoDaysAgoMillis)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return fmt.Errorf("failed to query expired demo users: %w", err)
 	}
-
-	req.Header.Set("apikey", supabaseSecretKey)
-	req.Header.Set("Authorization", "Bearer "+supabaseSecretKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("http request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("unexpected status %s: %s", resp.Status, string(bodyBytes))
-	}
+	defer rows.Close()
 
 	var users []LocalUser
-	if err := json.NewDecoder(resp.Body).Decode(&users); err != nil {
-		return fmt.Errorf("failed to decode response: %w", err)
+	for rows.Next() {
+		var u LocalUser
+		var registeredAt int64
+		if err := rows.Scan(&u.GoogleSub, &u.Email, &registeredAt); err != nil {
+			log.Printf("Failed to scan user: %v", err)
+			continue
+		}
+		u.RegisteredAt = registeredAt
+		users = append(users, u)
 	}
 
 	if len(users) == 0 {
@@ -138,30 +157,13 @@ func checkAndLockoutDemoUsers() error {
 	return nil
 }
 
-// Deletes a user from Supabase using their GoogleSub
+// Deletes a user from local database using their GoogleSub
 func deleteLocalUser(googleSub string) error {
-	reqUrl := fmt.Sprintf("%s/rest/v1/local_users?googleSub=eq.%s", supabaseURL, googleSub)
-	req, err := http.NewRequest("DELETE", reqUrl, nil)
-	if err != nil {
-		return err
+	if db == nil {
+		return fmt.Errorf("local database not initialized")
 	}
-
-	req.Header.Set("apikey", supabaseSecretKey)
-	req.Header.Set("Authorization", "Bearer "+supabaseSecretKey)
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("unexpected status %s: %s", resp.Status, string(bodyBytes))
-	}
-
-	return nil
+	_, err := db.Exec(`DELETE FROM "local_users" WHERE "googleSub" = $1`, googleSub)
+	return err
 }
 
 // Handler: GET /status
@@ -171,11 +173,18 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	dbStatus := "connected to PostgreSQL"
+	if db == nil {
+		dbStatus = "disconnected (db connection pool not initialized)"
+	} else if err := db.Ping(); err != nil {
+		dbStatus = fmt.Sprintf("disconnected error: %v", err)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	response := map[string]string{
 		"status":    "running",
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
-		"database":  "connected to Supabase",
+		"database":  dbStatus,
 		"language":  "Go 1.21",
 	}
 	json.NewEncoder(w).Encode(response)
@@ -188,29 +197,30 @@ func handleManualLockoutCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if db == nil {
+		http.Error(w, "Local database not initialized", http.StatusInternalServerError)
+		return
+	}
+
 	twoDaysAgoMillis := time.Now().UnixNano()/int64(time.Millisecond) - (2 * 24 * 60 * 60 * 1000)
 
 	// Fetch affected users first to report them
-	reqUrl := fmt.Sprintf("%s/rest/v1/local_users?isPremium=eq.false&registeredAt=lt.%d", supabaseURL, twoDaysAgoMillis)
-	req, err := http.NewRequest("GET", reqUrl, nil)
+	rows, err := db.Query(`SELECT "googleSub", "email", "registeredAt" FROM "local_users" WHERE "isPremium" = FALSE AND "registeredAt" < $1`, twoDaysAgoMillis)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	req.Header.Set("apikey", supabaseSecretKey)
-	req.Header.Set("Authorization", "Bearer "+supabaseSecretKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer resp.Body.Close()
+	defer rows.Close()
 
 	var users []LocalUser
-	json.NewDecoder(resp.Body).Decode(&users)
+	for rows.Next() {
+		var u LocalUser
+		var registeredAt int64
+		if err := rows.Scan(&u.GoogleSub, &u.Email, &registeredAt); err == nil {
+			u.RegisteredAt = registeredAt
+			users = append(users, u)
+		}
+	}
 
 	deletedEmails := []string{}
 	for _, user := range users {
@@ -226,6 +236,227 @@ func handleManualLockoutCheck(w http.ResponseWriter, r *http.Request) {
 		"deleted":      deletedEmails,
 	}
 	json.NewEncoder(w).Encode(response)
+}
+
+type ApproveUserRequest struct {
+	GoogleSub   string `json:"googleSub"`
+	Email       string `json:"email"`
+	DisplayName string `json:"displayName"`
+	PinHash     string `json:"pinHash"`
+}
+
+type RejectUserRequest struct {
+	GoogleSub string `json:"googleSub"`
+}
+
+type DemoUserResponse struct {
+	GoogleSub    string `json:"googleSub"`
+	Email        string `json:"email"`
+	DisplayName  string `json:"displayName"`
+	RegisteredAt int64  `json:"registeredAt"`
+	IsActive     bool   `json:"isActive"`
+}
+
+func handleGetDemoUsers(w http.ResponseWriter, r *http.Request) {
+	// CORS
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	authHeader := r.Header.Get("Authorization")
+	if authHeader != "Bearer BahteraMigrate123!" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if db == nil {
+		http.Error(w, "Database not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	rows, err := db.Query(`SELECT "googleSub", "email", COALESCE("displayName", ''), "registeredAt", "isActive" FROM "local_users" WHERE "isPremium" = FALSE ORDER BY "registeredAt" DESC`)
+	if err != nil {
+		http.Error(w, "Database query failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	users := []DemoUserResponse{}
+	for rows.Next() {
+		var u DemoUserResponse
+		if err := rows.Scan(&u.GoogleSub, &u.Email, &u.DisplayName, &u.RegisteredAt, &u.IsActive); err != nil {
+			log.Printf("Failed to scan demo user: %v", err)
+			continue
+		}
+		users = append(users, u)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(users)
+}
+
+func handleRejectUser(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	authHeader := r.Header.Get("Authorization")
+	if authHeader != "Bearer BahteraMigrate123!" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if db == nil {
+		http.Error(w, "Database not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	var reqData RejectUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+		http.Error(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if reqData.GoogleSub == "" {
+		http.Error(w, "googleSub is required", http.StatusBadRequest)
+		return
+	}
+
+	err := deleteLocalUser(reqData.GoogleSub)
+	if err != nil {
+		http.Error(w, "Failed to delete user: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "User successfully rejected and deleted",
+	})
+}
+
+func handleApproveUser(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	authHeader := r.Header.Get("Authorization")
+	if authHeader != "Bearer BahteraMigrate123!" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if db == nil {
+		http.Error(w, "Database not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	var reqData ApproveUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+		http.Error(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if reqData.GoogleSub == "" || reqData.Email == "" || reqData.PinHash == "" {
+		http.Error(w, "googleSub, email, and pinHash are required", http.StatusBadRequest)
+		return
+	}
+
+	cleanEmail := strings.ReplaceAll(strings.ReplaceAll(reqData.Email, ".", "_"), "@", "_")
+	demoTenantId := "demo_tenant_" + cleanEmail
+	premiumTenantId := "ten_premium_" + cleanEmail
+
+	// Start SQL Transaction
+	tx, err := db.Begin()
+	if err != nil {
+		http.Error(w, "Failed to start transaction: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	// Check if demo tenant exists to fetch businessMode
+	var businessMode string = "FNB"
+	err = tx.QueryRow(`SELECT "businessMode" FROM "tenants" WHERE "id" = $1`, demoTenantId).Scan(&businessMode)
+	if err != nil {
+		// Default to "FNB" if not found
+		businessMode = "FNB"
+	}
+
+	nowMillis := time.Now().UnixNano() / int64(time.Millisecond)
+
+	// Create Premium Tenant
+	displayName := reqData.DisplayName
+	if displayName == "" {
+		displayName = "Owner Premium"
+	}
+	tenantName := "CV. " + displayName + " (Premium)"
+	_, err = tx.Exec(`INSERT INTO "tenants" ("id", "name", "ownerEmail", "businessMode", "isActive", "createdAt", "updatedAt") 
+		VALUES ($1, $2, $3, $4, $5, $6, $7) 
+		ON CONFLICT ("id") DO UPDATE SET "name" = EXCLUDED."name", "businessMode" = EXCLUDED."businessMode", "updatedAt" = EXCLUDED."updatedAt"`,
+		premiumTenantId, tenantName, reqData.Email, businessMode, true, nowMillis, nowMillis)
+	if err != nil {
+		http.Error(w, "Failed to create premium tenant: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Create Owner Employee
+	// Use unique 32-bit positive integer for employee ID to avoid postgres INT overflow
+	employeeId := int((time.Now().Unix() + int64(time.Now().Nanosecond())) % 2000000000)
+	_, err = tx.Exec(`INSERT INTO "employees" ("id", "tenantId", "outletId", "name", "email", "role", "pinHash", "salary", "isActive", "createdAt", "updatedAt") 
+		VALUES ($1, $2, NULL, $3, $4, 'OWNER', $5, 0.0, true, $6, $7)
+		ON CONFLICT ("id") DO NOTHING`,
+		employeeId, premiumTenantId, displayName, reqData.Email, reqData.PinHash, nowMillis, nowMillis)
+	if err != nil {
+		http.Error(w, "Failed to create owner employee: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Update Local User to Premium
+	_, err = tx.Exec(`UPDATE "local_users" SET "isPremium" = TRUE, "tenantId" = $1, "updatedAt" = $2 WHERE "googleSub" = $3`,
+		premiumTenantId, nowMillis, reqData.GoogleSub)
+	if err != nil {
+		http.Error(w, "Failed to update local user: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "Failed to commit transaction: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "User successfully approved to Premium",
+		"tenantId": premiumTenantId,
+	})
 }
 
 // SignatureRequest menerima invoiceId sebagai string atau number dari JS
@@ -315,43 +546,33 @@ func handleSaveSignature(w http.ResponseWriter, r *http.Request) {
 		savedUrl = fmt.Sprintf("https://www.zedmz.cloud/api/signatures/%s", fileName)
 	}
 
-	// Update Supabase bmp_invoices table (non-blocking / optional)
-	reqUrl := fmt.Sprintf("%s/rest/v1/bmp_invoices?id=eq.%d", supabaseURL, reqData.InvoiceId)
-	
-	updateFields := map[string]interface{}{
-		"receiverSignatureUrl": savedUrl,
-		"receiverNameActual":   reqData.ReceiverName,
-		"updatedAt":            time.Now().UnixNano() / int64(time.Millisecond),
+	// Update local database & fetch clientId/tenantId
+	var clientId sql.NullInt64
+	var dbTenantId string
+	err = db.QueryRow(`SELECT "clientId", "tenantId" FROM "bmp_invoices" WHERE "id" = $1`, reqData.InvoiceId).Scan(&clientId, &dbTenantId)
+	if err != nil {
+		log.Printf("[Warning] Failed to find clientId/tenantId in local DB for invoice %d: %v", reqData.InvoiceId, err)
 	}
-	
-	if bodyBytes, err := json.Marshal(updateFields); err == nil {
-		req, err := http.NewRequest("PATCH", reqUrl, bytes.NewBuffer(bodyBytes))
-		if err == nil {
-			req.Header.Set("apikey", supabaseSecretKey)
-			req.Header.Set("Authorization", "Bearer "+supabaseSecretKey)
-			req.Header.Set("Content-Type", "application/json")
-			if reqData.TenantId != "" {
-				req.Header.Set("x-tenant-id", reqData.TenantId)
-			}
-			
-			client := &http.Client{Timeout: 5 * time.Second}
-			resp, err := client.Do(req)
-			if err != nil {
-				log.Printf("[Warning] Supabase connection failed during signature sync: %v", err)
-			} else {
-				defer resp.Body.Close()
-				if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-					respBody, _ := io.ReadAll(resp.Body)
-					log.Printf("[Warning] Supabase returned status %d on signature sync: %s", resp.StatusCode, string(respBody))
-				} else {
-					log.Printf("[Signature] Successfully synced signature to Supabase for invoice %d", reqData.InvoiceId)
-				}
-			}
-		} else {
-			log.Printf("[Warning] Failed to create Supabase sync request: %v", err)
+
+	updatedAt := time.Now().UnixNano() / int64(time.Millisecond)
+
+	// Update local bmp_invoices
+	_, err = db.Exec(`UPDATE "bmp_invoices" SET "receiverSignatureUrl" = $1, "receiverNameActual" = $2, "updatedAt" = $3 WHERE "id" = $4`, savedUrl, reqData.ReceiverName, updatedAt, reqData.InvoiceId)
+	if err != nil {
+		log.Printf("[Warning] Failed to update local bmp_invoices for invoice %d: %v", reqData.InvoiceId, err)
+	}
+
+	// Update local bmp_clients if clientId is valid
+	if clientId.Valid && clientId.Int64 > 0 {
+		_, err = db.Exec(`UPDATE "bmp_clients" SET "receiverSignatureUrl" = $1, "receiverNameActual" = $2, "updatedAt" = $3 WHERE "id" = $4`, savedUrl, reqData.ReceiverName, updatedAt, clientId.Int64)
+		if err != nil {
+			log.Printf("[Warning] Failed to update local bmp_clients for client %d: %v", clientId.Int64, err)
 		}
-	} else {
-		log.Printf("[Warning] Failed to marshal Supabase sync body: %v", err)
+	}
+
+	tenantId := dbTenantId
+	if tenantId == "" {
+		tenantId = reqData.TenantId
 	}
 
 	log.Printf("[Signature] Successfully saved receiver signature for invoice %d (URL: %s)", reqData.InvoiceId, savedUrl)
@@ -360,6 +581,78 @@ func handleSaveSignature(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"message":      "Signature saved successfully",
 		"signatureUrl": savedUrl,
+	})
+}
+
+func handleDeleteSignature(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var reqData struct {
+		InvoiceId int64  `json:"invoiceId"`
+		TenantId  string `json:"tenantId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+		http.Error(w, "Invalid request body: " + err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if reqData.InvoiceId <= 0 {
+		http.Error(w, "Invalid invoiceId", http.StatusBadRequest)
+		return
+	}
+
+	// 1. Fetch clientId & tenantId from local DB
+	var clientId sql.NullInt64
+	var dbTenantId string
+	err := db.QueryRow(`SELECT "clientId", "tenantId" FROM "bmp_invoices" WHERE "id" = $1`, reqData.InvoiceId).Scan(&clientId, &dbTenantId)
+	if err != nil {
+		log.Printf("[Warning] Failed to find clientId/tenantId for invoice %d: %v", reqData.InvoiceId, err)
+	}
+
+	tenantId := dbTenantId
+	if tenantId == "" {
+		tenantId = reqData.TenantId
+	}
+
+	updatedAt := time.Now().UnixNano() / int64(time.Millisecond)
+
+	// 2. Clear local database
+	_, err = db.Exec(`UPDATE "bmp_invoices" SET "receiverSignatureUrl" = NULL, "receiverNameActual" = NULL, "updatedAt" = $1 WHERE "id" = $2`, updatedAt, reqData.InvoiceId)
+	if err != nil {
+		log.Printf("[Warning] Failed to clear signature in local bmp_invoices: %v", err)
+	}
+
+	if clientId.Valid && clientId.Int64 > 0 {
+		_, err = db.Exec(`UPDATE "bmp_clients" SET "receiverSignatureUrl" = NULL, "receiverNameActual" = NULL, "updatedAt" = $1 WHERE "id" = $2`, updatedAt, clientId.Int64)
+		if err != nil {
+			log.Printf("[Warning] Failed to clear signature in local bmp_clients: %v", err)
+		}
+	}
+
+	// 3. Delete physical files in ./TTD starting with sig_<invoiceId>_
+	files, err := os.ReadDir("./TTD")
+	if err == nil {
+		prefix := fmt.Sprintf("sig_%d_", reqData.InvoiceId)
+		for _, file := range files {
+			if !file.IsDir() && strings.HasPrefix(file.Name(), prefix) {
+				filePath := filepath.Join("./TTD", file.Name())
+				if err := os.Remove(filePath); err != nil {
+					log.Printf("[Warning] Failed to delete signature file %s: %v", file.Name(), err)
+				} else {
+					log.Printf("[Signature] Deleted signature file %s", file.Name())
+				}
+			}
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Signature deleted successfully",
 	})
 }
 
@@ -417,6 +710,163 @@ type AiClassifyRequest struct {
 	Statement string `json:"statement"`
 }
 
+var trainingData = map[string][]string{
+	"SAVE_SIGNATURE_VPS": {
+		"simpan di vps aja ketika ada yang ttd untuk penerima invoice",
+		"simpan tanda tangan di vps",
+		"buat folder ttd di server",
+		"jangan pakai cloudinary lagi, simpan lokal di vps",
+		"taruh file ttd di folder vps",
+		"simpan ttd di vps lokal",
+		"simpan di vps aja",
+		"buat folder TTD di vps",
+		"simpan gambar ttd lokal di server",
+	},
+	"SAVE_SIGNATURE_CLOUDINARY": {
+		"simpan tanda tangan di cloudinary",
+		"upload ttd ke cloudinary",
+		"pakai cloudinary untuk ttd",
+		"simpan gambar ttd ke cloud",
+		"upload ke cloudinary",
+	},
+	"CHANGE_DOMAIN": {
+		"ubah domain web ke zedmz.cloud",
+		"pakai domain www.posbah.com",
+		"ganti domain server",
+		"ubah settingan dns atau domain",
+		"pakai https://www.zedmz.cloud",
+	},
+}
+
+var nonAlphanumericRegex = regexp.MustCompile(`[^a-z0-9\s]`)
+
+func tokenize(text string) []string {
+	text = strings.ToLower(text)
+	text = nonAlphanumericRegex.ReplaceAllString(text, "")
+	return strings.Fields(text)
+}
+
+func getTF(tokens []string) map[string]int {
+	tf := make(map[string]int)
+	for _, token := range tokens {
+		tf[token]++
+	}
+	return tf
+}
+
+var (
+	vocab       = make(map[string]bool)
+	idf         = make(map[string]float64)
+	docs        [][]string
+	docLabels   []string
+	isModelInit = false
+)
+
+func initTfidfModel() {
+	if isModelInit {
+		return
+	}
+	for label, texts := range trainingData {
+		for _, text := range texts {
+			tokens := tokenize(text)
+			for _, token := range tokens {
+				vocab[token] = true
+			}
+			docs = append(docs, tokens)
+			docLabels = append(docLabels, label)
+		}
+	}
+
+	numDocs := float64(len(docs))
+	for term := range vocab {
+		docCount := 0
+		for _, doc := range docs {
+			contains := false
+			for _, t := range doc {
+				if t == term {
+					contains = true
+					break
+				}
+			}
+			if contains {
+				docCount++
+			}
+		}
+		idf[term] = math.Log(numDocs / (1.0 + float64(docCount)))
+	}
+	isModelInit = true
+}
+
+func getTfidfVector(text string) map[string]float64 {
+	initTfidfModel()
+	tokens := tokenize(text)
+	tf := getTF(tokens)
+	vector := make(map[string]float64)
+	for term := range vocab {
+		if count, exists := tf[term]; exists {
+			vector[term] = float64(count) * idf[term]
+		} else {
+			vector[term] = 0.0
+		}
+	}
+	return vector
+}
+
+func cosineSimilarity(v1, v2 map[string]float64) float64 {
+	dotProduct := 0.0
+	sumV1 := 0.0
+	sumV2 := 0.0
+	for term := range vocab {
+		val1 := v1[term]
+		val2 := v2[term]
+		dotProduct += val1 * val2
+		sumV1 += val1 * val1
+		sumV2 += val2 * val2
+	}
+	magnitudeV1 := math.Sqrt(sumV1)
+	magnitudeV2 := math.Sqrt(sumV2)
+	if magnitudeV1 == 0 || magnitudeV2 == 0 {
+		return 0.0
+	}
+	return dotProduct / (magnitudeV1 * magnitudeV2)
+}
+
+func classifyGo(inputText string) (string, float64) {
+	inputLower := strings.ToLower(inputText)
+
+	// Check simple keyword rules first for absolute accuracy
+	if strings.Contains(inputLower, "simpan") && (strings.Contains(inputLower, "vps") || strings.Contains(inputLower, "folder") || strings.Contains(inputLower, "lokal") || strings.Contains(inputLower, "ttd")) {
+		return "SAVE_SIGNATURE_VPS", 1.0
+	}
+	if strings.Contains(inputLower, "cloudinary") {
+		return "SAVE_SIGNATURE_CLOUDINARY", 1.0
+	}
+	if strings.Contains(inputLower, "domain") || strings.Contains(inputLower, "dns") || strings.Contains(inputLower, "zedmz") || strings.Contains(inputLower, "posbah.com") {
+		return "CHANGE_DOMAIN", 1.0
+	}
+
+	initTfidfModel()
+	inputVector := getTfidfVector(inputText)
+	bestScore := 0.0
+	bestLabel := "UNKNOWN"
+
+	for idx, doc := range docs {
+		label := docLabels[idx]
+		docVector := getTfidfVector(strings.Join(doc, " "))
+		score := cosineSimilarity(inputVector, docVector)
+		if score > bestScore {
+			bestScore = score
+			bestLabel = label
+		}
+	}
+
+	if bestScore < 0.1 {
+		return "UNKNOWN", bestScore
+	}
+
+	return bestLabel, bestScore
+}
+
 func handleAiClassify(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -434,21 +884,40 @@ func handleAiClassify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Panggil python script ai_detector.py
-	detectorPath := "./ai_detector.py"
-	cmd := exec.Command("python3", detectorPath, reqData.Statement)
-	var out bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to run AI classifier: %v (details: %s)", err, stderr.String()), http.StatusInternalServerError)
-		return
-	}
+	label, score := classifyGo(reqData.Statement)
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(out.Bytes())
+	response := map[string]interface{}{
+		"category":   label,
+		"confidence": score,
+	}
+	json.NewEncoder(w).Encode(response)
+}
+
+func handleGetApkDownloadToken(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"token": "dummy-token",
+	})
+}
+
+func handleDownloadApk(w http.ResponseWriter, r *http.Request) {
+	apkPath := "./posbah-v2.0.3.apk"
+	if _, err := os.Stat(apkPath); err == nil {
+		w.Header().Set("Content-Disposition", "attachment; filename=POSBah-v2.0.3.apk")
+		w.Header().Set("Content-Type", "application/vnd.android.package-archive")
+		http.ServeFile(w, r, apkPath)
+		return
+	}
+	// Fallback redirect to Google Drive
+	http.Redirect(w, r, "https://drive.google.com/uc?export=download&id=1grCDSGp1qacBES1hcO29d_03HNPstdbM", http.StatusFound)
+}
+
+func handleApkVersion(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"version": "2.0.3",
+	})
 }
 
 func cleanFilename(name string) string {
@@ -669,6 +1138,149 @@ const signatureHtmlPage = `<!DOCTYPE html>
             border: 1px solid rgba(239, 68, 68, 0.2);
         }
 
+        .statement-box {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-left: 4px solid var(--primary);
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #E2E8F0;
+            text-align: left;
+        }
+
+        .instruction-box {
+            font-size: 13px;
+            font-weight: 600;
+            color: #F59E0B;
+            margin-bottom: 8px;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-tc {
+            width: 100%;
+            background: rgba(59, 130, 246, 0.1);
+            color: #3B82F6;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            padding: 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-tc:hover {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: #3B82F6;
+            color: #60A5FA;
+        }
+
+        /* Terms and Conditions Modal */
+        .tc-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+            padding: 16px;
+        }
+
+        .tc-modal-content {
+            background: #1E293B;
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            animation: modalFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            flex-direction: column;
+            max-height: 85vh;
+        }
+
+        @keyframes modalFadeIn {
+            from { transform: scale(0.95); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .tc-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .tc-modal-header h2 {
+            font-size: 18px;
+            font-weight: 700;
+            background: linear-gradient(to right, #3B82F6, #10B981);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .tc-close {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 28px;
+            line-height: 1;
+            cursor: pointer;
+            transition: color 0.2s;
+            padding: 0 4px;
+        }
+
+        .tc-close:hover {
+            color: #EF4444;
+        }
+
+        .tc-modal-body {
+            padding: 20px;
+            overflow-y: auto;
+            text-align: left;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #E2E8F0;
+        }
+
+        .tc-modal-body p {
+            margin-bottom: 12px;
+        }
+
+        .tc-modal-body strong {
+            color: #3B82F6;
+            display: block;
+            margin-top: 12px;
+            margin-bottom: 6px;
+        }
+
+        .tc-modal-body strong:first-child {
+            margin-top: 0;
+        }
+
+        .tc-modal-footer {
+            padding: 16px 20px;
+            border-top: 1px solid var(--border);
+        }
+
         /* Overlay loading */
         .loading-overlay {
             display: none;
@@ -712,6 +1324,12 @@ const signatureHtmlPage = `<!DOCTYPE html>
         </div>
 
         <div id="form-container" style="display: none;">
+            <div class="instruction-box">
+                <span>⚠️</span>
+                <span>Pahami Terlebih Dahulu Syarat & Ketentuan:</span>
+            </div>
+            <button type="button" class="btn-tc" id="tc-btn">📜 Syarat & Ketentuan Transaksi</button>
+
             <div class="form-group">
                 <label for="receiver-name">Nama Terang Penerima</label>
                 <input type="text" id="receiver-name" placeholder="Masukkan nama Anda..." autocomplete="off">
@@ -730,6 +1348,32 @@ const signatureHtmlPage = `<!DOCTYPE html>
         </div>
 
         <div id="status-tag" class="status-message"></div>
+    </div>
+
+    <!-- Modal Syarat & Ketentuan -->
+    <div class="tc-modal" id="tc-modal">
+        <div class="tc-modal-content">
+            <div class="tc-modal-header">
+                <h2>Syarat & Ketentuan Transaksi</h2>
+                <button type="button" class="tc-close" id="tc-close-btn">&times;</button>
+            </div>
+            <div class="tc-modal-body">
+                <strong>PERNYATAAN HUKUM & PERSETUJUAN TTE</strong>
+                <p>Dengan menandatangani dokumen ini, saya menyatakan secara sadar bahwa yang bertanda tangan di bawah ini adalah saya sendiri secara sah mewakili Klien, memiliki wewenang penuh untuk menerima barang, serta setuju bahwa tanda tangan digital ini akan disimpan di sistem basis data dan digunakan kembali sebagai bukti tanda terima yang sah dan mengikat secara hukum pada invoice dan surat jalan di kemudian hari secara luring maupun daring.</p>
+
+                <strong>1. KEABSAHAN PENERIMAAN BARANG</strong>
+                <p>Dengan membubuhkan tanda tangan elektronik ini, Penerima (atas nama Klien) menyatakan telah memeriksa dan menerima produk dalam keadaan lengkap, baik, dan sesuai dengan pesanan. Segala klaim atas kerusakan atau kekurangan barang setelah penandatanganan ini wajib dilaporkan maksimal 1x24 jam.</p>
+                
+                <strong>2. KETENTUAN JATUH TEMPO (TEMPO)</strong>
+                <p>Untuk transaksi tempo, Klien berkewajiban melunasi seluruh pembayaran sebelum tanggal jatuh tempo yang tertera pada Invoice. Hak kepemilikan atas produk tetap berada sepenuhnya pada Penjual dan baru beralih setelah Invoice dilunasi secara penuh.</p>
+                
+                <strong>3. LEGALITAS TANDA TANGAN ELEKTRONIK (TTE)</strong>
+                <p>Tanda tangan elektronik ini merupakan alat bukti digital yang sah, mengikat, dan memiliki kekuatan hukum yang setara dengan tanda tangan basah di bawah Pasal 11 UU ITE. Klien menyatakan persetujuan atas penyimpanan dan penggunaan kembali tanda tangan ini pada dokumen invoice dan surat jalan berikutnya.</p>
+            </div>
+            <div class="tc-modal-footer">
+                <button type="button" class="btn-submit" id="tc-agree-btn">Saya Mengerti & Setuju</button>
+            </div>
+        </div>
     </div>
 
     <!-- Loading screen overlay -->
@@ -755,6 +1399,12 @@ const signatureHtmlPage = `<!DOCTYPE html>
         const expiryTag = document.getElementById("expiry-tag");
         const loader = document.getElementById("loader");
         const loaderText = document.getElementById("loader-text");
+
+        // Syarat & Ketentuan Modal DOM Elements
+        const tcBtn = document.getElementById("tc-btn");
+        const tcModal = document.getElementById("tc-modal");
+        const tcCloseBtn = document.getElementById("tc-close-btn");
+        const tcAgreeBtn = document.getElementById("tc-agree-btn");
 
         let isDrawing = false;
         let drawnSomething = false;
@@ -840,6 +1490,24 @@ const signatureHtmlPage = `<!DOCTYPE html>
         }
 
         receiverNameInput.addEventListener("input", validateForm);
+
+        // Syarat & Ketentuan Modal Handlers
+        tcBtn.addEventListener("click", function() {
+            tcModal.style.display = "flex";
+        });
+
+        function closeTcModal() {
+            tcModal.style.display = "none";
+        }
+
+        tcCloseBtn.addEventListener("click", closeTcModal);
+        tcAgreeBtn.addEventListener("click", closeTcModal);
+
+        window.addEventListener("click", function(event) {
+            if (event.target === tcModal) {
+                closeTcModal();
+            }
+        });
 
         // Parser Token URL
         function parseUrlToken() {
@@ -994,4 +1662,912 @@ const signatureHtmlPage = `<!DOCTYPE html>
 </body>
 </html>
 `
+
+// handleCData handles ADMS device initialization and attendance uploads
+func handleCData(w http.ResponseWriter, r *http.Request) {
+	sn := r.URL.Query().Get("SN")
+	table := r.URL.Query().Get("table")
+	options := r.URL.Query().Get("options")
+
+	log.Printf("[ADMS] Received %s request on /iclock/cdata?SN=%s&table=%s&options=%s", r.Method, sn, table, options)
+
+	if sn == "" {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte("ERROR: No SN"))
+		return
+	}
+
+	if r.Method == http.MethodGet || options == "all" {
+		var exists bool
+		err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM "bmp_adms_devices" WHERE "serialNumber" = $1)`, sn).Scan(&exists)
+		if err == nil {
+			if !exists {
+				_, err = db.Exec(`INSERT INTO "bmp_adms_devices" ("serialNumber", "lastActivity") VALUES ($1, NOW())`, sn)
+			} else {
+				_, err = db.Exec(`UPDATE "bmp_adms_devices" SET "lastActivity" = NOW() WHERE "serialNumber" = $1`, sn)
+			}
+			if err != nil {
+				log.Printf("[ADMS] Error saving/updating device status: %v", err)
+			}
+		} else {
+			log.Printf("[ADMS] Error checking device existence: %v", err)
+		}
+
+		response := fmt.Sprintf("GET OPTION FROM:%s\nErrorDelay=60\nDelay=30\nTransTimes=00:00;14:05\nTransInterval=1\nTransFlag=TransData AttLog OpLog\nRealtime=1\nEncrypt=0", sn)
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte(response))
+		return
+	}
+
+	if r.Method == http.MethodPost && table == "ATTLOG" {
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Read body error", http.StatusBadRequest)
+			return
+		}
+
+		err = handleCDataPost(sn, string(bodyBytes))
+		if err != nil {
+			log.Printf("[ADMS] CData POST error: %v", err)
+		}
+
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte("OK"))
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte("OK"))
+		return
+	}
+
+	w.WriteHeader(http.StatusNotFound)
+}
+
+// handleGetRequest handles command polling from ZKTeco devices
+func handleGetRequest(w http.ResponseWriter, r *http.Request) {
+	sn := r.URL.Query().Get("SN")
+	log.Printf("[ADMS] Received %s request on /iclock/getrequest?SN=%s", r.Method, sn)
+
+	// In a real ADMS configuration, we can send options updates to ZKTeco machine
+	// We just reply OK for default keepalive
+	w.Header().Set("Content-Type", "text/plain")
+	w.Write([]byte("OK"))
+}
+
+// handleSyncRoute acts as a gateway for both GET (query) and POST (upsert) requests on /api/sync/
+func handleSyncRoute(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		handleSyncQuery(w, r)
+		return
+	}
+	if r.Method == http.MethodPost {
+		handleSyncTable(w, r)
+		return
+	}
+	if r.Method == http.MethodPatch {
+		handleSyncPatch(w, r)
+		return
+	}
+	if r.Method == http.MethodDelete {
+		handleSyncDelete(w, r)
+		return
+	}
+	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+func handleSyncPatch(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 {
+		http.Error(w, "Missing table name", http.StatusBadRequest)
+		return
+	}
+	tableName := parts[3]
+
+	var updateData map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&updateData); err != nil {
+		http.Error(w, "Invalid JSON body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var whereClauses []string
+	var args []interface{}
+	idx := 1
+
+	for k, vList := range r.URL.Query() {
+		if len(vList) == 0 {
+			continue
+		}
+		val := vList[0]
+		if strings.HasPrefix(val, "eq.") {
+			realVal := strings.TrimPrefix(val, "eq.")
+			whereClauses = append(whereClauses, fmt.Sprintf(`"%s" = $%d`, k, idx))
+			args = append(args, realVal)
+			idx++
+		}
+	}
+
+	if len(whereClauses) == 0 {
+		http.Error(w, "WHERE clause is required for PATCH", http.StatusBadRequest)
+		return
+	}
+
+	var setClauses []string
+	for k, v := range updateData {
+		setClauses = append(setClauses, fmt.Sprintf(`"%s" = $%d`, k, idx))
+		switch val := v.(type) {
+		case map[string]interface{}, []interface{}:
+			jsonBytes, _ := json.Marshal(val)
+			args = append(args, string(jsonBytes))
+		default:
+			args = append(args, v)
+		}
+		idx++
+	}
+
+	query := fmt.Sprintf(`UPDATE "%s" SET %s WHERE %s`, tableName, strings.Join(setClauses, ", "), strings.Join(whereClauses, " AND "))
+
+	_, err := db.Exec(query, args...)
+	if err != nil {
+		http.Error(w, "Update failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"success":true}`))
+}
+
+func handleSyncDelete(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 {
+		http.Error(w, "Missing table name", http.StatusBadRequest)
+		return
+	}
+	tableName := parts[3]
+
+	var whereClauses []string
+	var args []interface{}
+	idx := 1
+
+	for k, vList := range r.URL.Query() {
+		if len(vList) == 0 {
+			continue
+		}
+		val := vList[0]
+		if strings.HasPrefix(val, "eq.") {
+			realVal := strings.TrimPrefix(val, "eq.")
+			whereClauses = append(whereClauses, fmt.Sprintf(`"%s" = $%d`, k, idx))
+			args = append(args, realVal)
+			idx++
+		}
+	}
+
+	if len(whereClauses) == 0 {
+		http.Error(w, "WHERE clause is required for DELETE", http.StatusBadRequest)
+		return
+	}
+
+	query := fmt.Sprintf(`DELETE FROM "%s" WHERE %s`, tableName, strings.Join(whereClauses, " AND "))
+
+	_, err := db.Exec(query, args...)
+	if err != nil {
+		http.Error(w, "Delete failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"success":true}`))
+}
+
+func handleSyncQuery(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 {
+		http.Error(w, "Missing table name", http.StatusBadRequest)
+		return
+	}
+	tableName := parts[3]
+
+	var whereClauses []string
+	var args []interface{}
+	idx := 1
+
+	for k, vList := range r.URL.Query() {
+		if len(vList) == 0 {
+			continue
+		}
+		val := vList[0]
+		if strings.HasPrefix(val, "eq.") {
+			realVal := strings.TrimPrefix(val, "eq.")
+			whereClauses = append(whereClauses, fmt.Sprintf(`"%s" = $%d`, k, idx))
+			args = append(args, realVal)
+			idx++
+		}
+	}
+
+	query := fmt.Sprintf(`SELECT * FROM "%s"`, tableName)
+	if len(whereClauses) > 0 {
+		query += " WHERE " + strings.Join(whereClauses, " AND ")
+	}
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	cols, err := rows.Columns()
+	if err != nil {
+		http.Error(w, "Columns error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var result []map[string]interface{}
+	for rows.Next() {
+		columns := make([]interface{}, len(cols))
+		columnPointers := make([]interface{}, len(cols))
+		for i := range columns {
+			columnPointers[i] = &columns[i]
+		}
+
+		if err := rows.Scan(columnPointers...); err != nil {
+			http.Error(w, "Scan error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		rowMap := make(map[string]interface{})
+		for i, colName := range cols {
+			val := columns[i]
+			b, ok := val.([]byte)
+			if ok {
+				var temp map[string]interface{}
+				var tempArr []interface{}
+				if json.Unmarshal(b, &temp) == nil {
+					rowMap[colName] = temp
+				} else if json.Unmarshal(b, &tempArr) == nil {
+					rowMap[colName] = tempArr
+				} else {
+					rowMap[colName] = string(b)
+				}
+			} else {
+				rowMap[colName] = val
+			}
+		}
+		result = append(result, rowMap)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if len(result) == 0 {
+		w.Write([]byte("[]"))
+		return
+	}
+	json.NewEncoder(w).Encode(result)
+}
+
+func handleSyncTable(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 {
+		http.Error(w, "Missing table name", http.StatusBadRequest)
+		return
+	}
+	tableName := parts[3]
+
+	var rows []map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&rows); err != nil {
+		http.Error(w, "Invalid JSON body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	err := dynamicUpsert(tableName, rows)
+	if err != nil {
+		http.Error(w, "Sync failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if (tableName == "transactions" || tableName == "bmp_invoices") && len(rows) > 0 {
+		eventData := map[string]interface{}{
+			"event": "new_transaction",
+			"table": tableName,
+			"data":  rows,
+		}
+		if eventBytes, err := json.Marshal(eventData); err == nil {
+			broadcastWSMessage(string(eventBytes))
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Successfully synced %d rows to %s", len(rows), tableName),
+	})
+}
+
+// Helper types & functions for ZKTeco ADMS processing
+
+type BmpAttendanceLog struct {
+	ID           int
+	DeviceSN     sql.NullString
+	EmployeePIN  sql.NullString
+	VerifyType   int
+	VerifyState  int
+	LogTime      time.Time
+	CheckOutTime sql.NullTime
+	WorkDate     time.Time
+	LateMinutes  int
+	Alasan       sql.NullString
+	CreatedAt    time.Time
+}
+
+func parseLogTime(timeStr string) time.Time {
+	formatted := strings.Replace(timeStr, " ", "T", 1)
+	loc, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		loc = time.FixedZone("WIB", 7*3600)
+	}
+	t, err := time.ParseInLocation("2006-01-02T15:04:05", formatted, loc)
+	if err == nil && t.Year() > 2020 {
+		return t
+	}
+	return time.Now()
+}
+
+func getWibHourAndDate(logTime time.Time) (int, time.Time) {
+	loc, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		loc = time.FixedZone("WIB", 7*3600)
+	}
+	tLocal := logTime.In(loc)
+	hour := tLocal.Hour()
+
+	year, month, day := tLocal.Date()
+	workDate := time.Date(year, month, day, 0, 0, 0, 0, loc)
+
+	if hour >= 0 && hour < 4 {
+		workDate = workDate.AddDate(0, 0, -1)
+	}
+	return hour, workDate
+}
+
+func isCheckOutWindow(logTime time.Time) bool {
+	loc, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		loc = time.FixedZone("WIB", 7*3600)
+	}
+	hour := logTime.In(loc).Hour()
+
+	if hour >= 6 && hour < 8 {
+		return true
+	}
+	if hour >= 14 && hour < 16 {
+		return true
+	}
+	if hour >= 22 || hour == 0 {
+		return true
+	}
+	return false
+}
+
+func hitungKeterlambatan(logTime time.Time) int {
+	loc, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		loc = time.FixedZone("WIB", 7*3600)
+	}
+	tLocal := logTime.In(loc)
+	hour := tLocal.Hour()
+	minute := tLocal.Minute()
+	totalMinutes := hour*60 + minute
+
+	// Shift Pagi: 07:00. Window: 06:01 (361) to 07:30 (450)
+	if totalMinutes >= 361 && totalMinutes <= 450 {
+		diff := totalMinutes - 420
+		if diff < 0 {
+			return 0
+		}
+		return diff
+	}
+	// Shift Sore: 15:00. Window: 14:01 (841) to 15:30 (930)
+	if totalMinutes >= 841 && totalMinutes <= 930 {
+		diff := totalMinutes - 900
+		if diff < 0 {
+			return 0
+		}
+		return diff
+	}
+	// Shift Malam: 23:00. Window: 22:01 (1321) to 23:30 (1410)
+	if totalMinutes >= 1321 && totalMinutes <= 1410 {
+		diff := totalMinutes - 1380
+		if diff < 0 {
+			return 0
+		}
+		return diff
+	}
+	return 0
+}
+
+func handleCDataPost(sn string, bodyStr string) error {
+	lines := strings.Split(bodyStr, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.Split(line, "\t")
+		if len(parts) < 2 {
+			log.Printf("[ADMS] Invalid log line skipped: %s", line)
+			continue
+		}
+		pin := strings.TrimSpace(parts[0])
+		timeStr := strings.TrimSpace(parts[1])
+
+		verifyType := 0
+		if len(parts) >= 4 {
+			verifyType, _ = strconv.Atoi(strings.TrimSpace(parts[3]))
+		}
+
+		logTime := parseLogTime(timeStr)
+
+		// Find last log in PostgreSQL for this employee PIN
+		var lastLog BmpAttendanceLog
+		err := db.QueryRow(
+			`SELECT "id", "deviceSN", "employeePIN", "verifyType", "verifyState", "logTime", "checkOutTime", "workDate", "lateMinutes", "alasan", "createdAt" 
+			 FROM "bmp_attendance_logs" 
+			 WHERE "employeePIN" = $1 
+			 ORDER BY "logTime" DESC LIMIT 1`,
+			pin,
+		).Scan(
+			&lastLog.ID, &lastLog.DeviceSN, &lastLog.EmployeePIN, &lastLog.VerifyType,
+			&lastLog.VerifyState, &lastLog.LogTime, &lastLog.CheckOutTime, &lastLog.WorkDate,
+			&lastLog.LateMinutes, &lastLog.Alasan, &lastLog.CreatedAt,
+		)
+
+		isCheckIn := true
+		var matchedLogID int = 0
+		var matchedAlasan string = ""
+
+		if err == nil { // lastLog found
+			if !lastLog.CheckOutTime.Valid {
+				durationMin := logTime.Sub(lastLog.LogTime).Minutes()
+				durationHr := durationMin / 60.0
+
+				if durationMin < 2 {
+					log.Printf("[ADMS] Ignore double scan under 2 mins: PIN=%s", pin)
+					continue
+				}
+
+				if durationHr <= 12 {
+					isCheckIn = false
+					matchedLogID = lastLog.ID
+					if lastLog.Alasan.Valid {
+						matchedAlasan = lastLog.Alasan.String
+					}
+				} else {
+					isCheckIn = true
+				}
+			} else {
+				durationMin := logTime.Sub(lastLog.CheckOutTime.Time).Minutes()
+				if durationMin < 2 {
+					log.Printf("[ADMS] Ignore scan right after checkout: PIN=%s", pin)
+					continue
+				}
+				isCheckIn = true
+			}
+		} else if err != sql.ErrNoRows {
+			log.Printf("[ADMS] Database error checking last log: %v", err)
+		}
+
+		if isCheckIn {
+			_, workDate := getWibHourAndDate(logTime)
+			lateMinutes := hitungKeterlambatan(logTime)
+			alasan := ""
+			if isCheckOutWindow(logTime) {
+				alasan = "Hanya Scan Pulang / Lupa Scan Masuk"
+			}
+
+			var newID int
+			err = db.QueryRow(
+				`INSERT INTO "bmp_attendance_logs" ("deviceSN", "employeePIN", "verifyType", "verifyState", "logTime", "workDate", "lateMinutes", "alasan") 
+				 VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+				sn, pin, verifyType, 0, logTime, workDate, lateMinutes, sql.NullString{String: alasan, Valid: alasan != ""},
+			).Scan(&newID)
+			if err != nil {
+				log.Printf("[ADMS] Error saving Check-In log: %v", err)
+			} else {
+				log.Printf("[ADMS] Saved Check-In: ID=%d | PIN=%s | WorkDate=%s", newID, pin, workDate.Format("2006-01-02"))
+			}
+		} else {
+			alasan := matchedAlasan
+			if alasan == "Hanya Scan Pulang / Lupa Scan Masuk" {
+				alasan = ""
+			}
+
+			_, err = db.Exec(
+				`UPDATE "bmp_attendance_logs" 
+				 SET "checkOutTime" = $1, "verifyState" = $2, "alasan" = $3 
+				 WHERE "id" = $4`,
+				logTime, 1, sql.NullString{String: alasan, Valid: alasan != ""}, matchedLogID,
+			)
+			if err != nil {
+				log.Printf("[ADMS] Error saving Check-Out log: %v", err)
+			} else {
+				log.Printf("[ADMS] Saved Check-Out: ID=%d | PIN=%s", matchedLogID, pin)
+			}
+		}
+	}
+	return nil
+}
+
+func handleRoot(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html")
+	w.Write([]byte(landingHtmlPage))
+}
+
+const landingHtmlPage = `<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POSBah Server</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0F172A;
+            --primary: #3B82F6;
+            --secondary: #10B981;
+            --text: #F8FAFC;
+            --text-muted: #94A3B8;
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', sans-serif;
+        }
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            background-image: radial-gradient(circle at top right, rgba(59, 130, 246, 0.1), transparent),
+                              radial-gradient(circle at bottom left, rgba(16, 185, 129, 0.05), transparent);
+        }
+        .card {
+            width: 100%;
+            max-width: 480px;
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 40px 32px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+        .logo {
+            font-size: 32px;
+            font-weight: 800;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+        .status-badge {
+            display: inline-block;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            color: var(--secondary);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 24px;
+        }
+        p {
+            color: var(--text-muted);
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 32px;
+        }
+        .btn {
+            display: inline-block;
+            width: 100%;
+            background: var(--primary);
+            color: white;
+            text-decoration: none;
+            padding: 16px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            transition: background 0.2s, transform 0.1s;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+            border: none;
+            cursor: pointer;
+        }
+        .btn:hover {
+            background: #2563EB;
+            transform: translateY(-1px);
+        }
+        .btn:active {
+            transform: translateY(0);
+        }
+        .footer {
+            margin-top: 32px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="logo">POSBah Server</div>
+        <div class="status-badge">Golang Backend Active</div>
+        <p>Server pusat POSBah berjalan dengan sukses. Dashboard web telah dinonaktifkan sesuai konfigurasi sistem baru. Silakan unduh aplikasi kasir Android untuk mulai bertransaksi.</p>
+        <a href="/api/download-apk" class="btn">Unduh APK POSBah v2.0.3</a>
+        <div class="footer">v2.0.3 &copy; 2026 POSBah</div>
+    </div>
+</body>
+</html>`
+
+var (
+	wsClients    = make(map[net.Conn]bool)
+	wsClientsMu  sync.Mutex
+	qrSessions   = make(map[string]map[string]interface{})
+	qrSessionsMu sync.Mutex
+)
+
+func handleWS(w http.ResponseWriter, r *http.Request) {
+	hj, ok := w.(http.Hijacker)
+	if !ok {
+		http.Error(w, "webserver doesn't support hijacking", http.StatusInternalServerError)
+		return
+	}
+	conn, bufrw, err := hj.Hijack()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	key := r.Header.Get("Sec-WebSocket-Key")
+	if key == "" {
+		conn.Close()
+		return
+	}
+	h := sha1.New()
+	h.Write([]byte(key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"))
+	acceptKey := base64.StdEncoding.EncodeToString(h.Sum(nil))
+
+	bufrw.WriteString("HTTP/1.1 101 Switching Protocols\r\n")
+	bufrw.WriteString("Upgrade: websocket\r\n")
+	bufrw.WriteString("Connection: Upgrade\r\n")
+	bufrw.WriteString("Sec-WebSocket-Accept: ")
+	bufrw.WriteString(acceptKey)
+	bufrw.WriteString("\r\n\r\n")
+	bufrw.Flush()
+
+	wsClientsMu.Lock()
+	wsClients[conn] = true
+	wsClientsMu.Unlock()
+
+	log.Printf("[WS] Client connected. Total active: %d", len(wsClients))
+
+	go func() {
+		defer func() {
+			wsClientsMu.Lock()
+			delete(wsClients, conn)
+			wsClientsMu.Unlock()
+			conn.Close()
+			log.Println("[WS] Client disconnected")
+		}()
+		buf := make([]byte, 1024)
+		for {
+			_, err := conn.Read(buf)
+			if err != nil {
+				break
+			}
+		}
+	}()
+}
+
+func broadcastWSMessage(message string) {
+	wsClientsMu.Lock()
+	defer wsClientsMu.Unlock()
+
+	payload := []byte(message)
+	length := len(payload)
+
+	var header []byte
+	if length <= 125 {
+		header = []byte{0x81, byte(length)}
+	} else if length <= 65535 {
+		header = []byte{0x81, 126, byte(length >> 8), byte(length & 0xFF)}
+	} else {
+		header = []byte{0x81, 127,
+			0, 0, 0, 0,
+			byte(length >> 24), byte(length >> 16), byte(length >> 8), byte(length & 0xFF),
+		}
+	}
+
+	frame := append(header, payload...)
+	for conn := range wsClients {
+		go func(c net.Conn) {
+			_, _ = c.Write(frame)
+		}(conn)
+	}
+}
+
+func handleQrSession(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	sessionId := fmt.Sprintf("sess_%d_%s", time.Now().UnixNano(), randString(6))
+
+	qrSessionsMu.Lock()
+	qrSessions[sessionId] = map[string]interface{}{
+		"status": "pending",
+	}
+	qrSessionsMu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"sessionId": sessionId,
+	})
+}
+
+func handleQrAuthorize(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var authReq struct {
+		SessionId string `json:"sessionId"`
+		TenantId  string `json:"tenantId"`
+		Email     string `json:"email"`
+		Role      string `json:"role"`
+		GoogleSub string `json:"googleSub"`
+		IsPremium bool   `json:"isPremium"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&authReq); err != nil {
+		http.Error(w, "Invalid body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	qrSessionsMu.Lock()
+	session, exists := qrSessions[authReq.SessionId]
+	if !exists {
+		qrSessionsMu.Unlock()
+		http.Error(w, "Session not found", http.StatusNotFound)
+		return
+	}
+
+	session["status"] = "authorized"
+	session["tenantId"] = authReq.TenantId
+	session["email"] = authReq.Email
+	session["role"] = authReq.Role
+	session["googleSub"] = authReq.GoogleSub
+	session["isPremium"] = authReq.IsPremium
+	qrSessionsMu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"success":true}`))
+}
+
+func handleQrConfirm(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var reqData struct {
+		SessionId string `json:"sessionId"`
+		User      struct {
+			Id           string `json:"id"`
+			Name         string `json:"name"`
+			Email        string `json:"email"`
+			Role         string `json:"role"`
+			IsDemo       bool   `json:"isDemo"`
+			BusinessMode string `json:"businessMode"`
+			TenantId     string `json:"tenantId"`
+			RegisteredAt string `json:"registeredAt"`
+		} `json:"user"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+		http.Error(w, "Invalid body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	qrSessionsMu.Lock()
+	session, exists := qrSessions[reqData.SessionId]
+	if !exists {
+		qrSessionsMu.Unlock()
+		http.Error(w, "Session not found", http.StatusNotFound)
+		return
+	}
+
+	session["status"] = "authorized"
+	session["tenantId"] = reqData.User.TenantId
+	session["email"] = reqData.User.Email
+	session["role"] = reqData.User.Role
+	session["googleSub"] = reqData.User.Id
+	session["isPremium"] = !reqData.User.IsDemo
+	session["businessMode"] = reqData.User.BusinessMode
+	qrSessionsMu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"success":true}`))
+}
+
+func handleQrCheck(w http.ResponseWriter, r *http.Request) {
+	// Set CORS headers
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	sessionId := r.URL.Query().Get("sessionId")
+	if sessionId == "" {
+		http.Error(w, "Missing sessionId", http.StatusBadRequest)
+		return
+	}
+
+	qrSessionsMu.Lock()
+	session, exists := qrSessions[sessionId]
+	qrSessionsMu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if !exists {
+		json.NewEncoder(w).Encode(map[string]string{
+			"status": "expired",
+		})
+		return
+	}
+
+	status, _ := session["status"].(string)
+	if status == "authorized" {
+		json.NewEncoder(w).Encode(session)
+
+		// Clean up the session after successful auth (one-time use)
+		qrSessionsMu.Lock()
+		delete(qrSessions, sessionId)
+		qrSessionsMu.Unlock()
+		return
+	}
+
+	// Still pending
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "pending",
+	})
+}
+
+func randString(n int) string {
+	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, n)
+	nanos := time.Now().UnixNano()
+	for i := range b {
+		b[i] = letters[int((nanos>>uint(i*4))%int64(len(letters)))]
+	}
+	return string(b)
+}
+
+// handleMigrateFromSupabase removed - fully migrated to VPS local PostgreSQL database
+
 

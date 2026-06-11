@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.LocalLaundryService
@@ -81,6 +82,8 @@ import java.util.Date
 import java.util.Locale
 import com.posbah.app.util.CameraUtils
 
+import androidx.compose.material.icons.outlined.Print
+
 data class LaundryServiceItem(
     val id: String,
     val name: String,
@@ -113,6 +116,7 @@ data class LaundryOrder(
 fun LaundryScreen(
     onBack: () -> Unit,
     onNavigate: (String) -> Unit,
+    onNavigateToPrintSettings: () -> Unit,
     viewModel: LaundryViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -126,6 +130,15 @@ fun LaundryScreen(
     val isOwner by viewModel.isOwner.collectAsState()
     val activityLogsList by viewModel.activityLogs.collectAsState()
     var showLogsDialog by remember { mutableStateOf(false) }
+
+    val outletList by viewModel.availableOutlets.collectAsState()
+    val activeOutletId by viewModel.activeOutletId.collectAsState()
+    val activeOutlet = remember(outletList, activeOutletId) {
+        outletList.find { it.id == activeOutletId }
+    }
+    val activeOutletName = activeOutlet?.name ?: "Outlet Utama"
+    var showOutletDropdown by remember { mutableStateOf(false) }
+    var showOwnerMenuDropdown by remember { mutableStateOf(false) }
 
     var searchQuery by remember { mutableStateOf("") }
     var customerName by remember { mutableStateOf("") }
@@ -179,37 +192,88 @@ fun LaundryScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            PosBahTopBar(
-                title = "Laundry POS",
-                subtitle = "Sistem Kasir Jasa Laundry",
-                onBack = onBack,
-                actions = {
-                    IconButton(onClick = { onNavigate(Screen.MarginAnalysis.route) }) {
-                        Icon(Icons.Outlined.History, contentDescription = "Analisis Margin & Riwayat")
-                    }
-                    if (isOwner) {
-                        IconButton(onClick = { showLogsDialog = true }) {
-                            Icon(Icons.Outlined.Notes, contentDescription = "Log Aktivitas")
+            Box {
+                PosBahTopBar(
+                    title = "Laundry POS",
+                    subtitle = "Outlet: $activeOutletName",
+                    onBack = onBack,
+                    onTitleClick = { showOutletDropdown = true },
+                    actions = {
+                        IconButton(onClick = { onNavigate(Screen.MarginAnalysis.route) }) {
+                            Icon(Icons.Outlined.History, contentDescription = "Analisis Margin & Riwayat")
+                        }
+                        IconButton(onClick = onNavigateToPrintSettings) {
+                            Icon(Icons.Outlined.Print, contentDescription = "Pengaturan Struk")
+                        }
+                        if (isOwner) {
+                            Box {
+                                IconButton(onClick = { showOwnerMenuDropdown = true }) {
+                                    Icon(
+                                        imageVector = androidx.compose.material.icons.Icons.Default.MoreVert,
+                                        contentDescription = "Menu Owner"
+                                    )
+                                }
+                                androidx.compose.material3.DropdownMenu(
+                                    expanded = showOwnerMenuDropdown,
+                                    onDismissRequest = { showOwnerMenuDropdown = false }
+                                ) {
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Kontrol Outlet") },
+                                        onClick = {
+                                            onNavigate("owner/outlet_control")
+                                            showOwnerMenuDropdown = false
+                                        }
+                                    )
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Kelola Karyawan") },
+                                        onClick = {
+                                            onNavigate("owner/employees")
+                                            showOwnerMenuDropdown = false
+                                        }
+                                    )
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Log Aktivitas") },
+                                        onClick = {
+                                            showLogsDialog = true
+                                            showOwnerMenuDropdown = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                        IconButton(onClick = {
+                            newServiceName = ""
+                            newServiceCategory = "KILOAN"
+                            newServicePrice = ""
+                            newServiceCost = ""
+                            newServiceMonthlyMaintenance = ""
+                            newServiceUnit = "Kg"
+                            capturedPhotoFile = null
+                            showAddServiceDialog = true
+                        }) {
+                            Icon(Icons.Outlined.LocalLaundryService, contentDescription = "Tambah Layanan")
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        TextButton(onClick = { showActiveOrders = true }) {
+                            Text("Daftar Order (${orders.filter { it.orderStatus != "DIAMBIL" }.size})")
                         }
                     }
-                    IconButton(onClick = {
-                        newServiceName = ""
-                        newServiceCategory = "KILOAN"
-                        newServicePrice = ""
-                        newServiceCost = ""
-                        newServiceMonthlyMaintenance = ""
-                        newServiceUnit = "Kg"
-                        capturedPhotoFile = null
-                        showAddServiceDialog = true
-                    }) {
-                        Icon(Icons.Outlined.LocalLaundryService, contentDescription = "Tambah Layanan")
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    TextButton(onClick = { showActiveOrders = true }) {
-                        Text("Daftar Order (${orders.filter { it.orderStatus != "DIAMBIL" }.size})")
+                )
+                androidx.compose.material3.DropdownMenu(
+                    expanded = showOutletDropdown,
+                    onDismissRequest = { showOutletDropdown = false }
+                ) {
+                    outletList.forEach { outlet ->
+                        androidx.compose.material3.DropdownMenuItem(
+                            text = { Text(outlet.name) },
+                            onClick = {
+                                viewModel.selectOutlet(outlet.id)
+                                showOutletDropdown = false
+                            }
+                        )
                     }
                 }
-            )
+            }
         }
     ) { paddingValues ->
         Row(

@@ -233,6 +233,9 @@ interface BmpSettingsDao {
 
     @Query("SELECT * FROM bmp_settings")
     suspend fun getAll(): List<BmpSettingsEntity>
+
+    @Query("DELETE FROM bmp_settings WHERE tenantId = :tenantId")
+    suspend fun deleteByTenantId(tenantId: String)
 }
 
 @Dao
@@ -342,15 +345,21 @@ interface BmpBahanBakuItemDao {
 
 @Dao
 interface PrintSettingsDao {
-    @Query("SELECT * FROM print_settings WHERE tenantId = :tenantId LIMIT 1")
-    fun observe(tenantId: String): Flow<com.posbah.app.data.local.entities.PrintSettingsEntity?>
+    @Query("SELECT * FROM print_settings WHERE tenantId = :tenantId AND moduleKey = :moduleKey LIMIT 1")
+    fun observe(tenantId: String, moduleKey: String): Flow<com.posbah.app.data.local.entities.PrintSettingsEntity?>
 
-    @Query("SELECT * FROM print_settings WHERE tenantId = :tenantId LIMIT 1")
-    suspend fun get(tenantId: String): com.posbah.app.data.local.entities.PrintSettingsEntity?
+    @Query("SELECT * FROM print_settings WHERE tenantId = :tenantId AND moduleKey = :moduleKey LIMIT 1")
+    suspend fun get(tenantId: String, moduleKey: String): com.posbah.app.data.local.entities.PrintSettingsEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(settings: com.posbah.app.data.local.entities.PrintSettingsEntity)
 
     @Query("SELECT * FROM print_settings")
     suspend fun getAll(): List<com.posbah.app.data.local.entities.PrintSettingsEntity>
+
+    @Query("DELETE FROM print_settings WHERE tenantId = :tenantId")
+    suspend fun deleteByTenantId(tenantId: String)
+
+    @Query("DELETE FROM print_settings WHERE tenantId = :tenantId AND moduleKey = :moduleKey")
+    suspend fun deleteByTenantIdAndModule(tenantId: String, moduleKey: String)
 }

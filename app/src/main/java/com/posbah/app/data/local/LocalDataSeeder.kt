@@ -479,7 +479,11 @@ class LocalDataSeeder @Inject constructor(
                             "BmpSettings" -> {
                                 val id = rowMap["id"]?.toLongOrNull() ?: continue
                                 val clientName = rowMap["clientName"] ?: ""
-                                val clientLogo = rowMap["clientLogo"]?.takeIf { it != "\\N" }
+                                // KEAMANAN: clientLogo sengaja tidak di-seed karena berupa
+                                // path file lokal perangkat yang tidak valid di perangkat lain
+                                // dan bisa menyebabkan kebocoran data antar-tenant.
+                                // User harus upload ulang logo mereka sendiri.
+                                val clientLogo: String? = null
                                 val addressLine1 = rowMap["addressLine1"]?.takeIf { it != "\\N" }
                                 val province = rowMap["province"]?.takeIf { it != "\\N" }
                                 val postalCode = rowMap["postalCode"]?.takeIf { it != "\\N" }

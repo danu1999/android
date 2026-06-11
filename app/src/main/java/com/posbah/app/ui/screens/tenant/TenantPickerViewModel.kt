@@ -13,6 +13,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+import com.posbah.app.data.local.PosBahDatabase
+import com.posbah.app.data.repository.SessionState
+
 data class TenantPickerUiState(
     val isLoading: Boolean = true,
     val tenants: List<Tenant> = emptyList(),
@@ -27,7 +30,9 @@ data class TenantPickerUiState(
 class TenantPickerViewModel @Inject constructor(
     private val tenantRepository: TenantRepository,
     private val authRepository: AuthRepository,
-    private val securePrefs: SecurePreferences
+    private val securePrefs: SecurePreferences,
+    private val db: PosBahDatabase,
+    private val sessionState: SessionState
 ) : ViewModel() {
 
     private val _ui = MutableStateFlow(TenantPickerUiState())
@@ -69,6 +74,9 @@ class TenantPickerViewModel @Inject constructor(
         viewModelScope.launch {
             val ok = authRepository.selectTenant(sub, tenantId)
             if (ok) {
+                val outlets = db.outletDao().listForTenant(tenantId)
+                val activeOutlet = outlets.firstOrNull { it.isDefault } ?: outlets.firstOrNull()
+                sessionState.setOutlet(activeOutlet?.id)
                 _ui.update { it.copy(selectedId = tenantId) }
                 onDone()
             } else {

@@ -46,8 +46,8 @@ class AdminViewModel @Inject constructor(
     val uiState: StateFlow<AdminUiState> = _uiState.asStateFlow()
 
     companion object {
-        private const val SUPABASE_URL = "https://etustetneufkfilndimy.supabase.co"
-        private const val API_KEY = "sb_publishable_X_BhY3R3kKLp4wEpNX4giQ_U9xKDg2R"
+        private const val BASE_URL = "https://www.zedmz.cloud"
+        private const val AUTH_TOKEN = "Bearer BahteraMigrate123!"
     }
 
     init {
@@ -59,13 +59,12 @@ class AdminViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             var conn: HttpURLConnection? = null
             try {
-                val url = URL("$SUPABASE_URL/rest/v1/local_users?isPremium=eq.false&order=registeredAt.desc")
+                val url = URL("$BASE_URL/api/admin/demo-users")
                 conn = url.openConnection() as HttpURLConnection
                 conn.requestMethod = "GET"
                 conn.connectTimeout = 10000
                 conn.readTimeout = 10000
-                conn.setRequestProperty("apikey", API_KEY)
-                conn.setRequestProperty("Authorization", "Bearer $API_KEY")
+                conn.setRequestProperty("Authorization", AUTH_TOKEN)
 
                 val code = conn.responseCode
                 if (code in 200..299) {
@@ -78,7 +77,7 @@ class AdminViewModel @Inject constructor(
                             DemoUserItem(
                                 googleSub = obj.getString("googleSub"),
                                 email = obj.getString("email"),
-                                displayName = obj.optString("displayName", null),
+                                displayName = if (obj.isNull("displayName")) null else obj.getString("displayName"),
                                 registeredAt = obj.getLong("registeredAt"),
                                 isActive = obj.optBoolean("isActive", true)
                             )
@@ -104,112 +103,26 @@ class AdminViewModel @Inject constructor(
             val generatedPin = String.format("%06d", Random.nextInt(100000, 999999))
             val hashedPin = BackendHasher.hash(generatedPin)
 
-            // Step 1: Query the user's business mode from the demo tenant if it exists, default to "FNB"
-            var businessMode = "FNB"
-            val demoTenantId = "demo_tenant_${item.email.replace(".", "_").replace("@", "_")}"
             var conn: HttpURLConnection? = null
             try {
-                val url = URL("$SUPABASE_URL/rest/v1/tenants?id=eq.$demoTenantId")
-                conn = url.openConnection() as HttpURLConnection
-                conn.requestMethod = "GET"
-                conn.setRequestProperty("apikey", API_KEY)
-                conn.setRequestProperty("Authorization", "Bearer $API_KEY")
-                if (conn.responseCode in 200..299) {
-                    val res = conn.inputStream.bufferedReader().use { it.readText() }
-                    val array = JSONArray(res)
-                    if (array.length() > 0) {
-                        businessMode = array.getJSONObject(0).optString("businessMode", "FNB")
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
-                conn?.disconnect()
-            }
-
-            // Step 2: Create a Premium Tenant on Supabase
-            val premiumTenantId = "ten_premium_${item.email.replace(".", "_").replace("@", "_")}"
-            val tenantJson = JSONObject().apply {
-                put("id", premiumTenantId)
-                put("name", "CV. ${item.displayName ?: "Premium"} (Premium)")
-                put("ownerEmail", item.email)
-                put("businessMode", businessMode)
-                put("isActive", true)
-                put("createdAt", System.currentTimeMillis())
-                put("updatedAt", System.currentTimeMillis())
-            }
-            conn = null
-            try {
-                val url = URL("$SUPABASE_URL/rest/v1/tenants")
+                val url = URL("$BASE_URL/api/admin/approve-user")
                 conn = url.openConnection() as HttpURLConnection
                 conn.requestMethod = "POST"
                 conn.doOutput = true
-                conn.setRequestProperty("apikey", API_KEY)
-                conn.setRequestProperty("Authorization", "Bearer $API_KEY")
+                conn.connectTimeout = 10000
+                conn.readTimeout = 10000
+                conn.setRequestProperty("Authorization", AUTH_TOKEN)
                 conn.setRequestProperty("Content-Type", "application/json")
-                conn.setRequestProperty("Prefer", "resolution=merge-duplicates")
-                conn.outputStream.use { out ->
-                    out.bufferedWriter().use { it.write(tenantJson.toString()) }
-                }
-                conn.responseCode // execute
-            } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
-                conn?.disconnect()
-            }
 
-            // Step 3: Create an Owner Employee record on Supabase with the generated pinHash
-            val employeeJson = JSONObject().apply {
-                put("id", System.currentTimeMillis())
-                put("tenantId", premiumTenantId)
-                put("outletId", JSONObject.NULL)
-                put("name", item.displayName ?: "Owner Premium")
-                put("email", item.email)
-                put("role", "OWNER")
-                put("pinHash", hashedPin)
-                put("salary", 0.0)
-                put("isActive", true)
-                put("createdAt", System.currentTimeMillis())
-                put("updatedAt", System.currentTimeMillis())
-            }
-            conn = null
-            try {
-                val url = URL("$SUPABASE_URL/rest/v1/employees")
-                conn = url.openConnection() as HttpURLConnection
-                conn.requestMethod = "POST"
-                conn.doOutput = true
-                conn.setRequestProperty("apikey", API_KEY)
-                conn.setRequestProperty("Authorization", "Bearer $API_KEY")
-                conn.setRequestProperty("Content-Type", "application/json")
-                conn.setRequestProperty("Prefer", "resolution=merge-duplicates")
-                conn.outputStream.use { out ->
-                    out.bufferedWriter().use { it.write(employeeJson.toString()) }
+                val body = JSONObject().apply {
+                    put("googleSub", item.googleSub)
+                    put("email", item.email)
+                    put("displayName", item.displayName ?: "Owner Premium")
+                    put("pinHash", hashedPin)
                 }
-                conn.responseCode // execute
-            } catch (e: Exception) {
-                e.printStackTrace()
-            } finally {
-                conn?.disconnect()
-            }
 
-            // Step 4: Update the user to Premium and set the premium tenantId
-            conn = null
-            try {
-                val url = URL("$SUPABASE_URL/rest/v1/local_users?googleSub=eq.${item.googleSub}")
-                conn = url.openConnection() as HttpURLConnection
-                conn.requestMethod = "PATCH"
-                conn.doOutput = true
-                conn.setRequestProperty("apikey", API_KEY)
-                conn.setRequestProperty("Authorization", "Bearer $API_KEY")
-                conn.setRequestProperty("Content-Type", "application/json")
-                
-                val patchBody = JSONObject().apply {
-                    put("isPremium", true)
-                    put("tenantId", premiumTenantId)
-                    put("updatedAt", System.currentTimeMillis())
-                }
                 conn.outputStream.use { out ->
-                    out.bufferedWriter().use { it.write(patchBody.toString()) }
+                    out.bufferedWriter().use { it.write(body.toString()) }
                 }
 
                 val code = conn.responseCode
@@ -223,7 +136,7 @@ class AdminViewModel @Inject constructor(
                     loadDemoUsers()
                 } else {
                     val err = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
-                    _uiState.update { it.copy(isLoading = false, errorMessage = "Update User Gagal: $err") }
+                    _uiState.update { it.copy(isLoading = false, errorMessage = "Persetujuan Gagal: $err") }
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, errorMessage = e.localizedMessage) }
@@ -238,12 +151,22 @@ class AdminViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             var conn: HttpURLConnection? = null
             try {
-                // Delete user from local_users table on Supabase
-                val url = URL("$SUPABASE_URL/rest/v1/local_users?googleSub=eq.${item.googleSub}")
+                val url = URL("$BASE_URL/api/admin/reject-user")
                 conn = url.openConnection() as HttpURLConnection
-                conn.requestMethod = "DELETE"
-                conn.setRequestProperty("apikey", API_KEY)
-                conn.setRequestProperty("Authorization", "Bearer $API_KEY")
+                conn.requestMethod = "POST"
+                conn.doOutput = true
+                conn.connectTimeout = 10000
+                conn.readTimeout = 10000
+                conn.setRequestProperty("Authorization", AUTH_TOKEN)
+                conn.setRequestProperty("Content-Type", "application/json")
+
+                val body = JSONObject().apply {
+                    put("googleSub", item.googleSub)
+                }
+
+                conn.outputStream.use { out ->
+                    out.bufferedWriter().use { it.write(body.toString()) }
+                }
 
                 val code = conn.responseCode
                 if (code in 200..299) {

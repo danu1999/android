@@ -138,6 +138,7 @@ private fun decodeBase64Image(imageStr: String?): Any? {
 fun PosScreen(
     onBack: () -> Unit,
     onNavigate: (String) -> Unit,
+    onNavigateToPrintSettings: () -> Unit,
     viewModel: PosViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -207,6 +208,14 @@ fun PosScreen(
     val activityLogsList by viewModel.activityLogs.collectAsState()
     val tenantId = viewModel.activeTenantId
 
+    val outletList by viewModel.availableOutlets.collectAsState()
+    val activeOutletId by viewModel.activeOutletId.collectAsState()
+    val activeOutlet = remember(outletList, activeOutletId) {
+        outletList.find { it.id == activeOutletId }
+    }
+    val activeOutletName = activeOutlet?.name ?: "Outlet Utama"
+    var showOutletDropdown by remember { mutableStateOf(false) }
+
     val categories = remember(productList) {
         listOf("Semua") + productList.map { it.category }.distinct().sorted()
     }
@@ -252,16 +261,33 @@ fun PosScreen(
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
             topBar = {
-                PosBahTopBar(
-                    title = "Kasir F&B",
-                    subtitle = "Sistem Kasir Pintar",
-                    onBack = onBack,
-                    actions = {
-                        IconButton(onClick = { onNavigate(Screen.MarginAnalysis.route) }) {
-                            Icon(Icons.Outlined.History, contentDescription = "Analisis Margin & Riwayat")
+                Box {
+                    PosBahTopBar(
+                        title = "Kasir F&B",
+                        subtitle = "Outlet: $activeOutletName",
+                        onBack = onBack,
+                        onTitleClick = { showOutletDropdown = true },
+                        actions = {
+                            IconButton(onClick = { onNavigate(Screen.MarginAnalysis.route) }) {
+                                Icon(Icons.Outlined.History, contentDescription = "Analisis Margin & Riwayat")
+                            }
+                        }
+                    )
+                    androidx.compose.material3.DropdownMenu(
+                        expanded = showOutletDropdown,
+                        onDismissRequest = { showOutletDropdown = false }
+                    ) {
+                        outletList.forEach { outlet ->
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text(outlet.name) },
+                                onClick = {
+                                    viewModel.selectOutlet(outlet.id)
+                                    showOutletDropdown = false
+                                }
+                            )
                         }
                     }
-                )
+                }
             },
             bottomBar = {
                 Surface(
@@ -347,6 +373,13 @@ fun PosScreen(
                                 icon = Icons.Outlined.CloudDownload,
                                 label = "Backup",
                                 onClick = viewModel::importDemoData
+                            )
+                        }
+                        item {
+                            FooterButton(
+                                icon = Icons.Outlined.Print,
+                                label = "Pengaturan Struk",
+                                onClick = onNavigateToPrintSettings
                             )
                         }
                         if (ui.isOwner) {

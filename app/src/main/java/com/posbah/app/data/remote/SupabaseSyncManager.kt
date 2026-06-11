@@ -15,16 +15,15 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * SupabaseSyncManager
+ * VpsSyncManager
  *
- * Mengelola sinkronisasi database Room lokal ke Supabase Cloud REST API PostgREST.
+ * Mengelola sinkronisasi database Room lokal ke VPS PostgreSQL REST API.
  * Implementasi murni menggunakan HttpURLConnection standar tanpa dependency eksternal berat.
  */
 object SupabaseSyncManager {
 
-    private const val TAG = "SupabaseSyncManager"
-    private const val SUPABASE_URL = "https://www.zedmz.cloud"
-    private const val API_KEY = ""
+    private const val TAG = "VpsSyncManager"
+    private const val VPS_URL = "https://www.zedmz.cloud"
 
     @Volatile
     private var currentTenantId: String = ""
@@ -53,7 +52,7 @@ object SupabaseSyncManager {
         }
 
         try {
-            Log.d(TAG, "Memulai sinkronisasi ke Supabase...")
+            Log.d(TAG, "Memulai sinkronisasi ke VPS...")
 
             // 1. local_users (Metadata - upload all)
             val users = db.localUserDao().getAll().filter { it.tenantId == activeTenantId }
@@ -164,6 +163,8 @@ object SupabaseSyncManager {
                         put("taxNumber", c.taxNumber ?: JSONObject.NULL)
                         put("uniqueID", c.uniqueID ?: JSONObject.NULL)
                         put("slug", c.slug ?: JSONObject.NULL)
+                        put("receiverSignatureUrl", c.receiverSignatureUrl ?: JSONObject.NULL)
+                        put("receiverNameActual", c.receiverNameActual ?: JSONObject.NULL)
                         put("isSynced", true)
                         put("createdAt", c.createdAt)
                         put("updatedAt", c.updatedAt)
@@ -437,6 +438,7 @@ object SupabaseSyncManager {
                     array.put(JSONObject().apply {
                         put("id", ps.id)
                         put("tenantId", ps.tenantId)
+                        put("moduleKey", ps.moduleKey)
                         put("jpgUseLogo", ps.jpgUseLogo)
                         put("jpgHeaderAlign", ps.jpgHeaderAlign)
                         put("jpgUseSignature", ps.jpgUseSignature)
@@ -605,12 +607,12 @@ object SupabaseSyncManager {
     }
 
     /**
-     * Upload data JSON array ke endpoint REST Supabase tertentu dengan model UPSERT.
+     * Upload data JSON array ke endpoint REST VPS tertentu dengan model UPSERT.
      */
     private fun uploadTable(tableName: String, jsonArray: JSONArray): Boolean {
         var conn: HttpURLConnection? = null
         return try {
-            val endpointUrl = "$SUPABASE_URL/api/sync/$tableName"
+            val endpointUrl = "$VPS_URL/api/sync/$tableName"
             val url = URL(endpointUrl)
 
             conn = (url.openConnection() as HttpURLConnection).apply {

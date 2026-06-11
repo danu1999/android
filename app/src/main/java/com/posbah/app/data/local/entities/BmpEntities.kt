@@ -29,6 +29,8 @@ data class BmpClientEntity(
     val uniqueID: String? = null,
     val slug: String? = null,
     val isSynced: Boolean = false,    // false = belum disinkronkan ke cloud
+    val receiverSignatureUrl: String? = null,
+    val receiverNameActual: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
@@ -243,19 +245,31 @@ data class BmpBahanBakuItemEntity(
 )
 
 /**
- * Pengaturan cetak fleksibel per-tenant.
+ * Pengaturan cetak fleksibel per-tenant, per-modul.
  * Masing-masing dokumen (Cetak JPG, Surat Jalan, Invoice PDF, Struk POS)
  * memiliki pengaturan logo, TTD, dan warna yang INDEPENDEN.
  *
- * Disimpan sekali per tenant, bisa diubah kapan saja dari layar Pengaturan Cetak.
+ * `moduleKey` memisahkan pengaturan per modul bisnis:
+ *   - "BMP"     → Invoice & Manufaktur (4 tab: JPG, Surat Jalan, Invoice, Struk)
+ *   - "FNB"     → POS FnB/Restoran (hanya tab Struk POS)
+ *   - "LAUNDRY" → POS Laundry (hanya tab Struk POS)
+ *   - "RENTAL"  → POS Rental (hanya tab Struk POS)
+ *
+ * Disimpan satu record per (tenant, modul), bisa diubah kapan saja dari layar
+ * Pengaturan Cetak masing-masing modul.
  */
 @Entity(
     tableName = "print_settings",
-    indices = [Index(value = ["tenantId"], unique = true)]
+    indices = [Index(value = ["tenantId", "moduleKey"], unique = true)]
 )
 data class PrintSettingsEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val tenantId: String,
+    /**
+     * Identifier modul pemilik pengaturan ini.
+     * Nilai valid: "BMP" | "FNB" | "LAUNDRY" | "RENTAL"
+     */
+    val moduleKey: String = "BMP",
 
     // ─── Cetak JPG ────────────────────────────────────────────────────────────
     /** Tampilkan logo di header JPG */
@@ -331,3 +345,4 @@ data class PrintSettingsEntity(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
+
