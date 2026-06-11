@@ -48,9 +48,16 @@ fun PosBahRoot(
 
     val goDashboard = { popUpRoute: String ->
         scope.launch {
-            val route = viewModel.getDashboardRoute()
-            nav.navigate(route) {
-                popUpTo(popUpRoute) { inclusive = true }
+            try {
+                val route = viewModel.getDashboardRoute()
+                nav.navigate(route) {
+                    popUpTo(popUpRoute) { inclusive = true }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("PosBahRoot", "Navigation error", e)
+                nav.navigate(Screen.Login.route) {
+                    popUpTo(popUpRoute) { inclusive = true }
+                }
             }
         }
     }

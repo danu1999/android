@@ -66,13 +66,17 @@ fun LockScreen(
             }
             return@LaunchedEffect
         }
-        attempting = true
-        val r = BiometricHelper.authenticate(
-            activity,
-            title = "Verifikasi Identitas",
-            subtitle = "Gunakan biometrik untuk membuka POSBah",
-            negativeText = "Batal"
-        )
+        val r = try {
+            BiometricHelper.authenticate(
+                activity,
+                title = "Verifikasi Identitas",
+                subtitle = "Gunakan biometrik untuk membuka POSBah",
+                negativeText = "Batal"
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("LockScreen", "Biometric authentication exception", e)
+            BiometricHelper.Result.Failure(-1, e.localizedMessage ?: "Unknown biometric error")
+        }
         attempting = false
         when (r) {
             BiometricHelper.Result.Success -> {
@@ -80,6 +84,7 @@ fun LockScreen(
                 onUnlocked()
             }
             BiometricHelper.Result.Cancelled -> error = "Dibatalkan"
+            is BiometricHelper.Result.Failure -> error = "Error: " + r.message
             else -> error = "Verifikasi gagal"
         }
     }
