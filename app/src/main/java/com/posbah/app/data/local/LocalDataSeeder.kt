@@ -82,8 +82,9 @@ class LocalDataSeeder @Inject constructor(
             return@withContext
         }
 
-        val tenant = db.tenantDao().getById(tenantId)
-        val isBmpMode = tenant?.businessMode == "BMP"
+        try {
+            val tenant = db.tenantDao().getById(tenantId)
+            val isBmpMode = tenant?.businessMode == "BMP"
 
         val assetManager = context.assets
         // Select the right seed SQL file based on tenantId
@@ -710,6 +711,9 @@ class LocalDataSeeder @Inject constructor(
         }
         if (bmpBahanBakuItemList.isNotEmpty()) {
             db.bmpBahanBakuItemDao().insertAll(bmpBahanBakuItemList)
+        }
+        } catch (e: Exception) {
+            android.util.Log.e("LocalDataSeeder", "Error during seedFromSqlDump execution", e)
         }
     }
 

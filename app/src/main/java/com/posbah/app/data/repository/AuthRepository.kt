@@ -182,7 +182,11 @@ class AuthRepository @Inject constructor(
         
         // Seed mock/demo data if empty and not premium, or if it is the special hanafiariful tenant
         if (!user.isPremium || isHanafiarifulGroup) {
-            localDataSeeder.seedFromSqlDump(context, tenant.id, null)
+            try {
+                localDataSeeder.seedFromSqlDump(context, tenant.id, null)
+            } catch (e: Exception) {
+                android.util.Log.e("AuthRepository", "Error seeding google login data", e)
+            }
         }
         
         return@withContext LoginOutcome.Success(user.copy(tenantId = tenant.id), tenant)
@@ -253,7 +257,11 @@ class AuthRepository @Inject constructor(
             }
 
             // Seed tenant database from SQL assets if empty
-            localDataSeeder.seedFromSqlDump(context, tenantId, outletId)
+            try {
+                localDataSeeder.seedFromSqlDump(context, tenantId, outletId)
+            } catch (e: Exception) {
+                android.util.Log.e("AuthRepository", "Error seeding email/pin login data", e)
+            }
 
             val existing = userDao.getBySub(cleanEmail)
             val user = (existing ?: LocalUser(
@@ -531,7 +539,11 @@ class AuthRepository @Inject constructor(
         userDao.upsert(user)
         
         // 5. Seed default/clean database for this new tenant
-        localDataSeeder.seedFromSqlDump(context, cleanEmail, outletId)
+        try {
+            localDataSeeder.seedFromSqlDump(context, cleanEmail, outletId)
+        } catch (e: Exception) {
+            android.util.Log.e("AuthRepository", "Error seeding simulated payment data", e)
+        }
         
         // 6. Automatically set active session to this new tenant
         securePrefs.setActiveSession(cleanEmail, cleanEmail)
