@@ -23,7 +23,7 @@ class PosBahRootViewModel @Inject constructor(
         val sub = securePrefs.currentGoogleSub
         if (sub != null) {
             val user = userDao.getBySub(sub)
-            if (user != null && !user.isPremium && !user.businessModeLocked) {
+            if (user != null && !user.businessModeLocked) {
                 return Screen.SystemSelection.route
             }
         }

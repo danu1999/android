@@ -79,6 +79,7 @@ data class Employee(
     val email: String? = null,
     val role: String = "KASIR",
     val pinHash: String,
+    val phone: String? = null,
     val salary: Double = 0.0,
     val isActive: Boolean = true,
     val payPeriod: String = "MONTHLY",

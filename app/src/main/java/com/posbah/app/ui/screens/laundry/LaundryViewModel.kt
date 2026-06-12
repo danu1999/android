@@ -51,6 +51,18 @@ class LaundryViewModel @Inject constructor(
     private val tenantId = authRepository.activeTenantId().orEmpty()
     private val currentOutletId get() = sessionState.outletId.value
 
+    init {
+        viewModelScope.launch {
+            if (sessionState.outletId.value == null) {
+                val outlets = db.outletDao().listForTenant(tenantId)
+                val defaultOutlet = outlets.firstOrNull { it.isDefault } ?: outlets.firstOrNull()
+                if (defaultOutlet != null) {
+                    sessionState.setOutlet(defaultOutlet.id)
+                }
+            }
+        }
+    }
+
     val availableOutlets = db.outletDao().observeForTenant(tenantId)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 

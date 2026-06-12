@@ -41,7 +41,7 @@ import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.CloudDownload
+
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.LocalOffer
 import androidx.compose.material.icons.outlined.Notes
@@ -368,13 +368,7 @@ fun PosScreen(
                                 }
                             )
                         }
-                        item {
-                            FooterButton(
-                                icon = Icons.Outlined.CloudDownload,
-                                label = "Backup",
-                                onClick = viewModel::importDemoData
-                            )
-                        }
+
                         item {
                             FooterButton(
                                 icon = Icons.Outlined.Print,
@@ -466,12 +460,39 @@ fun PosScreen(
                     // Product Grid
                     if (filteredProducts.isEmpty()) {
                         if (productList.isEmpty()) {
-                            EmptyState(
-                                title = "Katalog Produk Kosong",
-                                description = "Database Anda belum terisi data F&B. Klik impor di kanan atas atau tombol di bawah untuk mengisi data backup demo.",
-                                actionLabel = "Impor Backup Sekarang",
-                                onAction = viewModel::importDemoData
-                            )
+                            if (ui.isPremium) {
+                                if (ui.isSeedTenant) {
+                                    EmptyState(
+                                        title = "Katalog Produk Kosong",
+                                        description = "Database Anda belum terisi data. Klik tombol di bawah untuk memulihkan data transaksi dan produk Anda.",
+                                        actionLabel = "Pulihkan Data Toko Sekarang",
+                                        onAction = viewModel::importDemoData
+                                    )
+                                } else {
+                                    EmptyState(
+                                        title = "Katalog Produk Kosong",
+                                        description = "Katalog produk Anda masih kosong. Silakan tambahkan produk baru untuk mulai bertransaksi.",
+                                        actionLabel = "Tambah Produk Baru",
+                                        onAction = {
+                                            newProdName = ""
+                                            newProdPrice = ""
+                                            newProdCostPrice = ""
+                                            newProdStock = "999"
+                                            newProdCategory = "Umum"
+                                            newProdBarcode = ""
+                                            capturedPhotoFile = null
+                                            showAddProductDialog = true
+                                        }
+                                    )
+                                }
+                            } else {
+                                EmptyState(
+                                    title = "Katalog Produk Kosong",
+                                    description = "Database Anda belum terisi data F&B. Klik tombol di bawah untuk memuat data demo.",
+                                    actionLabel = "Muat Data Demo Sekarang",
+                                    onAction = viewModel::importDemoData
+                                )
+                            }
                         } else {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Text("Produk tidak ditemukan", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -862,12 +883,12 @@ fun PosScreen(
         if (ui.isSeeding) {
             AlertDialog(
                 onDismissRequest = {},
-                title = { Text("Mengimpor Database Backup") },
+                title = { Text(if (ui.isPremium && ui.isSeedTenant) "Memulihkan Data Toko" else "Memuat Data Demo") },
                 text = {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                         CircularProgressIndicator(modifier = Modifier.size(44.dp))
                         Spacer(Modifier.height(12.dp))
-                        Text("Harap tunggu, memproses dan mengimpor file dump SQL...")
+                        Text(if (ui.isPremium && ui.isSeedTenant) "Harap tunggu, memproses dan memulihkan data toko..." else "Harap tunggu, memproses dan memuat file data demo...")
                     }
                 },
                 confirmButton = {}

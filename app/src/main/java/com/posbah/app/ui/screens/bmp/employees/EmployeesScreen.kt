@@ -141,8 +141,9 @@ fun EmployeesScreen(
                                 Spacer(Modifier.size(12.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(e.name, style = MaterialTheme.typography.titleMedium)
+                                    val pinText = if (!e.fingerprintPIN.isNullOrBlank()) "PIN: ${e.fingerprintPIN}" else "PIN Belum Set"
                                     Text(
-                                        "${e.position ?: "Karyawan"} • ${Formatters.rupiah(e.salaryAmount)}",
+                                        "${e.position ?: "Karyawan"} • ${Formatters.rupiah(e.salaryAmount)} • $pinText",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -161,17 +162,25 @@ fun EmployeesScreen(
     formEdit?.let { editing ->
         var name by remember { mutableStateOf(editing.name) }
         var position by remember { mutableStateOf(editing.position.orEmpty()) }
+        var pin by remember { mutableStateOf(editing.fingerprintPIN.orEmpty()) }
         var salary by remember { mutableStateOf(if (editing.salaryAmount == 0.0) "" else editing.salaryAmount.toLong().toString()) }
         AlertDialog(
             onDismissRequest = { formEdit = null },
             title = { Text(if (editing.id == 0L) "Karyawan Baru" else "Edit Karyawan") },
             text = {
                 Column {
-                    OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nama") },
+                    OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nama / ID Karyawan") },
                         modifier = Modifier.fillMaxWidth().testTag("emp-name"))
                     Spacer(Modifier.size(8.dp))
                     OutlinedTextField(value = position, onValueChange = { position = it }, label = { Text("Jabatan") },
                         modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.size(8.dp))
+                    OutlinedTextField(
+                        value = pin, onValueChange = { pin = it.filter { c -> c.isDigit() } },
+                        label = { Text("PIN Masuk (Numerik)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     Spacer(Modifier.size(8.dp))
                     OutlinedTextField(
                         value = salary, onValueChange = { salary = it },
@@ -188,7 +197,8 @@ fun EmployeesScreen(
                             viewModel.upsert(editing.copy(
                                 name = name,
                                 position = position.ifBlank { null },
-                                salaryAmount = salary.replace(",", "").toDoubleOrNull() ?: 0.0
+                                salaryAmount = salary.replace(",", "").toDoubleOrNull() ?: 0.0,
+                                fingerprintPIN = pin.ifBlank { null }
                             ))
                             formEdit = null
                         }

@@ -13,11 +13,33 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ProductDao {
+    // ── Tenant-level queries (used by seeder, owner dashboard) ──────────────
     @Query("SELECT * FROM products WHERE tenantId = :tenantId ORDER BY name ASC")
     fun observe(tenantId: String): Flow<List<ProductEntity>>
 
     @Query("SELECT * FROM products WHERE tenantId = :tenantId ORDER BY name ASC")
     suspend fun list(tenantId: String): List<ProductEntity>
+
+    // ── Outlet-level queries (strict isolation per outlet) ───────────────────
+    /**
+     * Returns products belonging to a specific outlet OR products with no outletId
+     * if the requested outlet is the default outlet (for backward compat with legacy data).
+     */
+    @Query("""
+        SELECT * FROM products
+        WHERE tenantId = :tenantId
+          AND (outletId = :outletId OR outletId IS NULL)
+        ORDER BY name ASC
+    """)
+    fun observeForOutlet(tenantId: String, outletId: Long): Flow<List<ProductEntity>>
+
+    @Query("""
+        SELECT * FROM products
+        WHERE tenantId = :tenantId
+          AND outletId = :outletId
+        ORDER BY name ASC
+    """)
+    suspend fun listForOutlet(tenantId: String, outletId: Long): List<ProductEntity>
 
     @Query("SELECT * FROM products WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): ProductEntity?
@@ -27,6 +49,15 @@ interface ProductDao {
 
     @Query("SELECT * FROM products WHERE tenantId = :tenantId AND name LIKE '%' || :query || '%' ORDER BY name ASC")
     fun search(tenantId: String, query: String): Flow<List<ProductEntity>>
+
+    @Query("""
+        SELECT * FROM products
+        WHERE tenantId = :tenantId
+          AND (outletId = :outletId OR outletId IS NULL)
+          AND name LIKE '%' || :query || '%'
+        ORDER BY name ASC
+    """)
+    fun searchForOutlet(tenantId: String, outletId: Long, query: String): Flow<List<ProductEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(product: ProductEntity): Long
@@ -51,11 +82,29 @@ interface ProductDao {
 
 @Dao
 interface CustomerDao {
+    // ── Tenant-level (owner sees all) ────────────────────────────────────────
     @Query("SELECT * FROM customers WHERE tenantId = :tenantId ORDER BY name ASC")
     fun observe(tenantId: String): Flow<List<CustomerEntity>>
 
     @Query("SELECT * FROM customers WHERE tenantId = :tenantId ORDER BY name ASC")
     suspend fun list(tenantId: String): List<CustomerEntity>
+
+    // ── Outlet-level (strict isolation) ──────────────────────────────────────
+    @Query("""
+        SELECT * FROM customers
+        WHERE tenantId = :tenantId
+          AND (outletId = :outletId OR outletId IS NULL)
+        ORDER BY name ASC
+    """)
+    fun observeForOutlet(tenantId: String, outletId: Long): Flow<List<CustomerEntity>>
+
+    @Query("""
+        SELECT * FROM customers
+        WHERE tenantId = :tenantId
+          AND (outletId = :outletId OR outletId IS NULL)
+        ORDER BY name ASC
+    """)
+    suspend fun listForOutlet(tenantId: String, outletId: Long): List<CustomerEntity>
 
     @Query("SELECT * FROM customers WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): CustomerEntity?
@@ -75,11 +124,30 @@ interface CustomerDao {
 
 @Dao
 interface TransactionDao {
+    // ── Tenant-level (owner sees all) ────────────────────────────────────────
     @Query("SELECT * FROM transactions WHERE tenantId = :tenantId ORDER BY date DESC")
     fun observe(tenantId: String): Flow<List<TransactionEntity>>
 
     @Query("SELECT * FROM transactions WHERE tenantId = :tenantId AND status = 'PENDING' ORDER BY date DESC")
     fun observePendingQueues(tenantId: String): Flow<List<TransactionEntity>>
+
+    // ── Outlet-level (strict isolation) ──────────────────────────────────────
+    @Query("""
+        SELECT * FROM transactions
+        WHERE tenantId = :tenantId
+          AND (outletId = :outletId OR outletId IS NULL)
+        ORDER BY date DESC
+    """)
+    fun observeForOutlet(tenantId: String, outletId: Long): Flow<List<TransactionEntity>>
+
+    @Query("""
+        SELECT * FROM transactions
+        WHERE tenantId = :tenantId
+          AND (outletId = :outletId OR outletId IS NULL)
+          AND status = 'PENDING'
+        ORDER BY date DESC
+    """)
+    fun observePendingQueuesForOutlet(tenantId: String, outletId: Long): Flow<List<TransactionEntity>>
 
     @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): TransactionEntity?
@@ -104,6 +172,10 @@ interface TransactionDao {
 
     @Query("SELECT receiptNumber FROM transactions WHERE tenantId = :tenantId ORDER BY id DESC LIMIT 1")
     suspend fun getLastReceiptNumber(tenantId: String): String?
+
+    /** Forcefully corrects a stale date for an existing transaction identified by receipt number. */
+    @Query("UPDATE transactions SET date = :date, createdAt = :date, updatedAt = :date WHERE receiptNumber = :receiptNumber")
+    suspend fun updateDateByReceiptNumber(receiptNumber: String, date: Long)
 
     @Query("SELECT * FROM transactions")
     suspend fun getAll(): List<TransactionEntity>

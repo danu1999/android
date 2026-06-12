@@ -44,10 +44,15 @@ class TenantPickerViewModel @Inject constructor(
         val email = securePrefs.currentEmail ?: return
         viewModelScope.launch {
             tenantRepository.observeForOwner(email).collect { list ->
+                val filteredList = when (email.lowercase().trim()) {
+                    "hanafiariful@gmail.com" -> list.filter { it.id == "ten_premium_hanafiariful_gmail_com" }
+                    "bahteramulyap@gmail.com" -> list.filter { it.id == "ten_premium_bahteramulyap_gmail_com" }
+                    else -> list
+                }
                 _ui.update { 
                     it.copy(
                         isLoading = false, 
-                        tenants = list,
+                        tenants = filteredList,
                         canAddTenant = email == "muhammadmuizz8@gmail.com"
                     ) 
                 }

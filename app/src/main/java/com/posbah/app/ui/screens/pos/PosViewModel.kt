@@ -73,7 +73,9 @@ data class PosUiState(
     val isSeeding: Boolean = false,
     val seedError: String? = null,
     val selectedTransactionDate: Long? = null,
-    val isOwner: Boolean = false
+    val isOwner: Boolean = false,
+    val isPremium: Boolean = false,
+    val isSeedTenant: Boolean = false
 )
 
 @HiltViewModel
@@ -105,7 +107,78 @@ class PosViewModel @Inject constructor(
         }
         viewModelScope.launch {
             val user = authRepository.getActiveUser()
-            _uiState.update { it.copy(isOwner = user?.role == "OWNER") }
+            val seededTenants = setOf(
+                "bahteramulyap@gmail.com",
+                "ten_premium_bahteramulyap_gmail_com",
+                "hanafiariful@gmail.com",
+                "demo_tenant"
+            )
+            val isSeed = seededTenants.any { tenantId == it } ||
+                tenantId.contains("hanafiariful_gmail_com") ||
+                tenantId.startsWith("demo_tenant_")
+
+            _uiState.update { 
+                it.copy(
+                    isOwner = user?.role == "OWNER",
+                    isPremium = user?.isPremium == true,
+                    isSeedTenant = isSeed
+                )
+            }
+        }
+        viewModelScope.launch {
+            if (sessionState.outletId.value == null) {
+                val outlets = db.outletDao().listForTenant(tenantId)
+                val defaultOutlet = outlets.firstOrNull { it.isDefault } ?: outlets.firstOrNull()
+                if (defaultOutlet != null) {
+                    sessionState.setOutlet(defaultOutlet.id)
+                }
+            }
+        }
+        // Trigger background pull sync for outlets, employees, products
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            com.posbah.app.data.remote.SupabaseSyncManager.pullAll(appContext, db, tenantId)
+        }
+
+        // Auto-repair: silently re-seed transaction dates that were incorrectly set to
+        // System.currentTimeMillis() during the first seeding due to a parsing bug.
+        // Runs once automatically on first launch after this fix — no user action needed.
+        autoRepairTransactionDates()
+    }
+
+    /**
+     * Automatically corrects transaction dates for seeded tenants whose historical
+     * transactions were saved with today's timestamp instead of the original SQL date.
+     *
+     * Uses a SharedPreferences version flag so the repair only runs once and never
+     * again, without requiring the customer to do anything manually.
+     */
+    private fun autoRepairTransactionDates() {
+        val seededTenants = setOf(
+            "bahteramulyap@gmail.com",
+            "ten_premium_bahteramulyap_gmail_com",
+            "hanafiariful@gmail.com",
+            "demo_tenant"
+        )
+        val isSeedTenant = seededTenants.any { tenantId == it } ||
+            tenantId.contains("hanafiariful_gmail_com") ||
+            tenantId.startsWith("demo_tenant_")
+        if (!isSeedTenant) return
+
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val prefs = appContext.getSharedPreferences("posbah_seeder_meta", android.content.Context.MODE_PRIVATE)
+                val repairVersion = prefs.getInt("date_repair_v", 0)
+                // Version 3 = fix for parseSqlTimestamp bug on transaction dates
+                if (repairVersion < 3) {
+                    _uiState.update { it.copy(isSeeding = true) }
+                    localDataSeeder.seedFromSqlDump(appContext, tenantId, currentOutletId)
+                    _uiState.update { it.copy(isSeeding = false) }
+                    prefs.edit().putInt("date_repair_v", 3).apply()
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isSeeding = false) }
+                android.util.Log.e("PosViewModel", "autoRepairTransactionDates failed", e)
+            }
         }
     }
 
@@ -120,40 +193,59 @@ class PosViewModel @Inject constructor(
         sessionState.setOutlet(id)
     }
 
-    val products = kotlinx.coroutines.flow.combine(
-        productRepository.observe(tenantId),
-        sessionState.outletId,
-        db.outletDao().observeForTenant(tenantId)
-    ) { allProducts, activeOutletId, outlets ->
-        val defaultOutletId = outlets.firstOrNull { it.isDefault }?.id
-        allProducts.filter { p ->
-            p.outletId == activeOutletId || (activeOutletId == defaultOutletId && p.outletId == null)
+    /**
+     * Produk untuk outlet yang aktif saat ini.
+     * Menggunakan query DAO langsung (bukan filter in-memory) untuk isolasi ketat.
+     * Produk dengan outletId=null juga disertakan (backward compat data lama).
+     */
+    val products = sessionState.outletId
+        .flatMapLatest { outletId ->
+            if (outletId != null) {
+                productRepository.observeForOutlet(tenantId, outletId)
+            } else {
+                productRepository.observe(tenantId)
+            }
         }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val customers = customerRepository.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
-    val pendingQueues = kotlinx.coroutines.flow.combine(
-        transactionRepository.observePendingQueues(tenantId),
-        sessionState.outletId,
-        db.outletDao().observeForTenant(tenantId)
-    ) { allQueues, activeOutletId, outlets ->
-        val defaultOutletId = outlets.firstOrNull { it.isDefault }?.id
-        allQueues.filter { t ->
-            t.outletId == activeOutletId || (activeOutletId == defaultOutletId && t.outletId == null)
+    /**
+     * Pelanggan untuk outlet yang aktif saat ini.
+     */
+    val customers = sessionState.outletId
+        .flatMapLatest { outletId ->
+            if (outletId != null) {
+                customerRepository.observeForOutlet(tenantId, outletId)
+            } else {
+                customerRepository.observe(tenantId)
+            }
         }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val transactions = kotlinx.coroutines.flow.combine(
-        transactionRepository.observe(tenantId),
-        sessionState.outletId,
-        db.outletDao().observeForTenant(tenantId)
-    ) { allTransactions, activeOutletId, outlets ->
-        val defaultOutletId = outlets.firstOrNull { it.isDefault }?.id
-        allTransactions.filter { t ->
-            t.outletId == activeOutletId || (activeOutletId == defaultOutletId && t.outletId == null)
+    /**
+     * Antrian pending untuk outlet yang aktif saat ini.
+     */
+    val pendingQueues = sessionState.outletId
+        .flatMapLatest { outletId ->
+            if (outletId != null) {
+                transactionRepository.observePendingQueuesForOutlet(tenantId, outletId)
+            } else {
+                transactionRepository.observePendingQueues(tenantId)
+            }
         }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /**
+     * Transaksi untuk outlet yang aktif saat ini.
+     */
+    val transactions = sessionState.outletId
+        .flatMapLatest { outletId ->
+            if (outletId != null) {
+                transactionRepository.observeForOutlet(tenantId, outletId)
+            } else {
+                transactionRepository.observe(tenantId)
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val activityLogs = activityLogDao.observeLogs(tenantId, "FNB").stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -517,6 +609,7 @@ class PosViewModel @Inject constructor(
         viewModelScope.launch {
             val c = CustomerEntity(
                 tenantId = tenantId,
+                outletId = currentOutletId,
                 name = name,
                 phone = phone.takeIf { it.isNotBlank() },
                 address = address.takeIf { it.isNotBlank() }

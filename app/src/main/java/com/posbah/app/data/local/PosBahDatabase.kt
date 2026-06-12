@@ -74,7 +74,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
         TransactionItemEntity::class,
         ActivityLogEntity::class
     ],
-    version = 15,
+    version = 17,
     exportSchema = true
 )
 abstract class PosBahDatabase : RoomDatabase() {
@@ -282,8 +282,26 @@ abstract class PosBahDatabase : RoomDatabase() {
 
                 // Step 3: Copy data lama ke tabel baru (semua jadi moduleKey='BMP')
                 db.execSQL("""
-                    INSERT INTO `print_settings_new` 
-                    SELECT * FROM `print_settings`
+                    INSERT INTO `print_settings_new` (
+                        `id`, `tenantId`, `moduleKey`, 
+                        `jpgUseLogo`, `jpgHeaderAlign`, `jpgUseSignature`, `jpgSignatureSenderName`, `jpgSignatureReceiverName`, `jpgSignatureDrawnBase64`, `jpgIsColor`, 
+                        `sjUseLogo`, `sjHeaderAlign`, `sjUseSignature`, `sjSignatureSenderName`, `sjSignatureReceiverName`, `sjSignatureDrawnBase64`, `sjIsColor`, 
+                        `invoiceUseLogo`, `invoiceHeaderAlign`, `invoiceUseSignature`, `invoiceSignatureSenderName`, `invoiceSignatureReceiverName`, `invoiceSignatureDrawnBase64`, `invoiceIsColor`, 
+                        `receiptPaperWidth`, `receiptUseLogo`, `receiptHeaderAlign`, `receiptIsColor`, `receiptShowItemPrice`, `receiptFooterText`, 
+                        `jpgTemplateType`, `sjTemplateType`, `invoiceTemplateType`, 
+                        `bankOwnerName`, `bankName`, `bankAccountNumber`, 
+                        `createdAt`, `updatedAt`
+                    )
+                    SELECT 
+                        `id`, `tenantId`, `moduleKey`, 
+                        `jpgUseLogo`, `jpgHeaderAlign`, `jpgUseSignature`, `jpgSignatureSenderName`, `jpgSignatureReceiverName`, `jpgSignatureDrawnBase64`, `jpgIsColor`, 
+                        `sjUseLogo`, `sjHeaderAlign`, `sjUseSignature`, `sjSignatureSenderName`, `sjSignatureReceiverName`, `sjSignatureDrawnBase64`, `sjIsColor`, 
+                        `invoiceUseLogo`, `invoiceHeaderAlign`, `invoiceUseSignature`, `invoiceSignatureSenderName`, `invoiceSignatureReceiverName`, `invoiceSignatureDrawnBase64`, `invoiceIsColor`, 
+                        `receiptPaperWidth`, `receiptUseLogo`, `receiptHeaderAlign`, `receiptIsColor`, `receiptShowItemPrice`, `receiptFooterText`, 
+                        `jpgTemplateType`, `sjTemplateType`, `invoiceTemplateType`, 
+                        `bankOwnerName`, `bankName`, `bankAccountNumber`, 
+                        `createdAt`, `updatedAt`
+                    FROM `print_settings`
                 """.trimIndent())
 
                 // Step 4: Drop tabel lama dan rename tabel baru
@@ -292,6 +310,39 @@ abstract class PosBahDatabase : RoomDatabase() {
 
                 // Step 5: Buat unique index baru
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_print_settings_tenantId_moduleKey` ON `print_settings` (`tenantId`, `moduleKey`)")
+            }
+        }
+
+        /**
+         * Migration v15 → v16: Isolasi pelanggan per outlet.
+         *
+         * Menambahkan kolom `outletId` ke tabel `customers` agar data pelanggan
+         * dapat difilter per outlet. Kolom nullable (INTEGER, default NULL) sehingga
+         * data pelanggan lama tetap terbaca di semua outlet (backward compat).
+         *
+         * Setelah migrasi ini, `CustomerEntity` memiliki outletId dan query
+         * `observeForOutlet` / `listForOutlet` berfungsi dengan benar.
+         */
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Tambah kolom outletId nullable ke customers
+                db.execSQL("ALTER TABLE `customers` ADD COLUMN `outletId` INTEGER")
+                // Recreate index — SQLite memerlukan drop index lama yang berdasarkan (name, tenantId)
+                // dan membuat index baru (name, tenantId, outletId)
+                db.execSQL("DROP INDEX IF EXISTS `index_customers_name_tenantId`")
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS `index_customers_name_tenantId_outletId` ON `customers` (`name`, `tenantId`, `outletId`)"
+                )
+                // Tambah index tambahan untuk outletId
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_customers_outletId` ON `customers` (`outletId`)"
+                )
+            }
+        }
+
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `employees` ADD COLUMN `phone` TEXT")
             }
         }
 
@@ -307,7 +358,11 @@ abstract class PosBahDatabase : RoomDatabase() {
                 DB_NAME
             )
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15) // ← Data AMAN, tidak terhapus
+                .addMigrations(
+                    MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
+                    MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
+                    MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17
+                ) // ← Data AMAN, tidak terhapus
                 .fallbackToDestructiveMigration()      // ← Fallback jika dari versi < 5 (install baru)
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {

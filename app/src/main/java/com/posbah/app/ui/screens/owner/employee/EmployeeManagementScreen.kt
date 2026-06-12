@@ -83,6 +83,7 @@ fun EmployeeManagementScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var nameInput by remember { mutableStateOf("") }
     var emailInput by remember { mutableStateOf("") }
+    var phoneInput by remember { mutableStateOf("") }
     var pinInput by remember { mutableStateOf("") }
     var roleInput by remember { mutableStateOf("KASIR") }
     var salaryInput by remember { mutableStateOf("") }
@@ -118,6 +119,7 @@ fun EmployeeManagementScreen(
                         IconButton(onClick = {
                             nameInput = ""
                             emailInput = ""
+                            phoneInput = ""
                             pinInput = ""
                             roleInput = "KASIR"
                             salaryInput = ""
@@ -270,6 +272,14 @@ fun EmployeeManagementScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
+                        value = phoneInput,
+                        onValueChange = { phoneInput = it },
+                        label = { Text("Nomor Telepon / WhatsApp") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
                         value = pinInput,
                         onValueChange = { pinInput = it },
                         label = { Text("PIN / Password") },
@@ -405,6 +415,7 @@ fun EmployeeManagementScreen(
                         viewModel.startAddEmployee(
                             name = nameInput,
                             email = emailInput,
+                            phone = phoneInput,
                             pin = pinInput,
                             role = roleInput,
                             salary = sal,
@@ -593,6 +604,13 @@ fun EmployeeCard(
                             fontSize = 11.sp,
                             color = Color.Gray
                         )
+                        if (!employee.phone.isNullOrBlank()) {
+                            Text(
+                                "No. Telp: ${employee.phone}",
+                                fontSize = 11.sp,
+                                color = Color.Gray
+                            )
+                        }
                     }
                 }
 

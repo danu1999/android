@@ -64,9 +64,12 @@ class EmployeeViewModel @Inject constructor(
             val outletsList = db.outletDao().listForTenant(tenantId)
 
             db.employeeDao().observeForTenant(tenantId).collect { list ->
+                val filteredList = list.filter { emp ->
+                    emp.role != "OWNER" && emp.email?.lowercase()?.trim() != user?.email?.lowercase()?.trim()
+                }
                 _uiState.update { 
                     it.copy(
-                        employees = list,
+                        employees = filteredList,
                         outlets = outletsList,
                         isOwner = true,
                         isLoading = false
@@ -83,6 +86,7 @@ class EmployeeViewModel @Inject constructor(
     fun startAddEmployee(
         name: String,
         email: String,
+        phone: String,
         pin: String,
         role: String,
         salary: Double,
@@ -93,12 +97,24 @@ class EmployeeViewModel @Inject constructor(
             _uiState.update { it.copy(error = "Nama, Email, dan PIN wajib diisi.") }
             return
         }
+        if (role == "OWNER") {
+            _uiState.update { it.copy(error = "Owner tidak dapat menambahkan karyawan sebagai Owner.") }
+            return
+        }
 
         viewModelScope.launch {
-            // Check if email already registered
-            val existing = db.employeeDao().findByEmail(email)
+            val cleanEmail = email.lowercase().trim()
+            // Check if email already registered as employee
+            val existing = db.employeeDao().findByEmail(cleanEmail)
             if (existing != null) {
-                _uiState.update { it.copy(error = "Email sudah digunakan oleh karyawan lain.") }
+                _uiState.update { it.copy(error = "Email sudah digunakan oleh karyawan lain (FnB/Rental/Laundry).") }
+                return@launch
+            }
+
+            // Check if email registered as owner
+            val existingOwner = db.localUserDao().getByEmail(cleanEmail)
+            if (existingOwner != null && existingOwner.role == "OWNER") {
+                _uiState.update { it.copy(error = "Email ini terdaftar sebagai Owner.") }
                 return@launch
             }
 
@@ -108,7 +124,8 @@ class EmployeeViewModel @Inject constructor(
                 tenantId = tenantId,
                 outletId = outletId,
                 name = name,
-                email = email.lowercase().trim(),
+                email = cleanEmail,
+                phone = phone.trim().takeIf { it.isNotBlank() },
                 role = role,
                 pinHash = hashedPin,
                 salary = salary,
@@ -197,6 +214,10 @@ class EmployeeViewModel @Inject constructor(
      * (Menyisipkan entri pengeluaran negatif ke tabel transaksi).
      */
     fun paySalary(employee: Employee) {
+        if (employee.role == "OWNER") {
+            _uiState.update { it.copy(error = "Owner tidak dapat menerima pembayaran gaji.") }
+            return
+        }
         viewModelScope.launch {
             try {
                 // Generate expense transaction
@@ -205,10 +226,11 @@ class EmployeeViewModel @Inject constructor(
                 
                 val currentOwner = authRepository.getActiveUser() ?: return@launch
 
+                // Gaji karyawan dicatat sebagai transaksi EXPENSE dengan outletId karyawan
                 val expenseTx = TransactionEntity(
                     tenantId = tenantId,
-                    outletId = employee.outletId,
-                    employeeId = currentOwner.googleSub.hashCode().toLong(), // Under Owner profile
+                    outletId = employee.outletId, // <- isolasi: catat ke outlet karyawan tersebut
+                    employeeId = currentOwner.googleSub.hashCode().toLong(),
                     customerName = "Payroll: ${employee.name}",
                     receiptNumber = receiptNumber,
                     subtotal = -employee.salary,
@@ -228,16 +250,18 @@ class EmployeeViewModel @Inject constructor(
                 )
                 db.employeeDao().update(updatedEmp)
 
-                // Log payroll activity
-                val appMode = "FNB"
+                // Log payroll activity dengan info outlet
+                val outletName = employee.outletId?.let { oid ->
+                    db.outletDao().getById(oid)?.name
+                } ?: "Outlet Utama"
                 db.activityLogDao().insertLog(
                     com.posbah.app.data.local.entities.ActivityLogEntity(
                         tenantId = tenantId,
                         action = "PAY_ROLL",
-                        description = "Bayar gaji karyawan ${employee.name} sebesar Rp ${employee.salary}",
+                        description = "Bayar gaji ${employee.name} (Outlet: $outletName) sebesar Rp ${employee.salary}",
                         date = System.currentTimeMillis(),
                         employeeName = currentOwner.displayName ?: "Owner",
-                        appMode = appMode
+                        appMode = "FNB"
                     )
                 )
 

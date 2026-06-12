@@ -284,7 +284,7 @@ fun LaundryScreen(
             // Left pane: Laundry Services Catalog
             Column(
                 modifier = Modifier
-                    .weight(1f)
+                    .weight(1.2f)
                     .fillMaxHeight()
                     .padding(16.dp)
             ) {
@@ -301,20 +301,21 @@ fun LaundryScreen(
                     leadingIcon = { Icon(Icons.Outlined.Search, null) },
                     placeholder = { Text("Cari layanan...") },
                     singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth().testTag("laundry-search")
                 )
                 Spacer(Modifier.height(12.dp))
 
                 LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                     modifier = Modifier.weight(1f)
                 ) {
                     items(filteredServices) { service ->
                         Surface(
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(18.dp),
                             color = MaterialTheme.colorScheme.surface,
                             tonalElevation = 1.dp,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
@@ -329,13 +330,13 @@ fun LaundryScreen(
                                 }
                         ) {
                             Row(
-                                modifier = Modifier.padding(12.dp),
+                                modifier = Modifier.padding(14.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                    modifier = Modifier.size(42.dp)
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                                    modifier = Modifier.size(52.dp)
                                 ) {
                                     if (!service.image.isNullOrEmpty()) {
                                         AsyncImage(
@@ -349,43 +350,68 @@ fun LaundryScreen(
                                             Icon(
                                                 Icons.Outlined.LocalLaundryService,
                                                 contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(24.dp)
                                             )
                                         }
                                     }
                                 }
-                                Spacer(Modifier.width(12.dp))
+                                Spacer(Modifier.width(14.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         service.name,
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontSize = 15.sp
                                     )
+                                    Spacer(Modifier.height(4.dp))
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
-                                        Text(
-                                            "Kategori: ${service.category}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
+                                        // Category Tag
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = if (service.category == "KILOAN") MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
+                                                    else MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f),
+                                            modifier = Modifier.padding(0.dp)
+                                        ) {
+                                            Text(
+                                                text = if (service.category == "KILOAN") "Kiloan" else "Satuan",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = if (service.category == "KILOAN") MaterialTheme.colorScheme.onSecondaryContainer
+                                                        else MaterialTheme.colorScheme.onTertiaryContainer,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                        
+                                        // Margin Tag
                                         val marginPercent = if (service.price > 0) ((service.price - service.costPrice) / service.price) * 100 else 0.0
-                                        Text(
-                                            "• Margin: ${String.format("%.0f", marginPercent)}%",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = if (marginPercent >= 0) Color(0xFF1F8B4C) else MaterialTheme.colorScheme.error,
-                                            fontWeight = FontWeight.Medium
-                                        )
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = if (marginPercent >= 0) Color(0xFFE2FBE7) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f)
+                                        ) {
+                                            Text(
+                                                text = "Margin: ${String.format("%.0f", marginPercent)}%",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = if (marginPercent >= 0) Color(0xFF1E824C) else MaterialTheme.colorScheme.onErrorContainer,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
                                     }
                                 }
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
                                     Column(horizontalAlignment = Alignment.End) {
                                         Text(
                                             Formatters.rupiah(service.price),
                                             fontWeight = FontWeight.Black,
                                             color = MaterialTheme.colorScheme.primary,
-                                            fontSize = 14.sp
+                                            fontSize = 15.sp
                                         )
                                         Text(
                                             "per ${service.unit}",
@@ -393,21 +419,27 @@ fun LaundryScreen(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
-                                    Spacer(Modifier.width(6.dp))
                                     IconButton(
                                         onClick = {
                                             viewModel.deleteService(service.id) {
                                                 Toast.makeText(context, "Layanan berhasil dihapus!", Toast.LENGTH_SHORT).show()
                                             }
                                         },
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier.size(28.dp)
                                     ) {
-                                        Icon(
-                                            Icons.Outlined.RemoveCircleOutline,
-                                            contentDescription = "Hapus Layanan",
-                                            tint = MaterialTheme.colorScheme.error,
-                                            modifier = Modifier.size(16.dp)
-                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .size(28.dp)
+                                                .background(MaterialTheme.colorScheme.error.copy(alpha = 0.08f), RoundedCornerShape(50)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                Icons.Outlined.Clear,
+                                                contentDescription = "Hapus Layanan",
+                                                tint = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -419,10 +451,10 @@ fun LaundryScreen(
             // Right pane: Laundry Shopping Cart Sidebar
             Surface(
                 modifier = Modifier
-                    .width(360.dp)
+                    .width(380.dp)
                     .fillMaxHeight(),
                 tonalElevation = 1.dp,
-                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
@@ -442,22 +474,29 @@ fun LaundryScreen(
                                     modifier = Modifier.fillParentMaxSize(),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text("Keranjang kosong.\nPilih layanan di kiri.", textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(
+                                        "Keranjang kosong.\nPilih layanan di kiri.", 
+                                        textAlign = TextAlign.Center, 
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                    )
                                 }
                             }
                         } else {
                             items(cart) { item ->
                                 Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.05f)),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(10.dp),
+                                        modifier = Modifier.padding(12.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Text(item.service.name, fontWeight = FontWeight.Bold, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Text(item.service.name, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Spacer(Modifier.height(2.dp))
                                             Text(
                                                 "${Formatters.rupiah(item.service.price)} / ${item.service.unit}",
                                                 fontSize = 11.sp,
@@ -466,7 +505,7 @@ fun LaundryScreen(
                                         }
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            horizontalArrangement = Arrangement.spacedBy(2.dp)
                                         ) {
                                             IconButton(
                                                 onClick = {
@@ -478,25 +517,57 @@ fun LaundryScreen(
                                                         cart.remove(item)
                                                     }
                                                 },
-                                                modifier = Modifier.size(24.dp)
+                                                modifier = Modifier.size(28.dp)
                                             ) {
-                                                Icon(Icons.Outlined.RemoveCircleOutline, null, modifier = Modifier.size(16.dp))
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(24.dp)
+                                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), RoundedCornerShape(50)),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        Icons.Outlined.RemoveCircleOutline, 
+                                                        null, 
+                                                        tint = MaterialTheme.colorScheme.primary, 
+                                                        modifier = Modifier.size(14.dp)
+                                                    )
+                                                }
                                             }
+                                            
                                             Text(
                                                 text = if (item.service.unit == "Kg") "%.1f".format(item.quantity) else item.quantity.toInt().toString(),
                                                 fontWeight = FontWeight.Bold,
-                                                fontSize = 12.sp
+                                                fontSize = 13.sp,
+                                                modifier = Modifier.padding(horizontal = 6.dp)
                                             )
-                                            Text(item.service.unit, fontSize = 10.sp)
-                                            TextButton(
+                                            Text(
+                                                item.service.unit, 
+                                                fontSize = 11.sp, 
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(end = 4.dp)
+                                            )
+                                            
+                                            IconButton(
                                                 onClick = {
                                                     val step = if (item.service.unit == "Kg") 0.5 else 1.0
                                                     val idx = cart.indexOf(item)
                                                     cart[idx] = item.copy(quantity = item.quantity + step)
                                                 },
-                                                modifier = Modifier.size(24.dp)
+                                                modifier = Modifier.size(28.dp)
                                             ) {
-                                                Text("+", fontWeight = FontWeight.Bold)
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(24.dp)
+                                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), RoundedCornerShape(50)),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        "+", 
+                                                        fontWeight = FontWeight.Bold, 
+                                                        color = MaterialTheme.colorScheme.primary, 
+                                                        fontSize = 13.sp
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -506,105 +577,147 @@ fun LaundryScreen(
                     }
 
                     Spacer(Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    
+                    // Customer Profile Card
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
                     ) {
-                        val isUmum = customerName == "Umum" && phone == ""
-                        Button(
-                            onClick = {
-                                customerName = "Umum"
-                                phone = ""
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isUmum) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (isUmum) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Umum (Walk-in)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Button(
-                            onClick = {
-                                showCustomerSelectionDialog = true
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (!isUmum) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (!isUmum) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Pilih/Tambah Pelanggan", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                "Profil Pelanggan", 
+                                style = MaterialTheme.typography.bodyMedium, 
+                                fontWeight = FontWeight.Bold, 
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                val isUmum = customerName == "Umum" && phone == ""
+                                Button(
+                                    onClick = {
+                                        customerName = "Umum"
+                                        phone = ""
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isUmum) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = if (isUmum) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                    ),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                    modifier = Modifier.weight(1f).height(32.dp)
+                                ) {
+                                    Text("Umum (Walk-in)", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Button(
+                                    onClick = {
+                                        showCustomerSelectionDialog = true
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (!isUmum) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = if (!isUmum) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                    ),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                    modifier = Modifier.weight(1f).height(32.dp)
+                                ) {
+                                    Text("Pilih Pelanggan", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            Spacer(Modifier.height(10.dp))
+
+                            OutlinedTextField(
+                                value = customerName,
+                                onValueChange = { customerName = it },
+                                label = { Text("Nama Pelanggan") },
+                                leadingIcon = { Icon(Icons.Outlined.People, null, modifier = Modifier.size(18.dp)) },
+                                singleLine = true,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth().testTag("laundry-cust-name")
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = phone,
+                                onValueChange = { phone = it },
+                                label = { Text("WhatsApp Pelanggan") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                singleLine = true,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth().testTag("laundry-phone")
+                            )
                         }
                     }
 
                     Spacer(Modifier.height(4.dp))
 
-                    OutlinedTextField(
-                        value = customerName,
-                        onValueChange = { customerName = it },
-                        label = { Text("Nama Pelanggan") },
-                        leadingIcon = { Icon(Icons.Outlined.People, null) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth().testTag("laundry-cust-name")
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    OutlinedTextField(
-                        value = phone,
-                        onValueChange = { phone = it },
-                        label = { Text("WhatsApp Pelanggan") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth().testTag("laundry-phone")
-                    )
-                    Spacer(Modifier.height(10.dp))
-
-                    // Date selection (Backdate)
-                    val calendar = java.util.Calendar.getInstance()
-                    if (rentDateMillis != null) {
-                        calendar.timeInMillis = rentDateMillis!!
-                    }
-                    val datePickerDialog = android.app.DatePickerDialog(
-                        context,
-                        { _, year, month, dayOfMonth ->
-                            val selectedCal = java.util.Calendar.getInstance()
-                            selectedCal.set(year, month, dayOfMonth)
-                            rentDateMillis = selectedCal.timeInMillis
-                        },
-                        calendar.get(java.util.Calendar.YEAR),
-                        calendar.get(java.util.Calendar.MONTH),
-                        calendar.get(java.util.Calendar.DAY_OF_MONTH)
-                    )
-
-                    val dateText = if (rentDateMillis != null) {
-                        val sdf = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
-                        sdf.format(Date(rentDateMillis!!))
-                    } else {
-                        "Hari Ini (Real-time)"
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    // Order Settings (Date selection & Subtotal) Card
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
                     ) {
-                        Text("Tanggal Order:", style = MaterialTheme.typography.bodyMedium)
-                        OutlinedButton(onClick = { datePickerDialog.show() }) {
-                            Text(dateText, fontSize = 12.sp)
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            // Date selection (Backdate)
+                            val calendar = java.util.Calendar.getInstance()
+                            if (rentDateMillis != null) {
+                                calendar.timeInMillis = rentDateMillis!!
+                            }
+                            val datePickerDialog = android.app.DatePickerDialog(
+                                context,
+                                { _, year, month, dayOfMonth ->
+                                    val selectedCal = java.util.Calendar.getInstance()
+                                    selectedCal.set(year, month, dayOfMonth)
+                                    rentDateMillis = selectedCal.timeInMillis
+                                },
+                                calendar.get(java.util.Calendar.YEAR),
+                                calendar.get(java.util.Calendar.MONTH),
+                                calendar.get(java.util.Calendar.DAY_OF_MONTH)
+                            )
+
+                            val dateText = if (rentDateMillis != null) {
+                                val sdf = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+                                sdf.format(Date(rentDateMillis!!))
+                            } else {
+                                "Hari Ini (Real-time)"
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Tanggal Order:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                                OutlinedButton(
+                                    onClick = { datePickerDialog.show() },
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                    modifier = Modifier.height(28.dp)
+                                ) {
+                                    Text(dateText, fontSize = 11.sp)
+                                }
+                            }
+                            
+                            Spacer(Modifier.height(8.dp))
+                            androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+                            Spacer(Modifier.height(8.dp))
+
+                            Row(
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Subtotal", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                                Text(Formatters.rupiah(cartSubtotal), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            }
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
 
-                    Row(
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Subtotal", style = MaterialTheme.typography.bodyMedium)
-                        Text(Formatters.rupiah(cartSubtotal), fontWeight = FontWeight.Bold)
-                    }
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(10.dp))
 
                     Button(
                         onClick = {
@@ -628,9 +741,10 @@ fun LaundryScreen(
                             }
                         },
                         enabled = cart.isNotEmpty(),
-                        modifier = Modifier.fillMaxWidth().testTag("btn-confirm-laundry")
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().height(46.dp).testTag("btn-confirm-laundry")
                     ) {
-                        Text("Buat Order Laundry", fontWeight = FontWeight.Bold)
+                        Text("Buat Order Laundry", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     }
                 }
             }

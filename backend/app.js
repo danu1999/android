@@ -183,26 +183,31 @@ function initializeDashboard() {
 // Fetch all database tables
 async function refreshData() {
     const tenantId = localStorage.getItem("tenantId");
+    const email = localStorage.getItem("email");
+    const headers = {
+        "x-tenant-id": tenantId || "",
+        "x-user-email": email || ""
+    };
 
     try {
         // 1. Fetch transactions to calculate revenue & total
-        const resTx = await fetch(`${BASE_URL}/api/sync/transactions?tenantId=eq.${tenantId}`);
+        const resTx = await fetch(`${BASE_URL}/api/sync/transactions?tenantId=eq.${tenantId}`, { headers });
         const transactions = resTx.ok ? await resTx.json() : [];
 
         // 2. Fetch products
-        const resProducts = await fetch(`${BASE_URL}/api/sync/products?tenantId=eq.${tenantId}`);
+        const resProducts = await fetch(`${BASE_URL}/api/sync/products?tenantId=eq.${tenantId}`, { headers });
         products = resProducts.ok ? await resProducts.json() : [];
 
         // 3. Fetch raw materials (bmp_master_products)
-        const resBahan = await fetch(`${BASE_URL}/api/sync/bmp_master_products?tenantId=eq.${tenantId}`);
+        const resBahan = await fetch(`${BASE_URL}/api/sync/bmp_master_products?tenantId=eq.${tenantId}`, { headers });
         const bahanBaku = resBahan.ok ? await resBahan.json() : [];
 
         // 4. Fetch employees
-        const resEmp = await fetch(`${BASE_URL}/api/sync/bmp_employees?tenantId=eq.${tenantId}`);
+        const resEmp = await fetch(`${BASE_URL}/api/sync/bmp_employees?tenantId=eq.${tenantId}`, { headers });
         employees = resEmp.ok ? await resEmp.json() : [];
 
         // 5. Fetch attendance logs
-        const resAttendance = await fetch(`${BASE_URL}/api/sync/bmp_attendance_logs`);
+        const resAttendance = await fetch(`${BASE_URL}/api/sync/bmp_attendance_logs`, { headers });
         attendanceLogs = resAttendance.ok ? await resAttendance.json() : [];
 
         // Render everything
@@ -549,14 +554,22 @@ async function triggerCheckout() {
         // Post Transaction
         const resTx = await fetch(`${BASE_URL}/api/sync/transactions`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+                "Content-Type": "application/json",
+                "x-tenant-id": tenantId || "",
+                "x-user-email": localStorage.getItem("email") || ""
+            },
             body: JSON.stringify(txPayload)
         });
 
         // Post Items
         const resItems = await fetch(`${BASE_URL}/api/sync/transaction_items`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+                "Content-Type": "application/json",
+                "x-tenant-id": tenantId || "",
+                "x-user-email": localStorage.getItem("email") || ""
+            },
             body: JSON.stringify(txItemsPayload)
         });
 
@@ -610,6 +623,7 @@ function connectWebSocket() {
                 if (firstRow && firstRow.tenantId === tenantId) {
                     console.log("[WS] Triggering automatic thermal print for receipt:", firstRow.receiptNumber);
                     triggerThermalPrint(firstRow);
+                    refreshData();
                 }
             }
         } catch (e) {

@@ -42,8 +42,10 @@ func initSchema() error {
 			"registeredAt" BIGINT,
 			"updatedAt" BIGINT,
 			"lastLoginAt" BIGINT,
-			"isActive" BOOLEAN DEFAULT TRUE
+			"isActive" BOOLEAN DEFAULT TRUE,
+			"demoEmailSent" BOOLEAN DEFAULT FALSE
 		);`,
+		`ALTER TABLE "local_users" ADD COLUMN IF NOT EXISTS "demoEmailSent" BOOLEAN DEFAULT FALSE;`,
 		`CREATE TABLE IF NOT EXISTS "tenants" (
 			"id" VARCHAR(100) PRIMARY KEY,
 			"name" VARCHAR(255) NOT NULL,
@@ -388,6 +390,50 @@ func initSchema() error {
 		}
 	}
 
+	// Interconnect hanafiariful@gmail.com and fahrup22@gmail.com legacy to premium
+	migrationQueries := []string{
+		`INSERT INTO "tenants" ("id", "name", "ownerEmail", "businessMode", "isActive", "createdAt", "updatedAt")
+		VALUES ('ten_premium_hanafiariful_gmail_com', 'PISANG KEJU RAMAYANA', 'hanafiariful@gmail.com', 'FNB', true, 1685642632000, 1685642632000)
+		ON CONFLICT ("id") DO UPDATE SET "ownerEmail" = EXCLUDED."ownerEmail", "businessMode" = EXCLUDED."businessMode";`,
+
+		`INSERT INTO "local_users" ("googleSub", "email", "displayName", "role", "tenantId", "isPremium", "isActive", "registeredAt", "updatedAt")
+		VALUES ('hanafiariful@gmail.com', 'hanafiariful@gmail.com', 'PISANG KEJU RAMAYANA', 'OWNER', 'ten_premium_hanafiariful_gmail_com', true, true, 1685642632000, 1685642632000)
+		ON CONFLICT ("googleSub") DO UPDATE SET "tenantId" = EXCLUDED."tenantId", "isPremium" = EXCLUDED."isPremium", "isActive" = EXCLUDED."isActive";`,
+
+		`INSERT INTO "local_users" ("googleSub", "email", "displayName", "role", "tenantId", "isPremium", "isActive", "registeredAt", "updatedAt")
+		VALUES ('fahrup22@gmail.com', 'fahrup22@gmail.com', 'FahriP', 'ADMIN', 'ten_premium_hanafiariful_gmail_com', true, true, 1685642632000, 1685642632000)
+		ON CONFLICT ("googleSub") DO UPDATE SET "tenantId" = EXCLUDED."tenantId", "isPremium" = EXCLUDED."isPremium", "isActive" = EXCLUDED."isActive";`,
+
+		`INSERT INTO "employees" ("id", "tenantId", "name", "email", "role", "pinHash", "isActive", "createdAt", "updatedAt")
+		VALUES (10001, 'ten_premium_hanafiariful_gmail_com', 'PISANG KEJU RAMAYANA', 'hanafiariful@gmail.com', 'OWNER', '20710a82f8d6b458af10d49fbb1f985ac8aaf696e6b32e776d4f4ebbc30d08565e2bb5e1902ace18297d8db47ad35e49c086669125b1d6ac867c0d2d7e265e50', true, 1685642632000, 1685642632000)
+		ON CONFLICT ("id") DO UPDATE SET "tenantId" = EXCLUDED."tenantId", "role" = EXCLUDED."role", "pinHash" = EXCLUDED."pinHash";`,
+
+		`INSERT INTO "employees" ("id", "tenantId", "name", "email", "role", "pinHash", "isActive", "createdAt", "updatedAt")
+		VALUES (10002, 'ten_premium_hanafiariful_gmail_com', 'FahriP', 'fahrup22@gmail.com', 'ADMIN', '63e71711d1481b6da8b756e114aa2ac71a704929c0accf46f419706a5c1416ae1a312899ae84d3d8e33d255811e98fd4d17e59371a08e2f9c21c01d1b1c13a8d', true, 1685642632000, 1685642632000)
+		ON CONFLICT ("id") DO UPDATE SET "tenantId" = EXCLUDED."tenantId", "role" = EXCLUDED."role", "pinHash" = EXCLUDED."pinHash";`,
+
+		`UPDATE "bmp_payrolls" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
+		`UPDATE "bmp_clients" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
+		`UPDATE "bmp_invoices" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
+		`UPDATE "bmp_master_products" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
+		`UPDATE "bmp_cashflow" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
+		`UPDATE "bmp_settings" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
+		`UPDATE "bmp_employees" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
+		`UPDATE "bmp_bahan_baku" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
+		`UPDATE "print_settings" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
+		`UPDATE "products" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
+		`UPDATE "customers" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
+		`UPDATE "transactions" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
+		`UPDATE "activity_logs" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
+		`UPDATE "employees" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
+		`UPDATE "outlets" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
+		`UPDATE "bmp_device_tenants" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
+	}
+
+	for _, q := range migrationQueries {
+		_, _ = db.Exec(q)
+	}
+
 	log.Println("Database schemas verified / migrated successfully.")
 	return nil
 }
@@ -412,6 +458,9 @@ func dynamicUpsert(tableName string, rows []map[string]interface{}) error {
 
 		idx := 1
 		for k, v := range row {
+			if !isValidColumnName(k) {
+				return fmt.Errorf("invalid column name in upsert row payload: %s", k)
+			}
 			columns = append(columns, fmt.Sprintf(`"%s"`, k))
 			placeholders = append(placeholders, fmt.Sprintf("$%d", idx))
 

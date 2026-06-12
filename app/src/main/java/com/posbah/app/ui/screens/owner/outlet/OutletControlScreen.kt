@@ -69,6 +69,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.posbah.app.data.local.entities.Employee
 import com.posbah.app.ui.components.PosBahTopBar
 import com.posbah.app.util.Formatters
+import com.posbah.app.data.local.entities.Outlet
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.outlined.Edit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,10 +82,13 @@ fun OutletControlScreen(
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
 
-    var showAddOutletDialog by remember { mutableStateOf(false) }
-    var newOutletName by remember { mutableStateOf("") }
-    var newOutletAddress by remember { mutableStateOf("") }
-    var newOutletPhone by remember { mutableStateOf("") }
+    var showOutletDialog by remember { mutableStateOf(false) }
+    var editingOutlet by remember { mutableStateOf<Outlet?>(null) }
+    var outletName by remember { mutableStateOf("") }
+    var outletAddress by remember { mutableStateOf("") }
+    var outletPhone by remember { mutableStateOf("") }
+    var outletEmployee by remember { mutableStateOf("") }
+    var showEmployeeListDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.error) {
         state.error?.let { err ->
@@ -99,10 +105,12 @@ fun OutletControlScreen(
                 actions = {
                     if (state.outlets.size < 3) {
                         IconButton(onClick = {
-                            newOutletName = ""
-                            newOutletAddress = ""
-                            newOutletPhone = ""
-                            showAddOutletDialog = true
+                            editingOutlet = null
+                            outletName = ""
+                            outletAddress = ""
+                            outletPhone = ""
+                            outletEmployee = ""
+                            showOutletDialog = true
                         }) {
                             Icon(Icons.Outlined.Add, contentDescription = "Tambah Outlet")
                         }
@@ -144,7 +152,15 @@ fun OutletControlScreen(
                         summary = summary,
                         allEmployees = state.employees,
                         onToggleStatus = { viewModel.toggleOutletStatus(summary.outlet.id) },
-                        onAssignEmployee = { empName -> viewModel.assignEmployee(summary.outlet.id, empName) }
+                        onAssignEmployee = { empName -> viewModel.assignEmployee(summary.outlet.id, empName) },
+                        onEditClick = {
+                            editingOutlet = summary.outlet
+                            outletName = summary.outlet.name
+                            outletAddress = summary.outlet.address.orEmpty()
+                            outletPhone = summary.outlet.phone.orEmpty()
+                            outletEmployee = summary.activeEmployeeName.takeIf { it != "-" }.orEmpty()
+                            showOutletDialog = true
+                        }
                     )
                 }
 
@@ -153,10 +169,12 @@ fun OutletControlScreen(
                     item {
                         Card(
                             onClick = {
-                                newOutletName = ""
-                                newOutletAddress = ""
-                                newOutletPhone = ""
-                                showAddOutletDialog = true
+                                editingOutlet = null
+                                outletName = ""
+                                outletAddress = ""
+                                outletPhone = ""
+                                outletEmployee = ""
+                                showOutletDialog = true
                             },
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
@@ -255,49 +273,197 @@ fun OutletControlScreen(
         }
     }
 
-    // Add Outlet Dialog
-    if (showAddOutletDialog) {
+    // Add/Edit Outlet Dialog
+    if (showOutletDialog) {
+        var employeeDropdownExpanded by remember { mutableStateOf(false) }
         AlertDialog(
-            onDismissRequest = { showAddOutletDialog = false },
-            title = { Text("Tambah Outlet Baru") },
+            onDismissRequest = { showOutletDialog = false },
+            title = { Text(if (editingOutlet == null) "Tambah Outlet Baru" else "Edit Detail Outlet") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Warning banner if no employees
+                    if (state.employees.isEmpty()) {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer
+                            ),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Outlined.People,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Tambahkan karyawan terlebih dahulu (bisa admin, bisa kasir)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+
                     OutlinedTextField(
-                        value = newOutletName,
-                        onValueChange = { newOutletName = it },
+                        value = outletName,
+                        onValueChange = { outletName = it },
                         label = { Text("Nama Outlet") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
-                        value = newOutletAddress,
-                        onValueChange = { newOutletAddress = it },
-                        label = { Text("Alamat (Opsional)") },
+                        value = outletAddress,
+                        onValueChange = { outletAddress = it },
+                        label = { Text("Lokasi Outlet (Alamat)") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
-                        value = newOutletPhone,
-                        onValueChange = { newOutletPhone = it },
+                        value = outletPhone,
+                        onValueChange = { outletPhone = it },
                         label = { Text("Nomor Telepon (Opsional)") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    // Employee assignment selector
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = if (outletEmployee.isBlank()) "- Kosong -" else outletEmployee,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Karyawan Outlet") },
+                            trailingIcon = {
+                                IconButton(onClick = { employeeDropdownExpanded = true }) {
+                                    Text("▾", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { employeeDropdownExpanded = true }
+                        )
+                        DropdownMenu(
+                            expanded = employeeDropdownExpanded,
+                            onDismissRequest = { employeeDropdownExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("- Kosong -") },
+                                onClick = {
+                                    outletEmployee = ""
+                                    employeeDropdownExpanded = false
+                                }
+                            )
+                            state.employees.forEach { emp ->
+                                DropdownMenuItem(
+                                    text = { Text(emp.name) },
+                                    onClick = {
+                                        outletEmployee = emp.name
+                                        employeeDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Button to view registered employees list
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(
+                            onClick = { showEmployeeListDialog = true }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.People,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("List Karyawan")
+                        }
+                    }
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.createOutlet(newOutletName, newOutletAddress, newOutletPhone)
-                        showAddOutletDialog = false
+                        val currentEditing = editingOutlet
+                        if (currentEditing == null) {
+                            viewModel.createOutlet(outletName, outletAddress, outletPhone, outletEmployee)
+                        } else {
+                            viewModel.updateOutlet(currentEditing.id, outletName, outletAddress, outletPhone, outletEmployee)
+                        }
+                        showOutletDialog = false
                     }
                 ) {
-                    Text("Tambah")
+                    Text(if (editingOutlet == null) "Tambah" else "Simpan")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showAddOutletDialog = false }) {
+                TextButton(onClick = { showOutletDialog = false }) {
                     Text("Batal")
+                }
+            }
+        )
+    }
+
+    // List of Employees sub-dialog
+    if (showEmployeeListDialog) {
+        AlertDialog(
+            onDismissRequest = { showEmployeeListDialog = false },
+            title = { Text("Daftar Karyawan") },
+            text = {
+                if (state.employees.isEmpty()) {
+                    Text("Belum ada karyawan terdaftar.")
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.heightIn(max = 300.dp)
+                    ) {
+                        items(state.employees) { emp ->
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(emp.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge)
+                                        Text(emp.email.orEmpty(), style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                    }
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = if (emp.role == "ADMIN") MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer,
+                                        contentColor = if (emp.role == "ADMIN") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
+                                    ) {
+                                        Text(
+                                            text = emp.role,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showEmployeeListDialog = false }) {
+                    Text("Tutup")
                 }
             }
         )
@@ -309,11 +475,13 @@ fun OutletCard(
     summary: OutletSummary,
     allEmployees: List<Employee>,
     onToggleStatus: () -> Unit,
-    onAssignEmployee: (String) -> Unit
+    onAssignEmployee: (String) -> Unit,
+    onEditClick: () -> Unit
 ) {
     var employeeMenuExpanded by remember { mutableStateOf(false) }
 
     Card(
+        onClick = onEditClick,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
@@ -327,7 +495,10 @@ fun OutletCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Icon(
                         Icons.Outlined.Storefront,
                         contentDescription = null,
@@ -354,6 +525,18 @@ fun OutletCard(
                                 fontWeight = FontWeight.Bold
                             )
                         }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    IconButton(
+                        onClick = onEditClick,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Edit,
+                            contentDescription = "Edit Detail",
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
                 }
 

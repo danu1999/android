@@ -47,7 +47,7 @@ class AdminViewModel @Inject constructor(
 
     companion object {
         private const val BASE_URL = "https://www.zedmz.cloud"
-        private const val AUTH_TOKEN = "Bearer BahteraMigrate123!"
+        private val AUTH_TOKEN = com.posbah.app.BuildConfig.ADMIN_AUTH_TOKEN
     }
 
     init {

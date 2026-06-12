@@ -22,7 +22,11 @@ data class LoginUiState(
     val errorMessage: String? = null,
     val signedInUser: LocalUser? = null,
     val needsTenantPicker: Pair<LocalUser, List<Tenant>>? = null,
-    val locked: Boolean = false
+    val locked: Boolean = false,
+    val updateVersion: String? = null,
+    val updateDescription: String? = null,
+    val isCheckingUpdate: Boolean = false,
+    val showUpdateDialog: Boolean = false
 )
 
 enum class LoginMode { Google, Pin }
@@ -45,10 +49,10 @@ class LoginViewModel @Inject constructor(
 
     fun consumeError() = _uiState.update { it.copy(errorMessage = null) }
 
-    fun signInWithGoogle(activity: Activity, simulatedEmail: String? = null, simulatedName: String? = null) {
+    fun signInWithGoogle(activity: Activity) {
         _uiState.update { it.copy(isLoading = true, errorMessage = null) }
         viewModelScope.launch {
-            when (val outcome = authRepository.loginWithGoogle(activity, simulatedEmail, simulatedName)) {
+            when (val outcome = authRepository.loginWithGoogle(activity)) {
                 is AuthRepository.LoginOutcome.Success ->
                     _uiState.update { it.copy(isLoading = false, signedInUser = outcome.user) }
                 is AuthRepository.LoginOutcome.NeedsTenantPick ->
@@ -65,19 +69,7 @@ class LoginViewModel @Inject constructor(
         }
     }
 
-    fun confirmPayment(userEmail: String, confirmEmail: String, onDone: (Boolean) -> Unit) {
-        viewModelScope.launch {
-            val success = authRepository.confirmPaymentAndUpgrade(userEmail, confirmEmail)
-            onDone(success)
-        }
-    }
 
-    fun fastForwardDemo(email: String, onDone: () -> Unit) {
-        viewModelScope.launch {
-            authRepository.fastForwardDemoTime(email)
-            onDone()
-        }
-    }
 
     fun signInWithPin() {
         val s = _uiState.value
@@ -123,5 +115,57 @@ class LoginViewModel @Inject constructor(
                 _uiState.update { it.copy(signedInUser = u, needsTenantPicker = null) }
             }
         }
+    }
+
+    fun checkForUpdates() {
+        _uiState.update { it.copy(isCheckingUpdate = true, errorMessage = null) }
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            var conn: java.net.HttpURLConnection? = null
+            try {
+                val url = java.net.URL("https://www.zedmz.cloud/api/apk-version")
+                conn = url.openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+                
+                if (conn.responseCode in 200..299) {
+                    val response = conn.inputStream.bufferedReader().use { it.readText() }
+                    val obj = org.json.JSONObject(response)
+                    val version = obj.optString("version", "")
+                    val description = obj.optString("description", "")
+                    
+                    _uiState.update {
+                        it.copy(
+                            isCheckingUpdate = false,
+                            updateVersion = version,
+                            updateDescription = description,
+                            showUpdateDialog = true
+                        )
+                    }
+                } else {
+                    val code = conn.responseCode
+                    _uiState.update {
+                        it.copy(
+                            isCheckingUpdate = false,
+                            errorMessage = "Gagal mengecek update: Server merespon $code"
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                val msg = e.localizedMessage ?: "Koneksi gagal"
+                _uiState.update {
+                    it.copy(
+                        isCheckingUpdate = false,
+                        errorMessage = "Gagal mengecek update: $msg"
+                    )
+                }
+            } finally {
+                conn?.disconnect()
+            }
+        }
+    }
+
+    fun dismissUpdateDialog() {
+        _uiState.update { it.copy(showUpdateDialog = false) }
     }
 }

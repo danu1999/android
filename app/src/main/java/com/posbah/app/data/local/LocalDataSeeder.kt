@@ -230,7 +230,7 @@ class LocalDataSeeder @Inject constructor(
                                 val id = rowMap["id"]?.toLongOrNull() ?: 0L
                                 val receiptNumber = rowMap["receiptNumber"] ?: continue
                                 if (receiptNumber.isBlank() || receiptNumber == "\\N") continue
-                                val dateMs = rowMap["date"]?.toLongOrNull() ?: System.currentTimeMillis()
+                                val dateMs = parseSqlTimestamp(rowMap["date"])
                                 val subtotal = rowMap["subtotal"]?.toDoubleOrNull() ?: 0.0
                                 val discountAmt = rowMap["discountAmt"]?.toDoubleOrNull() ?: 0.0
                                 val total = rowMap["total"]?.toDoubleOrNull() ?: subtotal
@@ -646,7 +646,14 @@ class LocalDataSeeder @Inject constructor(
                 try {
                     db.transactionDao().insert(tx)
                 } catch (e: Exception) {
-                    // Skip duplicate receiptNumber on conflict
+                    // REPLACE strategy handles duplicates; exception means a different error
+                }
+                // Always forcefully correct the date — guarantees stale System.currentTimeMillis()
+                // dates from the original seeding bug are overwritten with the correct SQL dates.
+                try {
+                    db.transactionDao().updateDateByReceiptNumber(tx.receiptNumber, tx.date)
+                } catch (e: Exception) {
+                    // Ignore — best-effort correction
                 }
             }
         }
@@ -704,14 +711,435 @@ class LocalDataSeeder @Inject constructor(
                 db.bmpPayrollDao().insert(item)
             }
         }
-        if (bmpBahanBakuList.isNotEmpty()) {
-            for (item in bmpBahanBakuList) {
-                db.bmpBahanBakuDao().insert(item)
-            }
-        }
         if (bmpBahanBakuItemList.isNotEmpty()) {
             db.bmpBahanBakuItemDao().insertAll(bmpBahanBakuItemList)
         }
+
+        if (tenantId.startsWith("demo_tenant_")) {
+            val isBmp = tenantId.endsWith("_BMP") || tenant?.businessMode == "BMP"
+            if (isBmp) {
+                // 1. Generate PT. Globalindo as client
+                val clientId = 888888L
+                val bmpClient = BmpClientEntity(
+                    id = clientId,
+                    tenantId = tenantId,
+                    outletId = outletId,
+                    clientName = "PT. Globalindo Manufaktur Jaya",
+                    saldoTitipan = 0.0,
+                    addressLine1 = "Kawasan Industri MM2100, Blok C-10, Cikarang",
+                    province = "Jawa Barat",
+                    postalCode = "17530",
+                    phoneNumber = "628119876543",
+                    emailAddress = "info@globalindo.co.id",
+                    taxNumber = "01.234.567.8-012.000",
+                    uniqueID = "client-globalindo",
+                    slug = "pt-globalindo-manufaktur-jaya",
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
+                )
+                db.bmpClientDao().upsert(bmpClient)
+
+                // 2. Generate BMP Employees (Karyawan Kerja)
+                val emp1 = BmpEmployeeEntity(
+                    id = 888881L,
+                    tenantId = tenantId,
+                    name = "Budi Santoso (Operator)",
+                    position = "OPERATOR MESIN 1",
+                    salaryAmount = 4500000.0,
+                    isActive = true,
+                    fingerprintPIN = "1122",
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
+                )
+                val emp2 = BmpEmployeeEntity(
+                    id = 888882L,
+                    tenantId = tenantId,
+                    name = "Siti Aminah (QC)",
+                    position = "QUALITY CONTROL",
+                    salaryAmount = 4800000.0,
+                    isActive = true,
+                    fingerprintPIN = "3344",
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
+                )
+                db.bmpEmployeeDao().upsert(emp1)
+                db.bmpEmployeeDao().upsert(emp2)
+
+                // 3. Generate Invoice of 1 Billion Rupiah (1.000.000.000)
+                val invoiceId = 888888L
+                val bmpInvoice = BmpInvoiceEntity(
+                    id = invoiceId,
+                    tenantId = tenantId,
+                    outletId = outletId,
+                    clientId = clientId,
+                    title = "Faktur Penjualan Botol Plastik PET Premium",
+                    number = "INV/2026/06/001",
+                    dueDate = System.currentTimeMillis() + 14 * 24 * 60 * 60 * 1000L,
+                    paymentTerms = "14 days",
+                    status = "PAID",
+                    notes = "Pesanan masal botol plastik untuk kebutuhan produksi teh kemasan.",
+                    totalAmount = 1000000000.0,
+                    paidAmount = 1000000000.0,
+                    uniqueID = "invoice-globalindo-1b",
+                    slug = "inv-2026-06-001",
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
+                )
+                db.bmpInvoiceDao().insert(bmpInvoice)
+
+                // 4. Products under the 1 Billion invoice
+                val prod1 = BmpProductEntity(
+                    id = 888881L,
+                    tenantId = tenantId,
+                    invoiceId = invoiceId,
+                    masterItemID = 1L,
+                    title = "Botol Plastik PET 500ml (Premium)",
+                    unit = "pcs",
+                    price = 1000.0,
+                    jumlahLusin = 1.0,
+                    quantity = 500000.0,
+                    isKhusus = false,
+                    hargaBeli = 600.0,
+                    currency = "Rp",
+                    uniqueID = "inv-prod-500ml",
+                    slug = "botol-plastik-pet-500ml-premium",
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
+                )
+                val prod2 = BmpProductEntity(
+                    id = 888882L,
+                    tenantId = tenantId,
+                    invoiceId = invoiceId,
+                    masterItemID = 2L,
+                    title = "Botol Plastik PET 250ml (Premium)",
+                    unit = "pcs",
+                    price = 1000.0,
+                    jumlahLusin = 1.0,
+                    quantity = 500000.0,
+                    isKhusus = false,
+                    hargaBeli = 650.0,
+                    currency = "Rp",
+                    uniqueID = "inv-prod-250ml",
+                    slug = "botol-plastik-pet-250ml-premium",
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
+                )
+                db.bmpProductDao().insertAll(listOf(prod1, prod2))
+
+                // 5. Payment record of 1 Billion Rupiah
+                val paymentId = 888888L
+                val bmpPayment = BmpInvoicePaymentEntity(
+                    id = paymentId,
+                    tenantId = tenantId,
+                    invoiceId = invoiceId,
+                    paymentDate = System.currentTimeMillis(),
+                    paymentAmount = 1000000000.0,
+                    paymentMethod = "TRANSFER",
+                    notes = "Pelunasan via transfer Bank Mandiri",
+                    createdAt = System.currentTimeMillis()
+                )
+                db.bmpPaymentDao().insert(bmpPayment)
+
+                // 6. Cash flow entry of 1 Billion Rupiah
+                val cashflowId = 888888L
+                val bmpCashflow = BmpCashFlowEntity(
+                    id = cashflowId,
+                    tenantId = tenantId,
+                    transactionDate = System.currentTimeMillis(),
+                    transactionType = "MASUK",
+                    description = "Pelunasan Invoice INV/2026/06/001 - PT. Globalindo",
+                    amount = 1000000000.0,
+                    paymentRefId = paymentId,
+                    createdAt = System.currentTimeMillis()
+                )
+                db.bmpCashFlowDao().insert(bmpCashflow)
+
+            } else {
+                // POS Mode (FNB / RENTAL / LAUNDRY) -> Generate transactions > 30M
+                // 1. Outlet Employees (Kasir)
+                val cashier1 = Employee(
+                    id = 888881L,
+                    tenantId = tenantId,
+                    outletId = outletId,
+                    name = "Lani Kasir (FNB)",
+                    email = "lani@kasir.com",
+                    role = "KASIR",
+                    pinHash = "123456",
+                    salary = 3000000.0
+                )
+                val cashier2 = Employee(
+                    id = 888882L,
+                    tenantId = tenantId,
+                    outletId = outletId,
+                    name = "Rian Kasir (ARMADA)",
+                    email = "rian@kasir.com",
+                    role = "KASIR",
+                    pinHash = "123456",
+                    salary = 3200000.0
+                )
+                db.employeeDao().insert(cashier1)
+                db.employeeDao().insert(cashier2)
+
+                // 2. Customers
+                val cust1 = CustomerEntity(
+                    id = 888881L,
+                    tenantId = tenantId,
+                    name = "Hotel Santika Sidoarjo",
+                    phone = "08123456789",
+                    address = "Jl. Raya Sidoarjo No. 10"
+                )
+                val cust2 = CustomerEntity(
+                    id = 888882L,
+                    tenantId = tenantId,
+                    name = "Catering Bu Endang",
+                    phone = "08776543210",
+                    address = "Kec. Waru, Sidoarjo"
+                )
+                db.customerDao().insertAll(listOf(cust1, cust2))
+
+                // 3. Products matching POS system
+                val fnbProd = ProductEntity(
+                    id = 888881L,
+                    tenantId = tenantId,
+                    outletId = outletId,
+                    name = "Paket Catering Bento Box Premium",
+                    price = 150000.0,
+                    costPrice = 80000.0,
+                    stock = 500,
+                    unit = "pax",
+                    barcode = "FNB-001",
+                    category = "CATERING"
+                )
+                val rentalProd = ProductEntity(
+                    id = 888882L,
+                    tenantId = tenantId,
+                    outletId = outletId,
+                    name = "Sewa Toyota Alphard + Sopir (24 Jam)",
+                    price = 2500000.0,
+                    costPrice = 1200000.0,
+                    stock = 5,
+                    unit = "hari",
+                    barcode = "RNT-001",
+                    category = "MOBIL"
+                )
+                val laundryProd = ProductEntity(
+                    id = 888883L,
+                    tenantId = tenantId,
+                    outletId = outletId,
+                    name = "Paket Cuci Setrika Bedcover Hotel",
+                    price = 50000.0,
+                    costPrice = 20000.0,
+                    stock = 1000,
+                    unit = "pcs",
+                    barcode = "LND-001",
+                    category = "SATUAN"
+                )
+                db.productDao().insertAll(listOf(fnbProd, rentalProd, laundryProd))
+
+                // 4. Generate transactions totalling 35,500,000 IDR
+                val startMs = System.currentTimeMillis() - 5 * 24 * 60 * 60 * 1000L // 5 days ago
+                val newTxs = mutableListOf<TransactionEntity>()
+                val newTxItems = mutableListOf<TransactionItemEntity>()
+
+                var txIndex = 888881L
+                var txItemIndex = 888881L
+
+                // Catering Transactions (10 * 1.5M = 15M)
+                for (i in 0 until 10) {
+                    val date = startMs + i * 8 * 60 * 60 * 1000L
+                    val subtotal = 150000.0 * 10
+                    val total = subtotal
+                    val receiptNumber = "TX-CAT-${10000 + i}"
+                    
+                    newTxs.add(
+                        TransactionEntity(
+                            id = txIndex,
+                            tenantId = tenantId,
+                            outletId = outletId,
+                            employeeId = 888881L,
+                            customerId = 888882L,
+                            customerName = "Catering Bu Endang",
+                            receiptNumber = receiptNumber,
+                            date = date,
+                            subtotal = subtotal,
+                            discountAmt = 0.0,
+                            total = total,
+                            discount = 0.0,
+                            paymentMethod = "TRANSFER",
+                            type = "SALES",
+                            status = "COMPLETED",
+                            createdAt = date,
+                            updatedAt = date
+                        )
+                    )
+                    newTxItems.add(
+                        TransactionItemEntity(
+                            id = txItemIndex++,
+                            transactionId = txIndex,
+                            productId = 888881L,
+                            variantId = null,
+                            variantName = null,
+                            quantity = 10,
+                            price = 150000.0,
+                            costPrice = 80000.0,
+                            discount = 0.0,
+                            note = "Pesanan Bento Box Acara Arisan"
+                        )
+                    )
+                    txIndex++
+                }
+
+                // Rental Transactions (8 * 2.5M = 20M)
+                for (i in 0 until 8) {
+                    val date = startMs + i * 12 * 60 * 60 * 1000L + 4 * 60 * 60 * 1000L
+                    val subtotal = 2500000.0
+                    val total = subtotal
+                    val receiptNumber = "TX-RNT-${20000 + i}"
+
+                    newTxs.add(
+                        TransactionEntity(
+                            id = txIndex,
+                            tenantId = tenantId,
+                            outletId = outletId,
+                            employeeId = 888882L,
+                            customerId = 888881L,
+                            customerName = "Hotel Santika Sidoarjo",
+                            receiptNumber = receiptNumber,
+                            date = date,
+                            subtotal = subtotal,
+                            discountAmt = 0.0,
+                            total = total,
+                            discount = 0.0,
+                            paymentMethod = "CASH",
+                            type = "SALES",
+                            status = "COMPLETED",
+                            createdAt = date,
+                            updatedAt = date
+                        )
+                    )
+                    newTxItems.add(
+                        TransactionItemEntity(
+                            id = txItemIndex++,
+                            transactionId = txIndex,
+                            productId = 888882L,
+                            variantId = null,
+                            variantName = null,
+                            quantity = 1,
+                            price = 2500000.0,
+                            costPrice = 1200000.0,
+                            discount = 0.0,
+                            note = "Sewa Alphard Tamu VVIP Hotel"
+                        )
+                    )
+                    txIndex++
+                }
+
+                // Laundry Transactions (10 * 50k = 500k)
+                for (i in 0 until 10) {
+                    val date = startMs + i * 6 * 60 * 60 * 1000L
+                    val subtotal = 50000.0
+                    val total = subtotal
+                    val receiptNumber = "TX-LND-${30000 + i}"
+
+                    newTxs.add(
+                        TransactionEntity(
+                            id = txIndex,
+                            tenantId = tenantId,
+                            outletId = outletId,
+                            employeeId = 888881L,
+                            customerId = 888881L,
+                            customerName = "Hotel Santika Sidoarjo",
+                            receiptNumber = receiptNumber,
+                            date = date,
+                            subtotal = subtotal,
+                            discountAmt = 0.0,
+                            total = total,
+                            discount = 0.0,
+                            paymentMethod = "CASH",
+                            type = "SALES",
+                            status = "COMPLETED",
+                            createdAt = date,
+                            updatedAt = date
+                        )
+                    )
+                    newTxItems.add(
+                        TransactionItemEntity(
+                            id = txItemIndex++,
+                            transactionId = txIndex,
+                            productId = 888883L,
+                            variantId = null,
+                            variantName = null,
+                            quantity = 1,
+                            price = 50000.0,
+                            costPrice = 20000.0,
+                            discount = 0.0,
+                            note = "Cuci Kilat Sprei Kamar Suite"
+                        )
+                    )
+                    txIndex++
+                }
+
+                for (tx in newTxs) {
+                    try {
+                        db.transactionDao().insert(tx)
+                    } catch (e: Exception) {}
+                }
+                db.transactionItemDao().insertAll(newTxItems)
+            }
+        }
+
+        // Auto-seed static premium employees for hanafiariful's tenant
+        if (tenantId == "ten_premium_hanafiariful_gmail_com" || tenantId == "hanafiariful@gmail.com") {
+            val staticEmployees = listOf(
+                Employee(
+                    id = 10002L,
+                    tenantId = "ten_premium_hanafiariful_gmail_com",
+                    outletId = outletId,
+                    name = "FahriP",
+                    email = "fahrup22@gmail.com",
+                    role = "ADMIN",
+                    pinHash = "63e71711d1481b6da8b756e114aa2ac71a704929c0accf46f419706a5c1416ae1a312899ae84d3d8e33d255811e98fd4d17e59371a08e2f9c21c01d1b1c13a8d",
+                    salary = 3000000.0,
+                    isActive = true,
+                    payPeriod = "MONTHLY",
+                    emailVerified = true
+                ),
+                Employee(
+                    id = 10003L,
+                    tenantId = "ten_premium_hanafiariful_gmail_com",
+                    outletId = outletId,
+                    name = "Mamet PKR",
+                    email = "alfarisirosi40@gmail.com",
+                    role = "KASIR",
+                    pinHash = "a10301e4a133374bddc5f4f246aead30ba95b4f60c65df80418df2c6338141c9606262b07348fb0ee75964d460de3a459377217afa4b85b7bde3f8572d3b791c",
+                    salary = 2500000.0,
+                    isActive = true,
+                    payPeriod = "MONTHLY",
+                    emailVerified = true
+                ),
+                Employee(
+                    id = 10004L,
+                    tenantId = "ten_premium_hanafiariful_gmail_com",
+                    outletId = outletId,
+                    name = "Mamet PKR",
+                    email = "alfarisirosi04@gmail.com",
+                    role = "KASIR",
+                    pinHash = "a10301e4a133374bddc5f4f246aead30ba95b4f60c65df80418df2c6338141c9606262b07348fb0ee75964d460de3a459377217afa4b85b7bde3f8572d3b791c",
+                    salary = 2500000.0,
+                    isActive = true,
+                    payPeriod = "MONTHLY",
+                    emailVerified = true
+                )
+            )
+            for (emp in staticEmployees) {
+                try {
+                    db.employeeDao().insert(emp)
+                } catch (e: java.lang.Exception) {
+                    android.util.Log.e("LocalDataSeeder", "Error inserting static employee ${emp.email}", e)
+                }
+            }
+        }
+
         } catch (e: Exception) {
             android.util.Log.e("LocalDataSeeder", "Error during seedFromSqlDump execution", e)
         }

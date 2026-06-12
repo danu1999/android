@@ -42,12 +42,14 @@ data class ProductEntity(
     tableName = "customers",
     indices = [
         Index(value = ["tenantId"]),
-        Index(value = ["name", "tenantId"], unique = true)
+        Index(value = ["outletId"]),
+        Index(value = ["name", "tenantId", "outletId"], unique = true)
     ]
 )
 data class CustomerEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val tenantId: String,
+    val outletId: Long? = null,
     val name: String,
     val phone: String? = null,
     val address: String? = null,

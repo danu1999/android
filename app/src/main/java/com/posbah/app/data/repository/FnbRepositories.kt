@@ -19,8 +19,24 @@ import javax.inject.Singleton
 class ProductRepository @Inject constructor(
     private val productDao: ProductDao
 ) {
+    // ── Tenant-level ─────────────────────────────────────────────────────────
     fun observe(tenantId: String): Flow<List<ProductEntity>> = productDao.observe(tenantId)
     suspend fun list(tenantId: String): List<ProductEntity> = productDao.list(tenantId)
+
+    // ── Outlet-level (strict isolation) ──────────────────────────────────────
+    /**
+     * Observe produk untuk outlet tertentu.
+     * Produk yang outletId-nya NULL juga termasuk (data lama sebelum isolasi penuh).
+     */
+    fun observeForOutlet(tenantId: String, outletId: Long): Flow<List<ProductEntity>> =
+        productDao.observeForOutlet(tenantId, outletId)
+
+    suspend fun listForOutlet(tenantId: String, outletId: Long): List<ProductEntity> =
+        productDao.listForOutlet(tenantId, outletId)
+
+    fun searchForOutlet(tenantId: String, outletId: Long, query: String): Flow<List<ProductEntity>> =
+        productDao.searchForOutlet(tenantId, outletId, query)
+
     suspend fun getById(id: Long): ProductEntity? = productDao.getById(id)
     suspend fun getByBarcode(tenantId: String, barcode: String): ProductEntity? = productDao.getByBarcode(tenantId, barcode)
     fun search(tenantId: String, query: String): Flow<List<ProductEntity>> = productDao.search(tenantId, query)
@@ -33,8 +49,21 @@ class ProductRepository @Inject constructor(
 class CustomerRepository @Inject constructor(
     private val customerDao: CustomerDao
 ) {
+    // ── Tenant-level ─────────────────────────────────────────────────────────
     fun observe(tenantId: String): Flow<List<CustomerEntity>> = customerDao.observe(tenantId)
     suspend fun list(tenantId: String): List<CustomerEntity> = customerDao.list(tenantId)
+
+    // ── Outlet-level (strict isolation) ──────────────────────────────────────
+    /**
+     * Observe pelanggan untuk outlet tertentu.
+     * Pelanggan yang outletId-nya NULL juga termasuk (backward compat data lama).
+     */
+    fun observeForOutlet(tenantId: String, outletId: Long): Flow<List<CustomerEntity>> =
+        customerDao.observeForOutlet(tenantId, outletId)
+
+    suspend fun listForOutlet(tenantId: String, outletId: Long): List<CustomerEntity> =
+        customerDao.listForOutlet(tenantId, outletId)
+
     suspend fun getById(id: Long): CustomerEntity? = customerDao.getById(id)
     suspend fun upsert(customer: CustomerEntity): Long = customerDao.upsert(customer)
     suspend fun delete(id: Long) = customerDao.delete(id)
@@ -46,8 +75,21 @@ class TransactionRepository @Inject constructor(
     private val transactionItemDao: TransactionItemDao,
     private val productDao: ProductDao
 ) {
+    // ── Tenant-level ─────────────────────────────────────────────────────────
     fun observe(tenantId: String): Flow<List<TransactionEntity>> = transactionDao.observe(tenantId)
     fun observePendingQueues(tenantId: String): Flow<List<TransactionEntity>> = transactionDao.observePendingQueues(tenantId)
+
+    // ── Outlet-level (strict isolation) ──────────────────────────────────────
+    /**
+     * Observe transaksi untuk outlet tertentu.
+     * Transaksi yang outletId-nya NULL juga termasuk (backward compat data lama sebelum isolasi).
+     */
+    fun observeForOutlet(tenantId: String, outletId: Long): Flow<List<TransactionEntity>> =
+        transactionDao.observeForOutlet(tenantId, outletId)
+
+    fun observePendingQueuesForOutlet(tenantId: String, outletId: Long): Flow<List<TransactionEntity>> =
+        transactionDao.observePendingQueuesForOutlet(tenantId, outletId)
+
     suspend fun getById(id: Long): TransactionEntity? = transactionDao.getById(id)
     suspend fun update(transaction: TransactionEntity) = transactionDao.update(transaction)
     suspend fun listItemsForTransaction(transactionId: Long): List<TransactionItemEntity> =

@@ -52,6 +52,9 @@ import com.posbah.app.data.local.dao.LocalUserDao
 import com.posbah.app.data.local.dao.TenantDao
 import com.posbah.app.security.SecurePreferences
 import com.posbah.app.ui.components.PosBahTopBar
+import com.posbah.app.data.repository.SessionState
+import com.posbah.app.data.local.entities.Tenant
+import com.posbah.app.data.local.entities.Outlet
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -68,23 +71,75 @@ data class SystemOption(
 class SystemSelectionViewModel @Inject constructor(
     private val securePrefs: SecurePreferences,
     private val userDao: LocalUserDao,
-    private val tenantDao: TenantDao
+    private val tenantDao: TenantDao,
+    private val sessionState: SessionState,
+    private val db: com.posbah.app.data.local.PosBahDatabase,
+    private val localDataSeeder: com.posbah.app.data.local.LocalDataSeeder,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) : ViewModel() {
 
     fun lockInSystem(businessMode: String, onDone: () -> Unit) {
         val sub = securePrefs.currentGoogleSub ?: return
-        val tenantId = securePrefs.currentTenantId ?: return
+        val email = securePrefs.currentEmail ?: return
+        val emailKey = email.lowercase().trim().replace(".", "_").replace("@", "_")
 
         viewModelScope.launch {
-            // 1. Lock in LocalUser system choice
             val user = userDao.getBySub(sub)
             if (user != null) {
-                userDao.upsert(user.copy(businessModeLocked = true))
-            }
-            // 2. Update Tenant mode
-            val tenant = tenantDao.getById(tenantId)
-            if (tenant != null) {
-                tenantDao.upsert(tenant.copy(businessMode = businessMode))
+                val isPremiumUser = user.isPremium
+                val chosenTenantId = when (email.lowercase().trim()) {
+                    "hanafiariful@gmail.com" -> "ten_premium_hanafiariful_gmail_com"
+                    "bahteramulyap@gmail.com" -> "ten_premium_bahteramulyap_gmail_com"
+                    else -> if (isPremiumUser) {
+                        "ten_premium_${emailKey}_$businessMode"
+                    } else {
+                        "demo_tenant_${emailKey}_$businessMode"
+                    }
+                }
+
+                // Create the tenant if it doesn't exist
+                var tenant = tenantDao.getById(chosenTenantId)
+                if (tenant == null) {
+                    val modeName = when (businessMode) {
+                        "FNB" -> "FnB"
+                        "RENTAL" -> "Rental"
+                        "LAUNDRY" -> "Laundry"
+                        else -> "Invoice & Manufaktur"
+                    }
+                    tenant = Tenant(
+                        id = chosenTenantId,
+                        name = if (isPremiumUser) "CV. ${user.displayName ?: email} ($modeName)"
+                               else "Demo - ${user.displayName ?: email} ($modeName)",
+                        ownerEmail = email,
+                        businessMode = businessMode
+                    )
+                    tenantDao.upsert(tenant)
+                    if (businessMode != "BMP") {
+                        db.outletDao().insert(
+                            Outlet(
+                                tenantId = chosenTenantId,
+                                name = "Outlet Utama",
+                                isDefault = true
+                            )
+                        )
+                    }
+                }
+
+                userDao.upsert(user.copy(businessModeLocked = true, tenantId = chosenTenantId))
+                securePrefs.currentTenantId = chosenTenantId
+                sessionState.setTenant(chosenTenantId)
+
+                // Select default outlet for the chosen tenant
+                val outlets = db.outletDao().listForTenant(chosenTenantId)
+                val activeOutlet = outlets.firstOrNull { it.isDefault } ?: outlets.firstOrNull()
+                sessionState.setOutlet(activeOutlet?.id)
+
+                // Seed simulated data instantly
+                try {
+                    localDataSeeder.seedFromSqlDump(context, chosenTenantId, activeOutlet?.id)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
             onDone()
         }

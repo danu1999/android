@@ -27,6 +27,9 @@ android {
             "GOOGLE_WEB_CLIENT_ID",
             "\"119416648055-hil4u0bmuqffcn2u1f6se66h1lhdiugr.apps.googleusercontent.com\""
         )
+        // Inject Admin Auth Token at build time, allowing local overrides in local.properties
+        val localToken = project.findProperty("adminAuthToken") as? String ?: "Bearer BahteraMigrate123!"
+        buildConfigField("String", "ADMIN_AUTH_TOKEN", "\"$localToken\"")
         buildConfigField("boolean", "ENFORCE_INTEGRITY", "true")
         ndk {
             // Limit native ABIs to reduce APK size (SQLCipher native libs)

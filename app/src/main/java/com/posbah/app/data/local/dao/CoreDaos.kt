@@ -83,8 +83,28 @@ interface OutletDao {
 
 @Dao
 interface EmployeeDao {
+    // ── Tenant-level (owner sees all) ────────────────────────────────────────
     @Query("SELECT * FROM employees WHERE tenantId = :tenantId AND isActive = 1 ORDER BY name ASC")
     fun observeForTenant(tenantId: String): Flow<List<Employee>>
+
+    // ── Outlet-level (strict isolation) ──────────────────────────────────────
+    @Query("""
+        SELECT * FROM employees
+        WHERE tenantId = :tenantId
+          AND (outletId = :outletId OR outletId IS NULL)
+          AND isActive = 1
+        ORDER BY name ASC
+    """)
+    fun observeForOutlet(tenantId: String, outletId: Long): Flow<List<Employee>>
+
+    @Query("""
+        SELECT * FROM employees
+        WHERE tenantId = :tenantId
+          AND (outletId = :outletId OR outletId IS NULL)
+          AND isActive = 1
+        ORDER BY name ASC
+    """)
+    suspend fun listForOutlet(tenantId: String, outletId: Long): List<Employee>
 
     @Query("SELECT * FROM employees WHERE email = :email COLLATE NOCASE AND tenantId = :tenantId LIMIT 1")
     suspend fun findForLogin(tenantId: String, email: String): Employee?
@@ -109,3 +129,4 @@ interface EmployeeDao {
     @Query("DELETE FROM employees WHERE email IN (:emails) AND tenantId NOT IN (:allowedTenants)")
     suspend fun deleteIncorrectEmployees(emails: List<String>, allowedTenants: List<String>)
 }
+

@@ -62,16 +62,9 @@ fun LoginScreen(
     val context = LocalContext.current
     val activity = context.findActivity()
 
-    var showGoogleSimDialog by remember { mutableStateOf(false) }
-    var simEmail by remember { mutableStateOf("demo@posbah.app") }
-    var simName by remember { mutableStateOf("User Demo") }
 
-    var showUpgradeDialog by remember { mutableStateOf(false) }
-    var upgradeTargetEmail by remember { mutableStateOf("") }
-    var upgradeConfirmEmail by remember { mutableStateOf("") }
 
-    var showFastForwardDialog by remember { mutableStateOf(false) }
-    var fastForwardEmail by remember { mutableStateOf("") }
+
 
     LaunchedEffect(ui.signedInUser) { if (ui.signedInUser != null) onLoggedIn() }
     LaunchedEffect(ui.needsTenantPicker) { if (ui.needsTenantPicker != null) onNeedTenantPick() }
@@ -128,7 +121,11 @@ fun LoginScreen(
                     when (ui.mode) {
                         LoginMode.Google -> GoogleSection(
                             isLoading = ui.isLoading,
-                            onClick = { showGoogleSimDialog = true }
+                            onClick = {
+                                activity?.let {
+                                    viewModel.signInWithGoogle(it)
+                                }
+                            }
                         )
                         LoginMode.Pin -> PremiumSection(
                             email = ui.email,
@@ -151,35 +148,26 @@ fun LoginScreen(
                     }
 
                     Spacer(Modifier.height(16.dp))
-                    Text(
-                        "ALAT SIMULASI & TESTING",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+
+                    if (ui.isCheckingUpdate) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .size(24.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
                         TextButton(
-                            onClick = {
-                                showUpgradeDialog = true
-                                upgradeTargetEmail = ""
-                                upgradeConfirmEmail = "muhammadmuizz8@gmail.com"
-                            },
-                            modifier = Modifier.weight(1f).testTag("btn-open-upgrade")
+                            onClick = { viewModel.checkForUpdates() },
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
                         ) {
-                            Text("Upgrade Premium", fontSize = 11.sp)
-                        }
-                        TextButton(
-                            onClick = {
-                                showFastForwardDialog = true
-                                fastForwardEmail = ""
-                            },
-                            modifier = Modifier.weight(1f).testTag("btn-open-fastforward")
-                        ) {
-                            Text("Percepat 2 Hari", fontSize = 11.sp)
+                            Text(
+                                "Cek Update Aplikasi (v${com.posbah.app.BuildConfig.VERSION_NAME})",
+                                color = MaterialTheme.colorScheme.primary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 }
@@ -207,177 +195,22 @@ fun LoginScreen(
         }
     }
 
-    // Dialog: Google Sign-In Simulation
-    if (showGoogleSimDialog) {
+    if (ui.showUpdateDialog) {
         AlertDialog(
-            onDismissRequest = { showGoogleSimDialog = false },
-            title = { Text("Simulasi Google Sign-In") },
+            onDismissRequest = { viewModel.dismissUpdateDialog() },
+            title = { Text("Informasi Update Aplikasi") },
             text = {
-                Column {
-                    Text(
-                        "Pilih preset atau masukkan email untuk menyimulasikan login Google SSO.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = simEmail,
-                        onValueChange = { emailVal -> simEmail = emailVal },
-                        label = { Text("Email Google") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth().testTag("sim-google-email")
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    OutlinedTextField(
-                        value = simName,
-                        onValueChange = { nameVal -> simName = nameVal },
-                        label = { Text("Nama Tampilan") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth().testTag("sim-google-name")
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Text("Presets:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Versi Saat Ini: v${com.posbah.app.BuildConfig.VERSION_NAME}")
+                    Text("Versi Terbaru: v${ui.updateVersion ?: "-"}", fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(4.dp))
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            TextButton(onClick = { simEmail = "demo@posbah.app"; simName = "Demo User" }) {
-                                Text("demo@posbah.app", fontSize = 10.sp)
-                            }
-                            TextButton(onClick = { simEmail = "muhammadmuizz8@gmail.com"; simName = "Muhammad Muizz" }) {
-                                Text("muhammadmuizz8@gmail.com", fontSize = 10.sp)
-                            }
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            TextButton(onClick = { simEmail = "bahteramulyap@gmail.com"; simName = "CV Bahtera Mulya Plastik" }) {
-                                Text("bahteramulyap@gmail.com", fontSize = 10.sp)
-                            }
-                            TextButton(onClick = { simEmail = "hanafiariful@gmail.com"; simName = "PISANG KEJU RAMAYANA" }) {
-                                Text("hanafiariful@gmail.com", fontSize = 10.sp)
-                            }
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            TextButton(onClick = { simEmail = "fahrup22@gmail.com"; simName = "FahriP (Karyawan)" }) {
-                                Text("fahrup22@gmail.com", fontSize = 10.sp)
-                            }
-                        }
-                    }
+                    Text(ui.updateDescription ?: "Tidak ada deskripsi pembaruan.")
                 }
             },
             confirmButton = {
-                Button(
-                    onClick = {
-                        showGoogleSimDialog = false
-                        activity?.let {
-                            viewModel.signInWithGoogle(it, simEmail, simName)
-                        }
-                    },
-                    modifier = Modifier.testTag("btn-sim-login")
-                ) { Text("Masuk") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showGoogleSimDialog = false }) { Text("Batal") }
-            }
-        )
-    }
-
-    // Dialog: Confirm Payment Upgrade
-    if (showUpgradeDialog) {
-        AlertDialog(
-            onDismissRequest = { showUpgradeDialog = false },
-            title = { Text("Konfirmasi Pembayaran Premium") },
-            text = {
-                Column {
-                    Text(
-                        "Hubungkan akun demo Anda ke Premium. Harus dikonfirmasi oleh email administrator muhammadmuizz8@gmail.com.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = upgradeTargetEmail,
-                        onValueChange = { target -> upgradeTargetEmail = target },
-                        label = { Text("Email Akun Demo Anda") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth().testTag("upgrade-target-email")
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    OutlinedTextField(
-                        value = upgradeConfirmEmail,
-                        onValueChange = { confirm -> upgradeConfirmEmail = confirm },
-                        label = { Text("Email Konfirmator") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth().testTag("upgrade-confirm-email")
-                    )
+                TextButton(onClick = { viewModel.dismissUpdateDialog() }) {
+                    Text("Tutup")
                 }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.confirmPayment(upgradeTargetEmail, upgradeConfirmEmail) { success ->
-                            if (success) {
-                                android.widget.Toast.makeText(
-                                    context,
-                                    "Akun berhasil di-upgrade ke Premium! Silakan login ulang.",
-                                    android.widget.Toast.LENGTH_LONG
-                                ).show()
-                                showUpgradeDialog = false
-                            } else {
-                                android.widget.Toast.makeText(
-                                    context,
-                                    "Gagal! Konfirmasi email salah atau akun tidak ditemukan.",
-                                    android.widget.Toast.LENGTH_LONG
-                                ).show()
-                            }
-                        }
-                    },
-                    modifier = Modifier.testTag("btn-submit-upgrade")
-                ) { Text("Upgrade Sekarang") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showUpgradeDialog = false }) { Text("Batal") }
-            }
-        )
-    }
-
-    // Dialog: Fast Forward Expired
-    if (showFastForwardDialog) {
-        AlertDialog(
-            onDismissRequest = { showFastForwardDialog = false },
-            title = { Text("Simulasikan Batas Uji Coba (2 Hari)") },
-            text = {
-                Column {
-                    Text(
-                        "Ubah waktu registrasi akun demo terpilih menjadi 2 hari yang lalu untuk mensimulasikan lockout.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = fastForwardEmail,
-                        onValueChange = { ff -> fastForwardEmail = ff },
-                        label = { Text("Email Akun Demo") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth().testTag("fastforward-email")
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.fastForwardDemo(fastForwardEmail) {
-                            android.widget.Toast.makeText(
-                                context,
-                                "Waktu registrasi berhasil dimanipulasi! Silakan login untuk tes lockout.",
-                                android.widget.Toast.LENGTH_LONG
-                            ).show()
-                            showFastForwardDialog = false
-                        }
-                    },
-                    modifier = Modifier.testTag("btn-submit-fastforward")
-                ) { Text("Percepat Waktu") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showFastForwardDialog = false }) { Text("Batal") }
             }
         )
     }

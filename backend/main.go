@@ -1,16 +1,21 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha1"
+	"crypto/sha512"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"hash"
 	"io"
 	"log"
 	"math"
 	"net"
 	"net/http"
+	"net/smtp"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -29,6 +34,7 @@ type LocalUser struct {
 
 var (
 	port              string
+	adminAuthToken    string
 )
 
 func main() {
@@ -36,6 +42,11 @@ func main() {
 	port = os.Getenv("PORT")
 	if port == "" {
 		port = "3000"
+	}
+
+	adminAuthToken = os.Getenv("ADMIN_AUTH_TOKEN")
+	if adminAuthToken == "" {
+		adminAuthToken = "Bearer BahteraMigrate123!"
 	}
 
 	log.Printf("Starting PosBah Go backend...")
@@ -59,6 +70,11 @@ func main() {
 	http.HandleFunc("/api/admin/demo-users", handleGetDemoUsers)
 	http.HandleFunc("/api/admin/approve-user", handleApproveUser)
 	http.HandleFunc("/api/admin/reject-user", handleRejectUser)
+	http.HandleFunc("/api/admin/approve-demo", handleApproveDemo)
+	http.HandleFunc("/api/admin/reject-demo", handleRejectDemo)
+	http.HandleFunc("/api/admin/inspect-tenant", handleInspectTenant)
+	http.HandleFunc("/api/admin/confirm-payment-page", handleConfirmPaymentPage)
+	http.HandleFunc("/api/admin/confirm-payment-action", handleConfirmPaymentAction)
 	http.HandleFunc("/api/auth/qr-session", handleQrSession)
 	http.HandleFunc("/api/auth/qr-authorize", handleQrAuthorize)
 	http.HandleFunc("/api/auth/qr-confirm", handleQrConfirm)
@@ -143,28 +159,91 @@ func checkAndLockoutDemoUsers() error {
 		return nil
 	}
 
-	log.Printf("Found %d expired demo users. Deletion in progress...", len(users))
+	log.Printf("Found %d expired demo users. Lockout in progress...", len(users))
 
 	for _, user := range users {
-		if err := deleteLocalUser(user.GoogleSub); err != nil {
-			log.Printf("Failed to delete user %s: %v", user.Email, err)
+		_, err := db.Exec(`UPDATE "local_users" SET "isActive" = FALSE, "updatedAt" = $1 WHERE "googleSub" = $2`,
+			time.Now().UnixNano()/int64(time.Millisecond), user.GoogleSub)
+		if err != nil {
+			log.Printf("Failed to lockout expired demo user %s: %v", user.Email, err)
 		} else {
 			regTime := time.Unix(user.RegisteredAt/1000, 0).Format("2006-01-02 15:04:05")
-			log.Printf("Successfully deleted demo user: %s (Registered at: %s)", user.Email, regTime)
+			log.Printf("Successfully locked out demo user: %s (Registered at: %s)", user.Email, regTime)
 		}
 	}
 
 	return nil
 }
 
-// Deletes a user from local database using their GoogleSub
+// Purges all data referencing the tenantId across all tables
+func purgeTenantData(tenantID string) {
+	if tenantID == "" {
+		return
+	}
+	log.Printf("Purging all data for tenant ID: %s", tenantID)
+
+	// Delete from child tables first
+	_, _ = db.Exec(`DELETE FROM "transaction_items" WHERE "transactionId" IN (SELECT "id" FROM "transactions" WHERE "tenantId" = $1)`, tenantID)
+	_, _ = db.Exec(`DELETE FROM "bmp_products" WHERE "invoiceId" IN (SELECT "id" FROM "bmp_invoices" WHERE "tenantId" = $1)`, tenantID)
+	_, _ = db.Exec(`DELETE FROM "bmp_invoice_payments" WHERE "invoiceId" IN (SELECT "id" FROM "bmp_invoices" WHERE "tenantId" = $1)`, tenantID)
+	_, _ = db.Exec(`DELETE FROM "bmp_bahan_baku_item" WHERE "bahanBakuId" IN (SELECT "id" FROM "bmp_bahan_baku" WHERE "tenantId" = $1)`, tenantID)
+
+	tables := []string{
+		"bmp_payrolls",
+		"bmp_clients",
+		"bmp_invoices",
+		"bmp_master_products",
+		"bmp_cashflow",
+		"bmp_settings",
+		"bmp_employees",
+		"bmp_bahan_baku",
+		"print_settings",
+		"products",
+		"customers",
+		"transactions",
+		"activity_logs",
+		"employees",
+		"outlets",
+		"bmp_device_tenants",
+	}
+
+	for _, table := range tables {
+		_, err := db.Exec(fmt.Sprintf(`DELETE FROM "%s" WHERE "tenantId" = $1`, table), tenantID)
+		if err != nil {
+			log.Printf("Error purging table %s for tenant %s: %v", table, tenantID, err)
+		}
+	}
+	_, err := db.Exec(`DELETE FROM "tenants" WHERE "id" = $1`, tenantID)
+	if err != nil {
+		log.Printf("Error purging tenant %s from tenants table: %v", tenantID, err)
+	}
+}
+
+// Deletes a user from local database using their GoogleSub and purges associated tenant data
 func deleteLocalUser(googleSub string) error {
 	if db == nil {
 		return fmt.Errorf("local database not initialized")
 	}
-	_, err := db.Exec(`DELETE FROM "local_users" WHERE "googleSub" = $1`, googleSub)
+
+	var email string
+	var tenantId sql.NullString
+	err := db.QueryRow(`SELECT "email", "tenantId" FROM "local_users" WHERE "googleSub" = $1`, googleSub).Scan(&email, &tenantId)
+	if err == nil {
+		cleanEmail := strings.ReplaceAll(strings.ReplaceAll(email, ".", "_"), "@", "_")
+		demoTenantId := "demo_tenant_" + cleanEmail
+		premiumTenantId := "ten_premium_" + cleanEmail
+
+		purgeTenantData(demoTenantId)
+		purgeTenantData(premiumTenantId)
+		if tenantId.Valid && tenantId.String != "" {
+			purgeTenantData(tenantId.String)
+		}
+	}
+
+	_, err = db.Exec(`DELETE FROM "local_users" WHERE "googleSub" = $1`, googleSub)
 	return err
 }
+
 
 // Handler: GET /status
 func handleStatus(w http.ResponseWriter, r *http.Request) {
@@ -222,18 +301,20 @@ func handleManualLockoutCheck(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	deletedEmails := []string{}
+	lockedOutEmails := []string{}
 	for _, user := range users {
-		if err := deleteLocalUser(user.GoogleSub); err == nil {
-			deletedEmails = append(deletedEmails, user.Email)
+		_, err := db.Exec(`UPDATE "local_users" SET "isActive" = FALSE, "updatedAt" = $1 WHERE "googleSub" = $2`,
+			time.Now().UnixNano()/int64(time.Millisecond), user.GoogleSub)
+		if err == nil {
+			lockedOutEmails = append(lockedOutEmails, user.Email)
 		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	response := map[string]interface{}{
-		"message":      "Manual demo deletion check completed successfully.",
+		"message":      "Manual demo lockout check completed successfully.",
 		"checkedCount": len(users),
-		"deleted":      deletedEmails,
+		"lockedOut":    lockedOutEmails,
 	}
 	json.NewEncoder(w).Encode(response)
 }
@@ -255,6 +336,7 @@ type DemoUserResponse struct {
 	DisplayName  string `json:"displayName"`
 	RegisteredAt int64  `json:"registeredAt"`
 	IsActive     bool   `json:"isActive"`
+	TenantId     string `json:"tenantId"`
 }
 
 func handleGetDemoUsers(w http.ResponseWriter, r *http.Request) {
@@ -272,7 +354,7 @@ func handleGetDemoUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	authHeader := r.Header.Get("Authorization")
-	if authHeader != "Bearer BahteraMigrate123!" {
+	if authHeader != adminAuthToken {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -282,7 +364,7 @@ func handleGetDemoUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := db.Query(`SELECT "googleSub", "email", COALESCE("displayName", ''), "registeredAt", "isActive" FROM "local_users" WHERE "isPremium" = FALSE ORDER BY "registeredAt" DESC`)
+	rows, err := db.Query(`SELECT "googleSub", "email", COALESCE("displayName", ''), "registeredAt", "isActive", COALESCE("tenantId", '') FROM "local_users" WHERE "isPremium" = FALSE ORDER BY "registeredAt" DESC`)
 	if err != nil {
 		http.Error(w, "Database query failed: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -292,7 +374,7 @@ func handleGetDemoUsers(w http.ResponseWriter, r *http.Request) {
 	users := []DemoUserResponse{}
 	for rows.Next() {
 		var u DemoUserResponse
-		if err := rows.Scan(&u.GoogleSub, &u.Email, &u.DisplayName, &u.RegisteredAt, &u.IsActive); err != nil {
+		if err := rows.Scan(&u.GoogleSub, &u.Email, &u.DisplayName, &u.RegisteredAt, &u.IsActive, &u.TenantId); err != nil {
 			log.Printf("Failed to scan demo user: %v", err)
 			continue
 		}
@@ -301,6 +383,86 @@ func handleGetDemoUsers(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(users)
+}
+
+func handleInspectTenant(w http.ResponseWriter, r *http.Request) {
+	// CORS headers
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	authHeader := r.Header.Get("Authorization")
+	if authHeader != adminAuthToken {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	tenantID := r.URL.Query().Get("tenantId")
+	if tenantID == "" {
+		http.Error(w, "tenantId parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	if db == nil {
+		http.Error(w, "Database not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	counts := make(map[string]int)
+	tables := []string{
+		"bmp_payrolls",
+		"bmp_clients",
+		"bmp_invoices",
+		"bmp_master_products",
+		"bmp_cashflow",
+		"bmp_settings",
+		"bmp_employees",
+		"bmp_bahan_baku",
+		"print_settings",
+		"products",
+		"customers",
+		"transactions",
+		"activity_logs",
+		"employees",
+		"outlets",
+		"bmp_device_tenants",
+	}
+
+	for _, table := range tables {
+		var count int
+		query := fmt.Sprintf(`SELECT COUNT(*) FROM "%s" WHERE "tenantId" = $1`, table)
+		err := db.QueryRow(query, tenantID).Scan(&count)
+		if err != nil {
+			// Skip or mark error
+			counts[table] = -1
+		} else {
+			counts[table] = count
+		}
+	}
+
+	// Also check if the tenant exists in tenants table
+	var tenantExists bool
+	err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM "tenants" WHERE "id" = $1)`, tenantID).Scan(&tenantExists)
+	if err != nil {
+		log.Printf("Error checking tenants existence: %v", err)
+	}
+
+	response := map[string]interface{}{
+		"tenantId":     tenantID,
+		"tenantExists": tenantExists,
+		"counts":       counts,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
 func handleRejectUser(w http.ResponseWriter, r *http.Request) {
@@ -317,7 +479,7 @@ func handleRejectUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	authHeader := r.Header.Get("Authorization")
-	if authHeader != "Bearer BahteraMigrate123!" {
+	if authHeader != adminAuthToken {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -366,7 +528,7 @@ func handleApproveUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	authHeader := r.Header.Get("Authorization")
-	if authHeader != "Bearer BahteraMigrate123!" {
+	if authHeader != adminAuthToken {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -456,6 +618,114 @@ func handleApproveUser(w http.ResponseWriter, r *http.Request) {
 		"success": true,
 		"message": "User successfully approved to Premium",
 		"tenantId": premiumTenantId,
+	})
+}
+
+type ApproveDemoRequest struct {
+	GoogleSub string `json:"googleSub"`
+}
+
+type RejectDemoRequest struct {
+	GoogleSub string `json:"googleSub"`
+}
+
+func handleApproveDemo(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	authHeader := r.Header.Get("Authorization")
+	if authHeader != adminAuthToken {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if db == nil {
+		http.Error(w, "Database not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	var reqData ApproveDemoRequest
+	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+		http.Error(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if reqData.GoogleSub == "" {
+		http.Error(w, "googleSub is required", http.StatusBadRequest)
+		return
+	}
+
+	nowMillis := time.Now().UnixNano() / int64(time.Millisecond)
+
+	_, err := db.Exec(`UPDATE "local_users" SET "isActive" = TRUE, "updatedAt" = $1 WHERE "googleSub" = $2`, nowMillis, reqData.GoogleSub)
+	if err != nil {
+		http.Error(w, "Failed to approve demo user: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Demo user successfully approved",
+	})
+}
+
+func handleRejectDemo(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	authHeader := r.Header.Get("Authorization")
+	if authHeader != adminAuthToken {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if db == nil {
+		http.Error(w, "Database not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	var reqData RejectDemoRequest
+	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
+		http.Error(w, "Invalid request body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if reqData.GoogleSub == "" {
+		http.Error(w, "googleSub is required", http.StatusBadRequest)
+		return
+	}
+
+	err := deleteLocalUser(reqData.GoogleSub)
+	if err != nil {
+		http.Error(w, "Failed to delete demo user: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Demo user successfully rejected and deleted",
 	})
 }
 
@@ -917,6 +1187,7 @@ func handleApkVersion(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
 		"version": "2.0.3",
+		"description": "Peningkatan sistem isolasi keamanan data pengguna, fitur pemulihan database toko asli premium, dan perbaikan visual katalog.",
 	})
 }
 
@@ -1736,8 +2007,129 @@ func handleGetRequest(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
 }
 
+var allowedSyncTables = map[string]bool{
+	"local_users":          true,
+	"tenants":              true,
+	"outlets":              true,
+	"employees":            true,
+	"products":             true,
+	"customers":            true,
+	"transactions":         true,
+	"transaction_items":    true,
+	"activity_logs":        true,
+	"bmp_clients":          true,
+	"bmp_invoices":         true,
+	"bmp_products":         true,
+	"bmp_master_products":  true,
+	"bmp_invoice_payments": true,
+	"bmp_cashflow":         true,
+	"bmp_settings":         true,
+	"bmp_employees":        true,
+	"bmp_payrolls":         true,
+	"bmp_bahan_baku":       true,
+	"bmp_bahan_baku_item":  true,
+	"print_settings":       true,
+	"bmp_attendance_logs":  true,
+	"bmp_device_tenants":   true,
+}
+
+var columnNameRegex = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
+
+func isValidColumnName(name string) bool {
+	return columnNameRegex.MatchString(name)
+}
+
+// validateTenantAccess checks whether the user has authorization for the requested tenant.
+// For public GET requests to login tables (local_users, employees, tenants), it allows the request
+// if the filter restricts query results to safe columns (googleSub, email, or id).
+func validateTenantAccess(r *http.Request) error {
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 {
+		return fmt.Errorf("invalid path")
+	}
+	tableName := parts[3]
+
+	if !allowedSyncTables[tableName] {
+		return fmt.Errorf("forbidden: table %s is not allowed for synchronization", tableName)
+	}
+
+	tenantID := r.Header.Get("x-tenant-id")
+	userEmail := r.Header.Get("x-user-email")
+
+	// 1. Allow login/auth-related GET requests without headers IF they query by secure columns
+	if r.Method == http.MethodGet && (tenantID == "" || userEmail == "") {
+		if tableName == "local_users" || tableName == "employees" || tableName == "tenants" {
+			hasSecureFilter := false
+			for k, vList := range r.URL.Query() {
+				if len(vList) > 0 && strings.HasPrefix(vList[0], "eq.") {
+					if k == "googleSub" || k == "email" || k == "id" {
+						hasSecureFilter = true
+						break
+					}
+				}
+			}
+			if hasSecureFilter {
+				return nil
+			}
+		}
+		return fmt.Errorf("unauthorized: missing x-tenant-id or x-user-email headers")
+	}
+
+	if tenantID == "" || userEmail == "" {
+		return fmt.Errorf("unauthorized: missing x-tenant-id or x-user-email headers")
+	}
+
+	// 2. Verify if user is active and belongs to tenantId (either as OWNER or Employee)
+	var isAllowed bool
+
+	// Check local_users (owner)
+	var count int
+	err := db.QueryRow(`SELECT COUNT(*) FROM "local_users" WHERE "email" = $1 AND "tenantId" = $2 AND "isActive" = TRUE`, userEmail, tenantID).Scan(&count)
+	if err == nil && count > 0 {
+		isAllowed = true
+	}
+
+	// Check employees
+	if !isAllowed {
+		err = db.QueryRow(`SELECT COUNT(*) FROM "employees" WHERE "email" = $1 AND "tenantId" = $2 AND "isActive" = TRUE`, userEmail, tenantID).Scan(&count)
+		if err == nil && count > 0 {
+			isAllowed = true
+		}
+	}
+
+	if !isAllowed {
+		return fmt.Errorf("forbidden: user %s has no active membership in tenant %s", userEmail, tenantID)
+	}
+
+	// 3. Enforce query-level tenant parameter isolation for GET/PATCH/DELETE
+	if r.Method == http.MethodGet || r.Method == http.MethodPatch || r.Method == http.MethodDelete {
+		for k, vList := range r.URL.Query() {
+			if len(vList) > 0 && strings.HasPrefix(vList[0], "eq.") {
+				val := strings.TrimPrefix(vList[0], "eq.")
+				if k == "tenantId" && val != tenantID {
+					return fmt.Errorf("forbidden: query tenantId %s does not match authorized tenantId %s", val, tenantID)
+				}
+				if k == "id" && tableName == "tenants" && val != tenantID {
+					return fmt.Errorf("forbidden: query tenant id %s does not match authorized tenant %s", val, tenantID)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 // handleSyncRoute acts as a gateway for both GET (query) and POST (upsert) requests on /api/sync/
 func handleSyncRoute(w http.ResponseWriter, r *http.Request) {
+	if err := validateTenantAccess(r); err != nil {
+		if strings.HasPrefix(err.Error(), "unauthorized") {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+		} else {
+			http.Error(w, err.Error(), http.StatusForbidden)
+		}
+		return
+	}
+
 	if r.Method == http.MethodGet {
 		handleSyncQuery(w, r)
 		return
@@ -1782,9 +2174,81 @@ func handleSyncPatch(w http.ResponseWriter, r *http.Request) {
 		val := vList[0]
 		if strings.HasPrefix(val, "eq.") {
 			realVal := strings.TrimPrefix(val, "eq.")
+			if !isValidColumnName(k) {
+				http.Error(w, "Bad Request: invalid query parameter key", http.StatusBadRequest)
+				return
+			}
 			whereClauses = append(whereClauses, fmt.Sprintf(`"%s" = $%d`, k, idx))
 			args = append(args, realVal)
 			idx++
+		}
+	}
+
+	tenantID := r.Header.Get("x-tenant-id")
+	if tenantID != "" {
+		if tableName == "transaction_items" {
+			var txIDVal string
+			for k, vList := range r.URL.Query() {
+				if k == "transactionId" && len(vList) > 0 && strings.HasPrefix(vList[0], "eq.") {
+					txIDVal = strings.TrimPrefix(vList[0], "eq.")
+					break
+				}
+			}
+			if txIDVal != "" {
+				var count int
+				err := db.QueryRow(`SELECT COUNT(*) FROM "transactions" WHERE "id" = $1 AND "tenantId" = $2`, txIDVal, tenantID).Scan(&count)
+				if err != nil || count == 0 {
+					http.Error(w, "Forbidden: transaction does not belong to your tenant", http.StatusForbidden)
+					return
+				}
+			} else {
+				var itemIDVal string
+				for k, vList := range r.URL.Query() {
+					if k == "id" && len(vList) > 0 && strings.HasPrefix(vList[0], "eq.") {
+						itemIDVal = strings.TrimPrefix(vList[0], "eq.")
+						break
+					}
+				}
+				if itemIDVal != "" {
+					var count int
+					err := db.QueryRow(`SELECT COUNT(*) FROM "transaction_items" ti 
+						INNER JOIN "transactions" t ON ti."transactionId" = t."id" 
+						WHERE ti."id" = $1 AND t."tenantId" = $2`, itemIDVal, tenantID).Scan(&count)
+					if err != nil || count == 0 {
+						http.Error(w, "Forbidden: transaction item does not belong to your tenant", http.StatusForbidden)
+						return
+					}
+				} else {
+					http.Error(w, "Bad Request: transactionId or id filter required for transaction_items", http.StatusBadRequest)
+					return
+				}
+			}
+		} else if tableName == "tenants" {
+			hasIdFilter := false
+			for k := range r.URL.Query() {
+				if k == "id" {
+					hasIdFilter = true
+					break
+				}
+			}
+			if !hasIdFilter {
+				whereClauses = append(whereClauses, fmt.Sprintf(`"id" = $%d`, idx))
+				args = append(args, tenantID)
+				idx++
+			}
+		} else {
+			hasTenantIdFilter := false
+			for k := range r.URL.Query() {
+				if k == "tenantId" {
+					hasTenantIdFilter = true
+					break
+				}
+			}
+			if !hasTenantIdFilter {
+				whereClauses = append(whereClauses, fmt.Sprintf(`"tenantId" = $%d`, idx))
+				args = append(args, tenantID)
+				idx++
+			}
 		}
 	}
 
@@ -1795,6 +2259,10 @@ func handleSyncPatch(w http.ResponseWriter, r *http.Request) {
 
 	var setClauses []string
 	for k, v := range updateData {
+		if !isValidColumnName(k) {
+			http.Error(w, "Bad Request: invalid column name in update payload", http.StatusBadRequest)
+			return
+		}
 		setClauses = append(setClauses, fmt.Sprintf(`"%s" = $%d`, k, idx))
 		switch val := v.(type) {
 		case map[string]interface{}, []interface{}:
@@ -1837,9 +2305,81 @@ func handleSyncDelete(w http.ResponseWriter, r *http.Request) {
 		val := vList[0]
 		if strings.HasPrefix(val, "eq.") {
 			realVal := strings.TrimPrefix(val, "eq.")
+			if !isValidColumnName(k) {
+				http.Error(w, "Bad Request: invalid query parameter key", http.StatusBadRequest)
+				return
+			}
 			whereClauses = append(whereClauses, fmt.Sprintf(`"%s" = $%d`, k, idx))
 			args = append(args, realVal)
 			idx++
+		}
+	}
+
+	tenantID := r.Header.Get("x-tenant-id")
+	if tenantID != "" {
+		if tableName == "transaction_items" {
+			var txIDVal string
+			for k, vList := range r.URL.Query() {
+				if k == "transactionId" && len(vList) > 0 && strings.HasPrefix(vList[0], "eq.") {
+					txIDVal = strings.TrimPrefix(vList[0], "eq.")
+					break
+				}
+			}
+			if txIDVal != "" {
+				var count int
+				err := db.QueryRow(`SELECT COUNT(*) FROM "transactions" WHERE "id" = $1 AND "tenantId" = $2`, txIDVal, tenantID).Scan(&count)
+				if err != nil || count == 0 {
+					http.Error(w, "Forbidden: transaction does not belong to your tenant", http.StatusForbidden)
+					return
+				}
+			} else {
+				var itemIDVal string
+				for k, vList := range r.URL.Query() {
+					if k == "id" && len(vList) > 0 && strings.HasPrefix(vList[0], "eq.") {
+						itemIDVal = strings.TrimPrefix(vList[0], "eq.")
+						break
+					}
+				}
+				if itemIDVal != "" {
+					var count int
+					err := db.QueryRow(`SELECT COUNT(*) FROM "transaction_items" ti 
+						INNER JOIN "transactions" t ON ti."transactionId" = t."id" 
+						WHERE ti."id" = $1 AND t."tenantId" = $2`, itemIDVal, tenantID).Scan(&count)
+					if err != nil || count == 0 {
+						http.Error(w, "Forbidden: transaction item does not belong to your tenant", http.StatusForbidden)
+						return
+					}
+				} else {
+					http.Error(w, "Bad Request: transactionId or id filter required for transaction_items", http.StatusBadRequest)
+					return
+				}
+			}
+		} else if tableName == "tenants" {
+			hasIdFilter := false
+			for k := range r.URL.Query() {
+				if k == "id" {
+					hasIdFilter = true
+					break
+				}
+			}
+			if !hasIdFilter {
+				whereClauses = append(whereClauses, fmt.Sprintf(`"id" = $%d`, idx))
+				args = append(args, tenantID)
+				idx++
+			}
+		} else {
+			hasTenantIdFilter := false
+			for k := range r.URL.Query() {
+				if k == "tenantId" {
+					hasTenantIdFilter = true
+					break
+				}
+			}
+			if !hasTenantIdFilter {
+				whereClauses = append(whereClauses, fmt.Sprintf(`"tenantId" = $%d`, idx))
+				args = append(args, tenantID)
+				idx++
+			}
 		}
 	}
 
@@ -1879,9 +2419,67 @@ func handleSyncQuery(w http.ResponseWriter, r *http.Request) {
 		val := vList[0]
 		if strings.HasPrefix(val, "eq.") {
 			realVal := strings.TrimPrefix(val, "eq.")
+			if !isValidColumnName(k) {
+				http.Error(w, "Bad Request: invalid query parameter key", http.StatusBadRequest)
+				return
+			}
 			whereClauses = append(whereClauses, fmt.Sprintf(`"%s" = $%d`, k, idx))
 			args = append(args, realVal)
 			idx++
+		}
+	}
+
+	tenantID := r.Header.Get("x-tenant-id")
+	if tenantID != "" {
+		if tableName == "transaction_items" {
+			var txIDVal string
+			for k, vList := range r.URL.Query() {
+				if k == "transactionId" && len(vList) > 0 && strings.HasPrefix(vList[0], "eq.") {
+					txIDVal = strings.TrimPrefix(vList[0], "eq.")
+					break
+				}
+			}
+			if txIDVal != "" {
+				var count int
+				err := db.QueryRow(`SELECT COUNT(*) FROM "transactions" WHERE "id" = $1 AND "tenantId" = $2`, txIDVal, tenantID).Scan(&count)
+				if err != nil || count == 0 {
+					http.Error(w, "Forbidden: transaction does not belong to your tenant", http.StatusForbidden)
+					return
+				}
+			} else {
+				http.Error(w, "Bad Request: transactionId filter required for transaction_items", http.StatusBadRequest)
+				return
+			}
+		} else if tableName == "tenants" {
+			hasIdFilter := false
+			for k := range r.URL.Query() {
+				if k == "id" {
+					hasIdFilter = true
+					break
+				}
+			}
+			if !hasIdFilter {
+				whereClauses = append(whereClauses, fmt.Sprintf(`"id" = $%d`, idx))
+				args = append(args, tenantID)
+				idx++
+			}
+		} else if tableName == "bmp_attendance_logs" {
+			whereClauses = append(whereClauses, fmt.Sprintf(`"deviceSN" IN (SELECT "serialNumber" FROM "bmp_device_tenants" WHERE "tenantId" = $%d)`, idx))
+			args = append(args, tenantID)
+			idx++
+		} else {
+			hasTenantIdFilter := false
+			for k := range r.URL.Query() {
+				if k == "tenantId" {
+					hasTenantIdFilter = true
+					break
+				}
+			}
+			if !hasTenantIdFilter {
+				whereClauses = append(whereClauses, fmt.Sprintf(`"tenantId" = $%d`, idx))
+				args = append(args, tenantID)
+				idx++
+			}
 		}
 	}
 
@@ -1959,6 +2557,59 @@ func handleSyncTable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tenantID := r.Header.Get("x-tenant-id")
+	if tenantID != "" {
+		if tableName == "transaction_items" {
+			for _, row := range rows {
+				txID, ok := row["transactionId"]
+				if ok {
+					var txIDVal int64
+					switch v := txID.(type) {
+					case float64:
+						txIDVal = int64(v)
+					case int64:
+						txIDVal = v
+					case int:
+						txIDVal = int64(v)
+					default:
+						parsed, _ := strconv.ParseInt(fmt.Sprintf("%v", v), 10, 64)
+						txIDVal = parsed
+					}
+					var count int
+					err := db.QueryRow(`SELECT COUNT(*) FROM "transactions" WHERE "id" = $1 AND "tenantId" = $2`, txIDVal, tenantID).Scan(&count)
+					if err != nil || count == 0 {
+						http.Error(w, fmt.Sprintf("Forbidden: transaction %d does not belong to tenant %s", txIDVal, tenantID), http.StatusForbidden)
+						return
+					}
+				}
+			}
+		} else if tableName == "tenants" {
+			for _, row := range rows {
+				idVal, hasId := row["id"]
+				if hasId {
+					if fmt.Sprintf("%v", idVal) != tenantID {
+						http.Error(w, fmt.Sprintf("Forbidden: tenant id %v does not match authorized tenant %s", idVal, tenantID), http.StatusForbidden)
+						return
+					}
+				} else {
+					row["id"] = tenantID
+				}
+			}
+		} else {
+			for _, row := range rows {
+				rowTenantID, hasTenant := row["tenantId"]
+				if hasTenant {
+					if fmt.Sprintf("%v", rowTenantID) != tenantID {
+						http.Error(w, fmt.Sprintf("Forbidden: row tenantId %v does not match authorized tenant %s", rowTenantID, tenantID), http.StatusForbidden)
+						return
+					}
+				} else {
+					row["tenantId"] = tenantID
+				}
+			}
+		}
+	}
+
 	err := dynamicUpsert(tableName, rows)
 	if err != nil {
 		http.Error(w, "Sync failed: "+err.Error(), http.StatusInternalServerError)
@@ -1974,6 +2625,10 @@ func handleSyncTable(w http.ResponseWriter, r *http.Request) {
 		if eventBytes, err := json.Marshal(eventData); err == nil {
 			broadcastWSMessage(string(eventBytes))
 		}
+	}
+
+	if tableName == "local_users" {
+		go checkAndNotifyAdminOfNewDemoUsers()
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -2568,6 +3223,545 @@ func randString(n int) string {
 	return string(b)
 }
 
-// handleMigrateFromSupabase removed - fully migrated to VPS local PostgreSQL database
+// PBKDF2 standard implementation in pure Go
+func pbkdf2(password, salt []byte, iter, keyLen int, h func() hash.Hash) []byte {
+	prf := hmac.New(h, password)
+	hashLen := prf.Size()
+	numBlocks := (keyLen + hashLen - 1) / hashLen
+
+	var buf [4]byte
+	dk := make([]byte, 0, numBlocks*hashLen)
+	U := make([]byte, hashLen)
+
+	for block := 1; block <= numBlocks; block++ {
+		buf[0] = byte(block >> 24)
+		buf[1] = byte(block >> 16)
+		buf[2] = byte(block >> 8)
+		buf[3] = byte(block)
+
+		prf.Reset()
+		prf.Write(salt)
+		prf.Write(buf[:])
+		U = prf.Sum(U[:0])
+
+		blockBuf := make([]byte, hashLen)
+		copy(blockBuf, U)
+
+		for i := 2; i <= iter; i++ {
+			prf.Reset()
+			prf.Write(U)
+			U = prf.Sum(U[:0])
+			for j := 0; j < hashLen; j++ {
+				blockBuf[j] ^= U[j]
+			}
+		}
+		dk = append(dk, blockBuf...)
+	}
+	return dk[:keyLen]
+}
+
+func hashPassword(password string) string {
+	salt := []byte("posbah_default_salt_secret")
+	dk := pbkdf2([]byte(password), salt, 1000, 64, sha512.New)
+	return fmt.Sprintf("%x", dk)
+}
+
+func generateRandomPassword() string {
+	const (
+		letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+		digits  = "0123456789"
+		symbols = "@#$%-+=!_"
+	)
+	all := letters + digits + symbols
+	length := 8
+	bytes := make([]byte, length)
+	_, err := rand.Read(bytes)
+	if err != nil {
+		for i := 0; i < length; i++ {
+			bytes[i] = all[time.Now().Nanosecond()%len(all)]
+		}
+	}
+
+	for {
+		hasLetter := false
+		hasDigit := false
+		hasSymbol := false
+		for i := 0; i < length; i++ {
+			c := all[int(bytes[i])%len(all)]
+			bytes[i] = c
+			if strings.ContainsRune(letters, rune(c)) {
+				hasLetter = true
+			} else if strings.ContainsRune(digits, rune(c)) {
+				hasDigit = true
+			} else if strings.ContainsRune(symbols, rune(c)) {
+				hasSymbol = true
+			}
+		}
+		if hasLetter && hasDigit && hasSymbol {
+			break
+		}
+		_, _ = rand.Read(bytes)
+	}
+	return string(bytes)
+}
+
+func sendEmail(to string, subject string, body string) error {
+	smtpHost := os.Getenv("SMTP_HOST")
+	smtpPort := os.Getenv("SMTP_PORT")
+	smtpUser := os.Getenv("SMTP_USER")
+	smtpPass := os.Getenv("SMTP_PASS")
+	smtpSender := os.Getenv("SMTP_SENDER")
+	if smtpSender == "" {
+		smtpSender = smtpUser
+	}
+
+	if smtpHost == "" {
+		smtpHost = "smtp.gmail.com"
+	}
+	if smtpPort == "" {
+		smtpPort = "587"
+	}
+	if smtpUser == "" {
+		smtpUser = "posbah.info@gmail.com"
+	}
+	if smtpPass == "" {
+		log.Println("Skipping email send: SMTP_PASS environment variable is not configured.")
+		return fmt.Errorf("SMTP credentials not configured")
+	}
+
+	auth := smtp.PlainAuth("", smtpUser, smtpPass, smtpHost)
+
+	msg := []byte("To: " + to + "\r\n" +
+		"Subject: " + subject + "\r\n" +
+		"Content-Type: text/html; charset=UTF-8\r\n" +
+		"\r\n" +
+		body + "\r\n")
+
+	err := smtp.SendMail(smtpHost+":"+smtpPort, auth, smtpSender, []string{to}, msg)
+	if err != nil {
+		log.Printf("SMTP Error: failed to send email to %s: %v", to, err)
+		return err
+	}
+	log.Printf("SMTP Success: email successfully sent to %s", to)
+	return nil
+}
+
+func checkAndNotifyAdminOfNewDemoUsers() {
+	if db == nil {
+		return
+	}
+	rows, err := db.Query(`SELECT "googleSub", "email", COALESCE("displayName", '') FROM "local_users" WHERE "isPremium" = FALSE AND "demoEmailSent" = FALSE`)
+	if err != nil {
+		log.Printf("[Sync-Notify] Query error: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	type DemoNotify struct {
+		GoogleSub   string
+		Email       string
+		DisplayName string
+	}
+	var newDemos []DemoNotify
+	for rows.Next() {
+		var d DemoNotify
+		if err := rows.Scan(&d.GoogleSub, &d.Email, &d.DisplayName); err == nil {
+			newDemos = append(newDemos, d)
+		}
+	}
+
+	for _, d := range newDemos {
+		subject := fmt.Sprintf("[POSBah] Konfirmasi Pembayaran Demo User - %s", d.Email)
+		confirmUrl := fmt.Sprintf("https://www.zedmz.cloud/api/admin/confirm-payment-page?sub=%s&email=%s&name=%s", d.GoogleSub, d.Email, d.DisplayName)
+		
+		body := fmt.Sprintf(`
+			<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+				<h2 style="color: #3B82F6;">Konfirmasi Pembayaran POSBah Premium</h2>
+				<p>Halo Admin,</p>
+				<p>Seorang pengguna demo baru telah terdaftar di POSBah dan membutuhkan konfirmasi pembayaran untuk di-upgrade ke premium:</p>
+				<table style="width: 100%%; border-collapse: collapse; margin: 20px 0;">
+					<tr>
+						<td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Nama:</td>
+						<td style="padding: 8px; border-bottom: 1px solid #eee;">%s</td>
+					</tr>
+					<tr>
+						<td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Email:</td>
+						<td style="padding: 8px; border-bottom: 1px solid #eee;">%s</td>
+					</tr>
+					<tr>
+						<td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Google Sub:</td>
+						<td style="padding: 8px; border-bottom: 1px solid #eee;">%s</td>
+					</tr>
+				</table>
+				<p>Silakan klik tombol di bawah ini untuk melihat detail dan mengonfirmasi pembayaran:</p>
+				<div style="text-align: center; margin: 30px 0;">
+					<a href="%s" style="background-color: #10B981; color: white; padding: 12px 24px; text-decoration: none; font-weight: bold; border-radius: 6px; display: inline-block;">Proses Konfirmasi Pembayaran</a>
+				</div>
+				<p style="color: #666; font-size: 12px;">Jika dibiarkan selama 2 hari, pengguna demo ini akan diblokir secara otomatis.</p>
+			</div>
+		`, d.DisplayName, d.Email, d.GoogleSub, confirmUrl)
+
+		err := sendEmail("muhammadmuizz8@gmail.com", subject, body)
+		if err == nil {
+			_, errDb := db.Exec(`UPDATE "local_users" SET "demoEmailSent" = TRUE WHERE "googleSub" = $1`, d.GoogleSub)
+			if errDb != nil {
+				log.Printf("[Sync-Notify] Failed to update demoEmailSent: %v", errDb)
+			} else {
+				log.Printf("[Sync-Notify] Notification sent and database updated for: %s", d.Email)
+			}
+		} else {
+			log.Printf("[Sync-Notify] Failed to send email for %s: %v", d.Email, err)
+		}
+	}
+}
+
+func handleConfirmPaymentPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	googleSub := r.URL.Query().Get("sub")
+	email := r.URL.Query().Get("email")
+	displayName := r.URL.Query().Get("name")
+
+	if googleSub == "" || email == "" {
+		http.Error(w, "sub and email are required", http.StatusBadRequest)
+		return
+	}
+
+	if db == nil {
+		http.Error(w, "Database not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	var isPremium bool
+	var isActive bool
+	err := db.QueryRow(`SELECT "isPremium", "isActive" FROM "local_users" WHERE "googleSub" = $1`, googleSub).Scan(&isPremium, &isActive)
+	if err != nil {
+		http.Error(w, "User not found in database", http.StatusNotFound)
+		return
+	}
+
+	if isPremium {
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(`
+			<!DOCTYPE html>
+			<html>
+			<head><title>Sudah Premium</title></head>
+			<body style="background-color: #0F172A; color: #F8FAFC; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh;">
+				<div style="text-align: center; border: 1px solid rgba(255, 255, 255, 0.1); padding: 30px; border-radius: 10px; background: #1E293B;">
+					<h2 style="color: #10B981;">Akun Sudah Premium</h2>
+					<p>User ` + email + ` sudah berstatus premium sebelumnya.</p>
+				</div>
+			</body>
+			</html>
+		`))
+		return
+	}
+
+	if !isActive {
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(`
+			<!DOCTYPE html>
+			<html>
+			<head><title>Akun Diblokir</title></head>
+			<body style="background-color: #0F172A; color: #F8FAFC; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh;">
+				<div style="text-align: center; border: 1px solid #EF4444; padding: 30px; border-radius: 10px; background: #1E293B;">
+					<h2 style="color: #EF4444;">Akun Diblokir / Inaktif</h2>
+					<p>User ` + email + ` berstatus inaktif atau sudah diblokir.</p>
+				</div>
+			</body>
+			</html>
+		`))
+		return
+	}
+
+	htmlContent := fmt.Sprintf(`
+		<!DOCTYPE html>
+		<html lang="id">
+		<head>
+			<meta charset="UTF-8">
+			<meta name="viewport" content="width=device-width, initial-scale=1.0">
+			<title>Konfirmasi Pembayaran Premium - POSBah</title>
+			<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+			<style>
+				body {
+					background-color: #0F172A;
+					color: #F8FAFC;
+					font-family: 'Inter', sans-serif;
+					display: flex;
+					justify-content: center;
+					align-items: center;
+					min-height: 100vh;
+					margin: 0;
+					padding: 20px;
+					box-sizing: border-box;
+				}
+				.container {
+					background-color: rgba(30, 41, 59, 0.7);
+					backdrop-filter: blur(10px);
+					border: 1px solid rgba(255, 255, 255, 0.1);
+					border-radius: 20px;
+					padding: 30px;
+					max-width: 500px;
+					width: 100%%;
+					box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+					text-align: center;
+				}
+				h1 {
+					font-size: 22px;
+					font-weight: 700;
+					margin-bottom: 20px;
+					background: linear-gradient(to right, #3B82F6, #10B981);
+					-webkit-background-clip: text;
+					background-clip: text;
+					-webkit-text-fill-color: transparent;
+				}
+				.info-table {
+					width: 100%%;
+					margin: 20px 0;
+					text-align: left;
+					border-collapse: collapse;
+				}
+				.info-table td {
+					padding: 10px 0;
+					border-bottom: 1px solid rgba(255,255,255,0.05);
+				}
+				.info-table td.label {
+					font-weight: 600;
+					color: #94A3B8;
+					width: 35%%;
+				}
+				.info-table td.value {
+					color: #F8FAFC;
+				}
+				.btn-group {
+					display: flex;
+					gap: 15px;
+					margin-top: 30px;
+				}
+				.btn {
+					flex: 1;
+					padding: 14px;
+					border: none;
+					border-radius: 12px;
+					font-size: 15px;
+					font-weight: 600;
+					cursor: pointer;
+					transition: all 0.2s;
+				}
+				.btn-approve {
+					background-color: #10B981;
+					color: white;
+				}
+				.btn-approve:hover {
+					background-color: #059669;
+				}
+				.btn-reject {
+					background-color: #EF4444;
+					color: white;
+				}
+				.btn-reject:hover {
+					background-color: #DC2626;
+				}
+			</style>
+		</head>
+		<body>
+			<div class="container">
+				<h1>Persetujuan Premium POSBah</h1>
+				<p style="color: #94A3B8; font-size: 14px;">Konfirmasi pembayaran untuk mendaftarkan akun Premium secara otomatis.</p>
+				
+				<table class="info-table">
+					<tr>
+						<td class="label">Nama User</td>
+						<td class="value">%s</td>
+					</tr>
+					<tr>
+						<td class="label">Email</td>
+						<td class="value">%s</td>
+					</tr>
+					<tr>
+						<td class="label">Google Sub</td>
+						<td class="value" style="font-family: monospace; font-size: 12px; word-break: break-all;">%s</td>
+					</tr>
+				</table>
+
+				<div class="btn-group">
+					<form action="/api/admin/confirm-payment-action?action=reject&sub=%s&email=%s&name=%s" method="POST" style="flex:1;">
+						<button type="submit" class="btn btn-reject">Tolak & Blokir</button>
+					</form>
+					<form action="/api/admin/confirm-payment-action?action=approve&sub=%s&email=%s&name=%s" method="POST" style="flex:1;">
+						<button type="submit" class="btn btn-approve">Bayar / Setuju</button>
+					</form>
+				</div>
+			</div>
+		</body>
+		</html>
+	`, displayName, email, googleSub, googleSub, email, displayName, googleSub, email, displayName)
+
+	w.Header().Set("Content-Type", "text/html")
+	w.Write([]byte(htmlContent))
+}
+
+func handleConfirmPaymentAction(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	action := r.URL.Query().Get("action")
+	googleSub := r.URL.Query().Get("sub")
+	email := r.URL.Query().Get("email")
+	displayName := r.URL.Query().Get("name")
+
+	if googleSub == "" || email == "" {
+		http.Error(w, "sub and email are required", http.StatusBadRequest)
+		return
+	}
+
+	if db == nil {
+		http.Error(w, "Database not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	if action == "approve" {
+		passwordGenerated := generateRandomPassword()
+		hashedPassword := hashPassword(passwordGenerated)
+
+		cleanEmail := strings.ReplaceAll(strings.ReplaceAll(email, ".", "_"), "@", "_")
+		demoTenantId := "demo_tenant_" + cleanEmail
+		premiumTenantId := "ten_premium_" + cleanEmail
+
+		tx, err := db.Begin()
+		if err != nil {
+			http.Error(w, "Transaction failed: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer tx.Rollback()
+
+		var businessMode string = "FNB"
+		err = tx.QueryRow(`SELECT "businessMode" FROM "tenants" WHERE "id" = $1`, demoTenantId).Scan(&businessMode)
+		if err != nil {
+			businessMode = "FNB"
+		}
+
+		nowMillis := time.Now().UnixNano() / int64(time.Millisecond)
+
+		tenantName := "CV. " + displayName + " (Premium)"
+		_, err = tx.Exec(`INSERT INTO "tenants" ("id", "name", "ownerEmail", "businessMode", "isActive", "createdAt", "updatedAt") 
+			VALUES ($1, $2, $3, $4, $5, $6, $7) 
+			ON CONFLICT ("id") DO UPDATE SET "name" = EXCLUDED."name", "businessMode" = EXCLUDED."businessMode", "updatedAt" = EXCLUDED."updatedAt"`,
+			premiumTenantId, tenantName, email, businessMode, true, nowMillis, nowMillis)
+		if err != nil {
+			http.Error(w, "Failed to create premium tenant: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		employeeId := int((time.Now().Unix() + int64(time.Now().Nanosecond())) % 2000000000)
+		_, err = tx.Exec(`INSERT INTO "employees" ("id", "tenantId", "outletId", "name", "email", "role", "pinHash", "salary", "isActive", "createdAt", "updatedAt") 
+			VALUES ($1, $2, NULL, $3, $4, 'OWNER', $5, 0.0, true, $6, $7)
+			ON CONFLICT ("id") DO NOTHING`,
+			employeeId, premiumTenantId, displayName, email, hashedPassword, nowMillis, nowMillis)
+		if err != nil {
+			http.Error(w, "Failed to create owner employee: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		_, err = tx.Exec(`UPDATE "local_users" SET "isPremium" = TRUE, "tenantId" = $1, "isActive" = TRUE, "updatedAt" = $2 WHERE "googleSub" = $3`,
+			premiumTenantId, nowMillis, googleSub)
+		if err != nil {
+			http.Error(w, "Failed to update local user: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		if err := tx.Commit(); err != nil {
+			http.Error(w, "Failed to commit transaction: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		subject := "[POSBah] Informasi Akun Premium POSBah Anda"
+		body := fmt.Sprintf(`
+			<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+				<h2 style="color: #10B981;">Pembayaran Sukses - Akun Premium POSBah Aktif!</h2>
+				<p>Halo %s,</p>
+				<p>Terima kasih atas pembayaran Anda. Akun Anda telah berhasil di-upgrade ke <strong>Premium</strong>.</p>
+				<p>Silakan gunakan kredensial berikut untuk masuk ke aplikasi POSBah sebagai Premium User:</p>
+				<div style="background-color: #f4f4f4; padding: 15px; border-radius: 6px; margin: 20px 0; font-family: monospace;">
+					<strong>Email:</strong> %s<br>
+					<strong>Password:</strong> <span style="font-size: 16px; color: #d9534f; font-weight: bold;">%s</span>
+				</div>
+				<p><strong>Catatan Penting:</strong> Simpan password ini baik-baik. Anda dapat menggunakan email dan password ini secara langsung untuk masuk pada menu Premium (Email) di halaman login aplikasi POSBah.</p>
+				<p>Selamat bertransaksi!</p>
+			</div>
+		`, displayName, email, passwordGenerated)
+
+		_ = sendEmail(email, subject, body)
+
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(`
+			<!DOCTYPE html>
+			<html>
+			<head>
+				<meta charset="utf-8">
+				<title>Konfirmasi Sukses</title>
+				<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+				<style>
+					body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: #F8FAFC; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+					.card { background-color: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px; padding: 40px; text-align: center; max-width: 500px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+					h1 { color: #10B981; margin-bottom: 20px; }
+					p { color: #94A3B8; line-height: 1.6; }
+					.pwd { font-family: monospace; background: #1E293B; padding: 10px; border-radius: 5px; color: #EF4444; font-size: 1.2em; letter-spacing: 2px; }
+				</style>
+			</head>
+			<body>
+				<div class="card">
+					<h1>Pembayaran Dikonfirmasi!</h1>
+					<p>Akun <strong>` + email + `</strong> berhasil di-upgrade ke premium.</p>
+					<p>Password premium yang dikirimkan ke Gmail user:</p>
+					<p class="pwd">` + passwordGenerated + `</p>
+					<p>Tutup tab ini atau kembali.</p>
+				</div>
+			</body>
+			</html>
+		`))
+		return
+	} else if action == "reject" {
+		_, err := db.Exec(`UPDATE "local_users" SET "isActive" = FALSE, "updatedAt" = $1 WHERE "googleSub" = $2`,
+			time.Now().UnixNano()/int64(time.Millisecond), googleSub)
+		if err != nil {
+			http.Error(w, "Failed to block user: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "text/html")
+		w.Write([]byte(`
+			<!DOCTYPE html>
+			<html>
+			<head>
+				<meta charset="utf-8">
+				<title>Akun Ditolak</title>
+				<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+				<style>
+					body { font-family: 'Inter', sans-serif; background-color: #0F172A; color: #F8FAFC; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+					.card { background-color: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px; padding: 40px; text-align: center; max-width: 500px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+					h1 { color: #EF4444; margin-bottom: 20px; }
+					p { color: #94A3B8; line-height: 1.6; }
+				</style>
+			</head>
+			<body>
+				<div class="card">
+					<h1>Pembayaran Ditolak & Diblokir</h1>
+					<p>Akun <strong>` + email + `</strong> telah diblokir secara permanen dari sistem.</p>
+					<p>Tutup tab ini atau kembali.</p>
+				</div>
+			</body>
+			</html>
+		`))
+		return
+	}
+
+	http.Error(w, "Invalid action", http.StatusBadRequest)
+}
 
 

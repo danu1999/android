@@ -75,7 +75,7 @@ object SupabaseSyncManager {
                         put("isActive", u.isActive)
                     })
                 }
-                uploadTable("local_users", array)
+                uploadTable(context, "local_users", array)
             }
 
             // 2. tenants (Metadata - upload all)
@@ -93,7 +93,7 @@ object SupabaseSyncManager {
                         put("updatedAt", t.updatedAt)
                     })
                 }
-                uploadTable("tenants", array)
+                uploadTable(context, "tenants", array)
             }
 
             // 3. outlets (Metadata - upload all)
@@ -114,7 +114,7 @@ object SupabaseSyncManager {
                         put("updatedAt", o.updatedAt)
                     })
                 }
-                uploadTable("outlets", array)
+                uploadTable(context, "outlets", array)
             }
 
             // 4. employees (Metadata - upload all)
@@ -130,6 +130,7 @@ object SupabaseSyncManager {
                         put("email", e.email ?: JSONObject.NULL)
                         put("role", e.role)
                         put("pinHash", e.pinHash)
+                        put("phone", e.phone ?: JSONObject.NULL)
                         put("salary", e.salary)
                         put("isActive", e.isActive)
                         put("payPeriod", e.payPeriod)
@@ -139,7 +140,7 @@ object SupabaseSyncManager {
                         put("updatedAt", e.updatedAt)
                     })
                 }
-                uploadTable("employees", array)
+                uploadTable(context, "employees", array)
             }
 
             // 5. bmp_clients (Operational - filter unsynced)
@@ -170,11 +171,11 @@ object SupabaseSyncManager {
                         put("updatedAt", c.updatedAt)
                     })
                 }
-                if (uploadTable("bmp_clients", array)) {
+                if (uploadTable(context, "bmp_clients", array)) {
                     unsyncedClients.forEach { db.bmpClientDao().markSynced(it.id) }
                 }
             }
-
+ 
             // 6. bmp_invoices (Operational - filter unsynced)
             val invoices = db.bmpInvoiceDao().getAll().filter { it.tenantId == activeTenantId }
             val unsyncedInvoices = invoices.filter { !it.isSynced }
@@ -204,11 +205,11 @@ object SupabaseSyncManager {
                         put("updatedAt", i.updatedAt)
                     })
                 }
-                if (uploadTable("bmp_invoices", array)) {
+                if (uploadTable(context, "bmp_invoices", array)) {
                     unsyncedInvoices.forEach { db.bmpInvoiceDao().markSynced(it.id) }
                 }
             }
-
+ 
             // 7. bmp_products (Metadata - upload all)
             val bmpProducts = db.bmpProductDao().getAll().filter { it.tenantId == activeTenantId }
             if (bmpProducts.isNotEmpty()) {
@@ -233,9 +234,9 @@ object SupabaseSyncManager {
                         put("updatedAt", p.updatedAt)
                     })
                 }
-                uploadTable("bmp_products", array)
+                uploadTable(context, "bmp_products", array)
             }
-
+ 
             // 8. bmp_master_products (Metadata - upload all)
             val bmpMasterProducts = db.bmpMasterProductDao().getAll().filter { it.tenantId == activeTenantId }
             if (bmpMasterProducts.isNotEmpty()) {
@@ -258,9 +259,9 @@ object SupabaseSyncManager {
                         put("updatedAt", mp.updatedAt)
                     })
                 }
-                uploadTable("bmp_master_products", array)
+                uploadTable(context, "bmp_master_products", array)
             }
-
+ 
             // 9. bmp_invoice_payments (Operational - filter unsynced)
             val bmpPayments = db.bmpPaymentDao().getAll().filter { it.tenantId == activeTenantId }
             val unsyncedPayments = bmpPayments.filter { !it.isSynced }
@@ -279,11 +280,11 @@ object SupabaseSyncManager {
                         put("createdAt", p.createdAt)
                     })
                 }
-                if (uploadTable("bmp_invoice_payments", array)) {
+                if (uploadTable(context, "bmp_invoice_payments", array)) {
                     unsyncedPayments.forEach { db.bmpPaymentDao().markSynced(it.id) }
                 }
             }
-
+ 
             // 10. bmp_cashflow (Operational - filter unsynced)
             val cashflow = db.bmpCashFlowDao().getAll().filter { it.tenantId == activeTenantId }
             val unsyncedCashflow = cashflow.filter { !it.isSynced }
@@ -302,11 +303,11 @@ object SupabaseSyncManager {
                         put("createdAt", cf.createdAt)
                     })
                 }
-                if (uploadTable("bmp_cashflow", array)) {
+                if (uploadTable(context, "bmp_cashflow", array)) {
                     unsyncedCashflow.forEach { db.bmpCashFlowDao().markSynced(it.id) }
                 }
             }
-
+ 
             // 11. bmp_settings (Metadata - upload all)
             val bmpSettings = db.bmpSettingsDao().getAll().filter { it.tenantId == activeTenantId }
             if (bmpSettings.isNotEmpty()) {
@@ -334,9 +335,9 @@ object SupabaseSyncManager {
                         put("updatedAt", s.updatedAt)
                     })
                 }
-                uploadTable("bmp_settings", array)
+                uploadTable(context, "bmp_settings", array)
             }
-
+ 
             // 12. bmp_employees (Metadata - upload all)
             val bmpEmployees = db.bmpEmployeeDao().getAll().filter { it.tenantId == activeTenantId }
             if (bmpEmployees.isNotEmpty()) {
@@ -354,9 +355,9 @@ object SupabaseSyncManager {
                         put("updatedAt", e.updatedAt)
                     })
                 }
-                uploadTable("bmp_employees", array)
+                uploadTable(context, "bmp_employees", array)
             }
-
+ 
             // 13. bmp_payrolls (Operational - filter unsynced)
             val payrolls = db.bmpPayrollDao().getAll().filter { it.tenantId == activeTenantId }
             val unsyncedPayrolls = payrolls.filter { !it.isSynced }
@@ -376,11 +377,11 @@ object SupabaseSyncManager {
                         put("createdAt", p.createdAt)
                     })
                 }
-                if (uploadTable("bmp_payrolls", array)) {
+                if (uploadTable(context, "bmp_payrolls", array)) {
                     unsyncedPayrolls.forEach { db.bmpPayrollDao().markSynced(it.id) }
                 }
             }
-
+ 
             // 14. bmp_bahan_baku (Operational - filter unsynced)
             val bahanBaku = db.bmpBahanBakuDao().getAll().filter { it.tenantId == activeTenantId }
             val unsyncedBahanBaku = bahanBaku.filter { !it.isSynced }
@@ -402,11 +403,11 @@ object SupabaseSyncManager {
                         put("updatedAt", bb.updatedAt)
                     })
                 }
-                if (uploadTable("bmp_bahan_baku", array)) {
+                if (uploadTable(context, "bmp_bahan_baku", array)) {
                     unsyncedBahanBaku.forEach { db.bmpBahanBakuDao().markSynced(it.id) }
                 }
             }
-
+ 
             // 15. bmp_bahan_baku_item (Operational - filter unsynced)
             val bahanBakuItems = db.bmpBahanBakuItemDao().getAll().filter { it.tenantId == activeTenantId }
             val unsyncedBahanBakuItems = bahanBakuItems.filter { !it.isSynced }
@@ -425,11 +426,11 @@ object SupabaseSyncManager {
                         put("createdAt", bbi.createdAt)
                     })
                 }
-                if (uploadTable("bmp_bahan_baku_item", array)) {
+                if (uploadTable(context, "bmp_bahan_baku_item", array)) {
                     unsyncedBahanBakuItems.forEach { db.bmpBahanBakuItemDao().markSynced(it.id) }
                 }
             }
-
+ 
             // 16. print_settings (Metadata - upload all)
             val printSettings = db.printSettingsDao().getAll().filter { it.tenantId == activeTenantId }
             if (printSettings.isNotEmpty()) {
@@ -473,9 +474,9 @@ object SupabaseSyncManager {
                         put("updatedAt", ps.updatedAt)
                     })
                 }
-                uploadTable("print_settings", array)
+                uploadTable(context, "print_settings", array)
             }
-
+ 
             // 17. products (Metadata - upload all)
             val productsList = db.productDao().getAll().filter { it.tenantId == activeTenantId }
             if (productsList.isNotEmpty()) {
@@ -500,9 +501,9 @@ object SupabaseSyncManager {
                         put("updatedAt", p.updatedAt)
                     })
                 }
-                uploadTable("products", array)
+                uploadTable(context, "products", array)
             }
-
+ 
             // 18. customers (Metadata - upload all)
             val customersList = db.customerDao().getAll().filter { it.tenantId == activeTenantId }
             if (customersList.isNotEmpty()) {
@@ -518,9 +519,9 @@ object SupabaseSyncManager {
                         put("updatedAt", c.updatedAt)
                     })
                 }
-                uploadTable("customers", array)
+                uploadTable(context, "customers", array)
             }
-
+ 
             // 19. transactions (Operational / POS Transactions - upload all)
             val transactionsList = db.transactionDao().getAll().filter { it.tenantId == activeTenantId }
             if (transactionsList.isNotEmpty()) {
@@ -555,9 +556,9 @@ object SupabaseSyncManager {
                         put("updatedAt", t.updatedAt)
                     })
                 }
-                uploadTable("transactions", array)
+                uploadTable(context, "transactions", array)
             }
-
+ 
             // 20. transaction_items (Operational - upload all)
             val allowedTxIds = transactionsList.map { it.id }.toSet()
             val transactionItemsList = db.transactionItemDao().getAll().filter { it.transactionId in allowedTxIds }
@@ -577,9 +578,9 @@ object SupabaseSyncManager {
                         put("note", ti.note ?: JSONObject.NULL)
                     })
                 }
-                uploadTable("transaction_items", array)
+                uploadTable(context, "transaction_items", array)
             }
-
+ 
             // 21. activity_logs (Logs - upload all)
             val activityLogsList = db.activityLogDao().getAll().filter { it.tenantId == activeTenantId }
             if (activityLogsList.isNotEmpty()) {
@@ -595,9 +596,9 @@ object SupabaseSyncManager {
                         put("appMode", l.appMode)
                     })
                 }
-                uploadTable("activity_logs", array)
+                uploadTable(context, "activity_logs", array)
             }
-
+ 
             Log.d(TAG, "Sinkronisasi selesai dengan sukses.")
             SyncResult.Success
         } catch (e: Exception) {
@@ -605,16 +606,16 @@ object SupabaseSyncManager {
             SyncResult.Error(e.message ?: "Error tidak terduga saat sinkronisasi.")
         }
     }
-
+ 
     /**
      * Upload data JSON array ke endpoint REST VPS tertentu dengan model UPSERT.
      */
-    private fun uploadTable(tableName: String, jsonArray: JSONArray): Boolean {
+    private fun uploadTable(context: Context, tableName: String, jsonArray: JSONArray): Boolean {
         var conn: HttpURLConnection? = null
         return try {
             val endpointUrl = "$VPS_URL/api/sync/$tableName"
             val url = URL(endpointUrl)
-
+ 
             conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 doOutput = true
@@ -622,15 +623,20 @@ object SupabaseSyncManager {
                 readTimeout = 30_000
                 setRequestProperty("Content-Type", "application/json")
                 setRequestProperty("x-tenant-id", currentTenantId)
+                val securePrefs = com.posbah.app.security.SecurePreferences(context)
+                val email = securePrefs.currentEmail
+                if (!email.isNullOrBlank()) {
+                    setRequestProperty("x-user-email", email)
+                }
             }
-
+ 
             conn.outputStream.use { out ->
                 val body = jsonArray.toString()
                 out.bufferedWriter().use { writer ->
                     writer.write(body)
                 }
             }
-
+ 
             val responseCode = conn.responseCode
             if (responseCode in 200..299) {
                 Log.d(TAG, "Berhasil mengunggah tabel: $tableName ($responseCode)")
@@ -645,6 +651,613 @@ object SupabaseSyncManager {
             false
         } finally {
             conn?.disconnect()
+        }
+    }
+
+    /**
+     * Download data dari VPS REST API.
+     */
+    private fun pullTable(context: Context, tableName: String, tenantId: String, queryParams: String = ""): JSONArray? {
+        var conn: HttpURLConnection? = null
+        return try {
+            val separator = if (queryParams.isNotEmpty()) "?" else ""
+            val endpointUrl = "$VPS_URL/api/sync/$tableName$separator$queryParams"
+            val url = URL(endpointUrl)
+
+            conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 15_000
+                readTimeout = 30_000
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("x-tenant-id", tenantId)
+                val securePrefs = com.posbah.app.security.SecurePreferences(context)
+                val email = securePrefs.currentEmail
+                if (!email.isNullOrBlank()) {
+                    setRequestProperty("x-user-email", email)
+                }
+            }
+
+            val responseCode = conn.responseCode
+            if (responseCode in 200..299) {
+                val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+                JSONArray(responseText)
+            } else {
+                val errorStream = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                Log.e(TAG, "Gagal mengunduh tabel: $tableName ($responseCode): $errorStream")
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception saat mengunduh tabel $tableName: ${e.message}", e)
+            null
+        } finally {
+            conn?.disconnect()
+        }
+    }
+
+    /**
+     * Jalankan sinkronisasi unduh penuh untuk data Master: outlets, employees, dan products.
+     */
+    suspend fun pullAll(context: Context, db: PosBahDatabase, activeTenantId: String): SyncResult = withContext(Dispatchers.IO) {
+        if (activeTenantId.isBlank()) {
+            Log.w(TAG, "Pull sinkronisasi dibatalkan: tenantId kosong.")
+            return@withContext SyncResult.Error("tenantId kosong")
+        }
+        if (!isNetworkAvailable(context)) {
+            Log.w(TAG, "Pull sinkronisasi dibatalkan: tidak ada koneksi internet.")
+            return@withContext SyncResult.NoConnection
+        }
+
+        try {
+            Log.d(TAG, "Memulai pull data master dari VPS...")
+
+            // 1. Pull outlets
+            val outletsArray = pullTable(context, "outlets", activeTenantId)
+            if (outletsArray != null) {
+                val list = mutableListOf<Outlet>()
+                for (i in 0 until outletsArray.length()) {
+                    val obj = outletsArray.getJSONObject(i)
+                    list.add(Outlet(
+                        id = obj.optLong("id", 0L),
+                        tenantId = obj.optString("tenantId", activeTenantId),
+                        name = obj.optString("name"),
+                        address = if (obj.isNull("address")) null else obj.optString("address"),
+                        phone = if (obj.isNull("phone")) null else obj.optString("phone"),
+                        isDefault = obj.optBoolean("isDefault", false),
+                        isOpen = obj.optBoolean("isOpen", true),
+                        currentEmployee = if (obj.isNull("currentEmployee")) null else obj.optString("currentEmployee"),
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                    ))
+                }
+                if (list.isNotEmpty()) {
+                    list.forEach { db.outletDao().insert(it) }
+                }
+            }
+
+            // 2. Pull employees
+            val employeesArray = pullTable(context, "employees", activeTenantId)
+            if (employeesArray != null) {
+                val list = mutableListOf<Employee>()
+                for (i in 0 until employeesArray.length()) {
+                    val obj = employeesArray.getJSONObject(i)
+                    val outletId = if (obj.isNull("outletId")) null else obj.optLong("outletId")
+                    list.add(Employee(
+                        id = obj.optLong("id", 0L),
+                        tenantId = obj.optString("tenantId", activeTenantId),
+                        outletId = outletId,
+                        name = obj.optString("name"),
+                        email = if (obj.isNull("email")) null else obj.optString("email"),
+                        role = obj.optString("role", "KASIR"),
+                        pinHash = obj.optString("pinHash"),
+                        phone = if (obj.isNull("phone")) null else obj.optString("phone"),
+                        salary = obj.optDouble("salary", 0.0),
+                        isActive = obj.optBoolean("isActive", true),
+                        payPeriod = obj.optString("payPeriod", "MONTHLY"),
+                        lastPaidAt = if (obj.isNull("lastPaidAt")) null else obj.optLong("lastPaidAt"),
+                        emailVerified = obj.optBoolean("emailVerified", false),
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                    ))
+                }
+                if (list.isNotEmpty()) {
+                    list.forEach { db.employeeDao().insert(it) }
+                }
+            }
+
+            // 3. Pull products
+            val productsArray = pullTable(context, "products", activeTenantId)
+            if (productsArray != null) {
+                val list = mutableListOf<ProductEntity>()
+                for (i in 0 until productsArray.length()) {
+                    val obj = productsArray.getJSONObject(i)
+                    val outletId = if (obj.isNull("outletId")) null else obj.optLong("outletId")
+                    list.add(ProductEntity(
+                        id = obj.optLong("id", 0L),
+                        tenantId = obj.optString("tenantId", activeTenantId),
+                        outletId = outletId,
+                        name = obj.optString("name"),
+                        price = obj.optDouble("price", 0.0),
+                        costPrice = obj.optDouble("costPrice", 0.0),
+                        stock = obj.optInt("stock", 0),
+                        unit = obj.optString("unit", "pcs"),
+                        barcode = if (obj.isNull("barcode")) null else obj.optString("barcode"),
+                        category = obj.optString("category", "Umum"),
+                        wholesaleEnabled = obj.optBoolean("wholesaleEnabled", false),
+                        wholesalePrices = if (obj.isNull("wholesalePrices")) null else obj.opt("wholesalePrices")?.toString(),
+                        variants = if (obj.isNull("variants")) null else obj.opt("variants")?.toString(),
+                        image = if (obj.isNull("image")) null else obj.optString("image"),
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                    ))
+                }
+                if (list.isNotEmpty()) {
+                    db.productDao().insertAll(list)
+                }
+            }
+
+            // 4. Pull customers
+            val customersArray = pullTable(context, "customers", activeTenantId)
+            if (customersArray != null) {
+                val list = mutableListOf<CustomerEntity>()
+                for (i in 0 until customersArray.length()) {
+                    val obj = customersArray.getJSONObject(i)
+                    list.add(CustomerEntity(
+                        id = obj.optLong("id", 0L),
+                        tenantId = obj.optString("tenantId", activeTenantId),
+                        name = obj.optString("name"),
+                        phone = if (obj.isNull("phone")) null else obj.optString("phone"),
+                        address = if (obj.isNull("address")) null else obj.optString("address"),
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                    ))
+                }
+                if (list.isNotEmpty()) {
+                    db.customerDao().insertAll(list)
+                }
+            }
+
+            // 5. Pull transactions
+            val transactionsArray = pullTable(context, "transactions", activeTenantId)
+            val activeTxIds = mutableListOf<Long>()
+            if (transactionsArray != null) {
+                val list = mutableListOf<TransactionEntity>()
+                for (i in 0 until transactionsArray.length()) {
+                    val obj = transactionsArray.getJSONObject(i)
+                    val idVal = obj.optLong("id", 0L)
+                    val outletId = if (obj.isNull("outletId")) null else obj.optLong("outletId")
+                    val customerId = if (obj.isNull("customerId")) null else obj.optLong("customerId")
+                    val amountPaid = if (obj.isNull("amountPaid")) null else obj.optDouble("amountPaid")
+                    val change = if (obj.isNull("change")) null else obj.optDouble("change")
+                    
+                    val status = obj.optString("status", "COMPLETED")
+                    val orderStatus = if (obj.isNull("orderStatus")) null else obj.optString("orderStatus")
+                    val receiptNumber = obj.optString("receiptNumber")
+                    val paymentMethod = obj.optString("paymentMethod", "CASH")
+                    
+                    // Identify active or unpaid (BELUM LUNAS) transactions to pull their items
+                    val isRentalActive = receiptNumber.startsWith("RN-") && (orderStatus == "ACTIVE" || paymentMethod != "CASH" || status == "PENDING")
+                    val isLaundryActive = receiptNumber.startsWith("LD-") && (orderStatus != "DIAMBIL" || paymentMethod != "CASH" || status == "PENDING")
+                    if (isRentalActive || isLaundryActive) {
+                        activeTxIds.add(idVal)
+                    }
+
+                    list.add(TransactionEntity(
+                        id = idVal,
+                        tenantId = obj.optString("tenantId", activeTenantId),
+                        outletId = outletId,
+                        employeeId = obj.optLong("employeeId", 1L),
+                        customerId = customerId,
+                        customerName = if (obj.isNull("customerName")) null else obj.optString("customerName"),
+                        receiptNumber = receiptNumber,
+                        date = obj.optLong("date", System.currentTimeMillis()),
+                        subtotal = obj.optDouble("subtotal", 0.0),
+                        discountType = if (obj.isNull("discountType")) null else obj.optString("discountType"),
+                        discountInput = obj.optDouble("discountInput", 0.0),
+                        discountAmt = obj.optDouble("discountAmt", 0.0),
+                        total = obj.optDouble("total", 0.0),
+                        discount = obj.optDouble("discount", 0.0),
+                        paymentMethod = obj.optString("paymentMethod", "CASH"),
+                        amountPaid = amountPaid,
+                        change = change,
+                        status = status,
+                        type = obj.optString("type", "SALES"),
+                        orderStatus = orderStatus,
+                        dpAmount = obj.optDouble("dpAmount", 0.0),
+                        deliveryDate = if (obj.isNull("deliveryDate")) null else obj.optLong("deliveryDate"),
+                        queueNumber = if (obj.isNull("queueNumber")) null else obj.optInt("queueNumber"),
+                        notes = if (obj.isNull("notes")) null else obj.optString("notes"),
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                    ))
+                }
+                if (list.isNotEmpty()) {
+                    list.forEach { db.transactionDao().insert(it) }
+                }
+            }
+
+            // 6. Pull transaction_items for active transactions
+            activeTxIds.forEach { txId ->
+                val itemsArray = pullTable(context, "transaction_items", activeTenantId, "transactionId=eq.$txId")
+                if (itemsArray != null) {
+                    val itemsList = mutableListOf<TransactionItemEntity>()
+                    for (i in 0 until itemsArray.length()) {
+                        val obj = itemsArray.getJSONObject(i)
+                        val variantId = if (obj.isNull("variantId")) null else obj.optLong("variantId")
+                        val variantName = if (obj.isNull("variantName")) null else obj.optString("variantName")
+                        itemsList.add(TransactionItemEntity(
+                            id = obj.optLong("id", 0L),
+                            transactionId = obj.optLong("transactionId", txId),
+                            productId = obj.optLong("productId", 0L),
+                            variantId = variantId,
+                            variantName = variantName,
+                            quantity = obj.optInt("quantity", 1),
+                            price = obj.optDouble("price", 0.0),
+                            costPrice = obj.optDouble("costPrice", 0.0),
+                            discount = obj.optDouble("discount", 0.0),
+                            note = if (obj.isNull("note")) null else obj.optString("note")
+                        ))
+                    }
+                    if (itemsList.isNotEmpty()) {
+                        db.transactionItemDao().insertAll(itemsList)
+                    }
+                }
+            }
+
+            // 7. Pull bmp_clients
+            val bmpClientsArray = pullTable(context, "bmp_clients", activeTenantId)
+            if (bmpClientsArray != null) {
+                val list = mutableListOf<BmpClientEntity>()
+                for (i in 0 until bmpClientsArray.length()) {
+                    val obj = bmpClientsArray.getJSONObject(i)
+                    list.add(BmpClientEntity(
+                        id = obj.optLong("id", 0L),
+                        tenantId = obj.optString("tenantId", activeTenantId),
+                        outletId = if (obj.isNull("outletId")) null else obj.optLong("outletId"),
+                        clientName = obj.optString("clientName"),
+                        saldoTitipan = obj.optDouble("saldoTitipan", 0.0),
+                        addressLine1 = if (obj.isNull("addressLine1")) null else obj.optString("addressLine1"),
+                        clientLogo = if (obj.isNull("clientLogo")) null else obj.optString("clientLogo"),
+                        province = if (obj.isNull("province")) null else obj.optString("province"),
+                        postalCode = if (obj.isNull("postalCode")) null else obj.optString("postalCode"),
+                        phoneNumber = if (obj.isNull("phoneNumber")) null else obj.optString("phoneNumber"),
+                        emailAddress = if (obj.isNull("emailAddress")) null else obj.optString("emailAddress"),
+                        taxNumber = if (obj.isNull("taxNumber")) null else obj.optString("taxNumber"),
+                        uniqueID = if (obj.isNull("uniqueID")) null else obj.optString("uniqueID"),
+                        slug = if (obj.isNull("slug")) null else obj.optString("slug"),
+                        isSynced = true,
+                        receiverSignatureUrl = if (obj.isNull("receiverSignatureUrl")) null else obj.optString("receiverSignatureUrl"),
+                        receiverNameActual = if (obj.isNull("receiverNameActual")) null else obj.optString("receiverNameActual"),
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                    ))
+                }
+                if (list.isNotEmpty()) {
+                    list.forEach { db.bmpClientDao().upsert(it) }
+                }
+            }
+
+            // 8. Pull bmp_invoices
+            val bmpInvoicesArray = pullTable(context, "bmp_invoices", activeTenantId)
+            if (bmpInvoicesArray != null) {
+                val list = mutableListOf<BmpInvoiceEntity>()
+                for (i in 0 until bmpInvoicesArray.length()) {
+                    val obj = bmpInvoicesArray.getJSONObject(i)
+                    list.add(BmpInvoiceEntity(
+                        id = obj.optLong("id", 0L),
+                        tenantId = obj.optString("tenantId", activeTenantId),
+                        outletId = if (obj.isNull("outletId")) null else obj.optLong("outletId"),
+                        clientId = if (obj.isNull("clientId")) null else obj.optLong("clientId"),
+                        title = obj.optString("title"),
+                        number = obj.optString("number"),
+                        dueDate = if (obj.isNull("dueDate")) null else obj.optLong("dueDate"),
+                        paymentTerms = obj.optString("paymentTerms", "14 days"),
+                        status = obj.optString("status", "DRAFT"),
+                        notes = if (obj.isNull("notes")) null else obj.optString("notes"),
+                        totalAmount = obj.optDouble("totalAmount", 0.0),
+                        paidAmount = obj.optDouble("paidAmount", 0.0),
+                        uniqueID = if (obj.isNull("uniqueID")) null else obj.optString("uniqueID"),
+                        slug = obj.optString("slug"),
+                        isSynced = true,
+                        receiverSignatureUrl = if (obj.isNull("receiverSignatureUrl")) null else obj.optString("receiverSignatureUrl"),
+                        receiverNameActual = if (obj.isNull("receiverNameActual")) null else obj.optString("receiverNameActual"),
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                    ))
+                }
+                if (list.isNotEmpty()) {
+                    list.forEach { db.bmpInvoiceDao().insert(it) }
+                }
+            }
+
+            // 9. Pull bmp_products
+            val bmpProductsArray = pullTable(context, "bmp_products", activeTenantId)
+            if (bmpProductsArray != null) {
+                val list = mutableListOf<BmpProductEntity>()
+                for (i in 0 until bmpProductsArray.length()) {
+                    val obj = bmpProductsArray.getJSONObject(i)
+                    list.add(BmpProductEntity(
+                        id = obj.optLong("id", 0L),
+                        tenantId = obj.optString("tenantId", activeTenantId),
+                        invoiceId = if (obj.isNull("invoiceId")) null else obj.optLong("invoiceId"),
+                        masterItemID = if (obj.isNull("masterItemID")) null else obj.optLong("masterItemID"),
+                        title = obj.optString("title"),
+                        unit = obj.optString("unit", "pcs"),
+                        price = obj.optDouble("price", 0.0),
+                        jumlahLusin = obj.optDouble("jumlahLusin", 1.0),
+                        quantity = obj.optDouble("quantity", 0.0),
+                        isKhusus = obj.optBoolean("isKhusus", false),
+                        hargaBeli = obj.optDouble("hargaBeli", 0.0),
+                        currency = obj.optString("currency", "Rp"),
+                        uniqueID = if (obj.isNull("uniqueID")) null else obj.optString("uniqueID"),
+                        slug = if (obj.isNull("slug")) null else obj.optString("slug"),
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                    ))
+                }
+                if (list.isNotEmpty()) {
+                    db.bmpProductDao().insertAll(list)
+                }
+            }
+
+            // 10. Pull bmp_master_products
+            val bmpMasterProductsArray = pullTable(context, "bmp_master_products", activeTenantId)
+            if (bmpMasterProductsArray != null) {
+                val list = mutableListOf<BmpMasterProductEntity>()
+                for (i in 0 until bmpMasterProductsArray.length()) {
+                    val obj = bmpMasterProductsArray.getJSONObject(i)
+                    list.add(BmpMasterProductEntity(
+                        id = obj.optLong("id", 0L),
+                        tenantId = obj.optString("tenantId", activeTenantId),
+                        title = obj.optString("title"),
+                        description = if (obj.isNull("description")) null else obj.optString("description"),
+                        unit = obj.optString("unit", "Kg"),
+                        price = obj.optDouble("price", 0.0),
+                        beratGram = obj.optDouble("beratGram", 0.0),
+                        cycleTime = obj.optDouble("cycleTime", 0.0),
+                        cavity = obj.optInt("cavity", 1),
+                        rejectRate = obj.optDouble("rejectRate", 0.0),
+                        uniqueID = if (obj.isNull("uniqueID")) null else obj.optString("uniqueID"),
+                        slug = if (obj.isNull("slug")) null else obj.optString("slug"),
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                    ))
+                }
+                if (list.isNotEmpty()) {
+                    list.forEach { db.bmpMasterProductDao().upsert(it) }
+                }
+            }
+
+            // 11. Pull bmp_invoice_payments
+            val bmpPaymentsArray = pullTable(context, "bmp_invoice_payments", activeTenantId)
+            if (bmpPaymentsArray != null) {
+                val list = mutableListOf<BmpInvoicePaymentEntity>()
+                for (i in 0 until bmpPaymentsArray.length()) {
+                    val obj = bmpPaymentsArray.getJSONObject(i)
+                    list.add(BmpInvoicePaymentEntity(
+                        id = obj.optLong("id", 0L),
+                        tenantId = obj.optString("tenantId", activeTenantId),
+                        invoiceId = obj.optLong("invoiceId"),
+                        paymentDate = obj.optLong("paymentDate"),
+                        paymentAmount = obj.optDouble("paymentAmount", 0.0),
+                        paymentMethod = obj.optString("paymentMethod", "TRANSFER"),
+                        notes = if (obj.isNull("notes")) null else obj.optString("notes"),
+                        isSynced = true,
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis())
+                    ))
+                }
+                if (list.isNotEmpty()) {
+                    list.forEach { db.bmpPaymentDao().insert(it) }
+                }
+            }
+
+            // 12. Pull bmp_cashflow
+            val bmpCashFlowArray = pullTable(context, "bmp_cashflow", activeTenantId)
+            if (bmpCashFlowArray != null) {
+                val list = mutableListOf<BmpCashFlowEntity>()
+                for (i in 0 until bmpCashFlowArray.length()) {
+                    val obj = bmpCashFlowArray.getJSONObject(i)
+                    list.add(BmpCashFlowEntity(
+                        id = obj.optLong("id", 0L),
+                        tenantId = obj.optString("tenantId", activeTenantId),
+                        transactionDate = obj.optLong("transactionDate"),
+                        transactionType = obj.optString("transactionType"),
+                        description = obj.optString("description"),
+                        amount = obj.optDouble("amount", 0.0),
+                        paymentRefId = if (obj.isNull("paymentRefId")) null else obj.optLong("paymentRefId"),
+                        isSynced = true,
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis())
+                    ))
+                }
+                if (list.isNotEmpty()) {
+                    list.forEach { db.bmpCashFlowDao().insert(it) }
+                }
+            }
+
+            // 13. Pull bmp_settings
+            val bmpSettingsArray = pullTable(context, "bmp_settings", activeTenantId)
+            if (bmpSettingsArray != null) {
+                val list = mutableListOf<BmpSettingsEntity>()
+                for (i in 0 until bmpSettingsArray.length()) {
+                    val obj = bmpSettingsArray.getJSONObject(i)
+                    list.add(BmpSettingsEntity(
+                        id = obj.optLong("id", 0L),
+                        tenantId = obj.optString("tenantId", activeTenantId),
+                        clientName = obj.optString("clientName"),
+                        clientLogo = if (obj.isNull("clientLogo")) null else obj.optString("clientLogo"),
+                        addressLine1 = if (obj.isNull("addressLine1")) null else obj.optString("addressLine1"),
+                        province = if (obj.isNull("province")) null else obj.optString("province"),
+                        postalCode = if (obj.isNull("postalCode")) null else obj.optString("postalCode"),
+                        phoneNumber = if (obj.isNull("phoneNumber")) null else obj.optString("phoneNumber"),
+                        emailAddress = if (obj.isNull("emailAddress")) null else obj.optString("emailAddress"),
+                        taxNumber = if (obj.isNull("taxNumber")) null else obj.optString("taxNumber"),
+                        listrikBulanan = obj.optDouble("listrikBulanan", 30000000.0),
+                        jumlahMesin = obj.optInt("jumlahMesin", 5),
+                        jumlahKaryawan = obj.optInt("jumlahKaryawan", 19),
+                        gajiHarian = obj.optDouble("gajiHarian", 80000.0),
+                        hariKerjaSebulan = obj.optInt("hariKerjaSebulan", 26),
+                        biayaKarungPer1000 = obj.optDouble("biayaKarungPer1000", 2100000.0),
+                        hoursPerDay = obj.optInt("hoursPerDay", 24),
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                    ))
+                }
+                if (list.isNotEmpty()) {
+                    list.forEach { db.bmpSettingsDao().upsert(it) }
+                }
+            }
+
+            // 14. Pull bmp_employees
+            val bmpEmployeesArray = pullTable(context, "bmp_employees", activeTenantId)
+            if (bmpEmployeesArray != null) {
+                val list = mutableListOf<BmpEmployeeEntity>()
+                for (i in 0 until bmpEmployeesArray.length()) {
+                    val obj = bmpEmployeesArray.getJSONObject(i)
+                    list.add(BmpEmployeeEntity(
+                        id = obj.optLong("id", 0L),
+                        tenantId = obj.optString("tenantId", activeTenantId),
+                        name = obj.optString("name"),
+                        position = if (obj.isNull("position")) null else obj.optString("position"),
+                        salaryAmount = obj.optDouble("salaryAmount", 0.0),
+                        isActive = obj.optBoolean("isActive", true),
+                        fingerprintPIN = if (obj.isNull("fingerprintPIN")) null else obj.optString("fingerprintPIN"),
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                    ))
+                }
+                if (list.isNotEmpty()) {
+                    list.forEach { db.bmpEmployeeDao().upsert(it) }
+                }
+            }
+
+            // 15. Pull bmp_payrolls
+            val bmpPayrollsArray = pullTable(context, "bmp_payrolls", activeTenantId)
+            if (bmpPayrollsArray != null) {
+                val list = mutableListOf<BmpPayrollEntity>()
+                for (i in 0 until bmpPayrollsArray.length()) {
+                    val obj = bmpPayrollsArray.getJSONObject(i)
+                    list.add(BmpPayrollEntity(
+                        id = obj.optLong("id", 0L),
+                        tenantId = obj.optString("tenantId", activeTenantId),
+                        employeeId = obj.optLong("employeeId"),
+                        paymentDate = obj.optLong("paymentDate"),
+                        amount = obj.optDouble("amount", 0.0),
+                        attendanceCount = obj.optInt("attendanceCount", 0),
+                        dailyRate = obj.optDouble("dailyRate", 0.0),
+                        description = if (obj.isNull("description")) null else obj.optString("description"),
+                        isSynced = true,
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis())
+                    ))
+                }
+                if (list.isNotEmpty()) {
+                    list.forEach { db.bmpPayrollDao().insert(it) }
+                }
+            }
+
+            // 16. Pull bmp_bahan_baku
+            val bmpBahanBakuArray = pullTable(context, "bmp_bahan_baku", activeTenantId)
+            if (bmpBahanBakuArray != null) {
+                val list = mutableListOf<BmpBahanBakuEntity>()
+                for (i in 0 until bmpBahanBakuArray.length()) {
+                    val obj = bmpBahanBakuArray.getJSONObject(i)
+                    list.add(BmpBahanBakuEntity(
+                        id = obj.optLong("id", 0L),
+                        tenantId = obj.optString("tenantId", activeTenantId),
+                        tanggal = obj.optLong("tanggal", System.currentTimeMillis()),
+                        noTagihan = obj.optString("noTagihan"),
+                        totalHarga = obj.optDouble("totalHarga", 0.0),
+                        nominal = obj.optDouble("nominal", 0.0),
+                        notes = if (obj.isNull("notes")) null else obj.optString("notes"),
+                        notaFotoUrl = if (obj.isNull("notaFotoUrl")) null else obj.optString("notaFotoUrl"),
+                        isSynced = true,
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                    ))
+                }
+                if (list.isNotEmpty()) {
+                    list.forEach { db.bmpBahanBakuDao().insert(it) }
+                }
+            }
+
+            // 17. Pull bmp_bahan_baku_item
+            val bmpBahanBakuItemsArray = pullTable(context, "bmp_bahan_baku_item", activeTenantId)
+            if (bmpBahanBakuItemsArray != null) {
+                val list = mutableListOf<BmpBahanBakuItemEntity>()
+                for (i in 0 until bmpBahanBakuItemsArray.length()) {
+                    val obj = bmpBahanBakuItemsArray.getJSONObject(i)
+                    list.add(BmpBahanBakuItemEntity(
+                        id = obj.optLong("id", 0L),
+                        tenantId = obj.optString("tenantId", activeTenantId),
+                        bahanBakuId = obj.optLong("bahanBakuId"),
+                        jenisBahan = obj.optString("jenisBahan"),
+                        kuantitas = obj.optDouble("kuantitas", 0.0),
+                        unit = obj.optString("unit", "Kg"),
+                        rate = obj.optDouble("rate", 0.0),
+                        isSynced = true,
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis())
+                    ))
+                }
+                if (list.isNotEmpty()) {
+                    db.bmpBahanBakuItemDao().insertAll(list)
+                }
+            }
+
+            // 18. Pull print_settings
+            val printSettingsArray = pullTable(context, "print_settings", activeTenantId)
+            if (printSettingsArray != null) {
+                val list = mutableListOf<PrintSettingsEntity>()
+                for (i in 0 until printSettingsArray.length()) {
+                    val obj = printSettingsArray.getJSONObject(i)
+                    list.add(PrintSettingsEntity(
+                        id = obj.optLong("id", 0L),
+                        tenantId = obj.optString("tenantId", activeTenantId),
+                        moduleKey = obj.optString("moduleKey", "BMP"),
+                        jpgUseLogo = obj.optBoolean("jpgUseLogo", true),
+                        jpgHeaderAlign = obj.optString("jpgHeaderAlign", "LEFT"),
+                        jpgUseSignature = obj.optBoolean("jpgUseSignature", true),
+                        jpgSignatureSenderName = obj.optString("jpgSignatureSenderName", "Admin"),
+                        jpgSignatureReceiverName = obj.optString("jpgSignatureReceiverName", ""),
+                        jpgSignatureDrawnBase64 = if (obj.isNull("jpgSignatureDrawnBase64")) null else obj.optString("jpgSignatureDrawnBase64"),
+                        jpgIsColor = obj.optBoolean("jpgIsColor", true),
+                        sjUseLogo = obj.optBoolean("sjUseLogo", true),
+                        sjHeaderAlign = obj.optString("sjHeaderAlign", "LEFT"),
+                        sjUseSignature = obj.optBoolean("sjUseSignature", true),
+                        sjSignatureSenderName = obj.optString("sjSignatureSenderName", "Admin"),
+                        sjSignatureReceiverName = obj.optString("sjSignatureReceiverName", ""),
+                        sjSignatureDrawnBase64 = if (obj.isNull("sjSignatureDrawnBase64")) null else obj.optString("sjSignatureDrawnBase64"),
+                        sjIsColor = obj.optBoolean("sjIsColor", false),
+                        invoiceUseLogo = obj.optBoolean("invoiceUseLogo", true),
+                        invoiceHeaderAlign = obj.optString("invoiceHeaderAlign", "LEFT"),
+                        invoiceUseSignature = obj.optBoolean("invoiceUseSignature", true),
+                        invoiceSignatureSenderName = obj.optString("invoiceSignatureSenderName", "Admin"),
+                        invoiceSignatureReceiverName = obj.optString("invoiceSignatureReceiverName", ""),
+                        invoiceSignatureDrawnBase64 = if (obj.isNull("invoiceSignatureDrawnBase64")) null else obj.optString("invoiceSignatureDrawnBase64"),
+                        invoiceIsColor = obj.optBoolean("invoiceIsColor", true),
+                        receiptPaperWidth = obj.optString("receiptPaperWidth", "MM80"),
+                        receiptUseLogo = obj.optBoolean("receiptUseLogo", true),
+                        receiptHeaderAlign = obj.optString("receiptHeaderAlign", "CENTER"),
+                        receiptIsColor = obj.optBoolean("receiptIsColor", false),
+                        receiptShowItemPrice = obj.optBoolean("receiptShowItemPrice", true),
+                        receiptFooterText = obj.optString("receiptFooterText", "Terima kasih sudah berbelanja!"),
+                        jpgTemplateType = obj.optString("jpgTemplateType", "MODERN"),
+                        sjTemplateType = obj.optString("sjTemplateType", "MODERN"),
+                        invoiceTemplateType = obj.optString("invoiceTemplateType", "MODERN"),
+                        bankOwnerName = obj.optString("bankOwnerName", ""),
+                        bankName = obj.optString("bankName", "BCA"),
+                        bankAccountNumber = obj.optString("bankAccountNumber", ""),
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                    ))
+                }
+                if (list.isNotEmpty()) {
+                    list.forEach { db.printSettingsDao().upsert(it) }
+                }
+            }
+
+            Log.d(TAG, "Pull sinkronisasi selesai dengan sukses.")
+            SyncResult.Success
+        } catch (e: Exception) {
+            Log.e(TAG, "Pull sinkronisasi gagal: ${e.message}", e)
+            SyncResult.Error(e.message ?: "Error tidak terduga saat pull sinkronisasi.")
         }
     }
 }

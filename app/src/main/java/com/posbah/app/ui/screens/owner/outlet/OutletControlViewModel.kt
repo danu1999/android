@@ -61,11 +61,19 @@ class OutletControlViewModel @Inject constructor(
                 // Fetch outlets
                 val rawOutlets = db.outletDao().listForTenant(tenantId)
                 
-                // Fetch products to calculate stock
+                // Fetch products to calculate stock (all products for this tenant)
                 val allProducts = db.productDao().list(tenantId)
                 
-                // Fetch employees for assignment list
-                val allEmployees = db.employeeDao().getAll().filter { it.tenantId == tenantId && it.isActive }
+                // Fetch employees for assignment list — strictly scoped to this tenant only
+                val ownerEmail = authRepository.activeUserEmail()?.lowercase()?.trim()
+                val allEmployees = db.employeeDao().getAll()
+                    .filter { emp ->
+                        emp.tenantId == tenantId &&
+                        emp.isActive &&
+                        emp.role != "OWNER" &&
+                        emp.email?.lowercase()?.trim() != ownerEmail
+                    }
+
 
                 // Fetch transactions and items for margin calculation
                 val completedTransactions = db.transactionDao().getAll()
@@ -206,7 +214,7 @@ class OutletControlViewModel @Inject constructor(
         }
     }
 
-    fun createOutlet(name: String, address: String?, phone: String?) {
+    fun createOutlet(name: String, address: String?, phone: String?, currentEmployee: String?) {
         viewModelScope.launch {
             val existing = db.outletDao().listForTenant(tenantId)
             if (existing.size >= 3) {
@@ -223,9 +231,29 @@ class OutletControlViewModel @Inject constructor(
                 name = name,
                 address = address,
                 phone = phone,
+                currentEmployee = currentEmployee.takeIf { !it.isNullOrBlank() },
                 isOpen = true
             )
             db.outletDao().insert(newOutlet)
+            loadData()
+        }
+    }
+
+    fun updateOutlet(outletId: Long, name: String, address: String?, phone: String?, currentEmployee: String?) {
+        viewModelScope.launch {
+            if (name.isBlank()) {
+                _uiState.update { it.copy(error = "Nama outlet tidak boleh kosong.") }
+                return@launch
+            }
+            val existing = db.outletDao().getById(outletId) ?: return@launch
+            val updated = existing.copy(
+                name = name,
+                address = address,
+                phone = phone,
+                currentEmployee = currentEmployee.takeIf { !it.isNullOrBlank() },
+                updatedAt = System.currentTimeMillis()
+            )
+            db.outletDao().update(updated)
             loadData()
         }
     }

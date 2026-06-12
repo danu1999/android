@@ -279,7 +279,7 @@ fun RentalScreen(
             // Left pane: Vehicles Catalog
             Column(
                 modifier = Modifier
-                    .weight(1.3f)
+                    .weight(1.2f)
                     .fillMaxHeight()
                     .padding(16.dp)
             ) {
@@ -304,6 +304,7 @@ fun RentalScreen(
                     },
                     placeholder = { Text("Cari armada atau plat nomor...") },
                     singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth().testTag("rental-search")
                 )
                 Spacer(Modifier.height(12.dp))
@@ -314,10 +315,10 @@ fun RentalScreen(
                 ) {
                     items(filteredVehicles) { vehicle ->
                         Surface(
-                            shape = RoundedCornerShape(16.dp),
+                            shape = RoundedCornerShape(18.dp),
                             color = MaterialTheme.colorScheme.surface,
                             tonalElevation = 1.dp,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+                            border = BorderStroke(1.dp, if (vehicle.isRented) MaterialTheme.colorScheme.outline.copy(alpha = 0.04f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable(enabled = !vehicle.isRented) {
@@ -329,14 +330,14 @@ fun RentalScreen(
                                 }
                         ) {
                             Row(
-                                modifier = Modifier.padding(16.dp),
+                                modifier = Modifier.padding(14.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Surface(
                                     shape = RoundedCornerShape(12.dp),
-                                    color = if (vehicle.isRented) MaterialTheme.colorScheme.error.copy(alpha = 0.12f)
-                                            else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                    modifier = Modifier.size(48.dp)
+                                    color = if (vehicle.isRented) MaterialTheme.colorScheme.error.copy(alpha = 0.08f)
+                                            else MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                                    modifier = Modifier.size(52.dp)
                                 ) {
                                     if (!vehicle.image.isNullOrBlank()) {
                                         AsyncImage(
@@ -351,7 +352,8 @@ fun RentalScreen(
                                                 Icons.Outlined.DirectionsCar,
                                                 contentDescription = null,
                                                 tint = if (vehicle.isRented) MaterialTheme.colorScheme.error
-                                                       else MaterialTheme.colorScheme.primary
+                                                       else MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(24.dp)
                                             )
                                         }
                                     }
@@ -361,21 +363,65 @@ fun RentalScreen(
                                     Text(
                                         vehicle.name,
                                         style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (vehicle.isRented) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface
                                     )
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            vehicle.plateNumber,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Spacer(Modifier.width(6.dp))
-                                        Text(
-                                            "•  ${vehicle.type}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
+                                    Spacer(Modifier.height(4.dp))
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        // Plate Number Tag
+                                        Surface(
+                                            shape = RoundedCornerShape(4.dp),
+                                            color = if (vehicle.isRented) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) else Color(0xFF1E1E24),
+                                            border = BorderStroke(0.5.dp, if (vehicle.isRented) Color.Gray.copy(alpha = 0.3f) else Color(0xFFCCCCCC))
+                                        ) {
+                                            Text(
+                                                vehicle.plateNumber,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = if (vehicle.isRented) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f) else Color.White,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 1.sp
+                                            )
+                                        }
+                                        
+                                        // Vehicle Type Tag
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = if (vehicle.type == "MOBIL") Color(0xFFE3F2FD) else Color(0xFFFFF3E0),
+                                            border = BorderStroke(0.5.dp, if (vehicle.type == "MOBIL") Color(0xFF90CAF9) else Color(0xFFFFCC80))
+                                        ) {
+                                            Text(
+                                                text = if (vehicle.type == "MOBIL") "MOBIL 🚗" else "MOTOR 🏍️",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                                color = if (vehicle.type == "MOBIL") Color(0xFF0D47A1) else Color(0xFFE65100),
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                    if (vehicle.isRented) {
+                                        Spacer(Modifier.height(6.dp))
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Outlined.Timer,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                            Text(
+                                                text = "Penyewa: ${vehicle.activeRenterName ?: "Umum"}" +
+                                                       (vehicle.rentExpiry?.let { " (s.d. ${Formatters.dateLong(it)})" } ?: ""),
+                                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                                color = MaterialTheme.colorScheme.error,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
                                     }
                                 }
                                 Column(horizontalAlignment = Alignment.End) {
@@ -383,52 +429,69 @@ fun RentalScreen(
                                         Formatters.rupiah(vehicle.pricePerDay),
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Black,
-                                        color = MaterialTheme.colorScheme.primary
+                                        color = if (vehicle.isRented) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f) else MaterialTheme.colorScheme.primary
                                     )
+                                    
                                     val profit = vehicle.pricePerDay - vehicle.costPrice
                                     val marginPercent = if (vehicle.pricePerDay > 0) (profit / vehicle.pricePerDay) * 100 else 0.0
-                                    Text(
-                                        "Margin: ${String.format("%.0f", marginPercent)}%",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Text(
-                                        "per hari",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Spacer(Modifier.height(4.dp))
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                    
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        modifier = Modifier.padding(top = 8.dp)
+                                    ) {
+                                        // Margin Pill
                                         Surface(
-                                            shape = RoundedCornerShape(50),
-                                            color = if (vehicle.isRented) MaterialTheme.colorScheme.error.copy(alpha = 0.15f)
-                                                    else Color(0xFF22C57E).copy(alpha = 0.15f)
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = if (marginPercent >= 0) Color(0xFFE2FBE7) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
+                                            border = BorderStroke(0.5.dp, if (marginPercent >= 0) Color(0xA01E824C) else MaterialTheme.colorScheme.error.copy(alpha = 0.2f))
                                         ) {
                                             Text(
-                                                text = if (vehicle.isRented) "Disewa oleh: ${vehicle.activeRenterName}" else "Tersedia",
-                                                color = if (vehicle.isRented) MaterialTheme.colorScheme.error else Color(0xFF1E824C),
+                                                "Margin: ${String.format("%.0f", marginPercent)}%",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = if (marginPercent >= 0) Color(0xFF1E824C) else MaterialTheme.colorScheme.onErrorContainer,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        
+                                        // Status Pill
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = if (vehicle.isRented) Color(0xFFFDE8E8) else Color(0xFFE2FBE7),
+                                            border = BorderStroke(0.5.dp, if (vehicle.isRented) Color(0xFFF8B4B4) else Color(0xA01E824C))
+                                        ) {
+                                            Text(
+                                                text = if (vehicle.isRented) "Disewa" else "Tersedia",
+                                                color = if (vehicle.isRented) Color(0xFFC81E1E) else Color(0xFF1E824C),
                                                 fontWeight = FontWeight.Bold,
-                                                fontSize = 10.sp,
+                                                style = MaterialTheme.typography.labelSmall,
                                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                                             )
                                         }
+                                        
                                         if (!vehicle.isRented) {
-                                            Spacer(Modifier.width(6.dp))
                                             IconButton(
                                                 onClick = {
                                                     viewModel.deleteVehicle(vehicle.id) {
                                                         Toast.makeText(context, "Armada berhasil dihapus!", Toast.LENGTH_SHORT).show()
                                                     }
                                                 },
-                                                modifier = Modifier.size(24.dp)
+                                                modifier = Modifier.size(28.dp)
                                             ) {
-                                                Icon(
-                                                    Icons.Outlined.Delete,
-                                                    contentDescription = "Hapus Armada",
-                                                    tint = MaterialTheme.colorScheme.error,
-                                                    modifier = Modifier.size(16.dp)
-                                                )
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(28.dp)
+                                                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.08f), RoundedCornerShape(50)),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        Icons.Outlined.Delete,
+                                                        contentDescription = "Hapus Armada",
+                                                        tint = MaterialTheme.colorScheme.error,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -442,43 +505,61 @@ fun RentalScreen(
             // Right pane: Rental Active / Completed Orders
             Surface(
                 modifier = Modifier
-                    .width(360.dp)
+                    .width(380.dp)
                     .fillMaxHeight(),
                 tonalElevation = 1.dp,
-                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     var showHistory by remember { mutableStateOf(false) }
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    // Premium Sliding-Tab (Segmented Control) Design
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(40.dp)
+                            .padding(2.dp)
                     ) {
-                        Button(
-                            onClick = { showHistory = false },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (!showHistory) MaterialTheme.colorScheme.primary 
-                                                 else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (!showHistory) MaterialTheme.colorScheme.onPrimary 
-                                               else MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.weight(1f)
+                        Row(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Sewa Aktif", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Button(
-                            onClick = { showHistory = true },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (showHistory) MaterialTheme.colorScheme.primary 
-                                                 else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (showHistory) MaterialTheme.colorScheme.onPrimary 
-                                               else MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Riwayat Selesai", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .padding(2.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (!showHistory) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                    .clickable { showHistory = false },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Sewa Aktif",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (!showHistory) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .padding(2.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (showHistory) MaterialTheme.colorScheme.primary else Color.Transparent)
+                                    .clickable { showHistory = true },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Riwayat Selesai",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (showHistory) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
 
@@ -499,7 +580,7 @@ fun RentalScreen(
                                 Icon(
                                     Icons.Outlined.CarRental,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
                                     modifier = Modifier.size(64.dp)
                                 )
                                 Spacer(Modifier.height(10.dp))
@@ -508,7 +589,7 @@ fun RentalScreen(
                                     else "Belum ada sewa aktif.\nPilih kendaraan untuk disewakan.",
                                     textAlign = TextAlign.Center,
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                 )
                             }
                         }
@@ -519,63 +600,142 @@ fun RentalScreen(
                         ) {
                             items(filteredOrders) { order ->
                                 Surface(
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    tonalElevation = 1.dp,
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
+                                    Column(modifier = Modifier.padding(16.dp)) {
                                         Row(
                                             horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically,
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Text(order.vehicleName, fontWeight = FontWeight.Bold)
+                                            Text(
+                                                text = order.vehicleName,
+                                                fontWeight = FontWeight.Bold,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontSize = 16.sp,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
                                             IconButton(
                                                 onClick = { activeReceiptOrder = order },
-                                                modifier = Modifier.size(24.dp)
+                                                modifier = Modifier.size(32.dp)
                                             ) {
-                                                Icon(
-                                                    Icons.Outlined.Receipt,
-                                                    "Nota",
-                                                    tint = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(18.dp)
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(32.dp)
+                                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), RoundedCornerShape(50)),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        Icons.Outlined.Receipt,
+                                                        contentDescription = "Lihat Nota",
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        Spacer(Modifier.height(8.dp))
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Outlined.People,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Text(
+                                                text = order.customerName,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            text = "WhatsApp: ${order.whatsapp}",
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = "Mulai Sewa: ${Formatters.dateLong(order.rentDate)}",
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        
+                                        Spacer(Modifier.height(8.dp))
+                                        androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f))
+                                        Spacer(Modifier.height(8.dp))
+
+                                        Row(
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Column {
+                                                Text(
+                                                    text = "Durasi Sewa",
+                                                    fontSize = 11.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                Text(
+                                                    text = "${order.days} Hari",
+                                                    fontSize = 14.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                            }
+                                            Column(horizontalAlignment = Alignment.End) {
+                                                Text(
+                                                    text = "Total Biaya",
+                                                    fontSize = 11.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                Text(
+                                                    text = Formatters.rupiah(order.total),
+                                                    fontSize = 14.sp,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = MaterialTheme.colorScheme.primary
                                                 )
                                             }
                                         }
-                                        Text(
-                                            "Pelanggan: ${order.customerName}",
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                        Text("WhatsApp: ${order.whatsapp}", fontSize = 11.sp)
-                                        Text(
-                                            "Durasi: ${order.days} Hari  (${Formatters.rupiah(order.total)})",
-                                            fontSize = 11.sp,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontWeight = FontWeight.Bold
-                                        )
+
                                         if (order.status == "ACTIVE") {
-                                            Spacer(Modifier.height(8.dp))
+                                            Spacer(Modifier.height(12.dp))
                                             Button(
                                                 onClick = { selectedOrderForReturn = order; lateDaysInput = "0" },
-                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF22C57E)),
-                                                shape = RoundedCornerShape(8.dp),
-                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                                                modifier = Modifier.fillMaxWidth().height(32.dp)
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = Color(0xFF10B981),
+                                                    contentColor = Color.White
+                                                ),
+                                                shape = RoundedCornerShape(10.dp),
+                                                contentPadding = PaddingValues(vertical = 8.dp),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(36.dp)
                                             ) {
-                                                Text("Kembalikan Armada", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                Text("Kembalikan Armada", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                             }
                                         } else {
-                                            Spacer(Modifier.height(6.dp))
+                                            Spacer(Modifier.height(12.dp))
                                             Surface(
-                                                shape = RoundedCornerShape(50),
-                                                color = Color(0xFF22C57E).copy(alpha = 0.15f)
+                                                shape = RoundedCornerShape(8.dp),
+                                                color = Color(0xFFE2FBE7),
+                                                border = BorderStroke(0.5.dp, Color(0xA01E824C)),
+                                                modifier = Modifier.fillMaxWidth()
                                             ) {
                                                 Text(
-                                                    text = "Sudah Dikembalikan",
+                                                    text = "Armada Sudah Dikembalikan",
                                                     color = Color(0xFF1E824C),
                                                     fontWeight = FontWeight.Bold,
-                                                    fontSize = 10.sp,
-                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                                    fontSize = 11.sp,
+                                                    textAlign = TextAlign.Center,
+                                                    modifier = Modifier.padding(vertical = 6.dp)
                                                 )
                                             }
                                         }
@@ -603,132 +763,172 @@ fun RentalScreen(
                 selectedVehicleForRent = null 
                 rentDateMillis = null
             },
-            title = { Text("Formulir Sewa: ${vehicle.name}") },
+            title = { 
+                Text(
+                    "Formulir Sewa: ${vehicle.name}",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleLarge
+                ) 
+            },
             text = {
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        val isUmum = customerName == "Umum" && whatsapp == ""
-                        Button(
-                            onClick = {
-                                customerName = "Umum"
-                                whatsapp = ""
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isUmum) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (isUmum) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Umum (Walk-in)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Button(
-                            onClick = {
-                                showCustomerSelectionDialog = true
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (!isUmum) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (!isUmum) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Pilih/Tambah Pelanggan", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-
-                    Spacer(Modifier.height(4.dp))
-
-                    OutlinedTextField(
-                        value = customerName,
-                        onValueChange = { customerName = it },
-                        label = { Text("Nama Pelanggan") },
-                        leadingIcon = { Icon(Icons.Outlined.People, null) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth().testTag("rental-cust-name")
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = whatsapp,
-                        onValueChange = { whatsapp = it },
-                        label = { Text("No. WhatsApp") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth().testTag("rental-phone")
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = rentDays,
-                            onValueChange = { rentDays = it },
-                            label = { Text("Durasi (Hari)") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            modifier = Modifier.weight(1f).testTag("rental-days")
-                        )
-                        OutlinedTextField(
-                            value = cashPaid,
-                            onValueChange = { cashPaid = it },
-                            label = { Text("Jumlah Bayar Cash") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            modifier = Modifier.weight(1.5f).testTag("rental-cash")
-                        )
-                    }
-
-                    // Date selection (Backdate)
-                    val calendar = java.util.Calendar.getInstance()
-                    if (rentDateMillis != null) {
-                        calendar.timeInMillis = rentDateMillis!!
-                    }
-                    val datePickerDialog = android.app.DatePickerDialog(
-                        context,
-                        { _, year, month, dayOfMonth ->
-                            val selectedCal = java.util.Calendar.getInstance()
-                            selectedCal.set(year, month, dayOfMonth)
-                            rentDateMillis = selectedCal.timeInMillis
-                        },
-                        calendar.get(java.util.Calendar.YEAR),
-                        calendar.get(java.util.Calendar.MONTH),
-                        calendar.get(java.util.Calendar.DAY_OF_MONTH)
-                    )
-
-                    val dateText = if (rentDateMillis != null) {
-                        val sdf = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
-                        sdf.format(Date(rentDateMillis!!))
-                    } else {
-                        "Hari Ini (Real-time)"
-                    }
-
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Tanggal Mulai Sewa:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        OutlinedButton(onClick = { datePickerDialog.show() }) {
-                            Text(dateText, fontSize = 12.sp)
-                        }
-                    }
-
-                    Spacer(Modifier.height(14.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Segment 1: Customer Profile Container
                     Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
+                        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(
+                                "Informasi Penyewa", 
+                                style = MaterialTheme.typography.labelLarge, 
+                                fontWeight = FontWeight.Bold, 
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                val isUmum = customerName == "Umum" && whatsapp == ""
+                                Button(
+                                    onClick = {
+                                        customerName = "Umum"
+                                        whatsapp = ""
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (isUmum) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = if (isUmum) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                    ),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(vertical = 4.dp),
+                                    modifier = Modifier.weight(1f).height(32.dp)
+                                ) {
+                                    Text("Umum (Walk-in)", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Button(
+                                    onClick = {
+                                        showCustomerSelectionDialog = true
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = if (!isUmum) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = if (!isUmum) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                    ),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(vertical = 4.dp),
+                                    modifier = Modifier.weight(1f).height(32.dp)
+                                ) {
+                                    Text("Pilih Pelanggan", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            OutlinedTextField(
+                                value = customerName,
+                                onValueChange = { customerName = it },
+                                label = { Text("Nama Pelanggan") },
+                                leadingIcon = { Icon(Icons.Outlined.People, null, modifier = Modifier.size(18.dp)) },
+                                singleLine = true,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth().testTag("rental-cust-name")
+                            )
+                            OutlinedTextField(
+                                value = whatsapp,
+                                onValueChange = { whatsapp = it },
+                                label = { Text("No. WhatsApp") },
+                                leadingIcon = { Icon(Icons.Outlined.People, null, modifier = Modifier.size(18.dp)) },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                singleLine = true,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth().testTag("rental-phone")
+                            )
+                        }
+                    }
+
+                    // Segment 2: Rental Settings Container
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(
+                                "Pengaturan Sewa", 
+                                style = MaterialTheme.typography.labelLarge, 
+                                fontWeight = FontWeight.Bold, 
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedTextField(
+                                    value = rentDays,
+                                    onValueChange = { rentDays = it },
+                                    label = { Text("Durasi (Hari)") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.weight(1f).testTag("rental-days")
+                                )
+                                OutlinedTextField(
+                                    value = cashPaid,
+                                    onValueChange = { cashPaid = it },
+                                    label = { Text("Uang Muka / Cash (Rp)") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.weight(1.5f).testTag("rental-cash")
+                                )
+                            }
+
+                            // Date selection (Backdate)
+                            val calendar = java.util.Calendar.getInstance()
+                            if (rentDateMillis != null) {
+                                calendar.timeInMillis = rentDateMillis!!
+                            }
+                            val datePickerDialog = android.app.DatePickerDialog(
+                                context,
+                                { _, year, month, dayOfMonth ->
+                                    val selectedCal = java.util.Calendar.getInstance()
+                                    selectedCal.set(year, month, dayOfMonth)
+                                    rentDateMillis = selectedCal.timeInMillis
+                                },
+                                calendar.get(java.util.Calendar.YEAR),
+                                calendar.get(java.util.Calendar.MONTH),
+                                calendar.get(java.util.Calendar.DAY_OF_MONTH)
+                            )
+
+                            val dateText = if (rentDateMillis != null) {
+                                val sdf = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+                                sdf.format(Date(rentDateMillis!!))
+                            } else {
+                                "Hari Ini (Real-time)"
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Mulai Sewa:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                                OutlinedButton(
+                                    onClick = { datePickerDialog.show() },
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                    modifier = Modifier.height(28.dp)
+                                ) {
+                                    Text(dateText, fontSize = 11.sp)
+                                }
+                            }
+
+                            androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+
                             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                                Text("Tarif per hari", fontSize = 12.sp)
-                                Text(Formatters.rupiah(vehicle.pricePerDay), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text("Tarif per Hari", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                                Text(Formatters.rupiah(vehicle.pricePerDay), fontWeight = FontWeight.Bold)
                             }
                             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                                Text("TOTAL BIAYA", fontWeight = FontWeight.Black)
-                                Text(Formatters.rupiah(computedTotal), fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
+                                Text("TOTAL BIAYA", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                Text(Formatters.rupiah(computedTotal), fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
                             }
                         }
                     }
@@ -749,6 +949,7 @@ fun RentalScreen(
                             Toast.makeText(context, "Sewa berhasil diproses!", Toast.LENGTH_SHORT).show()
                         }
                     },
+                    shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.testTag("btn-confirm-rental")
                 ) { Text("Proses Sewa") }
             },
@@ -899,14 +1100,15 @@ fun RentalScreen(
     if (showAddVehicleDialog) {
         AlertDialog(
             onDismissRequest = { showAddVehicleDialog = false },
-            title = { Text("Tambah Armada Baru") },
+            title = { Text("Tambah Armada Baru", fontWeight = FontWeight.Bold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
                         value = newVehicleName,
                         onValueChange = { nameVal -> newVehicleName = nameVal },
                         label = { Text("Nama Kendaraan") },
                         singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth().testTag("add-vehicle-name")
                     )
                     OutlinedTextField(
@@ -914,6 +1116,7 @@ fun RentalScreen(
                         onValueChange = { plateVal -> newVehiclePlate = plateVal },
                         label = { Text("Nomor Plat Kendaraan") },
                         singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth().testTag("add-vehicle-plate")
                     )
                     OutlinedTextField(
@@ -922,6 +1125,7 @@ fun RentalScreen(
                         label = { Text("Tarif Jual per Hari (Rp)") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth().testTag("add-vehicle-price")
                     )
                     OutlinedTextField(
@@ -930,6 +1134,7 @@ fun RentalScreen(
                         label = { Text("Biaya Modal/Beli Kendaraan (Rp)") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
@@ -938,6 +1143,7 @@ fun RentalScreen(
                         label = { Text("Biaya Perawatan Bulanan (Rp)") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -964,6 +1170,7 @@ fun RentalScreen(
                                 contentColor = if (newVehicleType == "MOBIL") MaterialTheme.colorScheme.onPrimary 
                                                else MaterialTheme.colorScheme.onSurfaceVariant
                             ),
+                            shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.weight(1f)
                         ) { Text("MOBIL") }
                         Button(
@@ -974,6 +1181,7 @@ fun RentalScreen(
                                 contentColor = if (newVehicleType == "MOTOR") MaterialTheme.colorScheme.onPrimary 
                                                else MaterialTheme.colorScheme.onSurfaceVariant
                             ),
+                            shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.weight(1f)
                         ) { Text("MOTOR") }
                     }
@@ -1006,6 +1214,7 @@ fun RentalScreen(
                     } else {
                         OutlinedButton(
                             onClick = launchCamera,
+                            shape = RoundedCornerShape(10.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
@@ -1030,6 +1239,7 @@ fun RentalScreen(
                             Toast.makeText(context, "Semua kolom wajib diisi dengan benar!", Toast.LENGTH_SHORT).show()
                         }
                     },
+                    shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.testTag("btn-save-new-vehicle")
                 ) { Text("Simpan") }
             },
@@ -1098,13 +1308,14 @@ fun RentalScreen(
             onDismissRequest = { showCustomerSelectionDialog = false },
             title = { Text("Pilih / Tambah Pelanggan") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("Tambah Pelanggan Baru", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
                     OutlinedTextField(
                         value = custNameInput,
                         onValueChange = { custNameInput = it },
                         label = { Text("Nama Pelanggan") },
                         singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
@@ -1113,6 +1324,7 @@ fun RentalScreen(
                         label = { Text("No. WhatsApp") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                         singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
@@ -1120,6 +1332,7 @@ fun RentalScreen(
                         onValueChange = { custAddressInput = it },
                         label = { Text("Alamat") },
                         singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
                     Button(
@@ -1135,6 +1348,7 @@ fun RentalScreen(
                                 Toast.makeText(context, "Nama wajib diisi!", Toast.LENGTH_SHORT).show()
                             }
                         },
+                        shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Simpan Pelanggan Baru")
