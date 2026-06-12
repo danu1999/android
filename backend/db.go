@@ -428,6 +428,50 @@ func initSchema() error {
 		`UPDATE "employees" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
 		`UPDATE "outlets" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
 		`UPDATE "bmp_device_tenants" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
+		`UPDATE "bmp_products" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
+		`UPDATE "bmp_invoice_payments" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
+		`UPDATE "bmp_bahan_baku_item" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
+
+		// Interconnect bahteramulyap@gmail.com and syerlirahma7@gmail.com legacy to premium
+		`INSERT INTO "tenants" ("id", "name", "ownerEmail", "businessMode", "isActive", "createdAt", "updatedAt")
+		VALUES ('ten_premium_bahteramulyap_gmail_com', 'CV. BAHTERA MULYA PLASTIK', 'bahteramulyap@gmail.com', 'BMP', true, 1685642632000, 1685642632000)
+		ON CONFLICT ("id") DO UPDATE SET "ownerEmail" = EXCLUDED."ownerEmail", "businessMode" = EXCLUDED."businessMode";`,
+
+		`INSERT INTO "local_users" ("googleSub", "email", "displayName", "role", "tenantId", "isPremium", "isActive", "registeredAt", "updatedAt")
+		VALUES ('bahteramulyap@gmail.com', 'bahteramulyap@gmail.com', 'CV. BAHTERA MULYA PLASTIK', 'OWNER', 'ten_premium_bahteramulyap_gmail_com', true, true, 1685642632000, 1685642632000)
+		ON CONFLICT ("googleSub") DO UPDATE SET "tenantId" = EXCLUDED."tenantId", "isPremium" = EXCLUDED."isPremium", "isActive" = EXCLUDED."isActive";`,
+
+		`INSERT INTO "local_users" ("googleSub", "email", "displayName", "role", "tenantId", "isPremium", "isActive", "registeredAt", "updatedAt")
+		VALUES ('syerlirahma7@gmail.com', 'syerlirahma7@gmail.com', 'syerli', 'ADMIN', 'ten_premium_bahteramulyap_gmail_com', true, true, 1685642632000, 1685642632000)
+		ON CONFLICT ("googleSub") DO UPDATE SET "tenantId" = EXCLUDED."tenantId", "isPremium" = EXCLUDED."isPremium", "isActive" = EXCLUDED."isActive";`,
+
+		`INSERT INTO "employees" ("id", "tenantId", "name", "email", "role", "pinHash", "isActive", "createdAt", "updatedAt")
+		VALUES (20001, 'ten_premium_bahteramulyap_gmail_com', 'CV. BAHTERA MULYA PLASTIK', 'bahteramulyap@gmail.com', 'OWNER', '8a0ff1f8926195dfde55af7e68c028591602dacc30dc3c7caef27a949ca45142b25514004cf4540c46eca830100d06517c6facc0faf77fc57140e9df5fe5ffc7', true, 1685642632000, 1685642632000)
+		ON CONFLICT ("id") DO UPDATE SET "tenantId" = EXCLUDED."tenantId", "role" = EXCLUDED."role", "pinHash" = EXCLUDED."pinHash";`,
+
+		`INSERT INTO "employees" ("id", "tenantId", "name", "email", "role", "pinHash", "isActive", "createdAt", "updatedAt")
+		VALUES (20002, 'ten_premium_bahteramulyap_gmail_com', 'syerli', 'syerlirahma7@gmail.com', 'ADMIN', '5819ef0d24208780b75c18009f0f69400eb933916f800ae980b778820cda595e3151de8600a0c325711f0e9641b5a72f393008868913578601ba0fa0d4c9ad93', true, 1685642632000, 1685642632000)
+		ON CONFLICT ("id") DO UPDATE SET "tenantId" = EXCLUDED."tenantId", "role" = EXCLUDED."role", "pinHash" = EXCLUDED."pinHash";`,
+
+		`UPDATE "bmp_payrolls" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
+		`UPDATE "bmp_clients" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
+		`UPDATE "bmp_invoices" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
+		`UPDATE "bmp_master_products" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
+		`UPDATE "bmp_cashflow" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
+		`UPDATE "bmp_settings" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
+		`UPDATE "bmp_employees" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
+		`UPDATE "bmp_bahan_baku" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
+		`UPDATE "print_settings" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
+		`UPDATE "products" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
+		`UPDATE "customers" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
+		`UPDATE "transactions" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
+		`UPDATE "activity_logs" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
+		`UPDATE "employees" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
+		`UPDATE "outlets" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
+		`UPDATE "bmp_device_tenants" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
+		`UPDATE "bmp_products" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
+		`UPDATE "bmp_invoice_payments" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
+		`UPDATE "bmp_bahan_baku_item" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
 	}
 
 	for _, q := range migrationQueries {

@@ -425,11 +425,11 @@ fun LaundryScreen(
                                                 Toast.makeText(context, "Layanan berhasil dihapus!", Toast.LENGTH_SHORT).show()
                                             }
                                         },
-                                        modifier = Modifier.size(28.dp)
+                                        modifier = Modifier.size(36.dp)
                                     ) {
                                         Box(
                                             modifier = Modifier
-                                                .size(28.dp)
+                                                .size(32.dp)
                                                 .background(MaterialTheme.colorScheme.error.copy(alpha = 0.08f), RoundedCornerShape(50)),
                                             contentAlignment = Alignment.Center
                                         ) {
@@ -437,7 +437,7 @@ fun LaundryScreen(
                                                 Icons.Outlined.Clear,
                                                 contentDescription = "Hapus Layanan",
                                                 tint = MaterialTheme.colorScheme.error,
-                                                modifier = Modifier.size(16.dp)
+                                                modifier = Modifier.size(18.dp)
                                             )
                                         }
                                     }
@@ -517,11 +517,11 @@ fun LaundryScreen(
                                                         cart.remove(item)
                                                     }
                                                 },
-                                                modifier = Modifier.size(28.dp)
+                                                modifier = Modifier.size(36.dp)
                                             ) {
                                                 Box(
                                                     modifier = Modifier
-                                                        .size(24.dp)
+                                                        .size(28.dp)
                                                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), RoundedCornerShape(50)),
                                                     contentAlignment = Alignment.Center
                                                 ) {
@@ -529,7 +529,7 @@ fun LaundryScreen(
                                                         Icons.Outlined.RemoveCircleOutline, 
                                                         null, 
                                                         tint = MaterialTheme.colorScheme.primary, 
-                                                        modifier = Modifier.size(14.dp)
+                                                        modifier = Modifier.size(18.dp)
                                                     )
                                                 }
                                             }
@@ -553,11 +553,11 @@ fun LaundryScreen(
                                                     val idx = cart.indexOf(item)
                                                     cart[idx] = item.copy(quantity = item.quantity + step)
                                                 },
-                                                modifier = Modifier.size(28.dp)
+                                                modifier = Modifier.size(36.dp)
                                             ) {
                                                 Box(
                                                     modifier = Modifier
-                                                        .size(24.dp)
+                                                        .size(28.dp)
                                                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), RoundedCornerShape(50)),
                                                     contentAlignment = Alignment.Center
                                                 ) {
@@ -565,7 +565,7 @@ fun LaundryScreen(
                                                         "+", 
                                                         fontWeight = FontWeight.Bold, 
                                                         color = MaterialTheme.colorScheme.primary, 
-                                                        fontSize = 13.sp
+                                                        fontSize = 16.sp
                                                     )
                                                 }
                                             }
@@ -609,7 +609,7 @@ fun LaundryScreen(
                                     ),
                                     shape = RoundedCornerShape(8.dp),
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                    modifier = Modifier.weight(1f).height(32.dp)
+                                    modifier = Modifier.weight(1f).height(40.dp)
                                 ) {
                                     Text("Umum (Walk-in)", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 }
@@ -623,7 +623,7 @@ fun LaundryScreen(
                                     ),
                                     shape = RoundedCornerShape(8.dp),
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                    modifier = Modifier.weight(1f).height(32.dp)
+                                    modifier = Modifier.weight(1f).height(40.dp)
                                 ) {
                                     Text("Pilih Pelanggan", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 }
@@ -742,7 +742,7 @@ fun LaundryScreen(
                         },
                         enabled = cart.isNotEmpty(),
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth().height(46.dp).testTag("btn-confirm-laundry")
+                        modifier = Modifier.fillMaxWidth().height(50.dp).testTag("btn-confirm-laundry")
                     ) {
                         Text("Buat Order Laundry", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     }

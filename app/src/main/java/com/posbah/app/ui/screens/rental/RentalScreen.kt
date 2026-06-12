@@ -477,11 +477,11 @@ fun RentalScreen(
                                                         Toast.makeText(context, "Armada berhasil dihapus!", Toast.LENGTH_SHORT).show()
                                                     }
                                                 },
-                                                modifier = Modifier.size(28.dp)
+                                                modifier = Modifier.size(36.dp)
                                             ) {
                                                 Box(
                                                     modifier = Modifier
-                                                        .size(28.dp)
+                                                        .size(32.dp)
                                                         .background(MaterialTheme.colorScheme.error.copy(alpha = 0.08f), RoundedCornerShape(50)),
                                                     contentAlignment = Alignment.Center
                                                 ) {
@@ -489,7 +489,7 @@ fun RentalScreen(
                                                         Icons.Outlined.Delete,
                                                         contentDescription = "Hapus Armada",
                                                         tint = MaterialTheme.colorScheme.error,
-                                                        modifier = Modifier.size(16.dp)
+                                                        modifier = Modifier.size(18.dp)
                                                     )
                                                 }
                                             }
@@ -519,7 +519,7 @@ fun RentalScreen(
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(40.dp)
+                            .height(44.dp)
                             .padding(2.dp)
                     ) {
                         Row(
@@ -717,7 +717,7 @@ fun RentalScreen(
                                                 contentPadding = PaddingValues(vertical = 8.dp),
                                                 modifier = Modifier
                                                     .fillMaxWidth()
-                                                    .height(36.dp)
+                                                    .height(44.dp)
                                             ) {
                                                 Text("Kembalikan Armada", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                             }
@@ -802,7 +802,7 @@ fun RentalScreen(
                                     ),
                                     shape = RoundedCornerShape(8.dp),
                                     contentPadding = PaddingValues(vertical = 4.dp),
-                                    modifier = Modifier.weight(1f).height(32.dp)
+                                    modifier = Modifier.weight(1f).height(40.dp)
                                 ) {
                                     Text("Umum (Walk-in)", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 }
@@ -816,7 +816,7 @@ fun RentalScreen(
                                     ),
                                     shape = RoundedCornerShape(8.dp),
                                     contentPadding = PaddingValues(vertical = 4.dp),
-                                    modifier = Modifier.weight(1f).height(32.dp)
+                                    modifier = Modifier.weight(1f).height(40.dp)
                                 ) {
                                     Text("Pilih Pelanggan", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 }

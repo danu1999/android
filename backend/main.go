@@ -1187,7 +1187,7 @@ func handleApkVersion(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
 		"version": "2.0.3",
-		"description": "Peningkatan sistem isolasi keamanan data pengguna, fitur pemulihan database toko asli premium, dan perbaikan visual katalog.",
+		"description": "Integrasi & perbaikan interkoneksi data premium bahteramulyap@gmail.com, sinkronisasi penuh modul Pabrik (BMP) dua arah, serta penataan visual dan tata letak menu Rental & Laundry.",
 	})
 }
 
