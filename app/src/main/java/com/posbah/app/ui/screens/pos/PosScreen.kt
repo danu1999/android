@@ -347,21 +347,23 @@ fun PosScreen(
                                 )
                             }
                         }
-                        item {
-                            FooterButton(
-                                icon = Icons.Outlined.Storefront,
-                                label = "Tambah Produk",
-                                onClick = {
-                                    newProdName = ""
-                                    newProdPrice = ""
-                                    newProdCostPrice = ""
-                                    newProdStock = "999"
-                                    newProdCategory = "Umum"
-                                    newProdBarcode = ""
-                                    capturedPhotoFile = null
-                                    showAddProductDialog = true
-                                }
-                            )
+                        if (ui.canViewMargin) {
+                            item {
+                                FooterButton(
+                                    icon = Icons.Outlined.Storefront,
+                                    label = "Tambah Produk",
+                                    onClick = {
+                                        newProdName = ""
+                                        newProdPrice = ""
+                                        newProdCostPrice = ""
+                                        newProdStock = "999"
+                                        newProdCategory = "Umum"
+                                        newProdBarcode = ""
+                                        capturedPhotoFile = null
+                                        showAddProductDialog = true
+                                    }
+                                )
+                            }
                         }
                         item {
                             FooterButton(
@@ -383,19 +385,17 @@ fun PosScreen(
                                 onClick = onNavigateToPrintSettings
                             )
                         }
-                        if (ui.canViewMargin) {
-                            item {
-                                FooterButton(
-                                    icon = Icons.Outlined.Receipt,
-                                    label = "Biaya / Bahan Baku",
-                                    onClick = {
-                                        expenseName = ""
-                                        expenseAmount = ""
-                                        expenseDate = System.currentTimeMillis()
-                                        showAddExpenseDialog = true
-                                    }
-                                )
-                            }
+                        item {
+                            FooterButton(
+                                icon = Icons.Outlined.Receipt,
+                                label = "Biaya / Bahan Baku",
+                                onClick = {
+                                    expenseName = ""
+                                    expenseAmount = ""
+                                    expenseDate = System.currentTimeMillis()
+                                    showAddExpenseDialog = true
+                                }
+                            )
                         }
                         if (ui.isOwner) {
                             item {

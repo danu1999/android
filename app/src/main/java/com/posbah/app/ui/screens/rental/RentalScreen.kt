@@ -229,15 +229,13 @@ fun RentalScreen(
                         IconButton(onClick = onNavigateToPrintSettings) {
                             Icon(Icons.Outlined.Print, contentDescription = "Pengaturan Struk")
                         }
-                        if (canViewMargin) {
-                            IconButton(onClick = {
-                                expenseName = ""
-                                expenseAmount = ""
-                                expenseDate = System.currentTimeMillis()
-                                showAddExpenseDialog = true
-                            }) {
-                                Icon(Icons.Outlined.Receipt, contentDescription = "Biaya / Bahan Baku")
-                            }
+                        IconButton(onClick = {
+                            expenseName = ""
+                            expenseAmount = ""
+                            expenseDate = System.currentTimeMillis()
+                            showAddExpenseDialog = true
+                        }) {
+                            Icon(Icons.Outlined.Receipt, contentDescription = "Biaya / Bahan Baku")
                         }
                         if (isOwner) {
                             Box {
@@ -275,17 +273,19 @@ fun RentalScreen(
                                 }
                             }
                         }
-                        IconButton(onClick = {
-                            newVehicleName = ""
-                            newVehiclePlate = ""
-                            newVehicleType = "MOBIL"
-                            newVehiclePrice = ""
-                            newVehicleCost = ""
-                            newVehicleMonthlyMaintenance = ""
-                            capturedPhotoFile = null
-                            showAddVehicleDialog = true
-                        }) {
-                            Icon(Icons.Outlined.DirectionsCar, contentDescription = "Tambah Armada")
+                        if (canViewMargin) {
+                            IconButton(onClick = {
+                                newVehicleName = ""
+                                newVehiclePlate = ""
+                                newVehicleType = "MOBIL"
+                                newVehiclePrice = ""
+                                newVehicleCost = ""
+                                newVehicleMonthlyMaintenance = ""
+                                capturedPhotoFile = null
+                                showAddVehicleDialog = true
+                            }) {
+                                Icon(Icons.Outlined.DirectionsCar, contentDescription = "Tambah Armada")
+                            }
                         }
                     }
                 )

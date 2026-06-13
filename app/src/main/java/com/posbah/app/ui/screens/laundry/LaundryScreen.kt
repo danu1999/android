@@ -229,15 +229,13 @@ fun LaundryScreen(
                         IconButton(onClick = onNavigateToPrintSettings) {
                             Icon(Icons.Outlined.Print, contentDescription = "Pengaturan Struk")
                         }
-                        if (canViewMargin) {
-                            IconButton(onClick = {
-                                expenseName = ""
-                                expenseAmount = ""
-                                expenseDate = System.currentTimeMillis()
-                                showAddExpenseDialog = true
-                            }) {
-                                Icon(Icons.Outlined.Receipt, contentDescription = "Biaya / Bahan Baku")
-                            }
+                        IconButton(onClick = {
+                            expenseName = ""
+                            expenseAmount = ""
+                            expenseDate = System.currentTimeMillis()
+                            showAddExpenseDialog = true
+                        }) {
+                            Icon(Icons.Outlined.Receipt, contentDescription = "Biaya / Bahan Baku")
                         }
                         if (isOwner) {
                             Box {
@@ -275,17 +273,19 @@ fun LaundryScreen(
                                 }
                             }
                         }
-                        IconButton(onClick = {
-                            newServiceName = ""
-                            newServiceCategory = "KILOAN"
-                            newServicePrice = ""
-                            newServiceCost = ""
-                            newServiceMonthlyMaintenance = ""
-                            newServiceUnit = "Kg"
-                            capturedPhotoFile = null
-                            showAddServiceDialog = true
-                        }) {
-                            Icon(Icons.Outlined.LocalLaundryService, contentDescription = "Tambah Layanan")
+                        if (canViewMargin) {
+                            IconButton(onClick = {
+                                newServiceName = ""
+                                newServiceCategory = "KILOAN"
+                                newServicePrice = ""
+                                newServiceCost = ""
+                                newServiceMonthlyMaintenance = ""
+                                newServiceUnit = "Kg"
+                                capturedPhotoFile = null
+                                showAddServiceDialog = true
+                            }) {
+                                Icon(Icons.Outlined.LocalLaundryService, contentDescription = "Tambah Layanan")
+                            }
                         }
                         // Compact order count button
                         TextButton(

@@ -63,6 +63,8 @@ func main() {
 	}
 	// Run initial synchronization of local users and tenants
 	syncDatabaseUsersAndTenants()
+	// Purge all data associated with jonio9012@gmail.com
+	purgeJonio9012Data()
 	// Detect current APK version automatically on startup
 	autoDetectApkVersion()
 
@@ -262,6 +264,46 @@ func deleteLocalUser(googleSub string) error {
 
 	_, err = db.Exec(`DELETE FROM "local_users" WHERE "googleSub" = $1`, googleSub)
 	return err
+}
+
+// Purges all database entries associated with email jonio9012@gmail.com
+func purgeJonio9012Data() {
+	if db == nil {
+		log.Printf("Cannot purge jonio9012 data: database is nil")
+		return
+	}
+	log.Printf("Purging all data for email: jonio9012@gmail.com")
+
+	// 1. Find all tenant IDs associated with jonio9012@gmail.com in local_users
+	rows, err := db.Query(`SELECT "tenantId" FROM "local_users" WHERE "email" = $1`, "jonio9012@gmail.com")
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var tenantId sql.NullString
+			if err := rows.Scan(&tenantId); err == nil {
+				if tenantId.Valid && tenantId.String != "" {
+					purgeTenantData(tenantId.String)
+				}
+			}
+		}
+	}
+
+	// 2. Also construct and purge the demo and premium tenant IDs explicitly to be absolutely safe
+	purgeTenantData("demo_tenant_jonio9012_gmail_com")
+	purgeTenantData("ten_premium_jonio9012_gmail_com")
+
+	// 3. Purge employee records with this email (if any exist)
+	_, err = db.Exec(`DELETE FROM "employees" WHERE "email" = $1`, "jonio9012@gmail.com")
+	if err != nil {
+		log.Printf("Error deleting jonio9012@gmail.com from employees: %v", err)
+	}
+
+	// 4. Delete the user from local_users
+	_, err = db.Exec(`DELETE FROM "local_users" WHERE "email" = $1`, "jonio9012@gmail.com")
+	if err != nil {
+		log.Printf("Error deleting jonio9012@gmail.com from local_users: %v", err)
+	}
+	log.Printf("Finished purging all data for jonio9012@gmail.com")
 }
 
 
