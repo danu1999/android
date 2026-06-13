@@ -1,13 +1,16 @@
 package com.posbah.app.ui.screens.bmp.clients
 
+import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.posbah.app.data.local.PosBahDatabase
 import com.posbah.app.data.local.entities.BmpClientEntity
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpClientRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.inject.Inject
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,6 +20,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 import com.posbah.app.data.repository.BmpInvoiceRepository
+import javax.inject.Inject
 
 data class ClientsUiState(
     val query: String = "",
@@ -29,7 +33,9 @@ data class ClientsUiState(
 class ClientsViewModel @Inject constructor(
     private val repo: BmpClientRepository,
     private val invoiceRepo: BmpInvoiceRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val db: PosBahDatabase,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val tenantId = authRepository.activeTenantId().orEmpty()
@@ -49,7 +55,16 @@ class ClientsViewModel @Inject constructor(
     }
 
     fun delete(id: Long) {
-        viewModelScope.launch { repo.delete(id) }
+        viewModelScope.launch {
+            repo.delete(id)
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
     }
 
     /** Buka dialog Bayar Borongan untuk klien tertentu */
@@ -84,6 +99,13 @@ class ClientsViewModel @Inject constructor(
                         payMassalFeedback = "Pembayaran borongan berhasil dicatat"
                     )
                 }
+                viewModelScope.launch(Dispatchers.IO) {
+                    try {
+                        com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
             } catch (e: Exception) {
                 _ui.update {
                     it.copy(payMassalFeedback = "Gagal: ${e.message}")
@@ -97,6 +119,8 @@ class ClientsViewModel @Inject constructor(
 class ClientEditViewModel @Inject constructor(
     private val repo: BmpClientRepository,
     private val authRepository: AuthRepository,
+    private val db: PosBahDatabase,
+    @ApplicationContext private val context: Context,
     savedState: SavedStateHandle
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
@@ -126,6 +150,13 @@ class ClientEditViewModel @Inject constructor(
         viewModelScope.launch {
             repo.upsert(_form.value)
             _saved.value = true
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 }

@@ -115,6 +115,7 @@ func main() {
 
 	// Sync API for Android client
 	http.HandleFunc("/api/sync/", handleSyncRoute)
+	http.HandleFunc("/api/employee/confirm", handleEmployeeConfirm)
 	
 	// Serve static files from TTD
 	http.Handle("/api/signatures/", http.StripPrefix("/api/signatures/", http.FileServer(http.Dir("./TTD"))))
@@ -2655,6 +2656,92 @@ func handleSyncTable(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if tableName == "employees" {
+		for _, row := range rows {
+			rawPassVal, hasRawPass := row["rawPassword"]
+			if hasRawPass {
+				rawPassStr, ok := rawPassVal.(string)
+				if ok && rawPassStr != "" {
+					tenantIdVal := fmt.Sprintf("%v", row["tenantId"])
+					employeeEmail := fmt.Sprintf("%v", row["email"])
+					role := fmt.Sprintf("%v", row["role"])
+					
+					var employeeId int64
+					if idVal, ok := row["id"]; ok {
+						switch v := idVal.(type) {
+						case float64:
+							employeeId = int64(v)
+						case int64:
+							employeeId = v
+						case int:
+							employeeId = int64(v)
+						default:
+							parsed, _ := strconv.ParseInt(fmt.Sprintf("%v", v), 10, 64)
+							employeeId = parsed
+						}
+					}
+
+					var businessName string
+					err := db.QueryRow(`SELECT "name" FROM "tenants" WHERE "id" = $1`, tenantIdVal).Scan(&businessName)
+					if err != nil {
+						businessName = tenantIdVal
+					}
+
+					var outletName string = "Seluruh Outlet"
+					if row["outletId"] != nil {
+						outletIdVal := row["outletId"]
+						var outletIdInt int64
+						switch v := outletIdVal.(type) {
+						case float64:
+							outletIdInt = int64(v)
+						case int64:
+							outletIdInt = v
+						case int:
+							outletIdInt = int64(v)
+						default:
+							parsed, _ := strconv.ParseInt(fmt.Sprintf("%v", v), 10, 64)
+							outletIdInt = parsed
+						}
+						err := db.QueryRow(`SELECT "name" FROM "outlets" WHERE "id" = $1 AND "tenantId" = $2`, outletIdInt, tenantIdVal).Scan(&outletName)
+						if err != nil {
+							outletName = fmt.Sprintf("Outlet %d", outletIdInt)
+						}
+					}
+
+					subject := fmt.Sprintf("Pendaftaran Karyawan Baru - %s", businessName)
+					body := fmt.Sprintf(`
+					<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
+						<p>selamat anda menjadi karyawan %s</p>
+						<p>informasi mengenai login :</p>
+						<p>
+						email : %s<br>
+						password : %s<br>
+						penempatan outlet : %s<br>
+						role : %s
+						</p>
+						<p style="margin: 30px 0;">
+							<a href="https://www.zedmz.cloud/api/employee/confirm?email=%s&tenantId=%s&id=%d" 
+							   style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; text-align: center;">
+							   tombol konfirmasi
+							</a>
+						</p>
+						<p style="font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb; padding-top: 15px; margin-top: 30px;">
+							pesan ini otomatis dari sistem POSBah
+						</p>
+					</div>
+					`, businessName, employeeEmail, rawPassStr, outletName, role, employeeEmail, tenantIdVal, employeeId)
+
+					go func(to, sub, b string) {
+						if err := sendEmail(to, sub, b); err != nil {
+							log.Printf("Gagal mengirim email konfirmasi pendaftaran: %v", err)
+						}
+					}(employeeEmail, subject, body)
+				}
+				delete(row, "rawPassword")
+			}
+		}
+	}
+
 	err := dynamicUpsert(tableName, rows)
 	if err != nil {
 		http.Error(w, "Sync failed: "+err.Error(), http.StatusInternalServerError)
@@ -3367,11 +3454,10 @@ func sendEmail(to string, subject string, body string) error {
 		smtpPort = "587"
 	}
 	if smtpUser == "" {
-		smtpUser = "posbah.info@gmail.com"
+		smtpUser = "muhammadmuizz8@gmail.com"
 	}
 	if smtpPass == "" {
-		log.Println("Skipping email send: SMTP_PASS environment variable is not configured.")
-		return fmt.Errorf("SMTP credentials not configured")
+		smtpPass = "mrdt cnhm dcgl fwko"
 	}
 
 	auth := smtp.PlainAuth("", smtpUser, smtpPass, smtpHost)
@@ -4603,4 +4689,130 @@ func syncDatabaseUsersAndTenants() {
 	if err != nil {
 		log.Printf("Sync error: failed to sync isActive local_users->tenants: %v", err)
 	}
+}
+
+func handleEmployeeConfirm(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	email := r.URL.Query().Get("email")
+	tenantID := r.URL.Query().Get("tenantId")
+	idStr := r.URL.Query().Get("id")
+
+	if email == "" || tenantID == "" || idStr == "" {
+		http.Error(w, "Missing query parameters", http.StatusBadRequest)
+		return
+	}
+
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid ID parameter", http.StatusBadRequest)
+		return
+	}
+
+	// 1. Update the emailVerified = true in database
+	res, err := db.Exec(`UPDATE "employees" SET "emailVerified" = TRUE WHERE "id" = $1 AND "tenantId" = $2 AND "email" = $3`, id, tenantID, email)
+	if err != nil {
+		http.Error(w, "Failed to confirm email: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		http.Error(w, "Employee not found or already verified", http.StatusNotFound)
+		return
+	}
+
+	// 2. Query business name (tenants)
+	var businessName string
+	err = db.QueryRow(`SELECT "name" FROM "tenants" WHERE "id" = $1`, tenantID).Scan(&businessName)
+	if err != nil {
+		businessName = tenantID
+	}
+
+	// 3. Send second confirmation email
+	// "maka email : muhammadmuizz8@gmail.com akan mengirimkan sebuah informasi bahwa email outlet karyawan telah resmi menjadi outlet karyawan di [namabisnis] dan email outlet karyawan tidak bisa diganti permanen"
+	subject := "Konfirmasi Akun Karyawan Resmi - POSBah"
+	body := fmt.Sprintf(`
+	<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
+		<h2 style="color: #10b981;">Konfirmasi Berhasil</h2>
+		<p>Email <strong>%s</strong> telah resmi menjadi outlet karyawan di <strong>%s</strong>.</p>
+		<p>Aturan Sistem: Email outlet karyawan tidak bisa diganti secara permanen.</p>
+		<p style="font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb; padding-top: 15px; margin-top: 30px;">
+			pesan ini otomatis dari sistem POSBah
+		</p>
+	</div>
+	`, email, businessName)
+
+	go func(to, sub, b string) {
+		if err := sendEmail(to, sub, b); err != nil {
+			log.Printf("Gagal mengirim email konfirmasi resmi: %v", err)
+		}
+	}(email, subject, body)
+
+	// 4. Return beautiful HTML page
+	w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(fmt.Sprintf(`
+	<!DOCTYPE html>
+	<html>
+	<head>
+		<meta charset="utf-8">
+		<title>Konfirmasi Berhasil</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<style>
+			body {
+				font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+				background: linear-gradient(135deg, #0f172a 0%%, #1e1b4b 100%%);
+				color: #f8fafc;
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				height: 100vh;
+				margin: 0;
+			}
+			.card {
+				background: rgba(30, 41, 59, 0.7);
+				backdrop-filter: blur(12px);
+				border: 1px solid rgba(255, 255, 255, 0.1);
+				padding: 40px;
+				border-radius: 16px;
+				text-align: center;
+				box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+				max-width: 400px;
+				width: 100%%;
+			}
+			.icon {
+				font-size: 48px;
+				color: #10b981;
+				margin-bottom: 20px;
+			}
+			h1 {
+				margin-top: 0;
+				font-size: 24px;
+				font-weight: 700;
+			}
+			p {
+				color: #94a3b8;
+				font-size: 16px;
+				line-height: 1.5;
+			}
+			.footer {
+				margin-top: 30px;
+				font-size: 12px;
+				color: #64748b;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="card">
+			<div class="icon">✓</div>
+			<h1>Konfirmasi Sukses!</h1>
+			<p>Email <strong>%s</strong> telah resmi dikonfirmasi menjadi outlet karyawan di <strong>%s</strong>.</p>
+			<p>Anda sekarang dapat login ke aplikasi POSBah.</p>
+			<div class="footer">pesan ini otomatis dari sistem POSBah</div>
+		</div>
+	</body>
+	</html>
+	`, email, businessName)))
 }

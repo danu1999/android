@@ -55,17 +55,42 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+import android.content.Context
+import com.posbah.app.data.local.PosBahDatabase
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+
 @HiltViewModel
 class EmployeesViewModel @Inject constructor(
     private val repo: BmpEmployeeRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val db: PosBahDatabase,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
     val tenantId = authRepository.activeTenantId().orEmpty()
     val employees = repo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val payrolls = repo.observePayrolls(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    fun upsert(e: BmpEmployeeEntity) = viewModelScope.launch { repo.upsert(e) }
-    fun softDelete(id: Long) = viewModelScope.launch { repo.softDelete(id) }
+    fun upsert(e: BmpEmployeeEntity) = viewModelScope.launch {
+        repo.upsert(e)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+            } catch (ex: Exception) {
+                ex.printStackTrace()
+            }
+        }
+    }
+    fun softDelete(id: Long) = viewModelScope.launch {
+        repo.softDelete(id)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+            } catch (ex: Exception) {
+                ex.printStackTrace()
+            }
+        }
+    }
 
     fun payEmployee(emp: BmpEmployeeEntity, amount: Double, attendance: Int) = viewModelScope.launch {
         if (amount <= 0) return@launch
@@ -79,6 +104,13 @@ class EmployeesViewModel @Inject constructor(
                 dailyRate = if (attendance > 0) amount / attendance else 0.0
             )
         )
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+            } catch (ex: Exception) {
+                ex.printStackTrace()
+            }
+        }
     }
 }
 

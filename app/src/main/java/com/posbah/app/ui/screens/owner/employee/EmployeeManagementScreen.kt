@@ -425,7 +425,7 @@ fun EmployeeManagementScreen(
                         showAddDialog = false
                     }
                 ) {
-                    Text("Kirim OTP")
+                    Text("Simpan")
                 }
             },
             dismissButton = {

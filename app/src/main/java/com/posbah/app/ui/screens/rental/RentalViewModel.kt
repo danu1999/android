@@ -215,6 +215,13 @@ class RentalViewModel @Inject constructor(
             productRepository.upsert(p)
             logActivity("TAMBAH KENDARAAN", "Menambahkan armada baru: $name ($plateNumber) Jual: $pricePerDay Modal: $costPrice")
             onDone()
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 
@@ -227,6 +234,13 @@ class RentalViewModel @Inject constructor(
                 logActivity("HAPUS KENDARAAN", "Menghapus armada: ${p?.name ?: vehicleId}")
             }
             onDone()
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 
@@ -370,6 +384,13 @@ class RentalViewModel @Inject constructor(
             db.customerDao().upsert(c)
             logActivity("TAMBAH PELANGGAN", "Menambahkan pelanggan baru: $name")
             onDone()
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 

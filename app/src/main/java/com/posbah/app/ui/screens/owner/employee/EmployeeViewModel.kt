@@ -7,7 +7,10 @@ import com.posbah.app.data.local.entities.Employee
 import com.posbah.app.data.local.entities.TransactionEntity
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.security.PinHasher
+import android.content.Context
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -32,7 +35,8 @@ data class EmployeeManagementUiState(
 @HiltViewModel
 class EmployeeViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    private val db: PosBahDatabase
+    private val db: PosBahDatabase,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val tenantId = authRepository.activeTenantId().orEmpty()
@@ -80,8 +84,7 @@ class EmployeeViewModel @Inject constructor(
     }
 
     /**
-     * Pendaftaran karyawan baru dengan verifikasi email simulasi.
-     * Memicu pengiriman kode OTP 6 digit.
+     * Pendaftaran karyawan baru dengan verifikasi email via server.
      */
     fun startAddEmployee(
         name: String,
@@ -118,7 +121,6 @@ class EmployeeViewModel @Inject constructor(
                 return@launch
             }
 
-            val otp = String.format("%06d", Random.nextInt(100000, 999999))
             val hashedPassword = PinHasher.hash(password)
             val newEmp = Employee(
                 tenantId = tenantId,
@@ -133,67 +135,33 @@ class EmployeeViewModel @Inject constructor(
                 emailVerified = false
             )
 
-            _uiState.update { 
-                it.copy(
-                    emailVerificationOtp = otp,
-                    pendingEmployee = newEmp,
-                    error = null
-                ) 
+            db.employeeDao().insert(newEmp)
+            
+            // Clear status error
+            _uiState.update { it.copy(error = null) }
+            
+            // Refresh list
+            checkPermissionAndLoad()
+
+            // Trigger auto-sync to VPS with raw password
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    com.posbah.app.data.remote.SupabaseSyncManager.syncEmployeeWithRawPassword(context, db, tenantId, cleanEmail, password)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
         }
     }
 
-    /**
-     * Konfirmasi verifikasi kode OTP email karyawan.
-     */
     fun verifyOtpAndInsert(otpInput: String) {
-        val currentState = _uiState.value
-        val correctOtp = currentState.emailVerificationOtp
-        val emp = currentState.pendingEmployee
-
-        if (correctOtp == null || emp == null) {
-            _uiState.update { it.copy(error = "Tidak ada proses registrasi berjalan.") }
-            return
-        }
-
-        if (otpInput != correctOtp) {
-            _uiState.update { it.copy(error = "Kode verifikasi salah.") }
-            return
-        }
-
-        viewModelScope.launch {
-            try {
-                val verifiedEmp = emp.copy(
-                    emailVerified = true,
-                    updatedAt = System.currentTimeMillis()
-                )
-                db.employeeDao().insert(verifiedEmp)
-                
-                // Clear state
-                _uiState.update { 
-                    it.copy(
-                        emailVerificationOtp = null,
-                        pendingEmployee = null,
-                        error = null
-                    ) 
-                }
-                
-                // Refresh list
-                checkPermissionAndLoad()
-            } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.localizedMessage ?: "Gagal mendaftarkan karyawan.") }
-            }
-        }
+        // Unused stub in new confirmation model
     }
 
     fun cancelAddEmployee() {
-        _uiState.update { 
-            it.copy(
-                emailVerificationOtp = null,
-                pendingEmployee = null
-            ) 
-        }
+        // Unused stub in new confirmation model
     }
+
 
     /**
      * Ganti password karyawan oleh Owner.
@@ -206,6 +174,15 @@ class EmployeeViewModel @Inject constructor(
             val updated = emp.copy(pinHash = hashed, updatedAt = System.currentTimeMillis())
             db.employeeDao().update(updated)
             checkPermissionAndLoad()
+
+            // Trigger auto-sync to VPS
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 
@@ -267,6 +244,15 @@ class EmployeeViewModel @Inject constructor(
 
                 // Reload list
                 checkPermissionAndLoad()
+
+                // Trigger auto-sync to VPS
+                viewModelScope.launch(Dispatchers.IO) {
+                    try {
+                        com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.localizedMessage ?: "Gagal memproses pembayaran gaji.") }
             }

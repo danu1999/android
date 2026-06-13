@@ -1,5 +1,6 @@
 package com.posbah.app.ui.screens.owner.outlet
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.posbah.app.data.local.PosBahDatabase
@@ -7,6 +8,8 @@ import com.posbah.app.data.local.entities.Outlet
 import com.posbah.app.data.local.entities.Employee
 import com.posbah.app.data.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -42,7 +45,8 @@ data class OutletControlUiState(
 @HiltViewModel
 class OutletControlViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    private val db: PosBahDatabase
+    private val db: PosBahDatabase,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val tenantId = authRepository.activeTenantId().orEmpty()
@@ -202,6 +206,13 @@ class OutletControlViewModel @Inject constructor(
             val updated = outlet.copy(isOpen = !outlet.isOpen, updatedAt = System.currentTimeMillis())
             db.outletDao().update(updated)
             loadData()
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 
@@ -211,6 +222,13 @@ class OutletControlViewModel @Inject constructor(
             val updated = outlet.copy(currentEmployee = employeeName.ifBlank { null }, updatedAt = System.currentTimeMillis())
             db.outletDao().update(updated)
             loadData()
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 
@@ -236,6 +254,13 @@ class OutletControlViewModel @Inject constructor(
             )
             db.outletDao().insert(newOutlet)
             loadData()
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 
@@ -255,6 +280,13 @@ class OutletControlViewModel @Inject constructor(
             )
             db.outletDao().update(updated)
             loadData()
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 }

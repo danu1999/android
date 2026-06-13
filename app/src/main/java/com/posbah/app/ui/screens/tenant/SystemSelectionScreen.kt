@@ -57,6 +57,7 @@ import com.posbah.app.data.local.entities.Tenant
 import com.posbah.app.data.local.entities.Outlet
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 import javax.inject.Inject
 
 data class SystemOption(
@@ -66,6 +67,7 @@ data class SystemOption(
     val icon: ImageVector,
     val color: Color
 )
+
 
 @HiltViewModel
 class SystemSelectionViewModel @Inject constructor(
@@ -139,6 +141,15 @@ class SystemSelectionViewModel @Inject constructor(
                     localDataSeeder.seedFromSqlDump(context, chosenTenantId, activeOutlet?.id)
                 } catch (e: Exception) {
                     e.printStackTrace()
+                }
+
+                // Sync the newly created/seeded tenant data up to VPS immediately
+                viewModelScope.launch(Dispatchers.IO) {
+                    try {
+                        com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, chosenTenantId)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
                 }
             }
             onDone()

@@ -554,7 +554,11 @@ func dynamicUpsert(tableName string, rows []map[string]interface{}) error {
 			}
 
 			if !isPKColumn(tableName, k) {
-				updateParts = append(updateParts, fmt.Sprintf(`"%s" = EXCLUDED."%s"`, k, k))
+				if tableName == "employees" && k == "email" {
+					// Exclude email column from conflict updates for employees table
+				} else {
+					updateParts = append(updateParts, fmt.Sprintf(`"%s" = EXCLUDED."%s"`, k, k))
+				}
 			}
 			idx++
 		}

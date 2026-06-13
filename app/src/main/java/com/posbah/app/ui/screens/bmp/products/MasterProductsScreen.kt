@@ -66,11 +66,18 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+import android.content.Context
+import com.posbah.app.data.local.PosBahDatabase
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+
 @HiltViewModel
 class MasterProductsViewModel @Inject constructor(
     private val repo: BmpMasterProductRepository,
     private val settingsRepo: com.posbah.app.data.repository.BmpSettingsRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val db: PosBahDatabase,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
     val products = repo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -99,9 +106,25 @@ class MasterProductsViewModel @Inject constructor(
         if (e.title.isBlank()) return@launch
         repo.upsert(e)
         _form.update { FormState() }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+            } catch (ex: Exception) {
+                ex.printStackTrace()
+            }
+        }
     }
 
-    fun delete(id: Long) = viewModelScope.launch { repo.delete(id) }
+    fun delete(id: Long) = viewModelScope.launch {
+        repo.delete(id)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+            } catch (ex: Exception) {
+                ex.printStackTrace()
+            }
+        }
+    }
 }
 
 data class HppResult(

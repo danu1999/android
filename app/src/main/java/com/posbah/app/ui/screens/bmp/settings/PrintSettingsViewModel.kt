@@ -1,22 +1,28 @@
 package com.posbah.app.ui.screens.bmp.settings
 
+import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.posbah.app.data.local.PosBahDatabase
 import com.posbah.app.data.local.entities.PrintSettingsEntity
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.PrintSettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.inject.Inject
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @HiltViewModel
 class PrintSettingsViewModel @Inject constructor(
     private val printSettingsRepo: PrintSettingsRepository,
     private val authRepository: AuthRepository,
+    private val db: PosBahDatabase,
+    @ApplicationContext private val context: Context,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -71,6 +77,13 @@ class PrintSettingsViewModel @Inject constructor(
         }
 
         printSettingsRepo.upsert(d.copy(updatedAt = System.currentTimeMillis()))
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
         onDone()
     }
 }

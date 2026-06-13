@@ -67,12 +67,16 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val settingsRepo: BmpSettingsRepository,
     private val outletRepo: OutletRepository,
     private val authRepository: AuthRepository,
-    private val db: com.posbah.app.data.local.PosBahDatabase
+    private val db: com.posbah.app.data.local.PosBahDatabase,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
 
@@ -103,13 +107,45 @@ class SettingsViewModel @Inject constructor(
     fun save() = viewModelScope.launch {
         val d = _draft.value ?: return@launch
         settingsRepo.upsert(d)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+            } catch (ex: Exception) {
+                ex.printStackTrace()
+            }
+        }
     }
 
     fun addOutlet(name: String, address: String?, phone: String?) = viewModelScope.launch {
         outletRepo.create(tenantId, name, address, phone)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+            } catch (ex: Exception) {
+                ex.printStackTrace()
+            }
+        }
     }
-    fun updateOutlet(o: Outlet) = viewModelScope.launch { outletRepo.update(o) }
-    fun deleteOutlet(id: Long) = viewModelScope.launch { outletRepo.delete(id) }
+    fun updateOutlet(o: Outlet) = viewModelScope.launch {
+        outletRepo.update(o)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+            } catch (ex: Exception) {
+                ex.printStackTrace()
+            }
+        }
+    }
+    fun deleteOutlet(id: Long) = viewModelScope.launch {
+        outletRepo.delete(id)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+            } catch (ex: Exception) {
+                ex.printStackTrace()
+            }
+        }
+    }
 
     fun performSync(context: Context) = viewModelScope.launch {
         _syncStatus.value = "Sedang mensinkronisasikan..."
