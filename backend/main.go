@@ -78,6 +78,7 @@ func main() {
 	http.HandleFunc("/api/admin/toggle-block", handleAdminToggleBlock)
 	http.HandleFunc("/api/admin/confirm-payment", handleAdminConfirmPayment)
 	http.HandleFunc("/api/admin/apk-config", handleAdminApkConfig)
+	http.HandleFunc("/api/admin/diagnose", handleAdminDiagnose)
 	http.HandleFunc("/status", handleStatus)
 	http.HandleFunc("/api/admin/check-demo-lockout", handleManualLockoutCheck)
 	http.HandleFunc("/api/admin/demo-users", handleGetDemoUsers)
@@ -4352,4 +4353,87 @@ func sendApkUpdateEmailToAllPremiumUsersAndEmployees(version, description string
 			time.Sleep(100 * time.Millisecond)
 		}
 	}()
+}
+
+func handleAdminDiagnose(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if db == nil {
+		http.Error(w, "Database not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	// Count users
+	var totalUsers, premiumUsers, activeDemo, blockedUsers int
+	db.QueryRow(`SELECT count(*) FROM "local_users"`).Scan(&totalUsers)
+	db.QueryRow(`SELECT count(*) FROM "local_users" WHERE "isPremium" = TRUE`).Scan(&premiumUsers)
+	db.QueryRow(`SELECT count(*) FROM "local_users" WHERE "isPremium" = FALSE AND "isActive" = TRUE`).Scan(&activeDemo)
+	db.QueryRow(`SELECT count(*) FROM "local_users" WHERE "isActive" = FALSE`).Scan(&blockedUsers)
+
+	// Search jonio9012@gmail.com in local_users
+	var luFound bool
+	var luSub, luEmail, luName, luTenant string
+	var luPremium, luActive bool
+	err := db.QueryRow(`SELECT "googleSub", "email", COALESCE("displayName", ''), "tenantId", "isPremium", "isActive" FROM "local_users" WHERE "email" = 'jonio9012@gmail.com'`).Scan(&luSub, &luEmail, &luName, &luTenant, &luPremium, &luActive)
+	if err == nil {
+		luFound = true
+	}
+
+	// Search jonio9012@gmail.com in employees
+	var empFound bool
+	var empId int
+	var empTenant, empName, empEmail, empRole string
+	var empActive bool
+	err = db.QueryRow(`SELECT "id", "tenantId", "name", "email", "role", "isActive" FROM "employees" WHERE "email" = 'jonio9012@gmail.com'`).Scan(&empId, &empTenant, &empName, &empEmail, &empRole, &empActive)
+	if err == nil {
+		empFound = true
+	}
+
+	// Get all table names in db
+	rows, err := db.Query(`SELECT table_name FROM information_schema.tables WHERE table_schema='public'`)
+	var tables []string
+	if err == nil {
+		for rows.Next() {
+			var t string
+			if err := rows.Scan(&t); err == nil {
+				tables = append(tables, t)
+			}
+		}
+		rows.Close()
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"stats": map[string]int{
+			"total":   totalUsers,
+			"premium": premiumUsers,
+			"demo":    activeDemo,
+			"blocked": blockedUsers,
+		},
+		"tables": tables,
+		"jonio_local_user": map[string]interface{}{
+			"found":       luFound,
+			"googleSub":   luSub,
+			"email":       luEmail,
+			"displayName": luName,
+			"tenantId":    luTenant,
+			"isPremium":   luPremium,
+			"isActive":    luActive,
+		},
+		"jonio_employee": map[string]interface{}{
+			"found":     empFound,
+			"id":        empId,
+			"tenantId":  empTenant,
+			"name":      empName,
+			"email":     empEmail,
+			"role":      empRole,
+			"isActive":  empActive,
+		},
+	})
 }
