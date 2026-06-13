@@ -61,6 +61,8 @@ func main() {
 	if err := initDatabase(dbURL); err != nil {
 		log.Printf("Warning: local database initialization failed: %v", err)
 	}
+	// Run initial synchronization of local users and tenants
+	syncDatabaseUsersAndTenants()
 	// Detect current APK version automatically on startup
 	autoDetectApkVersion()
 
@@ -149,6 +151,7 @@ func checkAndLockoutDemoUsers() error {
 	if db == nil {
 		return fmt.Errorf("local database not initialized")
 	}
+	syncDatabaseUsersAndTenants()
 	twoDaysAgoMillis := time.Now().UnixNano()/int64(time.Millisecond) - (2 * 24 * 60 * 60 * 1000)
 
 	// Query local database for demo users who registered more than 2 days ago
@@ -379,6 +382,8 @@ func handleGetDemoUsers(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Database not initialized", http.StatusInternalServerError)
 		return
 	}
+
+	syncDatabaseUsersAndTenants()
 
 	rows, err := db.Query(`SELECT "googleSub", "email", COALESCE("displayName", ''), "registeredAt", "isActive", COALESCE("tenantId", '') FROM "local_users" WHERE "isPremium" = FALSE ORDER BY "registeredAt" DESC`)
 	if err != nil {
@@ -3977,6 +3982,8 @@ func handleAdminGetUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	syncDatabaseUsersAndTenants()
+
 	rows, err := db.Query(`SELECT "googleSub", "email", COALESCE("displayName", ''), "registeredAt", "isActive", COALESCE("tenantId", ''), "isPremium" FROM "local_users" ORDER BY "registeredAt" DESC`)
 	if err != nil {
 		http.Error(w, "Database query failed: "+err.Error(), http.StatusInternalServerError)
@@ -4043,6 +4050,9 @@ func handleAdminToggleBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Sync changes to tenants table immediately
+	syncDatabaseUsersAndTenants()
+
 	// Broadcast WS message about the block status change
 	statusMsg := "active"
 	if !req.IsActive {
@@ -4094,6 +4104,9 @@ func handleAdminConfirmPayment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Upgrade failed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	// Sync database records instantly
+	syncDatabaseUsersAndTenants()
 
 	// Broadcast WS message
 	wsMsg := map[string]interface{}{
@@ -4369,6 +4382,8 @@ func handleAdminDiagnose(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	syncDatabaseUsersAndTenants()
+
 	// Count users
 	var totalUsers, premiumUsers, activeDemo, blockedUsers int
 	db.QueryRow(`SELECT count(*) FROM "local_users"`).Scan(&totalUsers)
@@ -4480,4 +4495,76 @@ func handleAdminDiagnose(w http.ResponseWriter, r *http.Request) {
 		},
 		"jonio_matches": matches,
 	})
+}
+
+func syncDatabaseUsersAndTenants() {
+	if db == nil {
+		return
+	}
+
+	// 1. Backfill missing local_users from tenants
+	_, err := db.Exec(`
+		INSERT INTO "local_users" ("googleSub", "email", "displayName", "role", "tenantId", "isPremium", "isActive", "registeredAt", "updatedAt")
+		SELECT 
+			t."ownerEmail" AS "googleSub", 
+			t."ownerEmail" AS "email", 
+			regexp_replace(regexp_replace(t."name", '^Demo - ', ''), ' \(Premium\)$', '') AS "displayName",
+			'OWNER' AS "role",
+			t."id" AS "tenantId",
+			CASE WHEN t."id" LIKE 'ten_premium_%' THEN TRUE ELSE FALSE END AS "isPremium",
+			t."isActive" AS "isActive",
+			t."createdAt" AS "registeredAt",
+			t."updatedAt" AS "updatedAt"
+		FROM "tenants" t
+		WHERE NOT EXISTS (
+			SELECT 1 FROM "local_users" u WHERE u."tenantId" = t."id" OR u."email" = t."ownerEmail"
+		) AND t."ownerEmail" IS NOT NULL AND t."ownerEmail" <> ''
+	`)
+	if err != nil {
+		log.Printf("Sync error: failed to backfill local_users: %v", err)
+	}
+
+	// 2. Backfill missing tenants from local_users
+	_, err = db.Exec(`
+		INSERT INTO "tenants" ("id", "name", "ownerEmail", "businessMode", "isActive", "createdAt", "updatedAt")
+		SELECT 
+			COALESCE(NULLIF(u."tenantId", ''), 'demo_tenant_' || replace(replace(u."email", '@', '_'), '.', '_')) AS "id",
+			CASE WHEN u."isPremium" = TRUE THEN 'CV. ' || COALESCE(NULLIF(u."displayName", ''), u."email") || ' (Premium)'
+				 ELSE 'Demo - ' || COALESCE(NULLIF(u."displayName", ''), u."email")
+			END AS "name",
+			u."email" AS "ownerEmail",
+			'FNB' AS "businessMode",
+			u."isActive" AS "isActive",
+			u."registeredAt" AS "createdAt",
+			u."updatedAt" AS "updatedAt"
+		FROM "local_users" u
+		WHERE NOT EXISTS (
+			SELECT 1 FROM "tenants" t WHERE t."id" = u."tenantId" OR t."ownerEmail" = u."email"
+		) AND u."email" IS NOT NULL AND u."email" <> ''
+	`)
+	if err != nil {
+		log.Printf("Sync error: failed to backfill tenants: %v", err)
+	}
+
+	// 3. Keep isActive synchronized from tenants to local_users (e.g. if updated via tenant sync)
+	_, err = db.Exec(`
+		UPDATE "local_users" u
+		SET "isActive" = t."isActive", "updatedAt" = $1
+		FROM "tenants" t
+		WHERE (u."tenantId" = t."id" OR u."email" = t."ownerEmail") AND u."isActive" <> t."isActive"
+	`, time.Now().UnixNano()/int64(time.Millisecond))
+	if err != nil {
+		log.Printf("Sync error: failed to sync isActive tenants->local_users: %v", err)
+	}
+
+	// 4. Keep isActive synchronized from local_users to tenants (e.g. if blocked from admin panel)
+	_, err = db.Exec(`
+		UPDATE "tenants" t
+		SET "isActive" = u."isActive", "updatedAt" = $1
+		FROM "local_users" u
+		WHERE (u."tenantId" = t."id" OR u."email" = t."ownerEmail") AND t."isActive" <> u."isActive"
+	`, time.Now().UnixNano()/int64(time.Millisecond))
+	if err != nil {
+		log.Printf("Sync error: failed to sync isActive local_users->tenants: %v", err)
+	}
 }
