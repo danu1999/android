@@ -285,7 +285,7 @@ func purgeJonio9012Data() {
 	log.Printf("Purging all data for email: jonio9012@gmail.com")
 
 	// 1. Find all tenant IDs associated with jonio9012@gmail.com in local_users
-	rows, err := db.Query(`SELECT "tenantId" FROM "local_users" WHERE "email" = $1`, "jonio9012@gmail.com")
+	rows, err := db.Query(`SELECT "tenantId" FROM "local_users" WHERE TRIM(LOWER("email")) = $1`, "jonio9012@gmail.com")
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -298,18 +298,28 @@ func purgeJonio9012Data() {
 		}
 	}
 
-	// 2. Also construct and purge the demo and premium tenant IDs explicitly to be absolutely safe
-	purgeTenantData("demo_tenant_jonio9012_gmail_com")
-	purgeTenantData("ten_premium_jonio9012_gmail_com")
+	// 2. Also search all tenants by ID wildcard or ownerEmail
+	rowsTenant, err := db.Query(`SELECT "id" FROM "tenants" WHERE LOWER("id") LIKE '%jonio9012_gmail_com%' OR TRIM(LOWER("ownerEmail")) = $1`, "jonio9012@gmail.com")
+	if err == nil {
+		defer rowsTenant.Close()
+		for rowsTenant.Next() {
+			var tenantId string
+			if err := rowsTenant.Scan(&tenantId); err == nil {
+				if tenantId != "" {
+					purgeTenantData(tenantId)
+				}
+			}
+		}
+	}
 
 	// 3. Purge employee records with this email (if any exist)
-	_, err = db.Exec(`DELETE FROM "employees" WHERE "email" = $1`, "jonio9012@gmail.com")
+	_, err = db.Exec(`DELETE FROM "employees" WHERE TRIM(LOWER("email")) = $1`, "jonio9012@gmail.com")
 	if err != nil {
 		log.Printf("Error deleting jonio9012@gmail.com from employees: %v", err)
 	}
 
 	// 4. Delete the user from local_users
-	_, err = db.Exec(`DELETE FROM "local_users" WHERE "email" = $1`, "jonio9012@gmail.com")
+	_, err = db.Exec(`DELETE FROM "local_users" WHERE TRIM(LOWER("email")) = $1`, "jonio9012@gmail.com")
 	if err != nil {
 		log.Printf("Error deleting jonio9012@gmail.com from local_users: %v", err)
 	}
