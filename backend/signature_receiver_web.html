@@ -282,6 +282,7 @@
         let drawnSomething = false;
         let invoiceId = null;
         let tokenStr = null;
+        let tenantId = "";
 
         // Setup responsivitas canvas
         function resizeCanvas() {
@@ -398,13 +399,21 @@
                     return;
                 }
 
-                invoiceId = parts[0];
-                const expiry = parseInt(parts[1]);
+                let expiry = 0;
+                if (parts.length >= 4) {
+                    tenantId = parts[0];
+                    invoiceId = parts[1];
+                    expiry = parseInt(parts[2]);
+                } else {
+                    tenantId = "";
+                    invoiceId = parts[0];
+                    expiry = parseInt(parts[1]);
+                }
                 
                 // Cek kadaluarsa
                 const now = Date.now();
                 if (now > expiry) {
-                    showExpiryError("Link ini telah kadaluarsa (melebihi batas 3 menit). Minta pengirim membuat link baru.");
+                    showExpiryError("Link ini telah kadaluarsa. Minta pengirim membuat link baru.");
                     return;
                 }
 

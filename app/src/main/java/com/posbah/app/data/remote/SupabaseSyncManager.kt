@@ -470,6 +470,7 @@ object SupabaseSyncManager {
                         put("bankOwnerName", ps.bankOwnerName)
                         put("bankName", ps.bankName)
                         put("bankAccountNumber", ps.bankAccountNumber)
+                        put("logoPath", ps.logoPath ?: JSONObject.NULL)
                         put("createdAt", ps.createdAt)
                         put("updatedAt", ps.updatedAt)
                     })
@@ -1244,6 +1245,7 @@ object SupabaseSyncManager {
                         bankOwnerName = obj.optString("bankOwnerName", ""),
                         bankName = obj.optString("bankName", "BCA"),
                         bankAccountNumber = obj.optString("bankAccountNumber", ""),
+                        logoPath = if (obj.isNull("logoPath")) null else obj.optString("logoPath"),
                         createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
                         updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
                     ))

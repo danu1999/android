@@ -53,6 +53,7 @@ import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Receipt
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
@@ -176,6 +177,10 @@ fun PosScreen(
     var editChange by remember { mutableStateOf("") }
     var editNotes by remember { mutableStateOf("") }
     var showLogsDialog by remember { mutableStateOf(false) }
+    var showAddExpenseDialog by remember { mutableStateOf(false) }
+    var expenseName by remember { mutableStateOf("") }
+    var expenseAmount by remember { mutableStateOf("") }
+    var expenseDate by remember { mutableStateOf(System.currentTimeMillis()) }
     var showStoreShareDialog by remember { mutableStateOf(false) }
     var showStoreSimulationDialog by remember { mutableStateOf(false) }
     var activeStoreToken by remember { mutableStateOf<String?>(null) }
@@ -268,8 +273,10 @@ fun PosScreen(
                         onBack = onBack,
                         onTitleClick = { showOutletDropdown = true },
                         actions = {
-                            IconButton(onClick = { onNavigate(Screen.MarginAnalysis.route) }) {
-                                Icon(Icons.Outlined.History, contentDescription = "Analisis Margin & Riwayat")
+                            if (ui.canViewMargin) {
+                                IconButton(onClick = { onNavigate(Screen.MarginAnalysis.route) }) {
+                                    Icon(Icons.Outlined.History, contentDescription = "Analisis Margin & Riwayat")
+                                }
                             }
                         }
                     )
@@ -375,6 +382,20 @@ fun PosScreen(
                                 label = "Pengaturan Struk",
                                 onClick = onNavigateToPrintSettings
                             )
+                        }
+                        if (ui.canViewMargin) {
+                            item {
+                                FooterButton(
+                                    icon = Icons.Outlined.Receipt,
+                                    label = "Biaya / Bahan Baku",
+                                    onClick = {
+                                        expenseName = ""
+                                        expenseAmount = ""
+                                        expenseDate = System.currentTimeMillis()
+                                        showAddExpenseDialog = true
+                                    }
+                                )
+                            }
                         }
                         if (ui.isOwner) {
                             item {
@@ -1016,6 +1037,81 @@ fun PosScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { showAddProductDialog = false }) { Text("Batal") }
+                }
+            )
+        }
+
+        if (showAddExpenseDialog) {
+            AlertDialog(
+                onDismissRequest = { showAddExpenseDialog = false },
+                title = { Text("Catat Biaya / Bahan Baku") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = expenseName,
+                            onValueChange = { expenseName = it },
+                            label = { Text("Keterangan / Nama Bahan") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = expenseAmount,
+                            onValueChange = { expenseAmount = it },
+                            label = { Text("Nominal Pengeluaran (Rp)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Date Picker Button
+                        val calendar = java.util.Calendar.getInstance()
+                        calendar.timeInMillis = expenseDate
+                        val datePickerDialog = android.app.DatePickerDialog(
+                            context,
+                            { _, year, month, dayOfMonth ->
+                                val selectedCal = java.util.Calendar.getInstance()
+                                selectedCal.timeInMillis = expenseDate
+                                selectedCal.set(java.util.Calendar.YEAR, year)
+                                selectedCal.set(java.util.Calendar.MONTH, month)
+                                selectedCal.set(java.util.Calendar.DAY_OF_MONTH, dayOfMonth)
+                                expenseDate = selectedCal.timeInMillis
+                            },
+                            calendar.get(java.util.Calendar.YEAR),
+                            calendar.get(java.util.Calendar.MONTH),
+                            calendar.get(java.util.Calendar.DAY_OF_MONTH)
+                        )
+                        val sdf = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+                        val dateStr = sdf.format(Date(expenseDate))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Tanggal: $dateStr", fontSize = 14.sp)
+                            Button(onClick = { datePickerDialog.show() }) {
+                                Text("Pilih Tanggal")
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val amt = expenseAmount.toDoubleOrNull() ?: 0.0
+                            if (expenseName.isNotBlank() && amt > 0) {
+                                viewModel.addExpense(expenseName, amt, expenseDate) {
+                                    showAddExpenseDialog = false
+                                    Toast.makeText(context, "Pengeluaran berhasil dicatat!", Toast.LENGTH_SHORT).show()
+                                }
+                            } else {
+                                Toast.makeText(context, "Keterangan dan nominal wajib diisi!", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    ) { Text("Simpan") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showAddExpenseDialog = false }) { Text("Batal") }
                 }
             )
         }

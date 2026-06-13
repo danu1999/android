@@ -57,6 +57,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.size
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 
 // Tab indices
 private const val TAB_JPG = 0
@@ -74,6 +78,14 @@ fun PrintSettingsScreen(
     val draft by viewModel.draft.collectAsState()
     val isBmp = viewModel.moduleKey == "BMP"
     var selectedTab by remember { mutableStateOf(if (isBmp) TAB_JPG else TAB_POS) }
+
+    val logoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            viewModel.update { e -> e.copy(logoPath = it.toString()) }
+        }
+    }
 
     val d = draft ?: return
 
@@ -352,6 +364,58 @@ fun PrintSettingsScreen(
                                             onCheckedChange = { viewModel.update { e -> e.copy(receiptUseLogo = it) } },
                                             modifier = Modifier.testTag("sw-receipt-logo")
                                         )
+                                    }
+
+                                    if (d.receiptUseLogo) {
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Divider()
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Text("Unggah Logo Struk", fontWeight = FontWeight.SemiBold)
+                                        Text(
+                                            "Pilih gambar logo untuk dicetak di struk POS Anda",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(100.dp, 60.dp)
+                                                    .background(
+                                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                                        shape = RoundedCornerShape(8.dp)
+                                                    )
+                                                    .clickable { logoPickerLauncher.launch("image/*") }
+                                                    .padding(4.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                if (!d.logoPath.isNullOrBlank()) {
+                                                    AsyncImage(
+                                                        model = d.logoPath,
+                                                        contentDescription = "Logo Struk",
+                                                        contentScale = ContentScale.Inside,
+                                                        modifier = Modifier.fillMaxSize()
+                                                    )
+                                                } else {
+                                                    Text(
+                                                        text = "Pilih Logo",
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            }
+                                            if (!d.logoPath.isNullOrBlank()) {
+                                                PrimaryButton(
+                                                    label = "Hapus Logo",
+                                                    onClick = { viewModel.update { e -> e.copy(logoPath = null) } },
+                                                    modifier = Modifier.height(36.dp)
+                                                )
+                                            }
+                                        }
                                     }
 
                                     if (!d.receiptUseLogo) {

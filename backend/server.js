@@ -616,7 +616,7 @@ const SIGNATURE_HTML = `<!DOCTYPE html>
                 // Cek kadaluarsa
                 const now = Date.now();
                 if (now > expiry) {
-                    showExpiryError("Link ini telah kadaluarsa (melebihi batas 3 menit). Minta pengirim membuat link baru.");
+                    showExpiryError("Link ini telah kadaluarsa. Minta pengirim membuat link baru.");
                     return;
                 }
 

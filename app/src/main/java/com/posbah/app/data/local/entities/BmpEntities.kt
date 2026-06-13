@@ -342,6 +342,8 @@ data class PrintSettingsEntity(
     val bankName: String = "BCA",
     val bankAccountNumber: String = "",
 
+    val logoPath: String? = null,
+
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

@@ -87,14 +87,14 @@ class EmployeeViewModel @Inject constructor(
         name: String,
         email: String,
         phone: String,
-        pin: String,
+        password: String,
         role: String,
         salary: Double,
         payPeriod: String,
         outletId: Long?
     ) {
-        if (name.isBlank() || email.isBlank() || pin.isBlank()) {
-            _uiState.update { it.copy(error = "Nama, Email, dan PIN wajib diisi.") }
+        if (name.isBlank() || email.isBlank() || password.isBlank()) {
+            _uiState.update { it.copy(error = "Nama, Email, dan Password wajib diisi.") }
             return
         }
         if (role == "OWNER") {
@@ -119,7 +119,7 @@ class EmployeeViewModel @Inject constructor(
             }
 
             val otp = String.format("%06d", Random.nextInt(100000, 999999))
-            val hashedPin = PinHasher.hash(pin)
+            val hashedPassword = PinHasher.hash(password)
             val newEmp = Employee(
                 tenantId = tenantId,
                 outletId = outletId,
@@ -127,7 +127,7 @@ class EmployeeViewModel @Inject constructor(
                 email = cleanEmail,
                 phone = phone.trim().takeIf { it.isNotBlank() },
                 role = role,
-                pinHash = hashedPin,
+                pinHash = hashedPassword,
                 salary = salary,
                 payPeriod = payPeriod,
                 emailVerified = false
@@ -196,13 +196,13 @@ class EmployeeViewModel @Inject constructor(
     }
 
     /**
-     * Ganti PIN/password karyawan oleh Owner.
+     * Ganti password karyawan oleh Owner.
      */
-    fun changeEmployeePin(employeeId: Long, newPin: String) {
-        if (newPin.isBlank()) return
+    fun changeEmployeePassword(employeeId: Long, newPassword: String) {
+        if (newPassword.isBlank()) return
         viewModelScope.launch {
             val emp = db.employeeDao().getById(employeeId) ?: return@launch
-            val hashed = PinHasher.hash(newPin)
+            val hashed = PinHasher.hash(newPassword)
             val updated = emp.copy(pinHash = hashed, updatedAt = System.currentTimeMillis())
             db.employeeDao().update(updated)
             checkPermissionAndLoad()

@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POSBah Cashier Hub</title>
+    <!-- Outfit Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- qrcode.js for client-side QR generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Print Container (Only visible to printer) -->
+    <div id="print-area"></div>
+
+    <!-- Login Screen Overlay -->
+    <div id="login-overlay" class="overlay">
+        <div class="glass-card login-card">
+            <h1 class="logo-text">POSBah</h1>
+            <p class="subtitle">Hubungkan dengan Aplikasi Android Anda</p>
+            <div class="qr-container">
+                <div id="qr-loading" class="spinner"></div>
+                <div id="qr-code-holder" style="display: none;"></div>
+            </div>
+            <div class="instructions">
+                <p><i class="fa-solid fa-qrcode"></i> Buka Aplikasi Android POSBah</p>
+                <p><i class="fa-solid fa-camera"></i> Scan QR Code ini untuk login otomatis</p>
+            </div>
+            <div id="login-status" class="status-badge pending">Menunggu otorisasi...</div>
+        </div>
+    </div>
+
+    <!-- Main Application Container -->
+    <div id="app-container" style="display: none;">
+        <!-- Top Navigation Bar -->
+        <header class="top-nav">
+            <div class="nav-left">
+                <span class="logo-text">POSBah</span>
+                <span class="tenant-tag" id="tenant-name-badge">Loading Toko...</span>
+            </div>
+            <div class="nav-right">
+                <div class="user-profile">
+                    <img id="user-avatar" src="https://lh3.googleusercontent.com/a/default-user=s96-c" alt="Avatar">
+                    <span id="user-email">kasir@posbah.com</span>
+                </div>
+                <button id="logout-btn" class="icon-btn" title="Logout"><i class="fa-solid fa-right-from-bracket"></i></button>
+            </div>
+        </header>
+
+        <!-- Sidebar + Content Body Layout -->
+        <div class="main-layout">
+            <aside class="sidebar">
+                <nav class="side-menu">
+                    <a href="#" class="menu-item active" data-target="dashboard-section">
+                        <i class="fa-solid fa-chart-line"></i> <span>Dashboard</span>
+                    </a>
+                    <a href="#" class="menu-item" data-target="pos-section">
+                        <i class="fa-solid fa-cash-register"></i> <span>Kasir POS</span>
+                    </a>
+                    <a href="#" class="menu-item" data-target="products-section">
+                        <i class="fa-solid fa-boxes-stacked"></i> <span>Produk & Stok</span>
+                    </a>
+                    <a href="#" class="menu-item" data-target="attendance-section">
+                        <i class="fa-solid fa-fingerprint"></i> <span>Absensi & AI</span>
+                    </a>
+                    <a href="#" class="menu-item" id="invoices-menu-item" data-target="invoices-section" style="display: none;">
+                        <i class="fa-solid fa-file-invoice-dollar"></i> <span>Faktur & Invoice</span>
+                    </a>
+                </nav>
+                <div class="sidebar-footer">
+                    <div class="status-indicator">
+                        <span class="dot active"></span>
+                        <span id="ws-status">WebSocket Terhubung</span>
+                    </div>
+                </div>
+            </aside>
+
+            <main class="content-area">
+                <!-- Section 1: Dashboard -->
+                <section id="dashboard-section" class="app-section active-section">
+                    <div class="section-header">
+                        <h2>Dashboard Real-Time</h2>
+                        <p id="dashboard-date">Kamis, 11 Juni 2026</p>
+                    </div>
+
+                    <!-- Stats Cards Grid -->
+                    <div class="stats-grid">
+                        <div class="glass-card stat-card">
+                            <div class="stat-icon income"><i class="fa-solid fa-wallet"></i></div>
+                            <div class="stat-info">
+                                <h3>Omzet Hari Ini</h3>
+                                <p class="stat-val" id="stat-revenue">Rp 0</p>
+                            </div>
+                        </div>
+                        <div class="glass-card stat-card">
+                            <div class="stat-icon tx"><i class="fa-solid fa-receipt"></i></div>
+                            <div class="stat-info">
+                                <h3>Total Transaksi</h3>
+                                <p class="stat-val" id="stat-transactions">0</p>
+                            </div>
+                        </div>
+                        <div class="glass-card stat-card">
+                            <div class="stat-icon premium"><i class="fa-solid fa-circle-check"></i></div>
+                            <div class="stat-info">
+                                <h3>Status Akun</h3>
+                                <p class="stat-val" id="stat-account-mode">Premium Account</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Middle Grid: Graph + Active Devices -->
+                    <div class="middle-grid">
+                        <div class="glass-card detail-card main-chart">
+                            <h3>Transaksi Terbaru</h3>
+                            <div class="table-container">
+                                <table class="custom-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Waktu</th>
+                                            <th>No. Struk</th>
+                                            <th>Metode</th>
+                                            <th>Total Belanja</th>
+                                            <th>Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="recent-transactions-list">
+                                        <tr>
+                                            <td colspan="5" class="text-center">Memuat data transaksi...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="glass-card detail-card device-list">
+                            <h3>Mesin ADMS Absensi</h3>
+                            <div id="device-status-box">
+                                <div class="device-item">
+                                    <div class="device-icon active"><i class="fa-solid fa-microchip"></i></div>
+                                    <div class="device-info">
+                                        <h4>TEST_SN_9999</h4>
+                                        <p>Solution X105-D | Aktif</p>
+                                    </div>
+                                    <span class="status-badge ok">Online</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Section 2: Kasir POS -->
+                <section id="pos-section" class="app-section">
+                    <div class="pos-layout">
+                        <!-- Left Pane: Product Selection -->
+                        <div class="pos-products">
+                            <div class="pos-search-bar">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                                <input type="text" id="product-search" placeholder="Cari produk berdasarkan nama atau barcode...">
+                            </div>
+                            <div class="category-filters">
+                                <button class="filter-btn active" data-category="ALL">Semua</button>
+                                <button class="filter-btn" data-category="Makanan">Makanan</button>
+                                <button class="filter-btn" data-category="Minuman">Minuman</button>
+                                <button class="filter-btn" data-category="Bahan Baku">Bahan Baku</button>
+                            </div>
+                            <div class="products-grid" id="pos-products-grid">
+                                <!-- Dynamic Product Cards -->
+                            </div>
+                        </div>
+
+                        <!-- Right Pane: Cart & Payment -->
+                        <div class="pos-cart-panel glass-card">
+                            <h3>Keranjang Belanja</h3>
+                            <div class="cart-items-list" id="cart-items-container">
+                                <div class="empty-cart-message">
+                                    <i class="fa-solid fa-basket-shopping"></i>
+                                    <p>Keranjang kosong</p>
+                                </div>
+                            </div>
+
+                            <div class="cart-summary">
+                                <div class="summary-row">
+                                    <span>Subtotal</span>
+                                    <span id="cart-subtotal">Rp 0</span>
+                                </div>
+                                <div class="summary-row discount">
+                                    <span>Diskon</span>
+                                    <input type="number" id="cart-discount" value="0" min="0" placeholder="0">
+                                </div>
+                                <div class="summary-row total">
+                                    <span>Total Akhir</span>
+                                    <span id="cart-total">Rp 0</span>
+                                </div>
+                            </div>
+
+                            <div class="payment-method-selector">
+                                <label>Metode Pembayaran</label>
+                                <div class="payment-grid">
+                                    <button class="pay-method-btn active" data-method="CASH">CASH</button>
+                                    <button class="pay-method-btn" data-method="TRANSFER">TRANSFER</button>
+                                    <button class="pay-method-btn" data-method="QRIS">QRIS</button>
+                                </div>
+                            </div>
+
+                            <button id="btn-checkout" class="btn-checkout-action" disabled>Bayar & Cetak Struk (Groziie)</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Section 3: Produk & Stok -->
+                <section id="products-section" class="app-section">
+                    <div class="section-header">
+                        <h2>Manajemen Produk & Bahan Baku</h2>
+                        <button class="btn btn-primary" id="add-product-btn-modal"><i class="fa-solid fa-plus"></i> Tambah Produk</button>
+                    </div>
+
+                    <div class="glass-card table-wrapper">
+                        <div class="table-header-tabs">
+                            <button class="tab-btn active" data-tab="tab-products">Produk POS</button>
+                            <button class="tab-btn" data-tab="tab-bahanbaku">Bahan Baku / Manufaktur</button>
+                        </div>
+
+                        <!-- Products Tab -->
+                        <div id="tab-products" class="tab-content active-tab-content">
+                            <div class="table-container">
+                                <table class="custom-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Gambar</th>
+                                            <th>Nama Produk</th>
+                                            <th>Kategori</th>
+                                            <th>Harga Jual</th>
+                                            <th>Stok Gudang</th>
+                                            <th>Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="catalog-products-list">
+                                        <!-- Dynamic rows -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Bahan Baku Tab -->
+                        <div id="tab-bahanbaku" class="tab-content">
+                            <div class="table-container">
+                                <table class="custom-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Nama Bahan</th>
+                                            <th>Satuan</th>
+                                            <th>Harga Beli</th>
+                                            <th>Siklus (detik)</th>
+                                            <th>Reject Rate (%)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="catalog-bahanbaku-list">
+                                        <!-- Dynamic rows -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Section 4: Absensi & AI -->
+                <section id="attendance-section" class="app-section">
+                    <div class="section-header">
+                        <h2>Monitor Absensi Fingerprint ADMS</h2>
+                        <div class="ai-status">
+                            <i class="fa-solid fa-brain"></i> Native TF-IDF AI Classifier Active
+                        </div>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="glass-card stat-card small-card">
+                            <h3>Total Karyawan</h3>
+                            <p class="stat-val" id="stat-employee-count">0</p>
+                        </div>
+                        <div class="glass-card stat-card small-card">
+                            <h3>Hadir Hari Ini</h3>
+                            <p class="stat-val" id="stat-today-attendance">0</p>
+                        </div>
+                        <div class="glass-card stat-card small-card">
+                            <h3>Keterlambatan Hari Ini</h3>
+                            <p class="stat-val" id="stat-today-late">0 menit</p>
+                        </div>
+                    </div>
+
+                    <div class="glass-card table-wrapper">
+                        <h3>Log Masuk / Pulang Karyawan</h3>
+                        <div class="table-container">
+                            <table class="custom-table">
+                                <thead>
+                                    <tr>
+                                        <th>Karyawan (PIN)</th>
+                                        <th>Waktu Masuk</th>
+                                        <th>Waktu Pulang</th>
+                                        <th>Keterlambatan</th>
+                                        <th>Alasan / Status</th>
+                                        <th>Deteksi AI</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="attendance-logs-list">
+                                    <tr>
+                                        <td colspan="6" class="text-center">Memuat data absensi...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Section 5: Invoices (BMP) -->
+                <section id="invoices-section" class="app-section">
+                    <div class="section-header">
+                        <h2>Daftar Faktur & Invoice (B2B)</h2>
+                        <p id="invoices-count-badge">Total: 0 Invoice</p>
+                    </div>
+
+                    <div class="glass-card table-wrapper">
+                        <div class="table-container">
+                            <table class="custom-table">
+                                <thead>
+                                    <tr>
+                                        <th>No. Faktur</th>
+                                        <th>Nama Invoice</th>
+                                        <th>Pelanggan</th>
+                                        <th>Total Tagihan</th>
+                                        <th>Status</th>
+                                        <th>Jatuh Tempo</th>
+                                        <th>Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="invoices-list-body">
+                                    <tr>
+                                        <td colspan="7" class="text-center">Memuat data invoice...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <!-- Invoice Detail Modal Overlay -->
+    <div id="invoice-detail-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <button class="modal-close-btn" id="close-invoice-modal-btn"><i class="fa-solid fa-xmark"></i></button>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 10px; margin: 0;">
+                    <i class="fa-solid fa-file-invoice" style="color: var(--primary);"></i> Detail Faktur / Invoice
+                </h3>
+                <div style="display: flex; align-items: center; gap: 10px; margin-right: 30px;">
+                    <!-- Paper Size Selector -->
+                    <div style="display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.05); padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);">
+                        <label for="select-paper-size" style="font-size: 11px; color: var(--text-muted); font-weight: 700; margin: 0; text-transform: uppercase; letter-spacing: 0.5px;">Kertas:</label>
+                        <select id="select-paper-size" style="background: transparent; border: none; color: var(--text-main); font-size: 12px; font-weight: 600; outline: none; cursor: pointer; font-family: inherit;">
+                            <option value="9.5x11" style="background: #1E293B; color: #fff;">Continuous (9.5x11)</option>
+                            <option value="A4" style="background: #1E293B; color: #fff;">A4 Portrait</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" id="print-invoice-modal-btn" style="background: var(--secondary);">
+                        <i class="fa-solid fa-file-invoice"></i> Cetak Invoice
+                    </button>
+                    <button class="btn btn-primary" id="print-sj-modal-btn" style="background: var(--primary);">
+                        <i class="fa-solid fa-truck-ramp-box"></i> Cetak Surat Jalan
+                    </button>
+                </div>
+            </div>
+            
+            <div class="invoice-meta-grid">
+                <div class="invoice-meta-col">
+                    <p>Nomor Faktur</p>
+                    <span id="inv-detail-number">-</span>
+                </div>
+                <div class="invoice-meta-col">
+                    <p>Judul Invoice</p>
+                    <span id="inv-detail-title">-</span>
+                </div>
+                <div class="invoice-meta-col">
+                    <p>Pelanggan / Klien</p>
+                    <span id="inv-detail-client">-</span>
+                </div>
+                <div class="invoice-meta-col">
+                    <p>Jatuh Tempo</p>
+                    <span id="inv-detail-due">-</span>
+                </div>
+                <div class="invoice-meta-col">
+                    <p>Status Pembayaran</p>
+                    <span id="inv-detail-status">-</span>
+                </div>
+                <div class="invoice-meta-col">
+                    <p>Syarat Pembayaran</p>
+                    <span id="inv-detail-terms">-</span>
+                </div>
+            </div>
+
+            <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--text-muted);">Daftar Barang / Item</h4>
+            <div class="table-container" style="margin-bottom: 24px;">
+                <table class="custom-table" style="background: rgba(255,255,255,0.01); border-radius: 8px;">
+                    <thead>
+                        <tr>
+                            <th>Barang</th>
+                            <th>Qty</th>
+                            <th>Harga Satuan</th>
+                            <th>Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inv-detail-items-body">
+                        <!-- Dynamic items -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="invoice-total-summary">
+                <div class="invoice-total-row">
+                    <span>Total Tagihan:</span>
+                    <span id="inv-detail-total">Rp 0</span>
+                </div>
+                <div class="invoice-total-row">
+                    <span>Telah Dibayar:</span>
+                    <span id="inv-detail-paid" style="color: var(--secondary);">Rp 0</span>
+                </div>
+                <div class="invoice-total-row grand">
+                    <span>Sisa Piutang:</span>
+                    <span id="inv-detail-remaining">Rp 0</span>
+                </div>
+            </div>
+
+            <!-- Info Pembayaran (Transfer Bank) Section -->
+            <div id="inv-detail-bank-section" style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">
+                <h4 style="font-size: 13px; font-weight: 600; margin-bottom: 10px; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; margin-top: 0;">
+                    <span><i class="fa-solid fa-credit-card" style="color: var(--secondary); margin-right: 6px;"></i> Info Pembayaran (Transfer Bank)</span>
+                    <button id="btn-edit-bank-info" style="background: transparent; border: none; color: var(--primary); font-size: 11px; cursor: pointer; font-weight: 700; display: flex; align-items: center; gap: 4px; padding: 0;">
+                        <i class="fa-solid fa-pen"></i> Edit
+                    </button>
+                </h4>
+                
+                <!-- Display Mode -->
+                <div id="bank-info-display-container" style="font-size: 13px; background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                    <div style="margin-bottom: 6px;">Bank: <strong id="lbl-bank-name">-</strong></div>
+                    <div style="margin-bottom: 6px;">No. Rekening: <strong id="lbl-bank-account">-</strong></div>
+                    <div>Atas Nama: <strong id="lbl-bank-owner">-</strong></div>
+                </div>
+
+                <!-- Edit Mode (Hidden by default) -->
+                <div id="bank-info-edit-container" style="display: none; background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                        <div>
+                            <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 4px; font-weight: 700; text-transform: uppercase;">Nama Bank</label>
+                            <input type="text" id="txt-bank-name" placeholder="BCA / Mandiri / dll" style="width: 100%; background: #1e293b; border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; outline: none; box-sizing: border-box;">
+                        </div>
+                        <div>
+                            <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 4px; font-weight: 700; text-transform: uppercase;">No. Rekening</label>
+                            <input type="text" id="txt-bank-account" placeholder="Nomor rekening" style="width: 100%; background: #1e293b; border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; outline: none; box-sizing: border-box;">
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                        <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 4px; font-weight: 700; text-transform: uppercase;">Atas Nama (Owner)</label>
+                        <input type="text" id="txt-bank-owner" placeholder="Nama pemilik rekening" style="width: 100%; background: #1e293b; border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; outline: none; box-sizing: border-box;">
+                    </div>
+                    <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                        <button id="btn-cancel-bank-edit" style="background: rgba(255,255,255,0.05); border: none; color: var(--text-muted); padding: 5px 10px; border-radius: 6px; font-size: 11px; cursor: pointer; font-weight: 600;">Batal</button>
+                        <button id="btn-save-bank-info" style="background: var(--secondary); border: none; color: #fff; padding: 5px 12px; border-radius: 6px; font-size: 11px; cursor: pointer; font-weight: 600;">Simpan</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="inv-detail-signature-container" class="signature-container" style="display: none;">
+                <p style="font-size: 12px; color: var(--text-muted); font-weight: 600;">Tanda Tangan Penerima Actual (Digital)</p>
+                <div style="font-size: 14px; font-weight: 700; margin: 8px 0;" id="inv-detail-receiver-name">-</div>
+                <img id="inv-detail-signature-img" class="signature-img" src="" alt="Signature Preview">
+                <div class="signature-actions" style="margin-top: 15px; display: flex; gap: 10px;">
+                    <button id="btn-delete-signature" class="btn btn-primary" style="background: #EF4444; flex: 1;">
+                        <i class="fa-solid fa-trash"></i> Hapus TTD
+                    </button>
+                    <button id="btn-share-signature-link" class="btn btn-primary" style="background: #3B82F6; flex: 1;">
+                        <i class="fa-solid fa-share-nodes"></i> Bagikan Link Baru
+                    </button>
+                </div>
+            </div>
+
+            <div id="inv-detail-no-signature-container" style="display: none; margin-top: 20px; border-top: 1px solid var(--border); padding-top: 20px;">
+                <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">Invoice belum ditandatangani oleh penerima.</p>
+                <button id="btn-generate-signature-link" class="btn btn-primary" style="background: #3B82F6; width: 100%;">
+                    <i class="fa-solid fa-share-nodes"></i> Bagikan Link Tanda Tangan (10 Menit)
+                </button>
+            </div>
+
+            <div id="signature-link-share-box" style="display: none; margin-top: 15px; background: rgba(59, 130, 246, 0.1); border: 1px dashed #3B82F6; padding: 12px; border-radius: 8px; box-sizing: border-box;">
+                <p style="font-size: 12px; font-weight: 600; margin-bottom: 8px; color: var(--text);">Link Tanda Tangan Penerima (Aktif 10 Menit):</p>
+                <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px; width: 100%; box-sizing: border-box;">
+                    <input type="text" id="input-signature-link" readonly style="flex: 1; min-width: 0; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border); background: #1e293b; color: #fff; font-size: 12px; box-sizing: border-box;" />
+                    <button id="btn-copy-signature-link" class="btn" style="background: #10B981; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; white-space: nowrap;">
+                        <i class="fa-solid fa-copy"></i> Copy
+                    </button>
+                </div>
+                <p id="copy-success-message" style="font-size: 12px; color: #10B981; font-weight: 600; display: none; margin: 0;"></p>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

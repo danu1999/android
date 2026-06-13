@@ -7,9 +7,9 @@
     <string name="login_title">Masuk ke POSBah</string>
     <string name="login_subtitle">Pilih metode login untuk melanjutkan</string>
     <string name="login_with_google">Masuk dengan Google</string>
-    <string name="login_with_pin">Masuk dengan PIN Karyawan</string>
-    <string name="login_pin_hint">Masukkan PIN 6 digit</string>
-    <string name="login_pin_email">Email karyawan</string>
+    <string name="login_with_pin">Masuk dengan Email &amp; Password</string>
+    <string name="login_pin_hint">Masukkan Password</string>
+    <string name="login_pin_email">Email</string>
     <string name="login_continue">Lanjutkan</string>
     <string name="login_error_no_google">Tidak ada akun Google di perangkat</string>
     <string name="login_error_cancelled">Login dibatalkan</string>
@@ -18,7 +18,7 @@
     <!-- Biometric -->
     <string name="biometric_prompt_title">Verifikasi Identitas</string>
     <string name="biometric_prompt_subtitle">Gunakan biometrik untuk membuka POSBah</string>
-    <string name="biometric_prompt_negative">Gunakan PIN</string>
+    <string name="biometric_prompt_negative">Gunakan Password</string>
     <string name="biometric_unavailable">Biometrik tidak tersedia. Daftarkan sidik jari/wajah di pengaturan device.</string>
     <string name="biometric_not_enrolled">Belum ada biometrik terdaftar. Daftar dulu di pengaturan device.</string>
 

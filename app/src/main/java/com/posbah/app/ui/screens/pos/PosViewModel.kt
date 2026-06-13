@@ -75,7 +75,8 @@ data class PosUiState(
     val selectedTransactionDate: Long? = null,
     val isOwner: Boolean = false,
     val isPremium: Boolean = false,
-    val isSeedTenant: Boolean = false
+    val isSeedTenant: Boolean = false,
+    val canViewMargin: Boolean = false
 )
 
 @HiltViewModel
@@ -121,7 +122,8 @@ class PosViewModel @Inject constructor(
                 it.copy(
                     isOwner = user?.role == "OWNER",
                     isPremium = user?.isPremium == true,
-                    isSeedTenant = isSeed
+                    isSeedTenant = isSeed,
+                    canViewMargin = user?.role == "OWNER" || user?.role == "ADMIN"
                 )
             }
         }
@@ -707,6 +709,34 @@ class PosViewModel @Inject constructor(
             )
             transactionRepository.update(updated)
             logActivity("EDIT STRUK", "Mengedit struk ${tx.receiptNumber} (${tx.paymentMethod} -> $paymentMethod, Total: Rp $total)")
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
+            }
+        }
+    }
+
+    fun addExpense(description: String, amount: Double, dateMillis: Long, onDone: () -> Unit) {
+        viewModelScope.launch {
+            val todayStr = java.text.SimpleDateFormat("yyMMdd", java.util.Locale.US).format(java.util.Date(dateMillis))
+            val prefix = "EXP-FNB"
+            val receiptNumber = "$prefix-$todayStr-${java.util.UUID.randomUUID().toString().take(6).uppercase()}"
+            val expenseTx = TransactionEntity(
+                tenantId = tenantId,
+                outletId = currentOutletId,
+                employeeId = 1L,
+                customerName = "Pengeluaran",
+                receiptNumber = receiptNumber,
+                date = dateMillis,
+                subtotal = -amount,
+                total = -amount,
+                paymentMethod = "CASH",
+                status = "COMPLETED",
+                type = "EXPENSE",
+                notes = description
+            )
+            transactionRepository.checkout(expenseTx, emptyList())
+            logActivity("CATAT PENGELUARAN", "Mencatat pengeluaran: $description senilai Rp $amount")
+            onDone()
             viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
             }

@@ -465,7 +465,7 @@ fun InvoiceDetailScreen(
 
     if (showShareLinkDialog && inv != null) {
         val shareUrl = remember(inv.id) {
-            com.posbah.app.util.SignatureLinkGenerator.generateShareLink(viewModel.tenantId, inv.id, durationMinutes = 60)
+            com.posbah.app.util.SignatureLinkGenerator.generateShareLink(viewModel.tenantId, inv.id, durationMinutes = 10)
         }
         
         LaunchedEffect(Unit) {
@@ -484,7 +484,7 @@ fun InvoiceDetailScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "Bagikan link di bawah ke WhatsApp penerima. Link hanya berlaku selama 60 menit dan akan kadaluarsa.",
+                        text = "Bagikan link di bawah ke WhatsApp penerima. Link hanya berlaku selama 10 menit dan akan kadaluarsa.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
@@ -884,14 +884,13 @@ private fun generateInvoiceHtml(
                             Alamat: $clientAddress<br>
                             Telp: $clientPhone
                         </div>
-                    </td>
-                    ${if (isColor) """
+                                      ${if (isColor) """
                     <td class="info-col" style="width: 50%;">
                         <div class="info-box-right">
                             <strong>Rincian Pembayaran:</strong><br>
                             Tanggal Faktur: ${Formatters.dateLong(invoice.createdAt)}<br>
                             Jatuh Tempo: ${invoice.dueDate?.let { Formatters.dateLong(it) } ?: "-"}<br>
-                            Termin: ${invoice.paymentTerms}
+                            Termin: ${invoice.paymentTerms.replace("days", "hari", ignoreCase = true).replace("day", "hari", ignoreCase = true)}
                         </div>
                     </td>
                     """ else ""}
@@ -902,8 +901,8 @@ private fun generateInvoiceHtml(
                 <thead>
                     <tr>
                         <th style="width: 5%; text-align: center;">No</th>
-                        <th style="width: 45%;">Deskripsi Item</th>
-                        <th style="width: 10%; text-align: center;">QTY</th>
+                        <th style="width: 45%;">Nama Barang / Deskripsi</th>
+                        <th style="width: 10%; text-align: center;">Jumlah</th>
                         <th style="width: 15%; text-align: center;">Satuan</th>
                         <th style="width: 12%; text-align: right;">Harga</th>
                         <th style="width: 13%; text-align: right;">Total</th>
@@ -935,20 +934,20 @@ private fun generateInvoiceHtml(
                     <td style="width: 60%; vertical-align: top;">
                         <div style="font-size: 13px; border-top: 1px solid #000; padding-top: 8px; margin-bottom: 15px;">
                             <strong>Info Pembayaran :</strong><br>
-                            bank : ${globalConfig.bankName} : ${globalConfig.bankAccountNumber}<br>
-                            atas nama : ${globalConfig.bankOwnerName}
+                            Bank : ${globalConfig.bankName} : ${globalConfig.bankAccountNumber}<br>
+                            Atas Nama : ${globalConfig.bankOwnerName}
                         </div>
                     </td>
                     <td style="width: 40%;"></td>
                 </tr>
             </table>
             """ else ""}
-
+ 
             $signatureHtml
  
             <div class="footer">
                 Terima kasih atas kerja sama Anda.<br>
-                Faktur ini dihasilkan secara luring (offline) oleh POSBah.
+                Faktur ini dihasilkan secara luring oleh POSBah.
             </div>
         </body>
         </html>
@@ -1105,8 +1104,8 @@ private fun generateSuratJalanHtml(
                 .doc-title { font-size: 22px; font-weight: bold; text-align: right; text-transform: uppercase; letter-spacing: 1px; }
                 .info-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
                 .info-col { width: 50%; vertical-align: top; }
-                .info-box { padding: 10px; border: 1px solid #333; border-radius: 4px; margin-right: 10px; }
-                .info-box-right { padding: 10px; border: 1px solid #333; border-radius: 4px; margin-left: 10px; }
+                .info-box { padding: 10px; border: none; margin-right: 10px; }
+                .info-box-right { padding: 10px; border: none; margin-left: 10px; }
                 .details-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
                 .details-table th {
                     background-color: ${if (isColor) "#333" else "white"};
@@ -1155,7 +1154,7 @@ private fun generateSuratJalanHtml(
                         <th style="width: 8%; text-align: center;">No</th>
                         <th style="width: 52%;">Nama Barang / Deskripsi</th>
                         <th style="width: 20%; text-align: center;">Satuan</th>
-                        <th style="width: 20%; text-align: center;">QTY</th>
+                        <th style="width: 20%; text-align: center;">Jumlah</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1166,13 +1165,12 @@ private fun generateSuratJalanHtml(
             $signatureHtml
 
             <div class="footer">
-                Surat Jalan ini sah and diterbitkan secara luring (offline) oleh POSBah.
+                Surat Jalan ini sah dan diterbitkan secara luring oleh POSBah.
             </div>
         </body>
         </html>
     """.trimIndent()
 }
-
 private fun getAssetBase64(context: Context, fileName: String): String {
     return try {
         val inputStream = context.assets.open(fileName)
@@ -1422,7 +1420,7 @@ private fun ReceiverSignatureSection(
                 )
             } else {
                 Text(
-                    text = "Minta penerima menandatangani bukti penyerahan barang secara digital luring di HP ini atau share link unik berdurasi 60 menit.",
+                    text = "Minta penerima menandatangani bukti penyerahan barang secara digital luring di HP ini atau share link unik berdurasi 10 menit.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

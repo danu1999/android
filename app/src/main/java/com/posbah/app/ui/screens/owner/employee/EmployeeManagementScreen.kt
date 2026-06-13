@@ -84,7 +84,7 @@ fun EmployeeManagementScreen(
     var nameInput by remember { mutableStateOf("") }
     var emailInput by remember { mutableStateOf("") }
     var phoneInput by remember { mutableStateOf("") }
-    var pinInput by remember { mutableStateOf("") }
+    var passwordInput by remember { mutableStateOf("") }
     var roleInput by remember { mutableStateOf("KASIR") }
     var salaryInput by remember { mutableStateOf("") }
     var payPeriodInput by remember { mutableStateOf("MONTHLY") }
@@ -93,9 +93,9 @@ fun EmployeeManagementScreen(
 
     var otpInput by remember { mutableStateOf("") }
 
-    var showPinChangeDialog by remember { mutableStateOf(false) }
-    var activeEmployeeForPinChange by remember { mutableStateOf<Employee?>(null) }
-    var newPinInput by remember { mutableStateOf("") }
+    var showPasswordChangeDialog by remember { mutableStateOf(false) }
+    var activeEmployeeForPasswordChange by remember { mutableStateOf<Employee?>(null) }
+    var newPasswordInput by remember { mutableStateOf("") }
 
     var outletDropdownExpanded by remember { mutableStateOf(false) }
     var roleDropdownExpanded by remember { mutableStateOf(false) }
@@ -120,7 +120,7 @@ fun EmployeeManagementScreen(
                             nameInput = ""
                             emailInput = ""
                             phoneInput = ""
-                            pinInput = ""
+                            passwordInput = ""
                             roleInput = "KASIR"
                             salaryInput = ""
                             payPeriodInput = "MONTHLY"
@@ -234,10 +234,10 @@ fun EmployeeManagementScreen(
                         EmployeeCard(
                             employee = emp,
                             onPaySalary = { viewModel.paySalary(emp) },
-                            onChangePin = {
-                                activeEmployeeForPinChange = emp
-                                newPinInput = ""
-                                showPinChangeDialog = true
+                            onChangePassword = {
+                                activeEmployeeForPasswordChange = emp
+                                newPasswordInput = ""
+                                showPasswordChangeDialog = true
                             }
                         )
                     }
@@ -280,11 +280,11 @@ fun EmployeeManagementScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
-                        value = pinInput,
-                        onValueChange = { pinInput = it },
-                        label = { Text("PIN / Password") },
+                        value = passwordInput,
+                        onValueChange = { passwordInput = it },
+                        label = { Text("Password") },
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -416,7 +416,7 @@ fun EmployeeManagementScreen(
                             name = nameInput,
                             email = emailInput,
                             phone = phoneInput,
-                            pin = pinInput,
+                            password = passwordInput,
                             role = roleInput,
                             salary = sal,
                             payPeriod = payPeriodInput,
@@ -504,19 +504,19 @@ fun EmployeeManagementScreen(
         )
     }
 
-    // PIN change dialog
-    if (showPinChangeDialog && activeEmployeeForPinChange != null) {
+    // Password change dialog
+    if (showPasswordChangeDialog && activeEmployeeForPasswordChange != null) {
         AlertDialog(
-            onDismissRequest = { showPinChangeDialog = false },
-            title = { Text("Ganti PIN: ${activeEmployeeForPinChange?.name}") },
+            onDismissRequest = { showPasswordChangeDialog = false },
+            title = { Text("Ganti Password: ${activeEmployeeForPasswordChange?.name}") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Masukkan PIN numerik baru untuk karyawan ini.", fontSize = 12.sp, color = Color.Gray)
+                    Text("Masukkan password baru untuk karyawan ini.", fontSize = 12.sp, color = Color.Gray)
                     OutlinedTextField(
-                        value = newPinInput,
-                        onValueChange = { newPinInput = it },
-                        label = { Text("PIN Baru") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                        value = newPasswordInput,
+                        onValueChange = { newPasswordInput = it },
+                        label = { Text("Password Baru") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -525,15 +525,15 @@ fun EmployeeManagementScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.changeEmployeePin(activeEmployeeForPinChange!!.id, newPinInput)
-                        showPinChangeDialog = false
+                        viewModel.changeEmployeePassword(activeEmployeeForPasswordChange!!.id, newPasswordInput)
+                        showPasswordChangeDialog = false
                     }
                 ) {
-                    Text("Simpan PIN")
+                    Text("Simpan Password")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showPinChangeDialog = false }) {
+                TextButton(onClick = { showPasswordChangeDialog = false }) {
                     Text("Batal")
                 }
             }
@@ -545,7 +545,7 @@ fun EmployeeManagementScreen(
 fun EmployeeCard(
     employee: Employee,
     onPaySalary: () -> Unit,
-    onChangePin: () -> Unit
+    onChangePassword: () -> Unit
 ) {
     Card(
         colors = CardDefaults.cardColors(
@@ -614,11 +614,11 @@ fun EmployeeCard(
                     }
                 }
 
-                // PIN Change Icon
-                IconButton(onClick = onChangePin) {
+                // Password Change Icon
+                IconButton(onClick = onChangePassword) {
                     Icon(
                         Icons.Outlined.Key,
-                        contentDescription = "Ganti PIN",
+                        contentDescription = "Ganti Password",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp)
                     )

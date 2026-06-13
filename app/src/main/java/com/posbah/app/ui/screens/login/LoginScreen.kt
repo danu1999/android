@@ -127,13 +127,13 @@ fun LoginScreen(
                                 }
                             }
                         )
-                        LoginMode.Pin -> PremiumSection(
+                        LoginMode.Password -> PremiumSection(
                             email = ui.email,
-                            pin = ui.pin,
+                            password = ui.password,
                             isLoading = ui.isLoading,
                             onEmailChange = viewModel::updateEmail,
-                            onPinChange = viewModel::updatePin,
-                            onSubmit = viewModel::signInWithPin
+                            onPasswordChange = viewModel::updatePassword,
+                            onSubmit = viewModel::signInWithPassword
                         )
                     }
 
@@ -226,7 +226,7 @@ private fun ModeSelector(current: LoginMode, onChange: (LoginMode) -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         ModeTab("User Demo (Google)", current == LoginMode.Google) { onChange(LoginMode.Google) }
-        ModeTab("Premium (Email)", current == LoginMode.Pin) { onChange(LoginMode.Pin) }
+        ModeTab("Premium (Email)", current == LoginMode.Password) { onChange(LoginMode.Password) }
     }
 }
 
@@ -281,10 +281,10 @@ private fun GoogleSection(isLoading: Boolean, onClick: () -> Unit) {
 @Composable
 private fun PremiumSection(
     email: String,
-    pin: String,
+    password: String,
     isLoading: Boolean,
     onEmailChange: (String) -> Unit,
-    onPinChange: (String) -> Unit,
+    onPasswordChange: (String) -> Unit,
     onSubmit: () -> Unit
 ) {
     Column {
@@ -294,24 +294,24 @@ private fun PremiumSection(
             label = { Text("Email") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            modifier = Modifier.fillMaxWidth().testTag("pin-email"),
+            modifier = Modifier.fillMaxWidth().testTag("login-email"),
         )
         Spacer(Modifier.height(12.dp))
         OutlinedTextField(
-            value = pin,
-            onValueChange = onPinChange,
+            value = password,
+            onValueChange = onPasswordChange,
             label = { Text("Password") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth().testTag("pin-input"),
+            modifier = Modifier.fillMaxWidth().testTag("login-password"),
         )
         Spacer(Modifier.height(16.dp))
         PrimaryButton(
             label = if (isLoading) "Memverifikasi\u2026" else "Masuk",
             onClick = onSubmit,
             enabled = !isLoading,
-            modifier = Modifier.fillMaxWidth().testTag("btn-pin-login")
+            modifier = Modifier.fillMaxWidth().testTag("btn-password-login")
         )
     }
 }

@@ -120,6 +120,15 @@ class SettingsViewModel @Inject constructor(
             is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Error -> "Gagal: ${result.message}"
         }
     }
+
+    fun getActiveUserEmail(): String? = authRepository.activeUserEmail()
+
+    fun changePassword(oldPin: String, newPin: String, onResult: (AuthRepository.ChangePasswordResult) -> Unit) {
+        viewModelScope.launch {
+            val result = authRepository.changePassword(oldPin, newPin)
+            onResult(result)
+        }
+    }
 }
 
 @Composable
@@ -134,6 +143,13 @@ fun SettingsScreen(
     var outletName by remember { mutableStateOf("") }
     var outletAddress by remember { mutableStateOf("") }
     var outletPhone by remember { mutableStateOf("") }
+
+    var showChangePassword by remember { mutableStateOf(false) }
+    var oldPassword by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var changePasswordError by remember { mutableStateOf<String?>(null) }
+    var isChangingPassword by remember { mutableStateOf(false) }
 
     val logoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -365,6 +381,15 @@ fun SettingsScreen(
             }
             item {
                 Spacer(Modifier.height(8.dp))
+                PrimaryButton(
+                    label = "Ganti Password",
+                    variant = ButtonVariant.Outline,
+                    onClick = { showChangePassword = true },
+                    modifier = Modifier.fillMaxWidth().testTag("btn-change-pwd")
+                )
+            }
+            item {
+                Spacer(Modifier.height(8.dp))
                 val context = androidx.compose.ui.platform.LocalContext.current
                 val syncStatus by viewModel.syncStatus.collectAsState()
 
@@ -470,6 +495,121 @@ fun SettingsScreen(
                 ) { Text("Simpan") }
             },
             dismissButton = { TextButton(onClick = { showOutletForm = false }) { Text("Batal") } }
+        )
+    }
+
+    if (showChangePassword) {
+        val userEmail = viewModel.getActiveUserEmail().orEmpty()
+        val context = androidx.compose.ui.platform.LocalContext.current
+        AlertDialog(
+            onDismissRequest = { if (!isChangingPassword) { showChangePassword = false; oldPassword = ""; newPassword = ""; confirmPassword = ""; changePasswordError = null } },
+            title = { Text("Ganti Password") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "Ubah password masuk Anda. Email tidak dapat diubah.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    
+                    // Email Read-Only field
+                    OutlinedTextField(
+                        value = userEmail,
+                        onValueChange = {},
+                        label = { Text("Email (Gmail)") },
+                        readOnly = true,
+                        enabled = false,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    
+                    OutlinedTextField(
+                        value = oldPassword,
+                        onValueChange = { oldPassword = it },
+                        label = { Text("Password Lama") },
+                        singleLine = true,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth().testTag("change-pwd-old")
+                    )
+                    
+                    OutlinedTextField(
+                        value = newPassword,
+                        onValueChange = { newPassword = it },
+                        label = { Text("Password Baru") },
+                        singleLine = true,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth().testTag("change-pwd-new")
+                    )
+                    
+                    OutlinedTextField(
+                        value = confirmPassword,
+                        onValueChange = { confirmPassword = it },
+                        label = { Text("Konfirmasi Password Baru") },
+                        singleLine = true,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth().testTag("change-pwd-confirm")
+                    )
+                    
+                    changePasswordError?.let {
+                        Text(
+                            it,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !isChangingPassword && oldPassword.isNotBlank() && newPassword.isNotBlank() && confirmPassword.isNotBlank(),
+                    onClick = {
+                        if (newPassword != confirmPassword) {
+                            changePasswordError = "Konfirmasi password baru tidak cocok"
+                            return@TextButton
+                        }
+                        if (newPassword.length < 4) {
+                            changePasswordError = "Password minimal 4 karakter"
+                            return@TextButton
+                        }
+                        isChangingPassword = true
+                        changePasswordError = null
+                        viewModel.changePassword(oldPassword, newPassword) { result ->
+                            isChangingPassword = false
+                            when (result) {
+                                is com.posbah.app.data.repository.AuthRepository.ChangePasswordResult.Success -> {
+                                    showChangePassword = false
+                                    oldPassword = ""
+                                    newPassword = ""
+                                    confirmPassword = ""
+                                    android.widget.Toast.makeText(context, "Password berhasil diubah!", android.widget.Toast.LENGTH_LONG).show()
+                                }
+                                is com.posbah.app.data.repository.AuthRepository.ChangePasswordResult.Error -> {
+                                    changePasswordError = result.message
+                                }
+                            }
+                        }
+                    },
+                    modifier = Modifier.testTag("btn-confirm-change-pwd")
+                ) {
+                    Text(if (isChangingPassword) "Memproses..." else "Simpan")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !isChangingPassword,
+                    onClick = {
+                        showChangePassword = false
+                        oldPassword = ""
+                        newPassword = ""
+                        confirmPassword = ""
+                        changePasswordError = null
+                    }
+                ) {
+                    Text("Batal")
+                }
+            }
         )
     }
 }

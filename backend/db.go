@@ -472,6 +472,13 @@ func initSchema() error {
 		`UPDATE "bmp_products" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
 		`UPDATE "bmp_invoice_payments" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
 		`UPDATE "bmp_bahan_baku_item" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
+
+		// print_settings schema updates
+		`ALTER TABLE "print_settings" ADD COLUMN IF NOT EXISTS "moduleKey" VARCHAR(50) DEFAULT 'BMP';`,
+		`ALTER TABLE "print_settings" ADD COLUMN IF NOT EXISTS "logoPath" TEXT;`,
+		`ALTER TABLE "print_settings" DROP CONSTRAINT IF EXISTS "print_settings_tenantId_key";`,
+		`ALTER TABLE "print_settings" DROP CONSTRAINT IF EXISTS "print_settings_tenantId_moduleKey_key";`,
+		`ALTER TABLE "print_settings" ADD CONSTRAINT "print_settings_tenantId_moduleKey_key" UNIQUE ("tenantId", "moduleKey");`,
 	}
 
 	for _, q := range migrationQueries {
@@ -482,16 +489,22 @@ func initSchema() error {
 	return nil
 }
 
+func isPKColumn(tableName string, colName string) bool {
+	if tableName == "local_users" && colName == "googleSub" {
+		return true
+	}
+	if tableName == "print_settings" && (colName == "tenantId" || colName == "moduleKey") {
+		return true
+	}
+	if tableName != "local_users" && tableName != "print_settings" && colName == "id" {
+		return true
+	}
+	return false
+}
+
 func dynamicUpsert(tableName string, rows []map[string]interface{}) error {
 	if len(rows) == 0 {
 		return nil
-	}
-
-	pkColumn := "id"
-	if tableName == "local_users" {
-		pkColumn = "googleSub"
-	} else if tableName == "print_settings" {
-		pkColumn = "tenantId"
 	}
 
 	for _, row := range rows {
@@ -516,10 +529,17 @@ func dynamicUpsert(tableName string, rows []map[string]interface{}) error {
 				values = append(values, v)
 			}
 
-			if k != pkColumn {
+			if !isPKColumn(tableName, k) {
 				updateParts = append(updateParts, fmt.Sprintf(`"%s" = EXCLUDED."%s"`, k, k))
 			}
 			idx++
+		}
+
+		conflictTarget := `"id"`
+		if tableName == "local_users" {
+			conflictTarget = `"googleSub"`
+		} else if tableName == "print_settings" {
+			conflictTarget = `"tenantId", "moduleKey"`
 		}
 
 		query := fmt.Sprintf(
@@ -530,9 +550,9 @@ func dynamicUpsert(tableName string, rows []map[string]interface{}) error {
 		)
 
 		if len(updateParts) > 0 {
-			query += fmt.Sprintf(` ON CONFLICT ("%s") DO UPDATE SET %s`, pkColumn, strings.Join(updateParts, ", "))
+			query += fmt.Sprintf(` ON CONFLICT (%s) DO UPDATE SET %s`, conflictTarget, strings.Join(updateParts, ", "))
 		} else {
-			query += fmt.Sprintf(` ON CONFLICT ("%s") DO NOTHING`, pkColumn)
+			query += fmt.Sprintf(` ON CONFLICT (%s) DO NOTHING`, conflictTarget)
 		}
 
 		_, err := db.Exec(query, values...)

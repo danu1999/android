@@ -7,6 +7,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.outlined.Logout
 import androidx.compose.material.icons.outlined.Notes
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Receipt
+import androidx.compose.material.icons.outlined.ShoppingCart
 import androidx.compose.material.icons.outlined.History
 import com.posbah.app.ui.navigation.Screen
 import androidx.compose.material.icons.outlined.RemoveCircleOutline
@@ -56,8 +58,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -70,7 +74,6 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.posbah.app.ui.components.PosBahTopBar
 import com.posbah.app.util.Formatters
-import androidx.compose.ui.draw.clip
 import androidx.compose.material3.OutlinedButton
 
 import androidx.compose.material.icons.outlined.PhotoCamera
@@ -128,6 +131,7 @@ fun LaundryScreen(
     val transactionList by viewModel.transactions.collectAsState(emptyList())
 
     val isOwner by viewModel.isOwner.collectAsState()
+    val canViewMargin by viewModel.canViewMargin.collectAsState()
     val activityLogsList by viewModel.activityLogs.collectAsState()
     var showLogsDialog by remember { mutableStateOf(false) }
 
@@ -141,6 +145,7 @@ fun LaundryScreen(
     var showOwnerMenuDropdown by remember { mutableStateOf(false) }
 
     var searchQuery by remember { mutableStateOf("") }
+    var selectedCategory by remember { mutableStateOf("Semua") } // NEW filter
     var customerName by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
@@ -158,9 +163,16 @@ fun LaundryScreen(
     var newServiceMonthlyMaintenance by remember { mutableStateOf("") }
     var newServiceUnit by remember { mutableStateOf("Kg") }
     var rentDateMillis by remember { mutableStateOf<Long?>(null) }
+    var showAddExpenseDialog by remember { mutableStateOf(false) }
+    var expenseName by remember { mutableStateOf("") }
+    var expenseAmount by remember { mutableStateOf("") }
+    var expenseDate by remember { mutableStateOf(System.currentTimeMillis()) }
 
     var tempPhotoFile by remember { mutableStateOf<java.io.File?>(null) }
     var capturedPhotoFile by remember { mutableStateOf<java.io.File?>(null) }
+
+    // Mobile tab state: 0 = Layanan, 1 = Keranjang
+    var mobileTabIndex by remember { mutableStateOf(0) }
 
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
@@ -181,13 +193,23 @@ fun LaundryScreen(
         }
     }
 
-    val filteredServices = remember(services, searchQuery) {
-        services.filter { it.name.contains(searchQuery, ignoreCase = true) }
+    val filteredServices = remember(services, searchQuery, selectedCategory) {
+        services.filter {
+            val matchesSearch = it.name.contains(searchQuery, ignoreCase = true)
+            val matchesCategory = when (selectedCategory) {
+                "Kiloan" -> it.category.equals("KILOAN", ignoreCase = true)
+                "Satuan" -> it.category.equals("SATUAN", ignoreCase = true)
+                else -> true
+            }
+            matchesSearch && matchesCategory
+        }
     }
 
     val cartSubtotal = remember(cart.toList()) {
         cart.sumOf { it.service.price * it.quantity }
     }
+    val cartCount = cart.size
+    val activeOrderCount = orders.count { it.orderStatus != "DIAMBIL" }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -199,11 +221,23 @@ fun LaundryScreen(
                     onBack = onBack,
                     onTitleClick = { showOutletDropdown = true },
                     actions = {
-                        IconButton(onClick = { onNavigate(Screen.MarginAnalysis.route) }) {
-                            Icon(Icons.Outlined.History, contentDescription = "Analisis Margin & Riwayat")
+                        if (canViewMargin) {
+                            IconButton(onClick = { onNavigate(Screen.MarginAnalysis.route) }) {
+                                Icon(Icons.Outlined.History, contentDescription = "Analisis Margin & Riwayat")
+                            }
                         }
                         IconButton(onClick = onNavigateToPrintSettings) {
                             Icon(Icons.Outlined.Print, contentDescription = "Pengaturan Struk")
+                        }
+                        if (canViewMargin) {
+                            IconButton(onClick = {
+                                expenseName = ""
+                                expenseAmount = ""
+                                expenseDate = System.currentTimeMillis()
+                                showAddExpenseDialog = true
+                            }) {
+                                Icon(Icons.Outlined.Receipt, contentDescription = "Biaya / Bahan Baku")
+                            }
                         }
                         if (isOwner) {
                             Box {
@@ -253,9 +287,12 @@ fun LaundryScreen(
                         }) {
                             Icon(Icons.Outlined.LocalLaundryService, contentDescription = "Tambah Layanan")
                         }
-                        Spacer(Modifier.width(8.dp))
-                        TextButton(onClick = { showActiveOrders = true }) {
-                            Text("Daftar Order (${orders.filter { it.orderStatus != "DIAMBIL" }.size})")
+                        // Compact order count button
+                        TextButton(
+                            onClick = { showActiveOrders = true },
+                            contentPadding = PaddingValues(horizontal = 8.dp)
+                        ) {
+                            Text("Order ($activeOrderCount)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 )
@@ -276,482 +313,188 @@ fun LaundryScreen(
             }
         }
     ) { paddingValues ->
-        Row(
+        BoxWithConstraints(
             modifier = Modifier
                 .padding(paddingValues)
                 .fillMaxSize()
         ) {
-            // Left pane: Laundry Services Catalog
-            Column(
-                modifier = Modifier
-                    .weight(1.2f)
-                    .fillMaxHeight()
-                    .padding(16.dp)
-            ) {
-                Text(
-                    "Layanan Laundry",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(Modifier.height(8.dp))
+            val isCompact = maxWidth < 600.dp
 
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    leadingIcon = { Icon(Icons.Outlined.Search, null) },
-                    placeholder = { Text("Cari layanan...") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth().testTag("laundry-search")
-                )
-                Spacer(Modifier.height(12.dp))
-
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    items(filteredServices) { service ->
-                        Surface(
-                            shape = RoundedCornerShape(18.dp),
-                            color = MaterialTheme.colorScheme.surface,
-                            tonalElevation = 1.dp,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
+            if (isCompact) {
+                // === MOBILE LAYOUT: Vertical with Tabs ===
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Tab Switcher
+                    Surface(
+                        shape = RoundedCornerShape(0.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 2.dp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                    ) {
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable {
-                                    val existing = cart.firstOrNull { it.service.id == service.id }
-                                    if (existing != null) {
-                                        val step = if (service.unit == "Kg") 0.5 else 1.0
-                                        val idx = cart.indexOf(existing)
-                                        cart[idx] = existing.copy(quantity = existing.quantity + step)
-                                    } else {
-                                        cart.add(CartItem(service, 1.0))
-                                    }
-                                }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                modifier = Modifier.padding(14.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-                                    modifier = Modifier.size(52.dp)
-                                ) {
-                                    if (!service.image.isNullOrEmpty()) {
-                                        AsyncImage(
-                                            model = service.image,
-                                            contentDescription = service.name,
-                                            modifier = Modifier.fillMaxSize(),
-                                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                                        )
-                                    } else {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                Icons.Outlined.LocalLaundryService,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(24.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                                Spacer(Modifier.width(14.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        service.name,
-                                        fontWeight = FontWeight.Bold,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontSize = 15.sp
-                                    )
-                                    Spacer(Modifier.height(4.dp))
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        // Category Tag
-                                        Surface(
-                                            shape = RoundedCornerShape(8.dp),
-                                            color = if (service.category == "KILOAN") MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
-                                                    else MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f),
-                                            modifier = Modifier.padding(0.dp)
-                                        ) {
-                                            Text(
-                                                text = if (service.category == "KILOAN") "Kiloan" else "Satuan",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = if (service.category == "KILOAN") MaterialTheme.colorScheme.onSecondaryContainer
-                                                        else MaterialTheme.colorScheme.onTertiaryContainer,
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                                fontWeight = FontWeight.Medium
-                                            )
-                                        }
-                                        
-                                        // Margin Tag
-                                        val marginPercent = if (service.price > 0) ((service.price - service.costPrice) / service.price) * 100 else 0.0
-                                        Surface(
-                                            shape = RoundedCornerShape(8.dp),
-                                            color = if (marginPercent >= 0) Color(0xFFE2FBE7) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f)
-                                        ) {
-                                            Text(
-                                                text = "Margin: ${String.format("%.0f", marginPercent)}%",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = if (marginPercent >= 0) Color(0xFF1E824C) else MaterialTheme.colorScheme.onErrorContainer,
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-                                }
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Column(horizontalAlignment = Alignment.End) {
-                                        Text(
-                                            Formatters.rupiah(service.price),
-                                            fontWeight = FontWeight.Black,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontSize = 15.sp
-                                        )
-                                        Text(
-                                            "per ${service.unit}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    IconButton(
-                                        onClick = {
-                                            viewModel.deleteService(service.id) {
-                                                Toast.makeText(context, "Layanan berhasil dihapus!", Toast.LENGTH_SHORT).show()
-                                            }
-                                        },
-                                        modifier = Modifier.size(36.dp)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(32.dp)
-                                                .background(MaterialTheme.colorScheme.error.copy(alpha = 0.08f), RoundedCornerShape(50)),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                Icons.Outlined.Clear,
-                                                contentDescription = "Hapus Layanan",
-                                                tint = MaterialTheme.colorScheme.error,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
+                            TabPill(
+                                label = "Layanan",
+                                icon = Icons.Outlined.LocalLaundryService,
+                                active = mobileTabIndex == 0,
+                                modifier = Modifier.weight(1f),
+                                onClick = { mobileTabIndex = 0 }
+                            )
+                            TabPill(
+                                label = "Keranjang ($cartCount)",
+                                icon = Icons.Outlined.ShoppingCart,
+                                active = mobileTabIndex == 1,
+                                modifier = Modifier.weight(1f),
+                                onClick = { mobileTabIndex = 1 }
+                            )
                         }
+                    }
+
+                    if (mobileTabIndex == 0) {
+                        ServiceCatalogPane(
+                            services = services,
+                            filteredServices = filteredServices,
+                            searchQuery = searchQuery,
+                            onSearchChange = { searchQuery = it },
+                            selectedCategory = selectedCategory,
+                            onCategoryChange = { selectedCategory = it },
+                            onServiceClick = { service ->
+                                val existing = cart.firstOrNull { it.service.id == service.id }
+                                if (existing != null) {
+                                    val step = if (service.unit == "Kg") 0.5 else 1.0
+                                    val idx = cart.indexOf(existing)
+                                    cart[idx] = existing.copy(quantity = existing.quantity + step)
+                                } else {
+                                    cart.add(CartItem(service, 1.0))
+                                }
+                                Toast.makeText(context, "${service.name} ditambahkan ke keranjang", Toast.LENGTH_SHORT).show()
+                            },
+                            onDeleteService = { id ->
+                                viewModel.deleteService(id) {
+                                    Toast.makeText(context, "Layanan berhasil dihapus!", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                        )
+                    } else {
+                        CartOrderPane(
+                            cart = cart,
+                            cartSubtotal = cartSubtotal,
+                            customerName = customerName,
+                            onCustomerNameChange = { customerName = it },
+                            phone = phone,
+                            onPhoneChange = { phone = it },
+                            rentDateMillis = rentDateMillis,
+                            onRentDateChange = { rentDateMillis = it },
+                            onPickCustomer = { showCustomerSelectionDialog = true },
+                            onCheckout = {
+                                if (customerName.isBlank() || phone.isBlank()) {
+                                    Toast.makeText(context, "Mohon lengkapi Nama & Phone Pelanggan!", Toast.LENGTH_SHORT).show()
+                                    return@CartOrderPane
+                                }
+                                if (cart.isEmpty()) {
+                                    Toast.makeText(context, "Keranjang masih kosong!", Toast.LENGTH_SHORT).show()
+                                    return@CartOrderPane
+                                }
+                                val detailsCopy = cart.toList()
+                                viewModel.checkout(customerName, phone, rentDateMillis) { newOrder ->
+                                    showReceiptDetails = detailsCopy
+                                    activeReceiptOrder = newOrder
+                                    customerName = ""
+                                    phone = ""
+                                    rentDateMillis = null
+                                    mobileTabIndex = 0
+                                    Toast.makeText(context, "Order laundry berhasil dibuat!", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                        )
                     }
                 }
-            }
-
-            // Right pane: Laundry Shopping Cart Sidebar
-            Surface(
-                modifier = Modifier
-                    .width(380.dp)
-                    .fillMaxHeight(),
-                tonalElevation = 1.dp,
-                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        "Keranjang Order",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(Modifier.height(8.dp))
-
-                    LazyColumn(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        if (cart.isEmpty()) {
-                            item {
-                                Box(
-                                    modifier = Modifier.fillParentMaxSize(),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        "Keranjang kosong.\nPilih layanan di kiri.", 
-                                        textAlign = TextAlign.Center, 
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                                    )
-                                }
-                            }
-                        } else {
-                            items(cart) { item ->
-                                Surface(
-                                    shape = RoundedCornerShape(14.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.05f)),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(item.service.name, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                            Spacer(Modifier.height(2.dp))
-                                            Text(
-                                                "${Formatters.rupiah(item.service.price)} / ${item.service.unit}",
-                                                fontSize = 11.sp,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(2.dp)
-                                        ) {
-                                            IconButton(
-                                                onClick = {
-                                                    val step = if (item.service.unit == "Kg") 0.5 else 1.0
-                                                    if (item.quantity > step) {
-                                                        val idx = cart.indexOf(item)
-                                                        cart[idx] = item.copy(quantity = item.quantity - step)
-                                                    } else {
-                                                        cart.remove(item)
-                                                    }
-                                                },
-                                                modifier = Modifier.size(36.dp)
-                                            ) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(28.dp)
-                                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), RoundedCornerShape(50)),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Icon(
-                                                        Icons.Outlined.RemoveCircleOutline, 
-                                                        null, 
-                                                        tint = MaterialTheme.colorScheme.primary, 
-                                                        modifier = Modifier.size(18.dp)
-                                                    )
-                                                }
-                                            }
-                                            
-                                            Text(
-                                                text = if (item.service.unit == "Kg") "%.1f".format(item.quantity) else item.quantity.toInt().toString(),
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 13.sp,
-                                                modifier = Modifier.padding(horizontal = 6.dp)
-                                            )
-                                            Text(
-                                                item.service.unit, 
-                                                fontSize = 11.sp, 
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.padding(end = 4.dp)
-                                            )
-                                            
-                                            IconButton(
-                                                onClick = {
-                                                    val step = if (item.service.unit == "Kg") 0.5 else 1.0
-                                                    val idx = cart.indexOf(item)
-                                                    cart[idx] = item.copy(quantity = item.quantity + step)
-                                                },
-                                                modifier = Modifier.size(36.dp)
-                                            ) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(28.dp)
-                                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), RoundedCornerShape(50)),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text(
-                                                        "+", 
-                                                        fontWeight = FontWeight.Bold, 
-                                                        color = MaterialTheme.colorScheme.primary, 
-                                                        fontSize = 16.sp
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(Modifier.height(8.dp))
-                    
-                    // Customer Profile Card
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                "Profil Pelanggan", 
-                                style = MaterialTheme.typography.bodyMedium, 
-                                fontWeight = FontWeight.Bold, 
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                val isUmum = customerName == "Umum" && phone == ""
-                                Button(
-                                    onClick = {
-                                        customerName = "Umum"
-                                        phone = ""
-                                    },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (isUmum) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                        contentColor = if (isUmum) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                                    ),
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                    modifier = Modifier.weight(1f).height(40.dp)
-                                ) {
-                                    Text("Umum (Walk-in)", fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                }
-                                Button(
-                                    onClick = {
-                                        showCustomerSelectionDialog = true
-                                    },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (!isUmum) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                        contentColor = if (!isUmum) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                                    ),
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                    modifier = Modifier.weight(1f).height(40.dp)
-                                ) {
-                                    Text("Pilih Pelanggan", fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-
-                            Spacer(Modifier.height(10.dp))
-
-                            OutlinedTextField(
-                                value = customerName,
-                                onValueChange = { customerName = it },
-                                label = { Text("Nama Pelanggan") },
-                                leadingIcon = { Icon(Icons.Outlined.People, null, modifier = Modifier.size(18.dp)) },
-                                singleLine = true,
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.fillMaxWidth().testTag("laundry-cust-name")
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            OutlinedTextField(
-                                value = phone,
-                                onValueChange = { phone = it },
-                                label = { Text("WhatsApp Pelanggan") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                                singleLine = true,
-                                shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.fillMaxWidth().testTag("laundry-phone")
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(4.dp))
-
-                    // Order Settings (Date selection & Subtotal) Card
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)),
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            // Date selection (Backdate)
-                            val calendar = java.util.Calendar.getInstance()
-                            if (rentDateMillis != null) {
-                                calendar.timeInMillis = rentDateMillis!!
-                            }
-                            val datePickerDialog = android.app.DatePickerDialog(
-                                context,
-                                { _, year, month, dayOfMonth ->
-                                    val selectedCal = java.util.Calendar.getInstance()
-                                    selectedCal.set(year, month, dayOfMonth)
-                                    rentDateMillis = selectedCal.timeInMillis
-                                },
-                                calendar.get(java.util.Calendar.YEAR),
-                                calendar.get(java.util.Calendar.MONTH),
-                                calendar.get(java.util.Calendar.DAY_OF_MONTH)
-                            )
-
-                            val dateText = if (rentDateMillis != null) {
-                                val sdf = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
-                                sdf.format(Date(rentDateMillis!!))
+            } else {
+                // === TABLET LAYOUT: Side-by-side ===
+                Row(modifier = Modifier.fillMaxSize()) {
+                    ServiceCatalogPane(
+                        services = services,
+                        filteredServices = filteredServices,
+                        searchQuery = searchQuery,
+                        onSearchChange = { searchQuery = it },
+                        selectedCategory = selectedCategory,
+                        onCategoryChange = { selectedCategory = it },
+                        onServiceClick = { service ->
+                            val existing = cart.firstOrNull { it.service.id == service.id }
+                            if (existing != null) {
+                                val step = if (service.unit == "Kg") 0.5 else 1.0
+                                val idx = cart.indexOf(existing)
+                                cart[idx] = existing.copy(quantity = existing.quantity + step)
                             } else {
-                                "Hari Ini (Real-time)"
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Tanggal Order:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                                OutlinedButton(
-                                    onClick = { datePickerDialog.show() },
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                                    modifier = Modifier.height(28.dp)
-                                ) {
-                                    Text(dateText, fontSize = 11.sp)
-                                }
-                            }
-                            
-                            Spacer(Modifier.height(8.dp))
-                            androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
-                            Spacer(Modifier.height(8.dp))
-
-                            Row(
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Subtotal", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                                Text(Formatters.rupiah(cartSubtotal), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                            }
-                        }
-                    }
-
-                    Spacer(Modifier.height(10.dp))
-
-                    Button(
-                        onClick = {
-                            if (customerName.isBlank() || phone.isBlank()) {
-                                Toast.makeText(context, "Mohon lengkapi Nama & Phone Pelanggan!", Toast.LENGTH_SHORT).show()
-                                return@Button
-                            }
-                            if (cart.isEmpty()) {
-                                Toast.makeText(context, "Keranjang masih kosong!", Toast.LENGTH_SHORT).show()
-                                return@Button
-                            }
-
-                            val detailsCopy = cart.toList()
-                            viewModel.checkout(customerName, phone, rentDateMillis) { newOrder ->
-                                showReceiptDetails = detailsCopy
-                                activeReceiptOrder = newOrder
-                                customerName = ""
-                                phone = ""
-                                rentDateMillis = null
-                                Toast.makeText(context, "Order laundry berhasil dibuat!", Toast.LENGTH_SHORT).show()
+                                cart.add(CartItem(service, 1.0))
                             }
                         },
-                        enabled = cart.isNotEmpty(),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth().height(50.dp).testTag("btn-confirm-laundry")
+                        onDeleteService = { id ->
+                            viewModel.deleteService(id) {
+                                Toast.makeText(context, "Layanan berhasil dihapus!", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier
+                            .weight(1.2f)
+                            .fillMaxHeight()
+                    )
+                    Surface(
+                        modifier = Modifier
+                            .width(380.dp)
+                            .fillMaxHeight(),
+                        tonalElevation = 1.dp,
+                        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
                     ) {
-                        Text("Buat Order Laundry", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        CartOrderPane(
+                            cart = cart,
+                            cartSubtotal = cartSubtotal,
+                            customerName = customerName,
+                            onCustomerNameChange = { customerName = it },
+                            phone = phone,
+                            onPhoneChange = { phone = it },
+                            rentDateMillis = rentDateMillis,
+                            onRentDateChange = { rentDateMillis = it },
+                            onPickCustomer = { showCustomerSelectionDialog = true },
+                            onCheckout = {
+                                if (customerName.isBlank() || phone.isBlank()) {
+                                    Toast.makeText(context, "Mohon lengkapi Nama & Phone Pelanggan!", Toast.LENGTH_SHORT).show()
+                                    return@CartOrderPane
+                                }
+                                if (cart.isEmpty()) {
+                                    Toast.makeText(context, "Keranjang masih kosong!", Toast.LENGTH_SHORT).show()
+                                    return@CartOrderPane
+                                }
+                                val detailsCopy = cart.toList()
+                                viewModel.checkout(customerName, phone, rentDateMillis) { newOrder ->
+                                    showReceiptDetails = detailsCopy
+                                    activeReceiptOrder = newOrder
+                                    customerName = ""
+                                    phone = ""
+                                    rentDateMillis = null
+                                    Toast.makeText(context, "Order laundry berhasil dibuat!", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
                     }
                 }
             }
         }
     }
 
-    // Dialog 1: Active/History Laundry Orders Manager
+    // ============= DIALOGS (unchanged behavior) =============
+
     if (showActiveOrders) {
         AlertDialog(
             onDismissRequest = { showActiveOrders = false },
@@ -767,10 +510,10 @@ fun LaundryScreen(
                         Button(
                             onClick = { viewHistoryOrders = false },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (!viewHistoryOrders) MaterialTheme.colorScheme.primary 
-                                                 else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (!viewHistoryOrders) MaterialTheme.colorScheme.onPrimary 
-                                               else MaterialTheme.colorScheme.onSurfaceVariant
+                                containerColor = if (!viewHistoryOrders) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (!viewHistoryOrders) MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
                             ),
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.weight(1f)
@@ -780,10 +523,10 @@ fun LaundryScreen(
                         Button(
                             onClick = { viewHistoryOrders = true },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (viewHistoryOrders) MaterialTheme.colorScheme.primary 
-                                                 else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (viewHistoryOrders) MaterialTheme.colorScheme.onPrimary 
-                                               else MaterialTheme.colorScheme.onSurfaceVariant
+                                containerColor = if (viewHistoryOrders) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (viewHistoryOrders) MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
                             ),
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.weight(1f)
@@ -792,8 +535,44 @@ fun LaundryScreen(
                         }
                     }
 
-                    val filteredOrders = remember(orders, viewHistoryOrders) {
-                        orders.filter { if (viewHistoryOrders) it.orderStatus == "DIAMBIL" else it.orderStatus != "DIAMBIL" }
+                    var dialogSearchQuery by remember { mutableStateOf("") }
+
+                    OutlinedTextField(
+                        value = dialogSearchQuery,
+                        onValueChange = { dialogSearchQuery = it },
+                        leadingIcon = { Icon(Icons.Outlined.Search, null, modifier = Modifier.size(16.dp)) },
+                        trailingIcon = {
+                            if (dialogSearchQuery.isNotEmpty()) {
+                                IconButton(onClick = { dialogSearchQuery = "" }) {
+                                    Icon(Icons.Outlined.Clear, null, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        },
+                        placeholder = { Text("Cari pelanggan, order ID, item...", fontSize = 11.sp) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 11.sp),
+                        colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
+                    val filteredOrders = remember(orders, viewHistoryOrders, dialogSearchQuery) {
+                        orders.filter {
+                            val matchesStatus = if (viewHistoryOrders) it.orderStatus == "DIAMBIL" else it.orderStatus != "DIAMBIL"
+                            val matchesSearch = it.customerName.contains(dialogSearchQuery, ignoreCase = true) ||
+                                    it.id.contains(dialogSearchQuery, ignoreCase = true) ||
+                                    it.itemsSummary.contains(dialogSearchQuery, ignoreCase = true)
+                            matchesStatus && matchesSearch
+                        }
                     }
 
                     if (filteredOrders.isEmpty()) {
@@ -846,7 +625,6 @@ fun LaundryScreen(
                                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            // Payment status toggle
                                             Button(
                                                 onClick = {
                                                     val next = if (o.paymentStatus == "LUNAS") "BELUM LUNAS" else "LUNAS"
@@ -862,7 +640,6 @@ fun LaundryScreen(
                                                 Text(o.paymentStatus, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                             }
 
-                                            // Order status cycler
                                             Button(
                                                 onClick = {
                                                     val next = when (o.orderStatus) {
@@ -893,7 +670,6 @@ fun LaundryScreen(
         )
     }
 
-    // Dialog 2: Laundry Receipt Mockup Dialog
     if (activeReceiptOrder != null) {
         val r = activeReceiptOrder!!
         val details = showReceiptDetails ?: emptyList()
@@ -962,7 +738,6 @@ fun LaundryScreen(
         )
     }
 
-    // Dialog: Tambah Layanan Baru
     if (showAddServiceDialog) {
         AlertDialog(
             onDismissRequest = { showAddServiceDialog = false },
@@ -1001,7 +776,6 @@ fun LaundryScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    // Real-time margin calculator
                     val jual = newServicePrice.toDoubleOrNull() ?: 0.0
                     val beli = newServiceCost.toDoubleOrNull() ?: 0.0
                     val margin = if (jual > 0) ((jual - beli) / jual) * 100 else 0.0
@@ -1012,32 +786,32 @@ fun LaundryScreen(
                         color = if (margin >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(vertical = 2.dp)
                     )
-                    
+
                     Text("Kategori Layanan:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
-                            onClick = { 
+                            onClick = {
                                 newServiceCategory = "KILOAN"
                                 newServiceUnit = "Kg"
                             },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (newServiceCategory == "KILOAN") MaterialTheme.colorScheme.primary 
-                                                 else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (newServiceCategory == "KILOAN") MaterialTheme.colorScheme.onPrimary 
-                                               else MaterialTheme.colorScheme.onSurfaceVariant
+                                containerColor = if (newServiceCategory == "KILOAN") MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (newServiceCategory == "KILOAN") MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
                             ),
                             modifier = Modifier.weight(1f)
                         ) { Text("KILOAN (Kg)") }
                         Button(
-                            onClick = { 
+                            onClick = {
                                 newServiceCategory = "SATUAN"
                                 newServiceUnit = "Pcs"
                             },
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = if (newServiceCategory == "SATUAN") MaterialTheme.colorScheme.primary 
-                                                 else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (newServiceCategory == "SATUAN") MaterialTheme.colorScheme.onPrimary 
-                                               else MaterialTheme.colorScheme.onSurfaceVariant
+                                containerColor = if (newServiceCategory == "SATUAN") MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (newServiceCategory == "SATUAN") MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
                             ),
                             modifier = Modifier.weight(1f)
                         ) { Text("SATUAN (Pcs)") }
@@ -1045,7 +819,6 @@ fun LaundryScreen(
 
                     Spacer(Modifier.height(4.dp))
 
-                    // Camera section
                     if (capturedPhotoFile != null) {
                         Box(
                             modifier = Modifier
@@ -1104,7 +877,80 @@ fun LaundryScreen(
         )
     }
 
-    // Dialog: Log Aktivitas Laundry (Owner Only)
+    if (showAddExpenseDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddExpenseDialog = false },
+            title = { Text("Catat Biaya / Bahan Baku") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = expenseName,
+                        onValueChange = { expenseName = it },
+                        label = { Text("Keterangan / Nama Bahan") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = expenseAmount,
+                        onValueChange = { expenseAmount = it },
+                        label = { Text("Nominal Pengeluaran (Rp)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    val calendar = java.util.Calendar.getInstance()
+                    calendar.timeInMillis = expenseDate
+                    val datePickerDialog = android.app.DatePickerDialog(
+                        context,
+                        { _, year, month, dayOfMonth ->
+                            val selectedCal = java.util.Calendar.getInstance()
+                            selectedCal.timeInMillis = expenseDate
+                            selectedCal.set(java.util.Calendar.YEAR, year)
+                            selectedCal.set(java.util.Calendar.MONTH, month)
+                            selectedCal.set(java.util.Calendar.DAY_OF_MONTH, dayOfMonth)
+                            expenseDate = selectedCal.timeInMillis
+                        },
+                        calendar.get(java.util.Calendar.YEAR),
+                        calendar.get(java.util.Calendar.MONTH),
+                        calendar.get(java.util.Calendar.DAY_OF_MONTH)
+                    )
+                    val sdf = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+                    val dateStr = sdf.format(Date(expenseDate))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Tanggal: $dateStr", fontSize = 14.sp)
+                        Button(onClick = { datePickerDialog.show() }) {
+                            Text("Pilih Tanggal")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val amt = expenseAmount.toDoubleOrNull() ?: 0.0
+                        if (expenseName.isNotBlank() && amt > 0) {
+                            viewModel.addExpense(expenseName, amt, expenseDate) {
+                                showAddExpenseDialog = false
+                                Toast.makeText(context, "Pengeluaran berhasil dicatat!", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            Toast.makeText(context, "Keterangan dan nominal wajib diisi!", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                ) { Text("Simpan") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddExpenseDialog = false }) { Text("Batal") }
+            }
+        )
+    }
+
     if (showLogsDialog) {
         AlertDialog(
             onDismissRequest = { showLogsDialog = false },
@@ -1153,7 +999,6 @@ fun LaundryScreen(
         )
     }
 
-    // Dialog: Pilih / Tambah Pelanggan
     if (showCustomerSelectionDialog) {
         var custNameInput by remember { mutableStateOf("") }
         var custPhoneInput by remember { mutableStateOf("") }
@@ -1207,7 +1052,7 @@ fun LaundryScreen(
 
                     androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                     Text("Daftar Pelanggan Terdaftar", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
-                    
+
                     Box(modifier = Modifier.fillMaxWidth().height(160.dp)) {
                         if (customerList.isEmpty()) {
                             Text(
@@ -1276,5 +1121,623 @@ fun LaundryScreen(
                 TextButton(onClick = { showCustomerSelectionDialog = false }) { Text("Tutup") }
             }
         )
+    }
+}
+
+// ====================== EXTRACTED PANES ======================
+
+@Composable
+private fun ServiceCatalogPane(
+    services: List<LaundryServiceItem>,
+    filteredServices: List<LaundryServiceItem>,
+    searchQuery: String,
+    onSearchChange: (String) -> Unit,
+    selectedCategory: String,
+    onCategoryChange: (String) -> Unit,
+    onServiceClick: (LaundryServiceItem) -> Unit,
+    onDeleteService: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        // === HEADER: title + count badge ===
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Pilih Layanan",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = 16.sp,
+                    maxLines = 1
+                )
+                Text(
+                    "Tap untuk masukkan ke keranjang",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 10.sp,
+                    maxLines = 1
+                )
+            }
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
+            ) {
+                Text(
+                    "${services.size} Layanan",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        // === SEARCH + FILTER (horizontal compact) ===
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = onSearchChange,
+                    leadingIcon = { Icon(Icons.Outlined.Search, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp)) },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { onSearchChange("") }) {
+                                Icon(Icons.Outlined.Clear, null, modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    },
+                    placeholder = { Text("Cari layanan...", fontSize = 12.sp) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(10.dp),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp),
+                    colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .testTag("laundry-search")
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    listOf("Semua", "Kiloan", "Satuan").forEach { cat ->
+                        val active = selectedCategory == cat
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                            contentColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                            border = BorderStroke(
+                                width = 1.dp,
+                                color = if (active) Color.Transparent else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { onCategoryChange(cat) }
+                        ) {
+                            Text(
+                                text = cat,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 7.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        if (filteredServices.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        Icons.Outlined.LocalLaundryService,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                        modifier = Modifier.size(64.dp)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Belum ada layanan",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                items(filteredServices) { service ->
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 1.dp,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onServiceClick(service) }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                if (!service.image.isNullOrEmpty()) {
+                                    AsyncImage(
+                                        model = service.image,
+                                        contentDescription = service.name,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                    )
+                                } else {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            Icons.Outlined.LocalLaundryService,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    service.name,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = if (service.category == "KILOAN") MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
+                                        else MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f)
+                                    ) {
+                                        Text(
+                                            text = if (service.category == "KILOAN") "Kiloan" else "Satuan",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (service.category == "KILOAN") MaterialTheme.colorScheme.onSecondaryContainer
+                                            else MaterialTheme.colorScheme.onTertiaryContainer,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                            fontWeight = FontWeight.Medium,
+                                            fontSize = 9.sp
+                                        )
+                                    }
+                                    val marginPercent = if (service.price > 0) ((service.price - service.costPrice) / service.price) * 100 else 0.0
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = if (marginPercent >= 0) Color(0xFFE2FBE7) else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f)
+                                    ) {
+                                        Text(
+                                            text = "${String.format("%.0f", marginPercent)}%",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (marginPercent >= 0) Color(0xFF1E824C) else MaterialTheme.colorScheme.onErrorContainer,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 9.sp
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    Formatters.rupiah(service.price),
+                                    fontWeight = FontWeight.Black,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontSize = 14.sp,
+                                    maxLines = 1
+                                )
+                                Text(
+                                    "/ ${service.unit}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 10.sp
+                                )
+                            }
+                            IconButton(
+                                onClick = { onDeleteService(service.id) },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(28.dp)
+                                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.08f), RoundedCornerShape(50)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.Clear,
+                                        contentDescription = "Hapus Layanan",
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CartOrderPane(
+    cart: SnapshotStateList<CartItem>,
+    cartSubtotal: Double,
+    customerName: String,
+    onCustomerNameChange: (String) -> Unit,
+    phone: String,
+    onPhoneChange: (String) -> Unit,
+    rentDateMillis: Long?,
+    onRentDateChange: (Long?) -> Unit,
+    onPickCustomer: () -> Unit,
+    onCheckout: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+
+    Column(modifier = modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                "Keranjang Order",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.primary,
+                fontSize = 16.sp,
+                modifier = Modifier.weight(1f)
+            )
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
+            ) {
+                Text(
+                    "${cart.size} Item",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (cart.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier.fillParentMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                Icons.Outlined.ShoppingCart,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                modifier = Modifier.size(56.dp)
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "Keranjang kosong.\nPilih layanan di tab Layanan.",
+                                textAlign = TextAlign.Center,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            )
+                        }
+                    }
+                }
+            } else {
+                items(cart) { item ->
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.05f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(item.service.name, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    "${Formatters.rupiah(item.service.price)} / ${item.service.unit}",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                IconButton(
+                                    onClick = {
+                                        val step = if (item.service.unit == "Kg") 0.5 else 1.0
+                                        if (item.quantity > step) {
+                                            val idx = cart.indexOf(item)
+                                            cart[idx] = item.copy(quantity = item.quantity - step)
+                                        } else {
+                                            cart.remove(item)
+                                        }
+                                    },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), RoundedCornerShape(50)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            Icons.Outlined.RemoveCircleOutline,
+                                            null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = if (item.service.unit == "Kg") "%.1f".format(item.quantity) else item.quantity.toInt().toString(),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.padding(horizontal = 4.dp)
+                                )
+                                Text(
+                                    item.service.unit,
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(end = 2.dp)
+                                )
+                                IconButton(
+                                    onClick = {
+                                        val step = if (item.service.unit == "Kg") 0.5 else 1.0
+                                        val idx = cart.indexOf(item)
+                                        cart[idx] = item.copy(quantity = item.quantity + step)
+                                    },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), RoundedCornerShape(50)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            "+",
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontSize = 16.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        // Customer Profile Card
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(10.dp)) {
+                Text(
+                    "Profil Pelanggan",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = 12.sp
+                )
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val isUmum = customerName == "Umum" && phone == ""
+                    Button(
+                        onClick = {
+                            onCustomerNameChange("Umum")
+                            onPhoneChange("")
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isUmum) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = if (isUmum) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                        modifier = Modifier.weight(1f).height(36.dp)
+                    ) {
+                        Text("Umum", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Button(
+                        onClick = onPickCustomer,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (!isUmum) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = if (!isUmum) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                        modifier = Modifier.weight(1f).height(36.dp)
+                    ) {
+                        Text("Pilih Pelanggan", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = customerName,
+                    onValueChange = onCustomerNameChange,
+                    label = { Text("Nama Pelanggan", fontSize = 11.sp) },
+                    leadingIcon = { Icon(Icons.Outlined.People, null, modifier = Modifier.size(16.dp)) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(10.dp),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp),
+                    modifier = Modifier.fillMaxWidth().height(54.dp).testTag("laundry-cust-name")
+                )
+                Spacer(Modifier.height(6.dp))
+                OutlinedTextField(
+                    value = phone,
+                    onValueChange = onPhoneChange,
+                    label = { Text("WhatsApp", fontSize = 11.sp) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    singleLine = true,
+                    shape = RoundedCornerShape(10.dp),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp),
+                    modifier = Modifier.fillMaxWidth().height(54.dp).testTag("laundry-phone")
+                )
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        // Date + Subtotal Card
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(10.dp)) {
+                val calendar = java.util.Calendar.getInstance()
+                if (rentDateMillis != null) calendar.timeInMillis = rentDateMillis
+                val datePickerDialog = android.app.DatePickerDialog(
+                    context,
+                    { _, year, month, dayOfMonth ->
+                        val selectedCal = java.util.Calendar.getInstance()
+                        selectedCal.set(year, month, dayOfMonth)
+                        onRentDateChange(selectedCal.timeInMillis)
+                    },
+                    calendar.get(java.util.Calendar.YEAR),
+                    calendar.get(java.util.Calendar.MONTH),
+                    calendar.get(java.util.Calendar.DAY_OF_MONTH)
+                )
+                val dateText = if (rentDateMillis != null) {
+                    SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(rentDateMillis))
+                } else "Hari Ini"
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Tanggal Order:", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, fontSize = 12.sp)
+                    OutlinedButton(
+                        onClick = { datePickerDialog.show() },
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Text(dateText, fontSize = 11.sp)
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                    Text("Subtotal", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, fontSize = 13.sp)
+                    Text(Formatters.rupiah(cartSubtotal), fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary, fontSize = 14.sp)
+                }
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        Button(
+            onClick = onCheckout,
+            enabled = cart.isNotEmpty(),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp)
+                .testTag("btn-confirm-laundry")
+        ) {
+            Text("Buat Order Laundry", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        }
+    }
+}
+
+@Composable
+private fun TabPill(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    active: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        contentColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier
+            .height(44.dp)
+            .clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(label, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
     }
 }

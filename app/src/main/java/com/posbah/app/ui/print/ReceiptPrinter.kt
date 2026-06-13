@@ -67,7 +67,7 @@ object ReceiptPrinter {
         val fontSizeCss = if (is58) "11px" else "13px"
         val paddingCss = if (is58) "0.3cm" else "0.6cm"
 
-        val logoBase64 = if (printConfig.receiptUseLogo) getAssetBase64(context, "logo.jpg") else ""
+        val logoBase64 = if (printConfig.receiptUseLogo) getUriOrAssetBase64(context, printConfig.logoPath, "logo.jpg") else ""
         val themeColor = if (printConfig.receiptIsColor) "#1E3A8A" else "#000000"
 
         val headerHtml = if (logoBase64.isNotEmpty()) {
@@ -128,7 +128,12 @@ object ReceiptPrinter {
                 <hr>
                 <div>No: ${t.receiptNumber}</div>
                 <div>Tanggal: ${com.posbah.app.util.Formatters.dateLong(t.createdAt)}</div>
-                <div>Metode: ${t.paymentMethod}</div>
+                <div>Metode: ${when (t.paymentMethod.uppercase()) {
+                    "CASH" -> "TUNAI"
+                    "TRANSFER" -> "TRANSFER"
+                    "QRIS" -> "QRIS"
+                    else -> t.paymentMethod
+                }}</div>
                 $cLine
                 $notesLine
                 <hr>
@@ -167,6 +172,27 @@ object ReceiptPrinter {
             "data:image/$extension;base64,$base64"
         } catch (e: Exception) {
             ""
+        }
+    }
+
+    private fun getUriOrAssetBase64(context: Context, pathOrUri: String?, defaultAsset: String): String {
+        if (pathOrUri.isNullOrBlank()) {
+            return getAssetBase64(context, defaultAsset)
+        }
+        return try {
+            val uri = android.net.Uri.parse(pathOrUri)
+            val inputStream = context.contentResolver.openInputStream(uri)
+            if (inputStream != null) {
+                val bytes = inputStream.readBytes()
+                inputStream.close()
+                val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                val mimeType = context.contentResolver.getType(uri) ?: "image/png"
+                "data:$mimeType;base64,$base64"
+            } else {
+                getAssetBase64(context, defaultAsset)
+            }
+        } catch (e: Exception) {
+            getAssetBase64(context, defaultAsset)
         }
     }
 

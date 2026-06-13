@@ -20,10 +20,10 @@ object SignatureLinkGenerator {
      * Membuat URL share untuk tanda tangan penerima.
      *
      * @param invoiceId ID dari invoice terkait.
-     * @param durationMinutes Durasi link aktif dalam menit (default 60 menit).
+     * @param durationMinutes Durasi link aktif dalam menit (default 10 menit).
      * @return URL lengkap dengan token Base64 aman.
      */
-    fun generateShareLink(tenantId: String, invoiceId: Long, durationMinutes: Int = 60): String {
+    fun generateShareLink(tenantId: String, invoiceId: Long, durationMinutes: Int = 10): String {
         val expiry = System.currentTimeMillis() + (durationMinutes * 60 * 1000L)
         val dataToSign = "$tenantId:$invoiceId:$expiry"
         val signature = computeHmacSha256(dataToSign, SECRET_KEY)

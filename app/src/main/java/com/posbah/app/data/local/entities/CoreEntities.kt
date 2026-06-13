@@ -86,5 +86,7 @@ data class Employee(
     val lastPaidAt: Long? = null,
     val emailVerified: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val passwordChangeCount: Int = 0,
+    val lastPasswordChangeDate: Long = 0L
 )

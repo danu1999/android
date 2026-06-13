@@ -102,6 +102,11 @@ class LaundryViewModel @Inject constructor(
         emit(user?.role == "OWNER")
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    val canViewMargin = flow {
+        val user = authRepository.getActiveUser()
+        emit(user?.role == "OWNER" || user?.role == "ADMIN")
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     val activityLogs = activityLogDao.observeLogs(tenantId, "LAUNDRY")
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -361,6 +366,34 @@ class LaundryViewModel @Inject constructor(
             db.customerDao().upsert(c)
             logActivity("TAMBAH PELANGGAN", "Menambahkan pelanggan baru: $name")
             onDone()
+        }
+    }
+
+    fun addExpense(description: String, amount: Double, dateMillis: Long, onDone: () -> Unit) {
+        viewModelScope.launch {
+            val todayStr = java.text.SimpleDateFormat("yyMMdd", java.util.Locale.US).format(java.util.Date(dateMillis))
+            val prefix = "EXP-LD"
+            val receiptNumber = "$prefix-$todayStr-${java.util.UUID.randomUUID().toString().take(6).uppercase()}"
+            val expenseTx = TransactionEntity(
+                tenantId = tenantId,
+                outletId = currentOutletId,
+                employeeId = 1L,
+                customerName = "Pengeluaran",
+                receiptNumber = receiptNumber,
+                date = dateMillis,
+                subtotal = -amount,
+                total = -amount,
+                paymentMethod = "CASH",
+                status = "COMPLETED",
+                type = "EXPENSE",
+                notes = description
+            )
+            transactionRepository.checkout(expenseTx, emptyList())
+            logActivity("CATAT PENGELUARAN", "Mencatat pengeluaran: $description senilai Rp $amount")
+            onDone()
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
+            }
         }
     }
 }

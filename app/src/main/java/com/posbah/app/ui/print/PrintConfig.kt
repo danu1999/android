@@ -36,7 +36,8 @@ data class PrintConfig(
     // ─── Info Pembayaran Bank/Wallet (Dinamis) ──────────────────────────────────
     val bankOwnerName: String = "",
     val bankName: String = "BCA",
-    val bankAccountNumber: String = ""
+    val bankAccountNumber: String = "",
+    val logoPath: String? = null
 ) {
     companion object {
         fun fromEntity(entity: PrintSettingsEntity?): PrintConfig {
@@ -80,7 +81,8 @@ data class PrintConfig(
                 receiptFooterText = entity.receiptFooterText,
                 bankOwnerName = entity.bankOwnerName,
                 bankName = entity.bankName,
-                bankAccountNumber = entity.bankAccountNumber
+                bankAccountNumber = entity.bankAccountNumber,
+                logoPath = entity.logoPath
             )
         }
     }

@@ -44,6 +44,15 @@ class AuthRepository @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
 
+    private val staticPremiumUsers = mapOf(
+        "bahteramulyap@gmail.com" to Triple("8a0ff1f8926195dfde55af7e68c028591602dacc30dc3c7caef27a949ca45142b25514004cf4540c46eca830100d06517c6facc0faf77fc57140e9df5fe5ffc7", "CV Bahtera Mulya Plastik", "ten_premium_bahteramulyap_gmail_com"),
+        "hanafiariful@gmail.com" to Triple("20710a82f8d6b458af10d49fbb1f985ac8aaf696e6b32e776d4f4ebbc30d08565e2bb5e1902ace18297d8db47ad35e49c086669125b1d6ac867c0d2d7e265e50", "PISANG KEJU RAMAYANA", "ten_premium_hanafiariful_gmail_com"),
+        "fahrup22@gmail.com" to Triple("63e71711d1481b6da8b756e114aa2ac71a704929c0accf46f419706a5c1416ae1a312899ae84d3d8e33d255811e98fd4d17e59371a08e2f9c21c01d1b1c13a8d", "FahriP", "ten_premium_hanafiariful_gmail_com"),
+        "alfarisirosi40@gmail.com" to Triple("a10301e4a133374bddc5f4f246aead30ba95b4f60c65df80418df2c6338141c9606262b07348fb0ee75964d460de3a459377217afa4b85b7bde3f8572d3b791c", "Mamet PKR", "ten_premium_hanafiariful_gmail_com"),
+        "alfarisirosi04@gmail.com" to Triple("a10301e4a133374bddc5f4f246aead30ba95b4f60c65df80418df2c6338141c9606262b07348fb0ee75964d460de3a459377217afa4b85b7bde3f8572d3b791c", "Mamet PKR", "ten_premium_hanafiariful_gmail_com"),
+        "syerlirahma7@gmail.com" to Triple("5819ef0d24208780b75c18009f0f69400eb933916f800ae980b778820cda595e3151de8600a0c325711f0e9641b5a72f393008868913578601ba0fa0d4c9ad93", "syerli", "ten_premium_bahteramulyap_gmail_com")
+    )
+
     init {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
@@ -249,10 +258,13 @@ class AuthRepository @Inject constructor(
             else targetTenantId?.let { tenantDao.getById(it)?.businessMode }
         }
 
+        val isPremiumFinal = isPremiumUser || isEmployee || isPremiumFromServer || (existing?.isPremium == true)
+
         val businessModeLocked = if (isEmployee) {
             true
         } else {
             if (cleanEmail == "hanafiariful@gmail.com" || cleanEmail == "bahteramulyap@gmail.com") true
+            else if (isPremiumFinal) false
             else (businessModeLockedFromServer || (existing?.businessModeLocked ?: false))
         }
 
@@ -262,7 +274,7 @@ class AuthRepository @Inject constructor(
             displayName = name,
             photoUrl = null,
             role = userRole,
-            isPremium = isPremiumUser || isEmployee || isPremiumFromServer,
+            isPremium = isPremiumFinal,
             registeredAt = registeredAtFromServer
         )).copy(
             email = cleanEmail,
@@ -270,7 +282,7 @@ class AuthRepository @Inject constructor(
             role = userRole,
             tenantId = targetTenantId,
             businessModeLocked = businessModeLocked,
-            isPremium = isPremiumUser || isEmployee || isPremiumFromServer || (existing?.isPremium == true),
+            isPremium = isPremiumFinal,
             lastLoginAt = System.currentTimeMillis(),
             updatedAt = System.currentTimeMillis()
         )
@@ -310,6 +322,10 @@ class AuthRepository @Inject constructor(
                         )
                     )
                 }
+            } else if (user.isPremium && tenant.name.startsWith("Demo - ")) {
+                val newName = tenant.name.removePrefix("Demo - ")
+                tenant = tenant.copy(name = newName, updatedAt = System.currentTimeMillis())
+                tenantDao.upsert(tenant)
             }
 
             // Seed mock data if FNB mode
@@ -372,22 +388,26 @@ class AuthRepository @Inject constructor(
             return@withContext LoginOutcome.Error("Akun demo wajib menggunakan Google Login. Hubungi muhammadmuizz8@gmail.com jika sudah melakukan pembayaran premium.")
         }
 
-        val staticPremiumUsers = mapOf(
-            "bahteramulyap@gmail.com" to Triple("8a0ff1f8926195dfde55af7e68c028591602dacc30dc3c7caef27a949ca45142b25514004cf4540c46eca830100d06517c6facc0faf77fc57140e9df5fe5ffc7", "CV Bahtera Mulya Plastik", "ten_premium_bahteramulyap_gmail_com"),
-            "hanafiariful@gmail.com" to Triple("20710a82f8d6b458af10d49fbb1f985ac8aaf696e6b32e776d4f4ebbc30d08565e2bb5e1902ace18297d8db47ad35e49c086669125b1d6ac867c0d2d7e265e50", "PISANG KEJU RAMAYANA", "ten_premium_hanafiariful_gmail_com"),
-            "fahrup22@gmail.com" to Triple("63e71711d1481b6da8b756e114aa2ac71a704929c0accf46f419706a5c1416ae1a312899ae84d3d8e33d255811e98fd4d17e59371a08e2f9c21c01d1b1c13a8d", "FahriP", "ten_premium_hanafiariful_gmail_com"),
-            "alfarisirosi40@gmail.com" to Triple("a10301e4a133374bddc5f4f246aead30ba95b4f60c65df80418df2c6338141c9606262b07348fb0ee75964d460de3a459377217afa4b85b7bde3f8572d3b791c", "Mamet PKR", "ten_premium_hanafiariful_gmail_com"),
-            "alfarisirosi04@gmail.com" to Triple("a10301e4a133374bddc5f4f246aead30ba95b4f60c65df80418df2c6338141c9606262b07348fb0ee75964d460de3a459377217afa4b85b7bde3f8572d3b791c", "Mamet PKR", "ten_premium_hanafiariful_gmail_com"),
-            "syerlirahma7@gmail.com" to Triple("5819ef0d24208780b75c18009f0f69400eb933916f800ae980b778820cda595e3151de8600a0c325711f0e9641b5a72f393008868913578601ba0fa0d4c9ad93", "syerli", "ten_premium_bahteramulyap_gmail_com")
-        )
-
         val successUser: LocalUser
         val successTenant: Tenant
 
         val staticInfo = staticPremiumUsers[cleanEmail]
         if (staticInfo != null) {
             val (hash, displayName, tenantId) = staticInfo
-            if (!BackendHasher.verify(password, hash)) {
+            
+            // Check if there is an employee record in DB (e.g. they changed password)
+            val dbEmp = employeeDao.findByEmail(cleanEmail)
+            val isPasswordValid = if (dbEmp != null) {
+                if (dbEmp.pinHash.startsWith("v1$")) {
+                    PinHasher.verify(password, dbEmp.pinHash)
+                } else {
+                    BackendHasher.verify(password, dbEmp.pinHash)
+                }
+            } else {
+                BackendHasher.verify(password, hash)
+            }
+            
+            if (!isPasswordValid) {
                 return@withContext incrementFailedAttempts(now)
             }
 
@@ -765,6 +785,118 @@ class AuthRepository @Inject constructor(
     suspend fun getActiveUser(): LocalUser? = withContext(Dispatchers.IO) {
         val sub = activeUserSub() ?: return@withContext null
         userDao.getBySub(sub)
+    }
+
+    sealed class ChangePasswordResult {
+        object Success : ChangePasswordResult()
+        data class Error(val message: String) : ChangePasswordResult()
+    }
+
+    suspend fun changePassword(oldPin: String, newPin: String): ChangePasswordResult = withContext(Dispatchers.IO) {
+        val email = activeUserEmail() ?: return@withContext ChangePasswordResult.Error("Sesi tidak valid")
+        val cleanEmail = email.lowercase().trim()
+        val user = getActiveUser() ?: return@withContext ChangePasswordResult.Error("User tidak ditemukan")
+
+        // 1. Find employee in database
+        val emp = employeeDao.findByEmail(cleanEmail)
+        
+        // 2. Verify current password
+        val isOldPasswordValid = if (emp != null) {
+            if (emp.pinHash.startsWith("v1$")) {
+                PinHasher.verify(oldPin, emp.pinHash)
+            } else {
+                BackendHasher.verify(oldPin, emp.pinHash)
+            }
+        } else {
+            // Check static map
+            val staticInfo = staticPremiumUsers[cleanEmail]
+            if (staticInfo != null) {
+                val (hash, _, _) = staticInfo
+                BackendHasher.verify(oldPin, hash)
+            } else {
+                false
+            }
+        }
+
+        if (!isOldPasswordValid) {
+            return@withContext ChangePasswordResult.Error("Password lama salah")
+        }
+
+        val now = System.currentTimeMillis()
+        
+        // Helper to check if same calendar day
+        fun isSameDay(t1: Long, t2: Long): Boolean {
+            val cal1 = java.util.Calendar.getInstance()
+            cal1.timeInMillis = t1
+            val cal2 = java.util.Calendar.getInstance()
+            cal2.timeInMillis = t2
+            return cal1.get(java.util.Calendar.YEAR) == cal2.get(java.util.Calendar.YEAR) &&
+                   cal1.get(java.util.Calendar.DAY_OF_YEAR) == cal2.get(java.util.Calendar.DAY_OF_YEAR)
+        }
+
+        // 3. Enforce rate limit (max 2 per day)
+        if (emp != null) {
+            val sameDay = isSameDay(emp.lastPasswordChangeDate, now)
+            val currentCount = if (sameDay) emp.passwordChangeCount else 0
+            if (currentCount >= 2) {
+                return@withContext ChangePasswordResult.Error("Maksimal ganti password 2 kali per hari")
+            }
+        }
+
+        // 4. Update password
+        val hashedNewPin = PinHasher.hash(newPin)
+        if (emp != null) {
+            val sameDay = isSameDay(emp.lastPasswordChangeDate, now)
+            val nextCount = if (sameDay) emp.passwordChangeCount + 1 else 1
+            val updated = emp.copy(
+                pinHash = hashedNewPin,
+                passwordChangeCount = nextCount,
+                lastPasswordChangeDate = now,
+                updatedAt = now
+            )
+            employeeDao.update(updated)
+        } else {
+            // Static user / Owner does not have a DB record in employees, so we create one!
+            val targetTenantId = activeTenantId() ?: "ten_${UUID.randomUUID().toString().replace("-", "").take(16)}"
+            
+            // Check if tenant exists, if not create a default one
+            var tenant = tenantDao.getById(targetTenantId)
+            if (tenant == null) {
+                tenant = Tenant(
+                    id = targetTenantId,
+                    name = user.displayName?.let { "$it - BMP" } ?: "Tenant Baru",
+                    ownerEmail = cleanEmail
+                )
+                tenantDao.upsert(tenant)
+                outletDao.insert(
+                    Outlet(
+                        tenantId = targetTenantId,
+                        name = "Outlet Utama",
+                        isDefault = true
+                    )
+                )
+            }
+            
+            val outlets = outletDao.listForTenant(targetTenantId)
+            val outletId = outlets.firstOrNull { it.isDefault }?.id ?: outlets.firstOrNull()?.id
+
+            val newEmployee = Employee(
+                tenantId = targetTenantId,
+                outletId = outletId,
+                name = user.displayName ?: "Owner",
+                email = cleanEmail,
+                role = user.role, // e.g. "OWNER"
+                pinHash = hashedNewPin,
+                passwordChangeCount = 1,
+                lastPasswordChangeDate = now,
+                createdAt = now,
+                updatedAt = now,
+                emailVerified = true
+            )
+            employeeDao.insert(newEmployee)
+        }
+
+        ChangePasswordResult.Success
     }
 }
 

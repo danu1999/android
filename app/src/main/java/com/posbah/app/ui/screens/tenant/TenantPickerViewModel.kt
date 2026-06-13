@@ -43,6 +43,8 @@ class TenantPickerViewModel @Inject constructor(
     private fun load() {
         val email = securePrefs.currentEmail ?: return
         viewModelScope.launch {
+            val user = authRepository.getActiveUser()
+            val isPremium = user?.isPremium == true
             tenantRepository.observeForOwner(email).collect { list ->
                 val filteredList = when (email.lowercase().trim()) {
                     "hanafiariful@gmail.com" -> list.filter { it.id == "ten_premium_hanafiariful_gmail_com" }
@@ -53,7 +55,7 @@ class TenantPickerViewModel @Inject constructor(
                     it.copy(
                         isLoading = false, 
                         tenants = filteredList,
-                        canAddTenant = email == "muhammadmuizz8@gmail.com"
+                        canAddTenant = email == "muhammadmuizz8@gmail.com" || isPremium
                     ) 
                 }
             }
@@ -64,12 +66,12 @@ class TenantPickerViewModel @Inject constructor(
         _ui.update { it.copy(showCreateDialog = open, newTenantName = "") }
     fun updateNewName(name: String) = _ui.update { it.copy(newTenantName = name) }
 
-    fun createTenant() {
+    fun createTenant(businessMode: String) {
         val email = securePrefs.currentEmail ?: return
         val name = _ui.value.newTenantName.trim()
         if (name.isBlank()) return
         viewModelScope.launch {
-            tenantRepository.create(email, name)
+            tenantRepository.create(email, name, businessMode)
             _ui.update { it.copy(showCreateDialog = false, newTenantName = "") }
         }
     }
@@ -87,6 +89,15 @@ class TenantPickerViewModel @Inject constructor(
             } else {
                 _ui.update { it.copy(error = "Gagal memilih tenant") }
             }
+        }
+    }
+
+    fun getActiveUserEmail(): String? = securePrefs.currentEmail
+
+    fun changePassword(oldPin: String, newPin: String, onResult: (AuthRepository.ChangePasswordResult) -> Unit) {
+        viewModelScope.launch {
+            val result = authRepository.changePassword(oldPin, newPin)
+            onResult(result)
         }
     }
 }

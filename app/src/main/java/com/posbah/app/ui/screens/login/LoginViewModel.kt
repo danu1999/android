@@ -16,8 +16,8 @@ import kotlinx.coroutines.launch
 data class LoginUiState(
     val mode: LoginMode = LoginMode.Google,
     val email: String = "",
-    val pin: String = "",
-    val pinTenantId: String = "",
+    val password: String = "",
+    val passwordTenantId: String = "",
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val signedInUser: LocalUser? = null,
@@ -29,7 +29,7 @@ data class LoginUiState(
     val showUpdateDialog: Boolean = false
 )
 
-enum class LoginMode { Google, Pin }
+enum class LoginMode { Google, Password }
 
 @HiltViewModel
 class LoginViewModel @Inject constructor(
@@ -44,8 +44,8 @@ class LoginViewModel @Inject constructor(
     }
 
     fun updateEmail(e: String) = _uiState.update { it.copy(email = e) }
-    fun updatePin(p: String) = _uiState.update { it.copy(pin = p.take(64)) }
-    fun updatePinTenantId(t: String) = _uiState.update { it.copy(pinTenantId = t) }
+    fun updatePassword(p: String) = _uiState.update { it.copy(password = p.take(64)) }
+    fun updatePasswordTenantId(t: String) = _uiState.update { it.copy(passwordTenantId = t) }
 
     fun consumeError() = _uiState.update { it.copy(errorMessage = null) }
 
@@ -71,16 +71,16 @@ class LoginViewModel @Inject constructor(
 
 
 
-    fun signInWithPin() {
+    fun signInWithPassword() {
         val s = _uiState.value
-        if (s.email.isBlank() || s.pin.isBlank()) {
+        if (s.email.isBlank() || s.password.isBlank()) {
             _uiState.update { it.copy(errorMessage = "Email dan password wajib diisi") }
             return
         }
         _uiState.update { it.copy(isLoading = true, errorMessage = null) }
         viewModelScope.launch {
             try {
-                when (val outcome = authRepository.loginWithEmailPassword(s.email, s.pin)) {
+                when (val outcome = authRepository.loginWithEmailPassword(s.email, s.password)) {
                     is AuthRepository.LoginOutcome.Success ->
                         _uiState.update { it.copy(isLoading = false, signedInUser = outcome.user) }
                     is AuthRepository.LoginOutcome.Error ->

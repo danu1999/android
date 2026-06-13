@@ -74,7 +74,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
         TransactionItemEntity::class,
         ActivityLogEntity::class
     ],
-    version = 17,
+    version = 19,
     exportSchema = true
 )
 abstract class PosBahDatabase : RoomDatabase() {
@@ -346,6 +346,19 @@ abstract class PosBahDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `print_settings` ADD COLUMN `logoPath` TEXT")
+            }
+        }
+
+        val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `employees` ADD COLUMN `passwordChangeCount` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `employees` ADD COLUMN `lastPasswordChangeDate` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun build(context: Context, passphrase: ByteArray): PosBahDatabase {
             // Load SQLCipher native library
             System.loadLibrary("sqlcipher")
@@ -361,7 +374,8 @@ abstract class PosBahDatabase : RoomDatabase() {
                 .addMigrations(
                     MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
                     MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
-                    MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17
+                    MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
+                    MIGRATION_17_18, MIGRATION_18_19
                 ) // ← Data AMAN, tidak terhapus
                 .fallbackToDestructiveMigration()      // ← Fallback jika dari versi < 5 (install baru)
                 .addCallback(object : Callback() {

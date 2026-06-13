@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kebijakan Privasi - POSBah</title>
+    <!-- Google Fonts (Outfit) -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --text-color: #f1f5f9;
+            --text-muted: #94a3b8;
+            --primary: #f59e0b;
+            --border: rgba(255, 255, 255, 0.08);
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        .container {
+            max-width: 800px;
+            width: 100%;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-top: 0;
+            color: var(--text-color);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border-bottom: 2px solid var(--primary);
+            padding-bottom: 15px;
+        }
+
+        h2 {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--primary);
+            margin-top: 30px;
+            margin-bottom: 12px;
+        }
+
+        p, li {
+            color: var(--text-color);
+            font-size: 15px;
+            font-weight: 400;
+        }
+
+        ul {
+            padding-left: 20px;
+            margin-top: 8px;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        .meta {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 30px;
+        }
+
+        footer {
+            margin-top: 40px;
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-muted);
+            border-top: 1px solid var(--border);
+            padding-top: 20px;
+        }
+
+        @media (max-width: 600px) {
+            body {
+                padding: 20px 10px;
+            }
+            .card {
+                padding: 24px;
+            }
+            h1 {
+                font-size: 22px;
+            }
+            h2 {
+                font-size: 16px;
+            }
+            p, li {
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="card">
+        <h1>Kebijakan Privasi POSBah</h1>
+        <div class="meta">Terakhir diperbarui: 13 Juni 2026</div>
+
+        <p>POSBah berkomitmen untuk melindungi dan menghormati privasi data Anda. Kebijakan Privasi ini menjelaskan bagaimana kami mengumpulkan, menggunakan, dan melindungi informasi Anda saat menggunakan aplikasi POSBah dan layanan terkait kami.</p>
+
+        <h2>1. INFORMASI YANG KAMI KUMPULKAN</h2>
+        <p>Kami hanya mengumpulkan informasi minimal yang diperlukan untuk menjalankan fitur-fitur utama aplikasi secara optimal, meliputi:</p>
+        <ul>
+            <li><strong>Informasi Akun:</strong> Alamat email (Gmail) dan nama tampilan untuk proses pendaftaran dan autentikasi masuk (login) yang aman.</li>
+            <li><strong>Data Transaksi &amp; Operasional:</strong> Data kasir, stok produk, transaksi, laporan keuangan, dan data toko yang Anda masukkan secara mandiri ke dalam aplikasi.</li>
+            <li><strong>Data Karyawan &amp; Absensi:</strong> Nama, email, status kehadiran, jam masuk/pulang karyawan, serta pengenal perangkat mesin sidik jari (ADMS) guna pencatatan laporan kerja.</li>
+            <li><strong>Tanda Tangan Penerima:</strong> Gambar tanda tangan digital yang digambar oleh penerima invoice sebagai bukti serah terima barang yang sah.</li>
+        </ul>
+
+        <h2>2. PENGGUNAAN DATA</h2>
+        <p>Data yang kami kumpulkan digunakan murni untuk keperluan operasional toko Anda, yaitu:</p>
+        <ul>
+            <li>Mengidentifikasi kepemilikan data bisnis dan membatasi akses ilegal ke akun Anda.</li>
+            <li>Menyelaraskan (sinkronisasi) data lokal perangkat dengan server cloud pribadi (VPS) agar data aman jika HP hilang atau berganti perangkat.</li>
+            <li>Menyediakan fitur pelaporan kasir, absensi karyawan, dan validasi pengiriman barang.</li>
+        </ul>
+
+        <h2>3. PERLINDUNGAN DAN KEAMANAN DATA</h2>
+        <ul>
+            <li>Seluruh data lokal di perangkat Anda diamankan dengan database terenkripsi berbasis hardware (SQLCipher &amp; Android Keystore System).</li>
+            <li>Data yang dikirimkan ke server kami dilindungi menggunakan protokol enkripsi aman (HTTPS/SSL).</li>
+            <li>Kami tidak pernah menjual, menyewakan, atau membagikan data sensitif bisnis Anda kepada pihak ketiga mana pun.</li>
+        </ul>
+
+        <h2>4. HAK PENGGUNA</h2>
+        <p>Anda memiliki hak penuh untuk mengakses, memperbarui, atau meminta penghapusan akun serta seluruh data bisnis Anda di server kami dengan menghubungi pusat bantuan kami.</p>
+
+        <h2>5. HUBUNGI KAMI</h2>
+        <p>Jika Anda memiliki pertanyaan tentang Kebijakan Privasi ini atau ingin mengajukan penghapusan data, silakan hubungi kami melalui email di: <strong>muhammadmuizz8@gmail.com</strong></p>
+
+        <footer>
+            &copy; 2026 POSBah. All rights reserved.
+        </footer>
+    </div>
+</div>
+
+</body>
+</html>

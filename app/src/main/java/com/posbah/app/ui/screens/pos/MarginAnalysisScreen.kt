@@ -60,6 +60,10 @@ class MarginAnalysisViewModel @Inject constructor(
     val products = productRepository.observe(tenantId)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    val userRole = flow {
+        emit(authRepository.getActiveUser()?.role ?: "KASIR")
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, "KASIR")
+
     private val _transactionItems = MutableStateFlow<List<TransactionItemEntity>>(emptyList())
     val transactionItems = _transactionItems.asStateFlow()
 
@@ -114,6 +118,38 @@ fun MarginAnalysisScreen(
     viewModel: MarginAnalysisViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
+    val userRole by viewModel.userRole.collectAsState()
+
+    if (userRole == "KASIR") {
+        Box(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Akses Ditolak",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.error
+                )
+                Text(
+                    text = "Hanya Owner dan Admin yang dapat melihat analisis margin & keuntungan.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = onBack) {
+                    Text("Kembali")
+                }
+            }
+        }
+        return
+    }
+
     val transactions by viewModel.transactions.collectAsState()
     val products by viewModel.products.collectAsState()
     val transactionItems by viewModel.transactionItems.collectAsState()
@@ -197,9 +233,9 @@ fun MarginAnalysisScreen(
 
             // POS Mode Filter
             val matchesPos = when (posMode) {
-                "FNB" -> tx.receiptNumber.startsWith("FNB-")
-                "RENTAL" -> tx.receiptNumber.startsWith("RN-")
-                "LAUNDRY" -> tx.receiptNumber.startsWith("LD-")
+                "FNB" -> tx.receiptNumber.startsWith("FNB-") || tx.receiptNumber.startsWith("EXP-FNB-")
+                "RENTAL" -> tx.receiptNumber.startsWith("RN-") || tx.receiptNumber.startsWith("EXP-RN-")
+                "LAUNDRY" -> tx.receiptNumber.startsWith("LD-") || tx.receiptNumber.startsWith("EXP-LD-")
                 else -> true
             }
 
@@ -222,8 +258,11 @@ fun MarginAnalysisScreen(
     var selectedTxItems by remember { mutableStateOf<List<TransactionItemEntity>>(emptyList()) }
 
     // Aggregate margin calculations
-    val totalRevenue = filteredTx.sumOf { it.total }
-    val totalCogs = filteredTx.sumOf { tx ->
+    val salesTx = filteredTx.filter { it.type != "EXPENSE" }
+    val expenseTx = filteredTx.filter { it.type == "EXPENSE" }
+
+    val totalRevenue = salesTx.sumOf { it.total }
+    val totalCogs = salesTx.sumOf { tx ->
         val txItems = transactionItems.filter { it.transactionId == tx.id }
         txItems.sumOf { item ->
             when {
@@ -250,8 +289,11 @@ fun MarginAnalysisScreen(
             }
         }
     }
+    val totalExpenses = expenseTx.sumOf { Math.abs(it.total) }
     val grossProfit = totalRevenue - totalCogs
+    val netProfit = grossProfit - totalExpenses
     val marginPercent = if (totalRevenue > 0) (grossProfit / totalRevenue) * 100.0 else 0.0
+    val netMarginPercent = if (totalRevenue > 0) (netProfit / totalRevenue) * 100.0 else 0.0
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -454,107 +496,168 @@ fun MarginAnalysisScreen(
                 }
             }
 
-            // Row 2: Premium Dashboard Summary Cards (Revenue, COGS, Profit, Margin %)
-            Row(
+            // Premium Dashboard Summary Cards (Revenue, COGS, Profit, Expenses, Net Profit, Margins)
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Revenue Card (Green)
-                Surface(
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, Color(0xFF2E7D32).copy(alpha = 0.15f)),
-                    color = Color.White,
-                    shadowElevation = 1.dp
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(Color(0xFFE8F5E9), Color.White)
-                                )
-                            )
-                            .padding(14.dp)
+                    // Revenue Card (Green)
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, Color(0xFF2E7D32).copy(alpha = 0.15f)),
+                        color = Color.White,
+                        shadowElevation = 1.dp
                     ) {
-                        Column {
-                            Text("Pendapatan Kotor", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF2E7D32))
-                            Spacer(Modifier.height(4.dp))
-                            Text(Formatters.rupiah(totalRevenue), fontSize = 16.sp, fontWeight = FontWeight.Black, color = Color(0xFF1B5E20))
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(Color(0xFFE8F5E9), Color.White)
+                                    )
+                                )
+                                .padding(14.dp)
+                        ) {
+                            Column {
+                                Text("Pendapatan Kotor", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF2E7D32))
+                                Spacer(Modifier.height(4.dp))
+                                Text(Formatters.rupiah(totalRevenue), fontSize = 16.sp, fontWeight = FontWeight.Black, color = Color(0xFF1B5E20))
+                            }
+                        }
+                    }
+
+                    // COGS Card (Amber)
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, Color(0xFFD84315).copy(alpha = 0.15f)),
+                        color = Color.White,
+                        shadowElevation = 1.dp
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(Color(0xFFFBE9E7), Color.White)
+                                    )
+                                )
+                                .padding(14.dp)
+                        ) {
+                            Column {
+                                Text("Total HPP (COGS)", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFD84315))
+                                Spacer(Modifier.height(4.dp))
+                                Text(Formatters.rupiah(totalCogs), fontSize = 16.sp, fontWeight = FontWeight.Black, color = Color(0xFFBF360C))
+                            }
+                        }
+                    }
+
+                    // Profit Card (Indigo)
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, Color(0xFF283593).copy(alpha = 0.15f)),
+                        color = Color.White,
+                        shadowElevation = 1.dp
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(Color(0xFFE8EAF6), Color.White)
+                                    )
+                                )
+                                .padding(14.dp)
+                        ) {
+                            Column {
+                                Text("Laba Kotor", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF283593))
+                                Spacer(Modifier.height(4.dp))
+                                Text(Formatters.rupiah(grossProfit), fontSize = 16.sp, fontWeight = FontWeight.Black, color = Color(0xFF1A237E))
+                            }
                         }
                     }
                 }
 
-                // COGS Card (Amber)
-                Surface(
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, Color(0xFFD84315).copy(alpha = 0.15f)),
-                    color = Color.White,
-                    shadowElevation = 1.dp
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(Color(0xFFFBE9E7), Color.White)
-                                )
-                            )
-                            .padding(14.dp)
+                    // Expenses Card (Red)
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, Color(0xFFC62828).copy(alpha = 0.15f)),
+                        color = Color.White,
+                        shadowElevation = 1.dp
                     ) {
-                        Column {
-                            Text("Total HPP (COGS)", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFD84315))
-                            Spacer(Modifier.height(4.dp))
-                            Text(Formatters.rupiah(totalCogs), fontSize = 16.sp, fontWeight = FontWeight.Black, color = Color(0xFFBF360C))
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(Color(0xFFFFEBEE), Color.White)
+                                    )
+                                )
+                                .padding(14.dp)
+                        ) {
+                            Column {
+                                Text("Biaya Usaha", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFC62828))
+                                Spacer(Modifier.height(4.dp))
+                                Text(Formatters.rupiah(totalExpenses), fontSize = 16.sp, fontWeight = FontWeight.Black, color = Color(0xFFB71C1C))
+                            }
                         }
                     }
-                }
 
-                // Profit Card (Indigo)
-                Surface(
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, Color(0xFF283593).copy(alpha = 0.15f)),
-                    color = Color.White,
-                    shadowElevation = 1.dp
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(Color(0xFFE8EAF6), Color.White)
-                                )
-                            )
-                            .padding(14.dp)
+                    // Net Profit Card (Teal)
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, Color(0xFF00796B).copy(alpha = 0.15f)),
+                        color = Color.White,
+                        shadowElevation = 1.dp
                     ) {
-                        Column {
-                            Text("Laba Kotor", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF283593))
-                            Spacer(Modifier.height(4.dp))
-                            Text(Formatters.rupiah(grossProfit), fontSize = 16.sp, fontWeight = FontWeight.Black, color = Color(0xFF1A237E))
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(Color(0xFFE0F2F1), Color.White)
+                                    )
+                                )
+                                .padding(14.dp)
+                        ) {
+                            Column {
+                                Text("Laba Bersih", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF00796B))
+                                Spacer(Modifier.height(4.dp))
+                                Text(Formatters.rupiah(netProfit), fontSize = 16.sp, fontWeight = FontWeight.Black, color = Color(0xFF004D40))
+                            }
                         }
                     }
-                }
 
-                // Margin Percentage Card (Purple)
-                Surface(
-                    modifier = Modifier.weight(0.8f),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, Color(0xFF6A1B9A).copy(alpha = 0.15f)),
-                    color = Color.White,
-                    shadowElevation = 1.dp
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(Color(0xFFF3E5F5), Color.White)
-                                )
-                            )
-                            .padding(14.dp)
+                    // Margin Percentage Card (Purple)
+                    Surface(
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, Color(0xFF6A1B9A).copy(alpha = 0.15f)),
+                        color = Color.White,
+                        shadowElevation = 1.dp
                     ) {
-                        Column {
-                            Text("Margin Laba %", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF6A1B9A))
-                            Spacer(Modifier.height(4.dp))
-                            Text(String.format("%.1f%%", marginPercent), fontSize = 18.sp, fontWeight = FontWeight.Black, color = Color(0xFF4A148C))
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(Color(0xFFF3E5F5), Color.White)
+                                    )
+                                )
+                                .padding(10.dp)
+                        ) {
+                            Column {
+                                Text("Margin Laba %", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF6A1B9A))
+                                Spacer(Modifier.height(2.dp))
+                                Text("Kotor: ${String.format("%.1f%%", marginPercent)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4A148C))
+                                Text("Bersih: ${String.format("%.1f%%", netMarginPercent)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4A148C))
+                            }
                         }
                     }
                 }
@@ -625,9 +728,9 @@ fun MarginAnalysisScreen(
                         items(filteredTx, key = { it.id }) { tx ->
                             val dateStr = SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault()).format(Date(tx.date))
                             val posType = when {
-                                tx.receiptNumber.startsWith("FNB-") -> "FnB"
-                                tx.receiptNumber.startsWith("RN-") -> "Rental"
-                                tx.receiptNumber.startsWith("LD-") -> "Laundry"
+                                tx.receiptNumber.startsWith("FNB-") || tx.receiptNumber.startsWith("EXP-FNB-") -> "FnB"
+                                tx.receiptNumber.startsWith("RN-") || tx.receiptNumber.startsWith("EXP-RN-") -> "Rental"
+                                tx.receiptNumber.startsWith("LD-") || tx.receiptNumber.startsWith("EXP-LD-") -> "Laundry"
                                 else -> "POS"
                             }
                             val posColor = when (posType) {
@@ -637,9 +740,11 @@ fun MarginAnalysisScreen(
                                 else -> Color(0xFFECEFF1) to Color(0xFF37474F)
                             }
 
+                            val isExpense = tx.type == "EXPENSE"
+
                             // Calculate HPP/COGS for this transaction
                             val txItems = transactionItems.filter { it.transactionId == tx.id }
-                            val txCogs = txItems.sumOf { item ->
+                            val txCogs = if (isExpense) 0.0 else txItems.sumOf { item ->
                                 when {
                                     tx.receiptNumber.startsWith("FNB-") -> {
                                         item.quantity * item.costPrice
@@ -663,8 +768,8 @@ fun MarginAnalysisScreen(
                                     else -> item.quantity * item.costPrice
                                 }
                             }
-                            val txMargin = tx.total - txCogs
-                            val txMarginPercent = if (tx.total > 0) (txMargin / tx.total) * 100.0 else 0.0
+                            val txMargin = if (isExpense) 0.0 else tx.total - txCogs
+                            val txMarginPercent = if (!isExpense && tx.total > 0) (txMargin / tx.total) * 100.0 else 0.0
 
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
@@ -693,7 +798,7 @@ fun MarginAnalysisScreen(
                                                     contentColor = posColor.second
                                                 ) {
                                                     Text(
-                                                        text = posType,
+                                                        text = if (isExpense) "$posType (Biaya)" else posType,
                                                         fontSize = 9.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -702,22 +807,31 @@ fun MarginAnalysisScreen(
                                             }
                                             Spacer(Modifier.height(2.dp))
                                             Text(dateStr, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                            Text("Pelanggan: ${tx.customerName ?: "Umum"}", fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                            Text(if (isExpense) "Keterangan: ${tx.notes ?: "-"}" else "Pelanggan: ${tx.customerName ?: "Umum"}", fontSize = 11.sp, fontWeight = FontWeight.Medium)
                                         }
 
                                         Column(horizontalAlignment = Alignment.End) {
                                             Text(
                                                 text = Formatters.rupiah(tx.total),
                                                 fontWeight = FontWeight.Black,
-                                                color = MaterialTheme.colorScheme.primary,
+                                                color = if (isExpense) Color(0xFFC62828) else MaterialTheme.colorScheme.primary,
                                                 fontSize = 13.sp
                                             )
-                                            Text(
-                                                text = "Profit: ${Formatters.rupiah(txMargin)} (${String.format("%.0f%%", txMarginPercent)})",
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (txMargin >= 0) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
-                                            )
+                                            if (isExpense) {
+                                                Text(
+                                                    text = "Biaya Usaha",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color(0xFFC62828)
+                                                )
+                                            } else {
+                                                Text(
+                                                    text = "Profit: ${Formatters.rupiah(txMargin)} (${String.format("%.0f%%", txMarginPercent)})",
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (txMargin >= 0) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -728,7 +842,7 @@ fun MarginAnalysisScreen(
             } else {
                 // Tab Buku Piutang & Aging AR
                 val unpaidTx = remember(transactions) {
-                    transactions.filter { it.paymentMethod == "HUTANG" }
+                    transactions.filter { it.paymentMethod == "HUTANG" && it.type != "EXPENSE" }
                 }
                 val unpaidTxFiltered = remember(unpaidTx, posMode) {
                     unpaidTx.filter { tx ->
