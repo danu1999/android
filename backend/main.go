@@ -58,6 +58,9 @@ func main() {
 	if dbURL == "" {
 		dbURL = "postgres://postgres:Bahtera1!@localhost:5432/posbah?sslmode=disable"
 	}
+	if err := initDatabase(dbURL); err != nil {
+		log.Printf("Warning: local database initialization failed: %v", err)
+	}
 	// Detect current APK version automatically on startup
 	autoDetectApkVersion()
 
