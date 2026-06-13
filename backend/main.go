@@ -4471,8 +4471,27 @@ func handleAdminDiagnose(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	tenantCounts := make(map[string]int)
+	if luFound && luTenant != "" {
+		tenantTables := []string{
+			"outlets", "employees", "products", "customers", "transactions", 
+			"bmp_invoices", "bmp_products", "bmp_master_products", "bmp_clients", 
+			"bmp_cashflow", "bmp_payrolls", "bmp_bahan_baku", "print_settings", 
+			"activity_logs",
+		}
+		for _, tbl := range tenantTables {
+			var count int
+			queryStr := fmt.Sprintf(`SELECT count(*) FROM "%s" WHERE "tenantId" = $1`, tbl)
+			err := db.QueryRow(queryStr, luTenant).Scan(&count)
+			if err == nil {
+				tenantCounts[tbl] = count
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
+		"tenant_row_counts": tenantCounts,
 		"stats": map[string]int{
 			"total":   totalUsers,
 			"premium": premiumUsers,
