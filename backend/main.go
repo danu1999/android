@@ -4382,6 +4382,11 @@ func handleAdminDiagnose(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	targetEmail := r.URL.Query().Get("email")
+	if targetEmail == "" {
+		targetEmail = "jonio9012@gmail.com"
+	}
+
 	syncDatabaseUsersAndTenants()
 
 	// Count users
@@ -4391,21 +4396,21 @@ func handleAdminDiagnose(w http.ResponseWriter, r *http.Request) {
 	db.QueryRow(`SELECT count(*) FROM "local_users" WHERE "isPremium" = FALSE AND "isActive" = TRUE`).Scan(&activeDemo)
 	db.QueryRow(`SELECT count(*) FROM "local_users" WHERE "isActive" = FALSE`).Scan(&blockedUsers)
 
-	// Search jonio9012@gmail.com in local_users
+	// Search targetEmail in local_users
 	var luFound bool
 	var luSub, luEmail, luName, luTenant string
 	var luPremium, luActive bool
-	err := db.QueryRow(`SELECT "googleSub", "email", COALESCE("displayName", ''), "tenantId", "isPremium", "isActive" FROM "local_users" WHERE "email" = 'jonio9012@gmail.com'`).Scan(&luSub, &luEmail, &luName, &luTenant, &luPremium, &luActive)
+	err := db.QueryRow(`SELECT "googleSub", "email", COALESCE("displayName", ''), "tenantId", "isPremium", "isActive" FROM "local_users" WHERE "email" = $1`, targetEmail).Scan(&luSub, &luEmail, &luName, &luTenant, &luPremium, &luActive)
 	if err == nil {
 		luFound = true
 	}
 
-	// Search jonio9012@gmail.com in employees
+	// Search targetEmail in employees
 	var empFound bool
 	var empId int
 	var empTenant, empName, empEmail, empRole string
 	var empActive bool
-	err = db.QueryRow(`SELECT "id", "tenantId", "name", "email", "role", "isActive" FROM "employees" WHERE "email" = 'jonio9012@gmail.com'`).Scan(&empId, &empTenant, &empName, &empEmail, &empRole, &empActive)
+	err = db.QueryRow(`SELECT "id", "tenantId", "name", "email", "role", "isActive" FROM "employees" WHERE "email" = $1`, targetEmail).Scan(&empId, &empTenant, &empName, &empEmail, &empRole, &empActive)
 	if err == nil {
 		empFound = true
 	}
@@ -4423,7 +4428,7 @@ func handleAdminDiagnose(w http.ResponseWriter, r *http.Request) {
 		rows.Close()
 	}
 
-	// Dynamic email scan for 'jonio9012@gmail.com' across all tables and columns containing 'email'
+	// Dynamic email scan for targetEmail across all tables and columns containing 'email'
 	type EmailCol struct {
 		TableName  string
 		ColumnName string
@@ -4451,9 +4456,9 @@ func handleAdminDiagnose(w http.ResponseWriter, r *http.Request) {
 	}
 	var matches []MatchInfo
 	for _, ec := range emailCols {
-		queryStr := fmt.Sprintf(`SELECT row_to_json(t) FROM "%s" t WHERE t."%s" = 'jonio9012@gmail.com' LIMIT 1`, ec.TableName, ec.ColumnName)
+		queryStr := fmt.Sprintf(`SELECT row_to_json(t) FROM "%s" t WHERE t."%s" = $1 LIMIT 1`, ec.TableName, ec.ColumnName)
 		var rowJSON string
-		err := db.QueryRow(queryStr).Scan(&rowJSON)
+		err := db.QueryRow(queryStr, targetEmail).Scan(&rowJSON)
 		if err == nil {
 			var parsed map[string]interface{}
 			if err := json.Unmarshal([]byte(rowJSON), &parsed); err == nil {
@@ -4475,7 +4480,8 @@ func handleAdminDiagnose(w http.ResponseWriter, r *http.Request) {
 			"blocked": blockedUsers,
 		},
 		"tables": tables,
-		"jonio_local_user": map[string]interface{}{
+		"target_email": targetEmail,
+		"email_local_user": map[string]interface{}{
 			"found":       luFound,
 			"googleSub":   luSub,
 			"email":       luEmail,
@@ -4484,7 +4490,7 @@ func handleAdminDiagnose(w http.ResponseWriter, r *http.Request) {
 			"isPremium":   luPremium,
 			"isActive":    luActive,
 		},
-		"jonio_employee": map[string]interface{}{
+		"email_employee": map[string]interface{}{
 			"found":     empFound,
 			"id":        empId,
 			"tenantId":  empTenant,
@@ -4493,7 +4499,7 @@ func handleAdminDiagnose(w http.ResponseWriter, r *http.Request) {
 			"role":      empRole,
 			"isActive":  empActive,
 		},
-		"jonio_matches": matches,
+		"email_matches": matches,
 		"smtp_config": map[string]interface{}{
 			"host_configured":   os.Getenv("SMTP_HOST") != "",
 			"port_configured":   os.Getenv("SMTP_PORT") != "",
