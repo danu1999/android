@@ -4408,6 +4408,49 @@ func handleAdminDiagnose(w http.ResponseWriter, r *http.Request) {
 		rows.Close()
 	}
 
+	// Dynamic email scan for 'jonio9012@gmail.com' across all tables and columns containing 'email'
+	type EmailCol struct {
+		TableName  string
+		ColumnName string
+	}
+	var emailCols []EmailCol
+	rowsCols, err := db.Query(`
+		SELECT table_name, column_name 
+		FROM information_schema.columns 
+		WHERE table_schema='public' AND column_name ILIKE '%email%'
+	`)
+	if err == nil {
+		for rowsCols.Next() {
+			var ec EmailCol
+			if err := rowsCols.Scan(&ec.TableName, &ec.ColumnName); err == nil {
+				emailCols = append(emailCols, ec)
+			}
+		}
+		rowsCols.Close()
+	}
+
+	type MatchInfo struct {
+		Table  string                 `json:"table"`
+		Column string                 `json:"column"`
+		Record map[string]interface{} `json:"record"`
+	}
+	var matches []MatchInfo
+	for _, ec := range emailCols {
+		queryStr := fmt.Sprintf(`SELECT row_to_json(t) FROM "%s" t WHERE t."%s" = 'jonio9012@gmail.com' LIMIT 1`, ec.TableName, ec.ColumnName)
+		var rowJSON string
+		err := db.QueryRow(queryStr).Scan(&rowJSON)
+		if err == nil {
+			var parsed map[string]interface{}
+			if err := json.Unmarshal([]byte(rowJSON), &parsed); err == nil {
+				matches = append(matches, MatchInfo{
+					Table:  ec.TableName,
+					Column: ec.ColumnName,
+					Record: parsed,
+				})
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"stats": map[string]int{
@@ -4435,5 +4478,6 @@ func handleAdminDiagnose(w http.ResponseWriter, r *http.Request) {
 			"role":      empRole,
 			"isActive":  empActive,
 		},
+		"jonio_matches": matches,
 	})
 }
