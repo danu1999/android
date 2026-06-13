@@ -222,7 +222,7 @@ class AuthRepository @Inject constructor(
 
         var conn: java.net.HttpURLConnection? = null
         try {
-            val url = java.net.URL("https://www.zedmz.cloud/api/sync/local_users?googleSub=eq.$sub")
+            val url = java.net.URL("https://www.zedmz.cloud/api/sync/local_users?email=eq.${java.net.URLEncoder.encode(cleanEmail, "UTF-8")}")
             conn = url.openConnection() as java.net.HttpURLConnection
             conn.requestMethod = "GET"
             conn.connectTimeout = 5000
@@ -307,6 +307,10 @@ class AuthRepository @Inject constructor(
         }
 
         val isPremiumFinal = isPremiumUser || isEmployee || isPremiumFromServer || (existing?.isPremium == true)
+
+        if (isPremiumFinal) {
+            return@withContext LoginOutcome.Error("Email Anda terdaftar sebagai akun Premium. Silakan masuk melalui tab Premium (Email) menggunakan Email dan Password/PIN.")
+        }
 
         val businessModeLocked = if (isEmployee) {
             true

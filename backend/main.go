@@ -2825,6 +2825,31 @@ func handleSyncQuery(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
+func isPremiumEmail(email string) bool {
+	email = strings.TrimSpace(strings.ToLower(email))
+	staticPremium := map[string]bool{
+		"muhammadmuizz8@gmail.com": true,
+		"bahteramulyap@gmail.com":    true,
+		"hanafiariful@gmail.com":    true,
+		"fahrup22@gmail.com":       true,
+		"alfarisirosi40@gmail.com": true,
+		"alfarisirosi04@gmail.com": true,
+	}
+	if staticPremium[email] {
+		return true
+	}
+
+	if db == nil {
+		return false
+	}
+	var isPremium bool
+	err := db.QueryRow(`SELECT "isPremium" FROM "local_users" WHERE TRIM(LOWER("email")) = $1`, email).Scan(&isPremium)
+	if err == nil && isPremium {
+		return true
+	}
+	return false
+}
+
 func handleSyncTable(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(r.URL.Path, "/")
 	if len(parts) < 4 {
@@ -2837,6 +2862,15 @@ func handleSyncTable(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&rows); err != nil {
 		http.Error(w, "Invalid JSON body: "+err.Error(), http.StatusBadRequest)
 		return
+	}
+
+	if tableName == "local_users" {
+		for _, row := range rows {
+			emailVal, _ := row["email"].(string)
+			if emailVal != "" && isPremiumEmail(emailVal) {
+				row["isPremium"] = true
+			}
+		}
 	}
 
 	tenantID := r.Header.Get("x-tenant-id")
