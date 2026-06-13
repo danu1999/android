@@ -9,9 +9,9 @@ WorkingDirectory=/home/muizz9900
 Environment=PORT=3000
 Environment=SMTP_HOST=smtp.gmail.com
 Environment=SMTP_PORT=587
-Environment=SMTP_USER=posbah.info@gmail.com
-Environment=SMTP_PASS=your_gmail_app_password
-Environment=SMTP_SENDER=posbah.info@gmail.com
+Environment=SMTP_USER=muhammadmuizz8@gmail.com
+Environment=SMTP_PASS=mrdtcnhmdcglfwko
+Environment=SMTP_SENDER=muhammadmuizz8@gmail.com
 ExecStart=/home/muizz9900/posbah-backend
 Restart=always
 RestartSec=5
