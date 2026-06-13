@@ -12,9 +12,12 @@ sudo systemctl stop posbah-backend
 # Backup current binary
 cp /home/muizz9900/posbah-backend /home/muizz9900/posbah-backend.bak
 
-# Copy new binary
+# Copy new binary and static assets
 cp ./posbah-backend /home/muizz9900/posbah-backend
 chmod +x /home/muizz9900/posbah-backend
+cp ./admin.html /home/muizz9900/admin.html
+mkdir -p /home/muizz9900/web
+cp ./web/admin.html /home/muizz9900/web/admin.html 2>/dev/null || true
 
 # Start service
 sudo systemctl start posbah-backend
