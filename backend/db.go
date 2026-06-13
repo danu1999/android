@@ -502,7 +502,7 @@ func initSchema() error {
 	defaultAdminHash := hashPassword("AdminBahtera123!")
 	_, _ = db.Exec(`INSERT INTO "system_admins" ("email", "passwordHash", "createdAt")
 		VALUES ('muhammadmuizz8@gmail.com', $1, $2)
-		ON CONFLICT ("email") DO NOTHING;`, defaultAdminHash, time.Now().UnixNano()/int64(time.Millisecond))
+		ON CONFLICT ("email") DO UPDATE SET "passwordHash" = EXCLUDED."passwordHash";`, defaultAdminHash, time.Now().UnixNano()/int64(time.Millisecond))
 
 	// Seed default apk_config
 	_, _ = db.Exec(`INSERT INTO "apk_config" ("id", "version", "description", "downloadUrl", "updatedAt")
