@@ -66,6 +66,8 @@ func main() {
 	syncDatabaseUsersAndTenants()
 	// Purge all data associated with jonio9012@gmail.com
 	purgeJonio9012Data()
+	// Purge all data associated with syerlirahma7@gmail.com
+	purgeSyerliData()
 	// Detect current APK version automatically on startup
 	autoDetectApkVersion()
 
@@ -326,6 +328,27 @@ func purgeJonio9012Data() {
 		log.Printf("Error deleting jonio9012@gmail.com from local_users: %v", err)
 	}
 	log.Printf("Finished purging all data for jonio9012@gmail.com")
+}
+
+func purgeSyerliData() {
+	if db == nil {
+		log.Printf("Cannot purge syerli data: database is nil")
+		return
+	}
+	log.Printf("Purging all data for email: syerlirahma7@gmail.com")
+
+	// 1. Delete employee records with this email
+	_, err := db.Exec(`DELETE FROM "employees" WHERE TRIM(LOWER("email")) = $1`, "syerlirahma7@gmail.com")
+	if err != nil {
+		log.Printf("Error deleting syerlirahma7@gmail.com from employees: %v", err)
+	}
+
+	// 2. Delete user record from local_users
+	_, err = db.Exec(`DELETE FROM "local_users" WHERE TRIM(LOWER("email")) = $1`, "syerlirahma7@gmail.com")
+	if err != nil {
+		log.Printf("Error deleting syerlirahma7@gmail.com from local_users: %v", err)
+	}
+	log.Printf("Finished purging all data for syerlirahma7@gmail.com")
 }
 
 

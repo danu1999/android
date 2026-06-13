@@ -49,8 +49,7 @@ class AuthRepository @Inject constructor(
         "hanafiariful@gmail.com" to Triple("20710a82f8d6b458af10d49fbb1f985ac8aaf696e6b32e776d4f4ebbc30d08565e2bb5e1902ace18297d8db47ad35e49c086669125b1d6ac867c0d2d7e265e50", "PISANG KEJU RAMAYANA", "ten_premium_hanafiariful_gmail_com"),
         "fahrup22@gmail.com" to Triple("63e71711d1481b6da8b756e114aa2ac71a704929c0accf46f419706a5c1416ae1a312899ae84d3d8e33d255811e98fd4d17e59371a08e2f9c21c01d1b1c13a8d", "FahriP", "ten_premium_hanafiariful_gmail_com"),
         "alfarisirosi40@gmail.com" to Triple("a10301e4a133374bddc5f4f246aead30ba95b4f60c65df80418df2c6338141c9606262b07348fb0ee75964d460de3a459377217afa4b85b7bde3f8572d3b791c", "Mamet PKR", "ten_premium_hanafiariful_gmail_com"),
-        "alfarisirosi04@gmail.com" to Triple("a10301e4a133374bddc5f4f246aead30ba95b4f60c65df80418df2c6338141c9606262b07348fb0ee75964d460de3a459377217afa4b85b7bde3f8572d3b791c", "Mamet PKR", "ten_premium_hanafiariful_gmail_com"),
-        "syerlirahma7@gmail.com" to Triple("5819ef0d24208780b75c18009f0f69400eb933916f800ae980b778820cda595e3151de8600a0c325711f0e9641b5a72f393008868913578601ba0fa0d4c9ad93", "syerli", "ten_premium_bahteramulyap_gmail_com")
+        "alfarisirosi04@gmail.com" to Triple("a10301e4a133374bddc5f4f246aead30ba95b4f60c65df80418df2c6338141c9606262b07348fb0ee75964d460de3a459377217afa4b85b7bde3f8572d3b791c", "Mamet PKR", "ten_premium_hanafiariful_gmail_com")
     )
 
     init {
@@ -150,13 +149,12 @@ class AuthRepository @Inject constructor(
         val dbEmployee = employeeDao.findByEmail(cleanEmail)
         val isStaticEmployee = cleanEmail == "fahrup22@gmail.com" ||
                                cleanEmail == "alfarisirosi40@gmail.com" ||
-                               cleanEmail == "alfarisirosi04@gmail.com" ||
-                               cleanEmail == "syerlirahma7@gmail.com"
+                               cleanEmail == "alfarisirosi04@gmail.com"
 
         val isEmployee = dbEmployee != null || isStaticEmployee
 
         val userRole = if (isEmployee) {
-            if (cleanEmail == "fahrup22@gmail.com" || cleanEmail == "syerlirahma7@gmail.com") "ADMIN"
+            if (cleanEmail == "fahrup22@gmail.com") "ADMIN"
             else if (cleanEmail == "alfarisirosi40@gmail.com" || cleanEmail == "alfarisirosi04@gmail.com") "KASIR"
             else dbEmployee?.role ?: "KASIR"
         } else {
@@ -234,8 +232,6 @@ class AuthRepository @Inject constructor(
         val targetTenantId = if (isEmployee) {
             if (cleanEmail == "fahrup22@gmail.com" || cleanEmail == "alfarisirosi40@gmail.com" || cleanEmail == "alfarisirosi04@gmail.com") {
                 "ten_premium_hanafiariful_gmail_com"
-            } else if (cleanEmail == "syerlirahma7@gmail.com") {
-                "ten_premium_bahteramulyap_gmail_com"
             } else {
                 dbEmployee?.tenantId.orEmpty()
             }
