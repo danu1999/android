@@ -987,9 +987,14 @@
                     <h1 class="page-title gradient-text" id="mainHeaderTitle">Manajemen User</h1>
                     <p style="color: var(--text-secondary); font-size: 14px;">Kontrol akses demo, pembayaran premium, dan distribusi APK.</p>
                 </div>
-                <div class="conn-status offline" id="websocketBadge">
-                    <div class="conn-dot"></div>
-                    <span id="websocketLabel">Menghubungkan WS...</span>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <button class="btn" id="btnAutoDeploy" onclick="triggerAutoDeploy()" style="background: linear-gradient(135deg, var(--color-indigo), var(--color-violet)); border: none; padding: 8px 16px; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);">
+                        <span>🚀</span> Auto-Deploy Backend
+                    </button>
+                    <div class="conn-status offline" id="websocketBadge">
+                        <div class="conn-dot"></div>
+                        <span id="websocketLabel">Menghubungkan WS...</span>
+                    </div>
                 </div>
             </header>
 
@@ -1729,6 +1734,53 @@
             } catch (err) {
                 console.error("Save apk config error:", err);
                 showToast("Koneksi gagal. Gagal memperbarui rilis APK.", "error");
+            }
+        }
+
+        async function triggerAutoDeploy() {
+            if (!confirm("Apakah Anda yakin ingin melakukan Auto-Deploy backend? Ini akan menjalankan git pull, go build, dan merestart server backend secara otomatis.")) {
+                return;
+            }
+
+            const btn = document.getElementById('btnAutoDeploy');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = `<span>⏳</span> Deploying...`;
+
+            try {
+                const response = await apiRequest('/api/admin/deploy', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showToast(data.message, "success");
+                    // Wait a bit and check if server comes back online
+                    setTimeout(() => {
+                        showToast("Menunggu server online kembali...", "info");
+                        // Poll status endpoint
+                        const checkServer = setInterval(async () => {
+                            try {
+                                const res = await fetch('/status');
+                                if (res.ok) {
+                                    clearInterval(checkServer);
+                                    showToast("Server kembali online dengan versi terbaru!", "success");
+                                    btn.disabled = false;
+                                    btn.innerHTML = originalText;
+                                    fetchUsersList();
+                                }
+                            } catch(e) {}
+                        }, 2000);
+                    }, 5000);
+                } else {
+                    showToast("Gagal memulai deployment: " + (data.message || "Unknown error"), "error");
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                }
+            } catch (err) {
+                console.error("Auto deploy request failed:", err);
+                showToast("Pengiriman request auto-deploy gagal: " + err.message, "error");
+                btn.disabled = false;
+                btn.innerHTML = originalText;
             }
         }
 

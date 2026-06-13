@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/smtp"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -84,6 +85,7 @@ func main() {
 	http.HandleFunc("/api/admin/apk-config", handleAdminApkConfig)
 	http.HandleFunc("/api/admin/diagnose", handleAdminDiagnose)
 	http.HandleFunc("/status", handleStatus)
+	http.HandleFunc("/api/admin/deploy", handleAdminDeploy)
 	http.HandleFunc("/api/admin/check-demo-lockout", handleManualLockoutCheck)
 	http.HandleFunc("/api/admin/demo-users", handleGetDemoUsers)
 	http.HandleFunc("/api/admin/approve-user", handleApproveUser)
@@ -349,6 +351,111 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 		"language":  "Go 1.21",
 	}
 	json.NewEncoder(w).Encode(response)
+}
+
+func handleAdminDeploy(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if !isAdminAuthenticated(r) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Pembaruan otomatis dimulai di background. Server akan menarik kode baru, mengompilasi, dan me-restart layanan secara otomatis.",
+	})
+
+	go runAutoDeploy()
+}
+
+func runAutoDeploy() {
+	log.Println("[AutoDeploy] Memulai deploy otomatis...")
+
+	runCmd := func(name string, args []string, dir string) error {
+		cmd := exec.Command(name, args...)
+		cmd.Dir = dir
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			log.Printf("[AutoDeploy] Perintah %s %v gagal: %v. Output: %s", name, args, err, string(output))
+			return err
+		}
+		log.Printf("[AutoDeploy] Perintah %s %v sukses. Output: %s", name, args, string(output))
+		return nil
+	}
+
+	repoDir := "/home/muizz9900/posbah-app"
+	backendDir := "/home/muizz9900/posbah-app/backend"
+	destBin := "/home/muizz9900/posbah-backend"
+	destAdminHtml := "/home/muizz9900/admin.html"
+	destWebAdminHtml := "/home/muizz9900/web/admin.html"
+
+	// 1. Git pull
+	if err := runCmd("git", []string{"pull"}, repoDir); err != nil {
+		log.Printf("[AutoDeploy] Git pull gagal: %v", err)
+		return
+	}
+
+	// 2. Go build
+	if err := runCmd("go", []string{"build", "-o", "posbah-backend"}, backendDir); err != nil {
+		log.Printf("[AutoDeploy] Go build gagal: %v", err)
+		return
+	}
+
+	// 3. Backup & unlink old binary
+	_ = os.Remove(destBin + ".bak")
+	_ = os.Rename(destBin, destBin+".bak")
+
+	// 4. Copy new binary
+	srcBin := backendDir + "/posbah-backend"
+	if err := copyFile(srcBin, destBin); err != nil {
+		log.Printf("[AutoDeploy] Gagal menyalin binary baru: %v", err)
+		return
+	}
+	_ = os.Chmod(destBin, 0755)
+
+	// 5. Copy admin.html
+	_ = copyFile(backendDir+"/admin.html", destAdminHtml)
+
+	// 6. Copy web/admin.html
+	_ = os.MkdirAll("/home/muizz9900/web", 0755)
+	_ = copyFile(backendDir+"/web/admin.html", destWebAdminHtml)
+
+	log.Println("[AutoDeploy] Pembaruan file berhasil. Keluar dari proses untuk me-restart layanan...")
+	time.Sleep(1 * time.Second)
+	os.Exit(0) // Systemd akan otomatis me-restart process karena Restart=always
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, in)
+	if err != nil {
+		return err
+	}
+	return out.Sync()
 }
 
 // Handler: POST /api/admin/check-demo-lockout
