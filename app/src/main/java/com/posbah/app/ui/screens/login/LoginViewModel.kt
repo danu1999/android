@@ -20,6 +20,8 @@ data class LoginUiState(
     val passwordTenantId: String = "",
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
+    val errorEmail: String? = null,
+    val rejoinMessage: String? = null,
     val signedInUser: LocalUser? = null,
     val needsTenantPicker: Pair<LocalUser, List<Tenant>>? = null,
     val locked: Boolean = false,
@@ -62,7 +64,7 @@ class LoginViewModel @Inject constructor(
                 AuthRepository.LoginOutcome.Cancelled ->
                     _uiState.update { it.copy(isLoading = false) }
                 is AuthRepository.LoginOutcome.Error ->
-                    _uiState.update { it.copy(isLoading = false, errorMessage = outcome.message) }
+                    _uiState.update { it.copy(isLoading = false, errorMessage = outcome.message, errorEmail = outcome.email) }
                 AuthRepository.LoginOutcome.Locked ->
                     _uiState.update { it.copy(isLoading = false, locked = true) }
             }
@@ -167,5 +169,46 @@ class LoginViewModel @Inject constructor(
 
     fun dismissUpdateDialog() {
         _uiState.update { it.copy(showUpdateDialog = false) }
+    }
+
+    fun clearRejoinMessage() = _uiState.update { it.copy(rejoinMessage = null) }
+
+    fun requestRejoin(email: String) {
+        _uiState.update { it.copy(isLoading = true, errorMessage = null, rejoinMessage = null) }
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            var conn: java.net.HttpURLConnection? = null
+            try {
+                val url = java.net.URL("https://www.zedmz.cloud/api/auth/request-rejoin?email=${java.net.URLEncoder.encode(email, "UTF-8")}")
+                conn = url.openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+                if (conn.responseCode in 200..299) {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            rejoinMessage = "Permintaan rejoin terkirim. Silakan periksa email Anda ($email) untuk mencoba menggunakan POSBah lagi."
+                        )
+                    }
+                } else {
+                    val msg = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: "Server returned ${conn.responseCode}"
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage = "Gagal meminta rejoin: $msg"
+                        )
+                    }
+                }
+            } catch (e: java.lang.Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = "Gagal menghubungi server: ${e.localizedMessage}"
+                    )
+                }
+            } finally {
+                conn?.disconnect()
+            }
+        }
     }
 }

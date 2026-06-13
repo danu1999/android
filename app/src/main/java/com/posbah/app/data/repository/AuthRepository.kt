@@ -105,7 +105,7 @@ class AuthRepository @Inject constructor(
         data class Success(val user: LocalUser, val tenant: Tenant) : LoginOutcome()
         data class NeedsTenantPick(val user: LocalUser, val tenants: List<Tenant>) : LoginOutcome()
         object Cancelled : LoginOutcome()
-        data class Error(val message: String) : LoginOutcome()
+        data class Error(val message: String, val email: String? = null) : LoginOutcome()
         object Locked : LoginOutcome()
     }
 
@@ -137,6 +137,58 @@ class AuthRepository @Inject constructor(
         val cleanEmail = identity.email.lowercase().trim()
         val name = identity.displayName ?: cleanEmail.substringBefore("@")
         val sub = identity.sub
+
+        // Check if email is deleted
+        var isDeleted = false
+        var deleteStatus = ""
+        var checkConn: java.net.HttpURLConnection? = null
+        try {
+            val checkUrl = java.net.URL("https://www.zedmz.cloud/api/auth/check-deleted?email=${java.net.URLEncoder.encode(cleanEmail, "UTF-8")}")
+            checkConn = checkUrl.openConnection() as java.net.HttpURLConnection
+            checkConn.requestMethod = "GET"
+            checkConn.connectTimeout = 5000
+            checkConn.readTimeout = 5000
+            if (checkConn.responseCode in 200..299) {
+                val checkRes = checkConn.inputStream.bufferedReader().use { it.readText() }
+                val checkObj = org.json.JSONObject(checkRes)
+                isDeleted = checkObj.optBoolean("deleted", false)
+                deleteStatus = checkObj.optString("status", "")
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            checkConn?.disconnect()
+        }
+
+        if (isDeleted) {
+            if (deleteStatus == "REJOINED") {
+                // Approved to rejoin! Clear local databases and prefs to force "data 0"
+                try {
+                    db.clearAllTables()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                securePrefs.wipe()
+
+                // Call complete-rejoin to mark user as active (not deleted anymore)
+                var completeConn: java.net.HttpURLConnection? = null
+                try {
+                    val completeUrl = java.net.URL("https://www.zedmz.cloud/api/auth/complete-rejoin?email=${java.net.URLEncoder.encode(cleanEmail, "UTF-8")}")
+                    completeConn = completeUrl.openConnection() as java.net.HttpURLConnection
+                    completeConn.requestMethod = "POST"
+                    completeConn.connectTimeout = 5000
+                    completeConn.readTimeout = 5000
+                    completeConn.responseCode // execute request
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                } finally {
+                    completeConn?.disconnect()
+                }
+            } else {
+                // Still blocked (status is DELETED, PENDING_USER_CONFIRM, or PENDING_ADMIN_APPROVE)
+                return@withContext LoginOutcome.Error("Gagal login karena database tidak ada. Silakan hubungi admin.", cleanEmail)
+            }
+        }
 
         val isPremiumUser = cleanEmail == "muhammadmuizz8@gmail.com" ||
                             cleanEmail == "bahteramulyap@gmail.com" ||

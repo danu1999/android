@@ -30,6 +30,11 @@ func initDatabase(dbURL string) error {
 
 func initSchema() error {
 	queries := []string{
+		`CREATE TABLE IF NOT EXISTS "deleted_users" (
+			"email" VARCHAR(255) PRIMARY KEY,
+			"status" VARCHAR(50) NOT NULL DEFAULT 'DELETED',
+			"updatedAt" BIGINT NOT NULL
+		);`,
 		`CREATE TABLE IF NOT EXISTS "local_users" (
 			"googleSub" VARCHAR(255) PRIMARY KEY,
 			"email" VARCHAR(255) UNIQUE NOT NULL,
@@ -454,16 +459,8 @@ func initSchema() error {
 		VALUES ('bahteramulyap@gmail.com', 'bahteramulyap@gmail.com', 'CV. BAHTERA MULYA PLASTIK', 'OWNER', 'ten_premium_bahteramulyap_gmail_com', true, true, 1685642632000, 1685642632000)
 		ON CONFLICT ("googleSub") DO UPDATE SET "tenantId" = EXCLUDED."tenantId", "isPremium" = EXCLUDED."isPremium", "isActive" = EXCLUDED."isActive";`,
 
-		`INSERT INTO "local_users" ("googleSub", "email", "displayName", "role", "tenantId", "isPremium", "isActive", "registeredAt", "updatedAt")
-		VALUES ('syerlirahma7@gmail.com', 'syerlirahma7@gmail.com', 'syerli', 'ADMIN', 'ten_premium_bahteramulyap_gmail_com', true, true, 1685642632000, 1685642632000)
-		ON CONFLICT ("googleSub") DO UPDATE SET "tenantId" = EXCLUDED."tenantId", "isPremium" = EXCLUDED."isPremium", "isActive" = EXCLUDED."isActive";`,
-
 		`INSERT INTO "employees" ("id", "tenantId", "name", "email", "role", "pinHash", "isActive", "createdAt", "updatedAt")
 		VALUES (20001, 'ten_premium_bahteramulyap_gmail_com', 'CV. BAHTERA MULYA PLASTIK', 'bahteramulyap@gmail.com', 'OWNER', '8a0ff1f8926195dfde55af7e68c028591602dacc30dc3c7caef27a949ca45142b25514004cf4540c46eca830100d06517c6facc0faf77fc57140e9df5fe5ffc7', true, 1685642632000, 1685642632000)
-		ON CONFLICT ("id") DO UPDATE SET "tenantId" = EXCLUDED."tenantId", "role" = EXCLUDED."role", "pinHash" = EXCLUDED."pinHash";`,
-
-		`INSERT INTO "employees" ("id", "tenantId", "name", "email", "role", "pinHash", "isActive", "createdAt", "updatedAt")
-		VALUES (20002, 'ten_premium_bahteramulyap_gmail_com', 'syerli', 'syerlirahma7@gmail.com', 'ADMIN', '5819ef0d24208780b75c18009f0f69400eb933916f800ae980b778820cda595e3151de8600a0c325711f0e9641b5a72f393008868913578601ba0fa0d4c9ad93', true, 1685642632000, 1685642632000)
 		ON CONFLICT ("id") DO UPDATE SET "tenantId" = EXCLUDED."tenantId", "role" = EXCLUDED."role", "pinHash" = EXCLUDED."pinHash";`,
 
 		`UPDATE "bmp_payrolls" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,

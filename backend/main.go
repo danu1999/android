@@ -122,6 +122,13 @@ func main() {
 	// Sync API for Android client
 	http.HandleFunc("/api/sync/", handleSyncRoute)
 	http.HandleFunc("/api/employee/confirm", handleEmployeeConfirm)
+
+	// Auth Rejoin endpoints for deleted users
+	http.HandleFunc("/api/auth/check-deleted", handleCheckDeleted)
+	http.HandleFunc("/api/auth/request-rejoin", handleRequestRejoin)
+	http.HandleFunc("/api/auth/confirm-rejoin", handleConfirmRejoin)
+	http.HandleFunc("/api/auth/approve-rejoin", handleApproveRejoin)
+	http.HandleFunc("/api/auth/complete-rejoin", handleCompleteRejoin)
 	
 	// Serve static files from TTD
 	http.Handle("/api/signatures/", http.StripPrefix("/api/signatures/", http.FileServer(http.Dir("./TTD"))))
@@ -286,6 +293,19 @@ func purgeJonio9012Data() {
 		log.Printf("Cannot purge jonio9012 data: database is nil")
 		return
 	}
+
+	var status string
+	err := db.QueryRow(`SELECT "status" FROM "deleted_users" WHERE TRIM(LOWER("email")) = $1`, "jonio9012@gmail.com").Scan(&status)
+	if err == sql.ErrNoRows {
+		_, _ = db.Exec(`INSERT INTO "deleted_users" ("email", "status", "updatedAt") VALUES ($1, 'DELETED', $2)`, "jonio9012@gmail.com", time.Now().UnixNano()/1e6)
+		status = "DELETED"
+	}
+
+	if status == "ACTIVE" {
+		log.Printf("Skipping purge for jonio9012@gmail.com because user rejoined and is now ACTIVE")
+		return
+	}
+
 	log.Printf("Purging all data for email: jonio9012@gmail.com")
 
 	// 1. Find all tenant IDs associated with jonio9012@gmail.com in local_users
@@ -335,10 +355,23 @@ func purgeSyerliData() {
 		log.Printf("Cannot purge syerli data: database is nil")
 		return
 	}
+
+	var status string
+	err := db.QueryRow(`SELECT "status" FROM "deleted_users" WHERE TRIM(LOWER("email")) = $1`, "syerlirahma7@gmail.com").Scan(&status)
+	if err == sql.ErrNoRows {
+		_, _ = db.Exec(`INSERT INTO "deleted_users" ("email", "status", "updatedAt") VALUES ($1, 'DELETED', $2)`, "syerlirahma7@gmail.com", time.Now().UnixNano()/1e6)
+		status = "DELETED"
+	}
+
+	if status == "ACTIVE" {
+		log.Printf("Skipping purge for syerlirahma7@gmail.com because user rejoined and is now ACTIVE")
+		return
+	}
+
 	log.Printf("Purging all data for email: syerlirahma7@gmail.com")
 
 	// 1. Delete employee records with this email
-	_, err := db.Exec(`DELETE FROM "employees" WHERE TRIM(LOWER("email")) = $1`, "syerlirahma7@gmail.com")
+	_, err = db.Exec(`DELETE FROM "employees" WHERE TRIM(LOWER("email")) = $1`, "syerlirahma7@gmail.com")
 	if err != nil {
 		log.Printf("Error deleting syerlirahma7@gmail.com from employees: %v", err)
 	}
@@ -5095,3 +5128,238 @@ func handleEmployeeConfirm(w http.ResponseWriter, r *http.Request) {
 	</html>
 	`, email, businessName)))
 }
+
+func handleCheckDeleted(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	email := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("email")))
+	if email == "" {
+		http.Error(w, "Missing email parameter", http.StatusBadRequest)
+		return
+	}
+
+	var status string
+	err := db.QueryRow(`SELECT "status" FROM "deleted_users" WHERE TRIM(LOWER("email")) = $1`, email).Scan(&status)
+	w.Header().Set("Content-Type", "application/json")
+	if err == sql.ErrNoRows {
+		w.Write([]byte(`{"deleted":false}`))
+		return
+	} else if err != nil {
+		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if status == "ACTIVE" {
+		w.Write([]byte(`{"deleted":false}`))
+	} else {
+		w.Write([]byte(fmt.Sprintf(`{"deleted":true,"status":"%s"}`, status)))
+	}
+}
+
+func handleRequestRejoin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	email := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("email")))
+	if email == "" {
+		http.Error(w, "Missing email parameter", http.StatusBadRequest)
+		return
+	}
+
+	var status string
+	err := db.QueryRow(`SELECT "status" FROM "deleted_users" WHERE TRIM(LOWER("email")) = $1`, email).Scan(&status)
+	if err == sql.ErrNoRows {
+		_, _ = db.Exec(`INSERT INTO "deleted_users" ("email", "status", "updatedAt") VALUES ($1, 'DELETED', $2)`, email, time.Now().UnixNano()/1e6)
+		status = "DELETED"
+	} else if err != nil {
+		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	_, err = db.Exec(`UPDATE "deleted_users" SET "status" = 'PENDING_USER_CONFIRM', "updatedAt" = $1 WHERE TRIM(LOWER("email")) = $2`, time.Now().UnixNano()/1e6, email)
+	if err != nil {
+		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	subject := "Apakah kamu ingin mencoba menggunakan POSBah lagi ?"
+	body := fmt.Sprintf(`
+	<!DOCTYPE html>
+	<html>
+	<head>
+		<meta charset="utf-8">
+		<style>
+			body { font-family: sans-serif; background-color: #f8fafc; color: #1e293b; padding: 30px; margin: 0; }
+			.card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 32px; max-width: 480px; margin: 0 auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+			h2 { color: #f97316; margin-top: 0; }
+			p { font-size: 16px; line-height: 1.6; color: #475569; }
+			.btn { display: inline-block; background-color: #f97316; color: white !important; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px; margin-top: 20px; text-align: center; }
+			.footer { font-size: 12px; color: #94a3b8; margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 15px; }
+		</style>
+	</head>
+	<body>
+		<div class="card">
+			<h2>Uji Coba POSBah</h2>
+			<p>Apakah kamu ingin mencoba menggunakan POSBah lagi?</p>
+			<a class="btn" href="https://www.zedmz.cloud/api/auth/confirm-rejoin?email=%s">Ya, Saya Ingin Mencoba Lagi</a>
+			<div class="footer">Pesan ini dikirim secara otomatis oleh sistem POSBah.</div>
+		</div>
+	</body>
+	</html>
+	`, email)
+
+	if err := sendEmail(email, subject, body); err != nil {
+		http.Error(w, "Failed to send email: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"success":true}`))
+}
+
+func handleConfirmRejoin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	email := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("email")))
+	if email == "" {
+		http.Error(w, "Missing email parameter", http.StatusBadRequest)
+		return
+	}
+
+	_, err := db.Exec(`UPDATE "deleted_users" SET "status" = 'PENDING_ADMIN_APPROVE', "updatedAt" = $1 WHERE TRIM(LOWER("email")) = $2`, time.Now().UnixNano()/1e6, email)
+	if err != nil {
+		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	adminEmail := "muhammadmuizz8@gmail.com"
+	subject := "Persetujuan Rejoin POSBah"
+	body := fmt.Sprintf(`
+	<!DOCTYPE html>
+	<html>
+	<head>
+		<meta charset="utf-8">
+		<style>
+			body { font-family: sans-serif; background-color: #f8fafc; color: #1e293b; padding: 30px; margin: 0; }
+			.card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 32px; max-width: 480px; margin: 0 auto; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+			h2 { color: #f97316; margin-top: 0; }
+			p { font-size: 16px; line-height: 1.6; color: #475569; }
+			.btn { display: inline-block; background-color: #10b981; color: white !important; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px; margin-top: 20px; text-align: center; }
+			.footer { font-size: 12px; color: #94a3b8; margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 15px; }
+		</style>
+	</head>
+	<body>
+		<div class="card">
+			<h2>Persetujuan Rejoin POSBah</h2>
+			<p>Apakah kamu menyetujui bahwa email : <strong>%s</strong> untuk login kembali?</p>
+			<a class="btn" href="https://www.zedmz.cloud/api/auth/approve-rejoin?email=%s">Iya</a>
+			<div class="footer">Pesan ini dikirim secara otomatis oleh sistem POSBah.</div>
+		</div>
+	</body>
+	</html>
+	`, email, email)
+
+	if err := sendEmail(adminEmail, subject, body); err != nil {
+		http.Error(w, "Failed to send email to admin: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write([]byte(fmt.Sprintf(`
+	<!DOCTYPE html>
+	<html>
+	<head>
+		<meta charset="utf-8">
+		<title>Permintaan Terkirim</title>
+		<style>
+			body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #0f172a; color: white; }
+			.card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); padding: 40px; border-radius: 16px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.3); max-width: 400px; width: 100%%; }
+			.icon { font-size: 48px; color: #f97316; margin-bottom: 20px; }
+			h1 { font-size: 24px; font-weight: 700; margin-top: 0; }
+			p { color: #94a3b8; font-size: 16px; line-height: 1.5; }
+			.footer { margin-top: 30px; font-size: 12px; color: #64748b; }
+		</style>
+	</head>
+	<body>
+		<div class="card">
+			<div class="icon">✓</div>
+			<h1>Permintaan Terkirim</h1>
+			<p>Terima kasih. Permintaan rejoin untuk email <strong>%s</strong> telah diteruskan kepada Admin untuk disetujui.</p>
+			<div class="footer">pesan ini otomatis dari sistem POSBah</div>
+		</div>
+	</body>
+	</html>
+	`, email)))
+}
+
+func handleApproveRejoin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	email := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("email")))
+	if email == "" {
+		http.Error(w, "Missing email parameter", http.StatusBadRequest)
+		return
+	}
+
+	_, err := db.Exec(`UPDATE "deleted_users" SET "status" = 'REJOINED', "updatedAt" = $1 WHERE TRIM(LOWER("email")) = $2`, time.Now().UnixNano()/1e6, email)
+	if err != nil {
+		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write([]byte(fmt.Sprintf(`
+	<!DOCTYPE html>
+	<html>
+	<head>
+		<meta charset="utf-8">
+		<title>Persetujuan Berhasil</title>
+		<style>
+			body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #0f172a; color: white; }
+			.card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); padding: 40px; border-radius: 16px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.3); max-width: 400px; width: 100%%; }
+			.icon { font-size: 48px; color: #10b981; margin-bottom: 20px; }
+			h1 { font-size: 24px; font-weight: 700; margin-top: 0; }
+			p { color: #94a3b8; font-size: 16px; line-height: 1.5; }
+			.footer { margin-top: 30px; font-size: 12px; color: #64748b; }
+		</style>
+	</head>
+	<body>
+		<div class="card">
+			<div class="icon">✓</div>
+			<h1>Persetujuan Berhasil</h1>
+			<p>Email <strong>%s</strong> telah disetujui untuk login kembali ke POSBah dengan data 0.</p>
+			<div class="footer">pesan ini otomatis dari sistem POSBah</div>
+		</div>
+	</body>
+	</html>
+	`, email)))
+}
+
+func handleCompleteRejoin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	email := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("email")))
+	if email == "" {
+		http.Error(w, "Missing email parameter", http.StatusBadRequest)
+		return
+	}
+
+	_, err := db.Exec(`UPDATE "deleted_users" SET "status" = 'ACTIVE', "updatedAt" = $1 WHERE TRIM(LOWER("email")) = $2`, time.Now().UnixNano()/1e6, email)
+	if err != nil {
+		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"success":true}`))
+}
+

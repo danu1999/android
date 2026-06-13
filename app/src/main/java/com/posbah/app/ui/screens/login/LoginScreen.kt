@@ -137,14 +137,28 @@ fun LoginScreen(
                         )
                     }
 
-                    ui.errorMessage?.let {
+                    ui.errorMessage?.let { err ->
                         Spacer(Modifier.height(12.dp))
-                        Text(
-                            it,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.testTag("login-error-msg")
-                        )
+                        Column {
+                            Text(
+                                err,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.testTag("login-error-msg")
+                            )
+                            if (err == "Gagal login karena database tidak ada. Silakan hubungi admin.") {
+                                Spacer(Modifier.height(8.dp))
+                                PrimaryButton(
+                                    label = "Hubungi Admin",
+                                    onClick = {
+                                        ui.errorEmail?.let { email ->
+                                            viewModel.requestRejoin(email)
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth().testTag("btn-hubungi-admin")
+                                )
+                            }
+                        }
                     }
 
                     Spacer(Modifier.height(16.dp))
@@ -210,6 +224,19 @@ fun LoginScreen(
             confirmButton = {
                 TextButton(onClick = { viewModel.dismissUpdateDialog() }) {
                     Text("Tutup")
+                }
+            }
+        )
+    }
+
+    ui.rejoinMessage?.let { msg ->
+        AlertDialog(
+            onDismissRequest = { viewModel.clearRejoinMessage() },
+            title = { Text("Permintaan Terkirim") },
+            text = { Text(msg) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.clearRejoinMessage() }) {
+                    Text("OK")
                 }
             }
         )
