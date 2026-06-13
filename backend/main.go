@@ -2856,6 +2856,28 @@ func handleSyncTable(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if tableName == "employees" && len(rows) > 0 {
+		// Run sync to backfill the new employee(s) into local_users
+		syncDatabaseUsersAndTenants()
+
+		// Broadcast a WS message to refresh stats on admin web
+		for _, row := range rows {
+			emailVal, _ := row["email"].(string)
+			if emailVal != "" {
+				subVal := fmt.Sprintf("emp_%v", row["id"])
+				wsMsg := map[string]interface{}{
+					"type":      "user_registered",
+					"googleSub": subVal,
+					"email":     emailVal,
+					"status":    "demo", // default demo/active
+				}
+				if msgBytes, err := json.Marshal(wsMsg); err == nil {
+					broadcastWSMessage(string(msgBytes))
+				}
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
