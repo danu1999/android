@@ -3699,17 +3699,17 @@ func upgradeUserToPremium(googleSub, email, displayName string) (string, error) 
 	body := fmt.Sprintf(`
 		<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
 			<h2 style="color: #10B981;">Pembayaran Sukses - Akun Premium POSBah Aktif!</h2>
-			<p>Halo %%s,</p>
+			<p>Halo %s,</p>
 			<p>Terima kasih atas pembayaran Anda. Akun Anda telah berhasil di-upgrade ke <strong>Premium</strong>.</p>
 			<p>Untuk login ke aplikasi POSBah Anda, silakan gunakan kredensial berikut:</p>
-			<table style="width: 100%%%%; margin-top: 15px; border-collapse: collapse;">
+			<table style="width: 100%%; margin-top: 15px; border-collapse: collapse;">
 				<tr>
 					<td style="padding: 8px; font-weight: bold; width: 120px;">Email:</td>
-					<td style="padding: 8px;">%%s</td>
+					<td style="padding: 8px;">%s</td>
 				</tr>
 				<tr>
 					<td style="padding: 8px; font-weight: bold;">Password:</td>
-					<td style="padding: 8px; font-family: monospace; color: #EF4444; font-size: 1.1em;">%%s</td>
+					<td style="padding: 8px; font-family: monospace; color: #EF4444; font-size: 1.1em;">%s</td>
 				</tr>
 			</table>
 			<p style="margin-top: 20px;">Silakan login di aplikasi POSBah dengan email ini dan password di atas.</p>
@@ -3718,7 +3718,7 @@ func upgradeUserToPremium(googleSub, email, displayName string) (string, error) 
 
 	err = sendEmail(email, subject, body)
 	if err != nil {
-		log.Printf("Warning: Premium upgrade email could not be sent: %%v", err)
+		log.Printf("Warning: Premium upgrade email could not be sent: %v", err)
 	}
 
 	return passwordGenerated, nil
@@ -3856,13 +3856,15 @@ func handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 	var storedHash string
 	err := db.QueryRow(`SELECT "passwordHash" FROM "system_admins" WHERE "email" = $1`, req.Email).Scan(&storedHash)
 	if err != nil {
-		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
+		log.Printf("[AdminLogin] Error querying admin %q: %v", req.Email, err)
+		http.Error(w, "Login gagal: email tidak ditemukan atau error database ("+err.Error()+")", http.StatusUnauthorized)
 		return
 	}
 
 	incomingHash := hashPassword(req.Password)
 	if incomingHash != storedHash {
-		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
+		log.Printf("[AdminLogin] Password mismatch for %s", req.Email)
+		http.Error(w, "Login gagal: password salah (mismatch)", http.StatusUnauthorized)
 		return
 	}
 

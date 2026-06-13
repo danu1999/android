@@ -56,6 +56,7 @@
         .gradient-text {
             background: linear-gradient(135deg, #A5B4FC 0%, #6366F1 50%, #10B981 100%);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
@@ -1281,7 +1282,8 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error("Login gagal");
+                    const errorText = await response.text();
+                    throw new Error(errorText || "Login gagal");
                 }
 
                 const data = await response.json();
@@ -1291,12 +1293,14 @@
                     showToast("Login berhasil!", "success");
                     showDashboard();
                 } else {
+                    errAlert.innerText = "Email atau password admin salah.";
                     errAlert.style.display = 'block';
                 }
             } catch (error) {
                 console.error("Login request error:", error);
+                errAlert.innerText = error.message;
                 errAlert.style.display = 'block';
-                showToast("Koneksi gagal. Cek koneksi server Anda.", "error");
+                showToast("Login gagal atau koneksi bermasalah.", "error");
             }
         }
 
