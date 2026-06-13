@@ -1374,21 +1374,17 @@
         // Handle Realtime Messages
         function handleWebSocketMessage(msg) {
             if (msg.type === "user_status_changed") {
-                showToast(`User status updated: ${msg.googleSub} is now ${msg.status}`, "info");
-                // Refresh list if users view is active
-                if (document.getElementById('viewUsers').classList.contains('active')) {
-                    fetchUsersList();
-                }
+                showToast(`Status pengguna diperbarui: ${msg.googleSub} menjadi ${msg.status}`, "info");
+                fetchUsersList();
+            } else if (msg.type === "user_registered") {
+                showToast(`Pendaftaran/pembaruan akun demo baru: ${msg.email}`, "success");
+                fetchUsersList();
             } else if (msg.type === "user_upgraded") {
-                showToast(`User upgraded to Premium: ${msg.email}`, "success");
-                if (document.getElementById('viewUsers').classList.contains('active')) {
-                    fetchUsersList();
-                }
+                showToast(`Pengguna berhasil disetujui Premium: ${msg.email}`, "success");
+                fetchUsersList();
             } else if (msg.type === "apk_update") {
                 showToast(`Rilis APK baru terdeteksi: Versi ${msg.version}`, "success");
-                if (document.getElementById('viewApk').classList.contains('active')) {
-                    fetchApkConfig();
-                }
+                fetchApkConfig();
             }
         }
 

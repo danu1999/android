@@ -191,6 +191,16 @@ func checkAndLockoutDemoUsers() error {
 		} else {
 			regTime := time.Unix(user.RegisteredAt/1000, 0).Format("2006-01-02 15:04:05")
 			log.Printf("Successfully locked out demo user: %s (Registered at: %s)", user.Email, regTime)
+			
+			// Broadcast WS message
+			wsMsg := map[string]interface{}{
+				"type":      "user_status_changed",
+				"googleSub": user.GoogleSub,
+				"status":    "blocked",
+			}
+			if msgBytes, err := json.Marshal(wsMsg); err == nil {
+				broadcastWSMessage(string(msgBytes))
+			}
 		}
 	}
 
@@ -2803,6 +2813,37 @@ func handleSyncTable(w http.ResponseWriter, r *http.Request) {
 
 	if tableName == "local_users" {
 		go checkAndNotifyAdminOfNewDemoUsers()
+		for _, row := range rows {
+			emailVal, _ := row["email"].(string)
+			subVal, _ := row["googleSub"].(string)
+			var premiumVal bool
+			if p, ok := row["isPremium"]; ok {
+				if pb, ok := p.(bool); ok {
+					premiumVal = pb
+				}
+			}
+			var activeVal bool
+			if a, ok := row["isActive"]; ok {
+				if ab, ok := a.(bool); ok {
+					activeVal = ab
+				}
+			}
+			statusMsg := "demo"
+			if !activeVal {
+				statusMsg = "blocked"
+			} else if premiumVal {
+				statusMsg = "premium"
+			}
+			wsMsg := map[string]interface{}{
+				"type":      "user_registered",
+				"googleSub": subVal,
+				"email":     emailVal,
+				"status":    statusMsg,
+			}
+			if msgBytes, err := json.Marshal(wsMsg); err == nil {
+				broadcastWSMessage(string(msgBytes))
+			}
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
