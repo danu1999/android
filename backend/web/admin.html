@@ -1185,6 +1185,11 @@
             fetchUsersList();
             fetchApkConfig();
             setupWebSocket();
+
+            // Fallback periodic sync check every 30 seconds
+            if (!window.syncIntervalId) {
+                window.syncIntervalId = setInterval(fetchUsersList, 30000);
+            }
         }
 
         function decodeTokenEmail(token) {
@@ -1320,6 +1325,10 @@
             if (wsConnection) {
                 wsConnection.close();
             }
+            if (window.syncIntervalId) {
+                clearInterval(window.syncIntervalId);
+                window.syncIntervalId = null;
+            }
             showLogin();
             showToast("Berhasil keluar dari panel admin.", "info");
         }
@@ -1377,7 +1386,8 @@
                 showToast(`Status pengguna diperbarui: ${msg.googleSub} menjadi ${msg.status}`, "info");
                 fetchUsersList();
             } else if (msg.type === "user_registered") {
-                showToast(`Pendaftaran/pembaruan akun demo baru: ${msg.email}`, "success");
+                const statusLabel = msg.status === "premium" ? "Premium" : (msg.status === "blocked" ? "Diblokir" : "Demo");
+                showToast(`Pendaftaran/pembaruan akun ${statusLabel} baru: ${msg.email}`, "success");
                 fetchUsersList();
             } else if (msg.type === "user_upgraded") {
                 showToast(`Pengguna berhasil disetujui Premium: ${msg.email}`, "success");
