@@ -4180,6 +4180,9 @@ func handleAdminApkConfig(w http.ResponseWriter, r *http.Request) {
 		msgBytes, _ := json.Marshal(wsMsg)
 		broadcastWSMessage(string(msgBytes))
 
+		// Send Gmail notification to all premium users and employees
+		sendApkUpdateEmailToAllPremiumUsersAndEmployees(req.Version, req.Description)
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]bool{"success": true})
 		return
@@ -4263,6 +4266,90 @@ func autoDetectApkVersion() {
 			}
 			msgBytes, _ := json.Marshal(wsMsg)
 			broadcastWSMessage(string(msgBytes))
+
+			// Send Gmail notification to all premium users and employees
+			sendApkUpdateEmailToAllPremiumUsersAndEmployees(latestVersion, description)
 		}
 	}
+}
+
+func sendApkUpdateEmailToAllPremiumUsersAndEmployees(version, description string) {
+	if db == nil {
+		log.Println("[ApkUpdateEmail] Database not initialized. Skipping email broadcast.")
+		return
+	}
+
+	query := `
+		SELECT DISTINCT "email" FROM "local_users" WHERE "isPremium" = TRUE AND "email" IS NOT NULL AND "email" != ''
+		UNION
+		SELECT DISTINCT e."email"
+		FROM "employees" e
+		JOIN "local_users" u ON e."tenantId" = u."tenantId"
+		WHERE u."isPremium" = TRUE AND e."email" IS NOT NULL AND e."email" != '' AND e."isActive" = TRUE
+	`
+
+	rows, err := db.Query(query)
+	if err != nil {
+		log.Printf("[ApkUpdateEmail] Failed to query premium emails: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	var emails []string
+	for rows.Next() {
+		var email string
+		if err := rows.Scan(&email); err == nil {
+			emails = append(emails, email)
+		}
+	}
+
+	if len(emails) == 0 {
+		log.Println("[ApkUpdateEmail] No premium users or employees found to email.")
+		return
+	}
+
+	log.Printf("[ApkUpdateEmail] Broadcasting update to %d premium emails...", len(emails))
+
+	subject := fmt.Sprintf("[POSBah] Informasi Pembaruan Aplikasi Versi %s", version)
+	body := fmt.Sprintf(`
+		<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid rgba(0, 0, 0, 0.08); border-radius: 16px; background-color: #FAFAFA;">
+			<div style="text-align: center; margin-bottom: 25px; padding-bottom: 20px; border-bottom: 1px solid #EAEAEA;">
+				<h2 style="color: #6366F1; margin: 0; font-size: 24px;">POSBah Rilis Pembaruan!</h2>
+				<p style="color: #6B7280; margin: 5px 0 0 0; font-size: 14px;">Aplikasi Kasir Premium Anda Menjadi Lebih Baik</p>
+			</div>
+			
+			<div style="margin-bottom: 25px;">
+				<p style="font-size: 15px; color: #374151; line-height: 1.6; margin: 0 0 15px 0;">Halo Rekan POSBah Premium,</p>
+				<p style="font-size: 15px; color: #374151; line-height: 1.6; margin: 0 0 15px 0;">
+					Kami telah merilis pembaruan aplikasi <strong>POSBah Versi %s</strong> yang menyertakan berbagai perbaikan sistem dan peningkatan kinerja.
+				</p>
+				
+				<div style="background-color: #EEF2F6; border-left: 4px solid #6366F1; padding: 15px; border-radius: 8px; margin: 20px 0;">
+					<h4 style="margin: 0 0 10px 0; color: #1E293B; font-size: 14px; font-weight: 600;">Catatan Rilis (Release Notes):</h4>
+					<p style="margin: 0; color: #4B5563; font-size: 13px; line-height: 1.6; white-space: pre-line;">%s</p>
+				</div>
+			</div>
+
+			<div style="text-align: center; margin: 30px 0;">
+				<a href="https://www.zedmz.cloud/api/download-apk" style="display: inline-block; background-color: #6366F1; color: white; text-decoration: none; padding: 14px 28px; border-radius: 10px; font-size: 15px; font-weight: 600;">Unduh APK Terbaru</a>
+			</div>
+			
+			<div style="border-top: 1px solid #EAEAEA; padding-top: 20px; text-align: center; color: #9CA3AF; font-size: 11px;">
+				<p style="margin: 0;">Email ini dikirimkan secara otomatis kepada pengguna akun premium dan karyawan outlet POSBah yang terdaftar.</p>
+				<p style="margin: 5px 0 0 0;">&copy; 2026 POSBah. All rights reserved.</p>
+			</div>
+		</div>
+	`, version, description)
+
+	go func() {
+		for _, email := range emails {
+			err := sendEmail(email, subject, body)
+			if err != nil {
+				log.Printf("[ApkUpdateEmail] Failed to send email to %s: %v", email, err)
+			} else {
+				log.Printf("[ApkUpdateEmail] Email successfully sent to %s", email)
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}()
 }
