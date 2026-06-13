@@ -18,6 +18,8 @@ chmod +x /home/muizz9900/posbah-backend
 cp ./admin.html /home/muizz9900/admin.html
 mkdir -p /home/muizz9900/web
 cp ./web/admin.html /home/muizz9900/web/admin.html 2>/dev/null || true
+cp ./posbah-v*.apk /home/muizz9900/ 2>/dev/null || true
+cp ./release_notes.txt /home/muizz9900/release_notes.txt 2>/dev/null || true
 
 # Start service
 sudo systemctl start posbah-backend

@@ -433,6 +433,17 @@ func runAutoDeploy() {
 	_ = os.MkdirAll("/home/muizz9900/web", 0755)
 	_ = copyFile(backendDir+"/web/admin.html", destWebAdminHtml)
 
+	// 7. Copy posbah-v*.apk files
+	if apks, err := filepath.Glob(backendDir + "/posbah-v*.apk"); err == nil {
+		for _, apkPath := range apks {
+			destApk := "/home/muizz9900/" + filepath.Base(apkPath)
+			_ = copyFile(apkPath, destApk)
+		}
+	}
+
+	// 8. Copy release_notes.txt
+	_ = copyFile(backendDir+"/release_notes.txt", "/home/muizz9900/release_notes.txt")
+
 	log.Println("[AutoDeploy] Pembaruan file berhasil. Keluar dari proses untuk me-restart layanan...")
 	time.Sleep(1 * time.Second)
 	os.Exit(0) // Systemd akan otomatis me-restart process karena Restart=always

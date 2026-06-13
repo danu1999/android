@@ -1,0 +1,15 @@
+✨ Pembaruan Fitur Keamanan, Hak Akses Kasir, dan Sinkronisasi Sistem POSBah:
+
+1. 🔑 Pengaturan Hak Akses Kasir Lebih Fleksibel
+   - Kini Kasir (Kasir) dapat melihat dan mengedit data "Biaya & Bahan Baku" secara langsung untuk memudahkan operasional harian di toko.
+   - Hak akses untuk "Tambah Produk Baru" dan melihat "Analisis Keuntungan/Margin" kini dikunci lebih aman, khusus untuk Pemilik (Owner) dan Admin saja demi menjaga kerahasiaan keuangan toko.
+   - Kasir kini dapat membantu menambahkan data "Pelanggan Baru" langsung dari layar kasir saat melayani transaksi.
+
+2. ⚡ Sinkronisasi Data Instan & Real-time
+   - Sistem di aplikasi kasir (Android) dan web admin kini terhubung jauh lebih cepat. Setiap kali ada transaksi baru atau pendaftaran akun, data akan langsung muncul di layar tanpa perlu memuat ulang (refresh) halaman.
+
+3. 🧹 Pembersihan Data Akun Tidak Aktif
+   - Kami telah merapikan sistem dengan menghapus permanen data akun uji coba lama yang sudah tidak aktif agar penyimpanan server lebih lega dan aplikasi berjalan lebih ringan.
+
+4. 🚀 Pembaruan Sistem Sekali Klik
+   - Menambahkan tombol pembaruan sistem otomatis di web admin untuk memudahkan pemeliharaan server secara berkala tanpa ribet.
