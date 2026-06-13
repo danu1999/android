@@ -4782,6 +4782,29 @@ func syncDatabaseUsersAndTenants() {
 	if err != nil {
 		log.Printf("Sync error: failed to sync isActive local_users->tenants: %v", err)
 	}
+
+	// 5. Backfill missing local_users from employees
+	_, err = db.Exec(`
+		INSERT INTO "local_users" ("googleSub", "email", "displayName", "role", "tenantId", "isPremium", "isActive", "registeredAt", "updatedAt")
+		SELECT DISTINCT ON (LOWER(e."email"))
+			'emp_' || e."id" AS "googleSub", 
+			e."email" AS "email", 
+			e."name" AS "displayName",
+			e."role" AS "role",
+			e."tenantId" AS "tenantId",
+			COALESCE((SELECT t."id" LIKE 'ten_premium_%' FROM "tenants" t WHERE t."id" = e."tenantId" LIMIT 1), FALSE) AS "isPremium",
+			e."isActive" AS "isActive",
+			e."createdAt" AS "registeredAt",
+			e."updatedAt" AS "updatedAt"
+		FROM "employees" e
+		WHERE NOT EXISTS (
+			SELECT 1 FROM "local_users" u WHERE LOWER(u."email") = LOWER(e."email")
+		) AND e."email" IS NOT NULL AND e."email" <> ''
+		ORDER BY LOWER(e."email"), e."id"
+	`)
+	if err != nil {
+		log.Printf("Sync error: failed to backfill local_users from employees: %v", err)
+	}
 }
 
 func handleEmployeeConfirm(w http.ResponseWriter, r *http.Request) {
