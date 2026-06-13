@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	_ "github.com/lib/pq"
 )
@@ -382,6 +383,18 @@ func initSchema() error {
 			"tenantId" VARCHAR(100) NOT NULL,
 			"createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);`,
+		`CREATE TABLE IF NOT EXISTS "system_admins" (
+			"email" VARCHAR(255) PRIMARY KEY,
+			"passwordHash" VARCHAR(255) NOT NULL,
+			"createdAt" BIGINT
+		);`,
+		`CREATE TABLE IF NOT EXISTS "apk_config" (
+			"id" INT PRIMARY KEY,
+			"version" VARCHAR(50) NOT NULL,
+			"description" TEXT,
+			"downloadUrl" TEXT,
+			"updatedAt" BIGINT
+		);`,
 	}
 
 	for _, q := range queries {
@@ -484,6 +497,17 @@ func initSchema() error {
 	for _, q := range migrationQueries {
 		_, _ = db.Exec(q)
 	}
+
+	// Seed default system admin: muhammadmuizz8@gmail.com
+	defaultAdminHash := hashPassword("AdminBahtera123!")
+	_, _ = db.Exec(`INSERT INTO "system_admins" ("email", "passwordHash", "createdAt")
+		VALUES ('muhammadmuizz8@gmail.com', $1, $2)
+		ON CONFLICT ("email") DO NOTHING;`, defaultAdminHash, time.Now().UnixNano()/int64(time.Millisecond))
+
+	// Seed default apk_config
+	_, _ = db.Exec(`INSERT INTO "apk_config" ("id", "version", "description", "downloadUrl", "updatedAt")
+		VALUES (1, '2.0.3', 'Integrasi & perbaikan interkoneksi data premium bahteramulyap@gmail.com, sinkronisasi penuh modul Pabrik (BMP) dua arah, serta penataan visual dan tata letak menu Rental & Laundry.', '/api/download-apk', $1)
+		ON CONFLICT ("id") DO NOTHING;`, time.Now().UnixNano()/int64(time.Millisecond))
 
 	log.Println("Database schemas verified / migrated successfully.")
 	return nil

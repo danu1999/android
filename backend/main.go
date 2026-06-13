@@ -35,6 +35,8 @@ type LocalUser struct {
 var (
 	port              string
 	adminAuthToken    string
+	adminSessions     = make(map[string]string) // sessionToken -> adminEmail
+	adminSessionsMu   sync.Mutex
 )
 
 func main() {
@@ -56,15 +58,23 @@ func main() {
 	if dbURL == "" {
 		dbURL = "postgres://postgres:Bahtera1!@localhost:5432/posbah?sslmode=disable"
 	}
-	if err := initDatabase(dbURL); err != nil {
-		log.Printf("Warning: local database initialization failed: %v", err)
-	}
+	// Detect current APK version automatically on startup
+	autoDetectApkVersion()
 
 	// Start background cron worker (runs check every hour)
 	go startCronWorker()
 
 	// Setup endpoints
 	http.Handle("/", http.FileServer(http.Dir("./web")))
+	http.HandleFunc("/admin", handleAdminPage)
+	http.HandleFunc("/admin/", handleAdminPage)
+	http.HandleFunc("/api/admin/login", handleAdminLogin)
+	http.HandleFunc("/api/admin/check-login", handleAdminCheckLogin)
+	http.HandleFunc("/api/admin/logout", handleAdminLogout)
+	http.HandleFunc("/api/admin/users", handleAdminGetUsers)
+	http.HandleFunc("/api/admin/toggle-block", handleAdminToggleBlock)
+	http.HandleFunc("/api/admin/confirm-payment", handleAdminConfirmPayment)
+	http.HandleFunc("/api/admin/apk-config", handleAdminApkConfig)
 	http.HandleFunc("/status", handleStatus)
 	http.HandleFunc("/api/admin/check-demo-lockout", handleManualLockoutCheck)
 	http.HandleFunc("/api/admin/demo-users", handleGetDemoUsers)
@@ -119,12 +129,14 @@ func startCronWorker() {
 	if err := checkAndLockoutDemoUsers(); err != nil {
 		log.Printf("Initial demo lockout check failed: %v", err)
 	}
+	autoDetectApkVersion()
 
 	for range ticker.C {
 		log.Println("Triggering scheduled demo lockout check...")
 		if err := checkAndLockoutDemoUsers(); err != nil {
 			log.Printf("Scheduled demo lockout check failed: %v", err)
 		}
+		autoDetectApkVersion()
 	}
 }
 
@@ -1172,9 +1184,16 @@ func handleGetApkDownloadToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleDownloadApk(w http.ResponseWriter, r *http.Request) {
-	apkPath := "./posbah-v2.0.3.apk"
+	var version string
+	if db != nil {
+		_ = db.QueryRow(`SELECT "version" FROM "apk_config" WHERE "id" = 1`).Scan(&version)
+	}
+	if version == "" {
+		version = "2.0.3" // Fallback
+	}
+	apkPath := fmt.Sprintf("./posbah-v%s.apk", version)
 	if _, err := os.Stat(apkPath); err == nil {
-		w.Header().Set("Content-Disposition", "attachment; filename=POSBah-v2.0.3.apk")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=POSBah-v%s.apk", version))
 		w.Header().Set("Content-Type", "application/vnd.android.package-archive")
 		http.ServeFile(w, r, apkPath)
 		return
@@ -1185,9 +1204,26 @@ func handleDownloadApk(w http.ResponseWriter, r *http.Request) {
 
 func handleApkVersion(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	if db == nil {
+		json.NewEncoder(w).Encode(map[string]string{
+			"version":     "2.0.3",
+			"description": "Database not initialized. Fallback version.",
+		})
+		return
+	}
+	var version, description, downloadUrl string
+	err := db.QueryRow(`SELECT "version", "description", "downloadUrl" FROM "apk_config" WHERE "id" = 1`).Scan(&version, &description, &downloadUrl)
+	if err != nil {
+		json.NewEncoder(w).Encode(map[string]string{
+			"version":     "2.0.3",
+			"description": "Query failed. Fallback version.",
+		})
+		return
+	}
 	json.NewEncoder(w).Encode(map[string]string{
-		"version": "2.0.3",
-		"description": "Integrasi & perbaikan interkoneksi data premium bahteramulyap@gmail.com, sinkronisasi penuh modul Pabrik (BMP) dua arah, serta penataan visual dan tata letak menu Rental & Laundry.",
+		"version":     version,
+		"description": description,
+		"downloadUrl": downloadUrl,
 	})
 }
 
@@ -3604,6 +3640,90 @@ func handleConfirmPaymentPage(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(htmlContent))
 }
 
+func upgradeUserToPremium(googleSub, email, displayName string) (string, error) {
+	if db == nil {
+		return "", fmt.Errorf("Database not initialized")
+	}
+
+	passwordGenerated := generateRandomPassword()
+	hashedPassword := hashPassword(passwordGenerated)
+
+	cleanEmail := strings.ReplaceAll(strings.ReplaceAll(email, ".", "_"), "@", "_")
+	demoTenantId := "demo_tenant_" + cleanEmail
+	premiumTenantId := "ten_premium_" + cleanEmail
+
+	tx, err := db.Begin()
+	if err != nil {
+		return "", fmt.Errorf("Transaction failed: %w", err)
+	}
+	defer tx.Rollback()
+
+	var businessMode string = "FNB"
+	err = tx.QueryRow(`SELECT "businessMode" FROM "tenants" WHERE "id" = $1`, demoTenantId).Scan(&businessMode)
+	if err != nil {
+		businessMode = "FNB"
+	}
+
+	nowMillis := time.Now().UnixNano() / int64(time.Millisecond)
+
+	tenantName := "CV. " + displayName + " (Premium)"
+	_, err = tx.Exec(`INSERT INTO "tenants" ("id", "name", "ownerEmail", "businessMode", "isActive", "createdAt", "updatedAt") 
+		VALUES ($1, $2, $3, $4, $5, $6, $7) 
+		ON CONFLICT ("id") DO UPDATE SET "name" = EXCLUDED."name", "businessMode" = EXCLUDED."businessMode", "updatedAt" = EXCLUDED."updatedAt"`,
+		premiumTenantId, tenantName, email, businessMode, true, nowMillis, nowMillis)
+	if err != nil {
+		return "", fmt.Errorf("Failed to create premium tenant: %w", err)
+	}
+
+	employeeId := int((time.Now().Unix() + int64(time.Now().Nanosecond())) % 2000000000)
+	_, err = tx.Exec(`INSERT INTO "employees" ("id", "tenantId", "outletId", "name", "email", "role", "pinHash", "salary", "isActive", "createdAt", "updatedAt") 
+		VALUES ($1, $2, NULL, $3, $4, 'OWNER', $5, 0.0, true, $6, $7)
+		ON CONFLICT ("id") DO NOTHING`,
+		employeeId, premiumTenantId, displayName, email, hashedPassword, nowMillis, nowMillis)
+	if err != nil {
+		return "", fmt.Errorf("Failed to create owner employee: %w", err)
+	}
+
+	_, err = tx.Exec(`UPDATE "local_users" SET "isPremium" = TRUE, "tenantId" = $1, "isActive" = TRUE, "updatedAt" = $2 WHERE "googleSub" = $3`,
+		premiumTenantId, nowMillis, googleSub)
+	if err != nil {
+		return "", fmt.Errorf("Failed to update local user: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return "", fmt.Errorf("Failed to commit transaction: %w", err)
+	}
+
+	// Send Email
+	subject := "[POSBah] Informasi Akun Premium POSBah Anda"
+	body := fmt.Sprintf(`
+		<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+			<h2 style="color: #10B981;">Pembayaran Sukses - Akun Premium POSBah Aktif!</h2>
+			<p>Halo %%s,</p>
+			<p>Terima kasih atas pembayaran Anda. Akun Anda telah berhasil di-upgrade ke <strong>Premium</strong>.</p>
+			<p>Untuk login ke aplikasi POSBah Anda, silakan gunakan kredensial berikut:</p>
+			<table style="width: 100%%%%; margin-top: 15px; border-collapse: collapse;">
+				<tr>
+					<td style="padding: 8px; font-weight: bold; width: 120px;">Email:</td>
+					<td style="padding: 8px;">%%s</td>
+				</tr>
+				<tr>
+					<td style="padding: 8px; font-weight: bold;">Password:</td>
+					<td style="padding: 8px; font-family: monospace; color: #EF4444; font-size: 1.1em;">%%s</td>
+				</tr>
+			</table>
+			<p style="margin-top: 20px;">Silakan login di aplikasi POSBah dengan email ini dan password di atas.</p>
+		</div>
+	`, displayName, email, passwordGenerated)
+
+	err = sendEmail(email, subject, body)
+	if err != nil {
+		log.Printf("Warning: Premium upgrade email could not be sent: %%v", err)
+	}
+
+	return passwordGenerated, nil
+}
+
 func handleConfirmPaymentAction(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -3626,77 +3746,11 @@ func handleConfirmPaymentAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if action == "approve" {
-		passwordGenerated := generateRandomPassword()
-		hashedPassword := hashPassword(passwordGenerated)
-
-		cleanEmail := strings.ReplaceAll(strings.ReplaceAll(email, ".", "_"), "@", "_")
-		demoTenantId := "demo_tenant_" + cleanEmail
-		premiumTenantId := "ten_premium_" + cleanEmail
-
-		tx, err := db.Begin()
+		passwordGenerated, err := upgradeUserToPremium(googleSub, email, displayName)
 		if err != nil {
-			http.Error(w, "Transaction failed: "+err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Failed to upgrade user: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		defer tx.Rollback()
-
-		var businessMode string = "FNB"
-		err = tx.QueryRow(`SELECT "businessMode" FROM "tenants" WHERE "id" = $1`, demoTenantId).Scan(&businessMode)
-		if err != nil {
-			businessMode = "FNB"
-		}
-
-		nowMillis := time.Now().UnixNano() / int64(time.Millisecond)
-
-		tenantName := "CV. " + displayName + " (Premium)"
-		_, err = tx.Exec(`INSERT INTO "tenants" ("id", "name", "ownerEmail", "businessMode", "isActive", "createdAt", "updatedAt") 
-			VALUES ($1, $2, $3, $4, $5, $6, $7) 
-			ON CONFLICT ("id") DO UPDATE SET "name" = EXCLUDED."name", "businessMode" = EXCLUDED."businessMode", "updatedAt" = EXCLUDED."updatedAt"`,
-			premiumTenantId, tenantName, email, businessMode, true, nowMillis, nowMillis)
-		if err != nil {
-			http.Error(w, "Failed to create premium tenant: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		employeeId := int((time.Now().Unix() + int64(time.Now().Nanosecond())) % 2000000000)
-		_, err = tx.Exec(`INSERT INTO "employees" ("id", "tenantId", "outletId", "name", "email", "role", "pinHash", "salary", "isActive", "createdAt", "updatedAt") 
-			VALUES ($1, $2, NULL, $3, $4, 'OWNER', $5, 0.0, true, $6, $7)
-			ON CONFLICT ("id") DO NOTHING`,
-			employeeId, premiumTenantId, displayName, email, hashedPassword, nowMillis, nowMillis)
-		if err != nil {
-			http.Error(w, "Failed to create owner employee: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		_, err = tx.Exec(`UPDATE "local_users" SET "isPremium" = TRUE, "tenantId" = $1, "isActive" = TRUE, "updatedAt" = $2 WHERE "googleSub" = $3`,
-			premiumTenantId, nowMillis, googleSub)
-		if err != nil {
-			http.Error(w, "Failed to update local user: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		if err := tx.Commit(); err != nil {
-			http.Error(w, "Failed to commit transaction: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		subject := "[POSBah] Informasi Akun Premium POSBah Anda"
-		body := fmt.Sprintf(`
-			<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
-				<h2 style="color: #10B981;">Pembayaran Sukses - Akun Premium POSBah Aktif!</h2>
-				<p>Halo %s,</p>
-				<p>Terima kasih atas pembayaran Anda. Akun Anda telah berhasil di-upgrade ke <strong>Premium</strong>.</p>
-				<p>Silakan gunakan kredensial berikut untuk masuk ke aplikasi POSBah sebagai Premium User:</p>
-				<div style="background-color: #f4f4f4; padding: 15px; border-radius: 6px; margin: 20px 0; font-family: monospace;">
-					<strong>Email:</strong> %s<br>
-					<strong>Password:</strong> <span style="font-size: 16px; color: #d9534f; font-weight: bold;">%s</span>
-				</div>
-				<p><strong>Catatan Penting:</strong> Simpan password ini baik-baik. Anda dapat menggunakan email dan password ini secara langsung untuk masuk pada menu Premium (Email) di halaman login aplikasi POSBah.</p>
-				<p>Selamat bertransaksi!</p>
-			</div>
-		`, displayName, email, passwordGenerated)
-
-		_ = sendEmail(email, subject, body)
 
 		w.Header().Set("Content-Type", "text/html")
 		w.Write([]byte(`
@@ -3764,4 +3818,446 @@ func handleConfirmPaymentAction(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "Invalid action", http.StatusBadRequest)
 }
 
+func handleAdminPage(w http.ResponseWriter, r *http.Request) {
+	path := "./web/admin.html"
+	if _, err := os.Stat(path); err != nil {
+		path = "./admin.html"
+	}
+	http.ServeFile(w, r, path)
+}
 
+func handleAdminLogin(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+
+	if db == nil {
+		http.Error(w, "Database not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	var storedHash string
+	err := db.QueryRow(`SELECT "passwordHash" FROM "system_admins" WHERE "email" = $1`, req.Email).Scan(&storedHash)
+	if err != nil {
+		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
+		return
+	}
+
+	incomingHash := hashPassword(req.Password)
+	if incomingHash != storedHash {
+		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
+		return
+	}
+
+	sessionToken := fmt.Sprintf("admin_sess_%d_%s", time.Now().UnixNano(), randString(16))
+	adminSessionsMu.Lock()
+	adminSessions[sessionToken] = req.Email
+	adminSessionsMu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"token":   sessionToken,
+	})
+}
+
+func handleAdminCheckLogin(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	token := getBearerToken(r)
+	if token == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	adminSessionsMu.Lock()
+	email, exists := adminSessions[token]
+	adminSessionsMu.Unlock()
+
+	if !exists {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"valid": true,
+		"email": email,
+	})
+}
+
+func handleAdminLogout(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	token := getBearerToken(r)
+	if token != "" {
+		adminSessionsMu.Lock()
+		delete(adminSessions, token)
+		adminSessionsMu.Unlock()
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
+func getBearerToken(r *http.Request) string {
+	authHeader := r.Header.Get("Authorization")
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		return strings.TrimPrefix(authHeader, "Bearer ")
+	}
+	return ""
+}
+
+func isAdminAuthenticated(r *http.Request) bool {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == adminAuthToken {
+		return true
+	}
+	token := getBearerToken(r)
+	if token != "" {
+		adminSessionsMu.Lock()
+		_, exists := adminSessions[token]
+		adminSessionsMu.Unlock()
+		return exists
+	}
+	return false
+}
+
+func handleAdminGetUsers(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if !isAdminAuthenticated(r) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if db == nil {
+		http.Error(w, "Database not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	rows, err := db.Query(`SELECT "googleSub", "email", COALESCE("displayName", ''), "registeredAt", "isActive", COALESCE("tenantId", ''), "isPremium" FROM "local_users" ORDER BY "registeredAt" DESC`)
+	if err != nil {
+		http.Error(w, "Database query failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type UserItem struct {
+		GoogleSub    string `json:"googleSub"`
+		Email        string `json:"email"`
+		DisplayName  string `json:"displayName"`
+		RegisteredAt int64  `json:"registeredAt"`
+		IsActive     bool   `json:"isActive"`
+		TenantId     string `json:"tenantId"`
+		IsPremium    bool   `json:"isPremium"`
+	}
+
+	users := []UserItem{}
+	for rows.Next() {
+		var u UserItem
+		if err := rows.Scan(&u.GoogleSub, &u.Email, &u.DisplayName, &u.RegisteredAt, &u.IsActive, &u.TenantId, &u.IsPremium); err != nil {
+			log.Printf("Failed to scan user: %v", err)
+			continue
+		}
+		users = append(users, u)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(users)
+}
+
+func handleAdminToggleBlock(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if !isAdminAuthenticated(r) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		GoogleSub string `json:"googleSub"`
+		IsActive  bool   `json:"isActive"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+
+	if db == nil {
+		http.Error(w, "Database not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	_, err := db.Exec(`UPDATE "local_users" SET "isActive" = $1, "updatedAt" = $2 WHERE "googleSub" = $3`,
+		req.IsActive, time.Now().UnixNano()/int64(time.Millisecond), req.GoogleSub)
+	if err != nil {
+		http.Error(w, "Database update failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Broadcast WS message about the block status change
+	statusMsg := "active"
+	if !req.IsActive {
+		statusMsg = "blocked"
+	}
+	wsMsg := map[string]interface{}{
+		"type":      "user_status_changed",
+		"googleSub": req.GoogleSub,
+		"status":    statusMsg,
+	}
+	msgBytes, _ := json.Marshal(wsMsg)
+	broadcastWSMessage(string(msgBytes))
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]bool{"success": true})
+}
+
+func handleAdminConfirmPayment(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if !isAdminAuthenticated(r) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		GoogleSub   string `json:"googleSub"`
+		Email       string `json:"email"`
+		DisplayName string `json:"displayName"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+
+	if req.GoogleSub == "" || req.Email == "" {
+		http.Error(w, "googleSub and email are required", http.StatusBadRequest)
+		return
+	}
+
+	passwordGenerated, err := upgradeUserToPremium(req.GoogleSub, req.Email, req.DisplayName)
+	if err != nil {
+		http.Error(w, "Upgrade failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Broadcast WS message
+	wsMsg := map[string]interface{}{
+		"type":      "user_upgraded",
+		"googleSub": req.GoogleSub,
+		"email":     req.Email,
+	}
+	msgBytes, _ := json.Marshal(wsMsg)
+	broadcastWSMessage(string(msgBytes))
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":  true,
+		"password": passwordGenerated,
+	})
+}
+
+func handleAdminApkConfig(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if !isAdminAuthenticated(r) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if db == nil {
+		http.Error(w, "Database not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	if r.Method == http.MethodGet {
+		var version, description, downloadUrl string
+		var updatedAt int64
+		err := db.QueryRow(`SELECT "version", "description", "downloadUrl", "updatedAt" FROM "apk_config" WHERE "id" = 1`).Scan(&version, &description, &downloadUrl, &updatedAt)
+		if err != nil {
+			http.Error(w, "Query failed: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"version":     version,
+			"description": description,
+			"downloadUrl": downloadUrl,
+			"updatedAt":   updatedAt,
+		})
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		var req struct {
+			Version     string `json:"version"`
+			Description string `json:"description"`
+			DownloadUrl string `json:"downloadUrl"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			return
+		}
+
+		if req.Version == "" {
+			http.Error(w, "version is required", http.StatusBadRequest)
+			return
+		}
+
+		_, err := db.Exec(`UPDATE "apk_config" SET "version" = $1, "description" = $2, "downloadUrl" = $3, "updatedAt" = $4 WHERE "id" = 1`,
+			req.Version, req.Description, req.DownloadUrl, time.Now().UnixNano()/int64(time.Millisecond))
+		if err != nil {
+			http.Error(w, "Update failed: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Broadcast update notification
+		wsMsg := map[string]interface{}{
+			"type":        "apk_update",
+			"version":     req.Version,
+			"description": req.Description,
+		}
+		msgBytes, _ := json.Marshal(wsMsg)
+		broadcastWSMessage(string(msgBytes))
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]bool{"success": true})
+		return
+	}
+}
+
+func compareVersions(v1, v2 string) int {
+	parts1 := strings.Split(v1, ".")
+	parts2 := strings.Split(v2, ".")
+	for i := 0; i < len(parts1) && i < len(parts2); i++ {
+		n1, _ := strconv.Atoi(parts1[i])
+		n2, _ := strconv.Atoi(parts2[i])
+		if n1 < n2 {
+			return -1
+		}
+		if n1 > n2 {
+			return 1
+		}
+	}
+	if len(parts1) < len(parts2) {
+		return -1
+	}
+	if len(parts1) > len(parts2) {
+		return 1
+	}
+	return 0
+}
+
+func autoDetectApkVersion() {
+	if db == nil {
+		return
+	}
+
+	files, err := filepath.Glob("./posbah-v*.apk")
+	if err != nil || len(files) == 0 {
+		return
+	}
+
+	var latestVersion string
+	for _, f := range files {
+		filename := filepath.Base(f)
+		version := strings.TrimPrefix(filename, "posbah-v")
+		version = strings.TrimSuffix(version, ".apk")
+		if latestVersion == "" || compareVersions(version, latestVersion) > 0 {
+			latestVersion = version
+		}
+	}
+
+	if latestVersion == "" {
+		return
+	}
+
+	var currentVersion string
+	err = db.QueryRow(`SELECT "version" FROM "apk_config" WHERE "id" = 1`).Scan(&currentVersion)
+	if err != nil {
+		// Insert default if select failed
+		_, _ = db.Exec(`INSERT INTO "apk_config" ("id", "version", "description", "downloadUrl", "updatedAt") VALUES (1, $1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+			latestVersion, "Versi baru terdeteksi otomatis.", "/api/download-apk", time.Now().UnixNano()/int64(time.Millisecond))
+		return
+	}
+
+	if latestVersion != currentVersion {
+		description := ""
+		notesBytes, err := os.ReadFile("./release_notes.txt")
+		if err == nil {
+			description = strings.TrimSpace(string(notesBytes))
+		}
+		if description == "" {
+			description = fmt.Sprintf("Pembaruan ke versi %s terdeteksi otomatis. Silakan unduh pembaruan.", latestVersion)
+		}
+
+		_, err = db.Exec(`UPDATE "apk_config" SET "version" = $1, "description" = $2, "updatedAt" = $3 WHERE "id" = 1`,
+			latestVersion, description, time.Now().UnixNano()/int64(time.Millisecond))
+		if err == nil {
+			log.Printf("[AutoUpdate] Detected and updated new APK version: %s", latestVersion)
+			// Broadcast update notification
+			wsMsg := map[string]interface{}{
+				"type":        "apk_update",
+				"version":     latestVersion,
+				"description": description,
+			}
+			msgBytes, _ := json.Marshal(wsMsg)
+			broadcastWSMessage(string(msgBytes))
+		}
+	}
+}
