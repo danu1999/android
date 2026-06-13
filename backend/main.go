@@ -4494,6 +4494,17 @@ func handleAdminDiagnose(w http.ResponseWriter, r *http.Request) {
 			"isActive":  empActive,
 		},
 		"jonio_matches": matches,
+		"smtp_config": map[string]interface{}{
+			"host_configured":   os.Getenv("SMTP_HOST") != "",
+			"port_configured":   os.Getenv("SMTP_PORT") != "",
+			"user_configured":   os.Getenv("SMTP_USER") != "",
+			"pass_configured":   os.Getenv("SMTP_PASS") != "",
+			"sender_configured": os.Getenv("SMTP_SENDER") != "",
+			"host":              os.Getenv("SMTP_HOST"),
+			"port":              os.Getenv("SMTP_PORT"),
+			"user":              os.Getenv("SMTP_USER"),
+			"sender":            os.Getenv("SMTP_SENDER"),
+		},
 	})
 }
 
