@@ -559,10 +559,19 @@ func runAutoDeploy() {
 		return
 	}
 
-	// 2. Go build
-	if err := runCmd("go", []string{"build", "-o", "posbah-backend"}, backendDir); err != nil {
-		writeLog("[AutoDeploy] Go build gagal: %v", err)
-		return
+	// 2. Go build (or use pre-compiled binary if present)
+	usePrecompiled := false
+	srcBin := backendDir + "/posbah-backend"
+	if _, err := os.Stat(srcBin); err == nil {
+		writeLog("[AutoDeploy] Menemukan pre-compiled binary. Menghindari build ulang di VPS.")
+		usePrecompiled = true
+	}
+
+	if !usePrecompiled {
+		if err := runCmd("go", []string{"build", "-o", "posbah-backend"}, backendDir); err != nil {
+			writeLog("[AutoDeploy] Go build gagal: %v", err)
+			return
+		}
 	}
 
 	// 3. Backup & unlink old binary
@@ -570,7 +579,7 @@ func runAutoDeploy() {
 	_ = os.Rename(destBin, destBin+".bak")
 
 	// 4. Copy new binary
-	srcBin := backendDir + "/posbah-backend"
+	srcBin = backendDir + "/posbah-backend"
 	if err := copyFile(srcBin, destBin); err != nil {
 		writeLog("[AutoDeploy] Gagal menyalin binary baru: %v", err)
 		return
