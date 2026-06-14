@@ -522,8 +522,74 @@ class AuthRepository @Inject constructor(
 
         val cleanEmail = email.lowercase().trim()
 
+        // Sync local user's premium status from the server if they are currently marked as demo locally
+        var dbUser = userDao.getByEmail(cleanEmail)
+        if (dbUser != null && !dbUser.isPremium) {
+            var conn: java.net.HttpURLConnection? = null
+            try {
+                val url = java.net.URL("https://www.zedmz.cloud/api/sync/local_users?email=eq.${java.net.URLEncoder.encode(cleanEmail, "UTF-8")}")
+                conn = url.openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+                if (conn.responseCode in 200..299) {
+                    val response = conn.inputStream.bufferedReader().use { it.readText() }
+                    val array = org.json.JSONArray(response)
+                    if (array.length() > 0) {
+                        val obj = array.getJSONObject(0)
+                        val isPremiumOnServer = obj.optBoolean("isPremium", false)
+                        if (isPremiumOnServer) {
+                            val serverTenantId = obj.optString("tenantId", "")
+                            val updatedUser = dbUser.copy(
+                                isPremium = true,
+                                tenantId = if (serverTenantId.isNotEmpty()) serverTenantId else dbUser.tenantId,
+                                updatedAt = System.currentTimeMillis()
+                            )
+                            userDao.upsert(updatedUser)
+                            dbUser = userDao.getByEmail(cleanEmail)
+
+                            // Ensure tenant exists locally
+                            if (serverTenantId.isNotEmpty()) {
+                                var tenantName = "CV. Premium Owner (Premium)"
+                                var tenantBusinessMode = "BMP"
+                                var tenantConn: java.net.HttpURLConnection? = null
+                                try {
+                                    val tUrl = java.net.URL("https://www.zedmz.cloud/api/sync/tenants?id=eq.$serverTenantId")
+                                    tenantConn = tUrl.openConnection() as java.net.HttpURLConnection
+                                    tenantConn.requestMethod = "GET"
+                                    if (tenantConn.responseCode in 200..299) {
+                                        val tResponse = tenantConn.inputStream.bufferedReader().use { it.readText() }
+                                        val tArray = org.json.JSONArray(tResponse)
+                                        if (tArray.length() > 0) {
+                                            val tObj = tArray.getJSONObject(0)
+                                            tenantName = tObj.getString("name")
+                                            tenantBusinessMode = tObj.getString("businessMode")
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                } finally {
+                                    tenantConn?.disconnect()
+                                }
+                                val tenant = Tenant(
+                                    id = serverTenantId,
+                                    name = tenantName,
+                                    ownerEmail = cleanEmail,
+                                    businessMode = tenantBusinessMode
+                                )
+                                tenantDao.upsert(tenant)
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                conn?.disconnect()
+            }
+        }
+
         // Enforce: Demo users must use Google Login
-        val dbUser = userDao.getByEmail(cleanEmail)
         if (dbUser != null && !dbUser.isPremium) {
             return@withContext LoginOutcome.Error("Akun demo wajib menggunakan Google Login. Hubungi muhammadmuizz8@gmail.com jika sudah melakukan pembayaran premium.")
         }
