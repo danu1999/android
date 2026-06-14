@@ -63,9 +63,9 @@ class SecurePreferences @Inject constructor(
         get() = prefs.getLong(KEY_LOCKOUT_UNTIL, 0L)
         set(value) = prefs.edit().putLong(KEY_LOCKOUT_UNTIL, value).apply()
 
-    var isDemoCleanedV208: Boolean
-        get() = prefs.getBoolean("demo_cleaned_v208", false)
-        set(value) = prefs.edit().putBoolean("demo_cleaned_v208", value).apply()
+    var isDemoCleanedV211: Boolean
+        get() = prefs.getBoolean("demo_cleaned_v211", false)
+        set(value) = prefs.edit().putBoolean("demo_cleaned_v211", value).apply()
 
     /** Wipe entire encrypted session. Called on logout / tamper detection. */
     fun wipe() {

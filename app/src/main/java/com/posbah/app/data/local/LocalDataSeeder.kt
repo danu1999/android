@@ -16,6 +16,7 @@ import com.posbah.app.data.local.entities.BmpMasterProductEntity
 import com.posbah.app.data.local.entities.BmpInvoicePaymentEntity
 import com.posbah.app.data.local.entities.BmpCashFlowEntity
 import com.posbah.app.data.local.entities.BmpSettingsEntity
+import com.posbah.app.data.local.entities.PrintSettingsEntity
 import com.posbah.app.data.local.entities.BmpEmployeeEntity
 import com.posbah.app.data.local.entities.BmpPayrollEntity
 import com.posbah.app.data.local.entities.BmpBahanBakuEntity
@@ -886,6 +887,14 @@ class LocalDataSeeder @Inject constructor(
                 )
                 db.bmpSettingsDao().upsert(bmpSettings)
 
+                // Generate default Print Settings for BMP
+                val printSettings = PrintSettingsEntity(
+                    tenantId = tenantId,
+                    moduleKey = "BMP",
+                    logoPath = null
+                )
+                db.printSettingsDao().upsert(printSettings)
+
                 // 8. Generate default BMP Master Products
                 val masterProds = listOf(
                     BmpMasterProductEntity(
@@ -956,235 +965,613 @@ class LocalDataSeeder @Inject constructor(
 
             } else {
                 // POS Mode (FNB / RENTAL / LAUNDRY) -> Generate transactions > 30M
-                // 1. Outlet Employees (Kasir)
-                val cashier1 = Employee(
-                    id = 888881L,
-                    tenantId = tenantId,
-                    outletId = outletId,
-                    name = "Lani Kasir (FNB)",
-                    email = "lani@kasir.com",
-                    role = "KASIR",
-                    pinHash = "123456",
-                    salary = 3000000.0
-                )
-                val cashier2 = Employee(
-                    id = 888882L,
-                    tenantId = tenantId,
-                    outletId = outletId,
-                    name = "Rian Kasir (ARMADA)",
-                    email = "rian@kasir.com",
-                    role = "KASIR",
-                    pinHash = "123456",
-                    salary = 3200000.0
-                )
-                db.employeeDao().insert(cashier1)
-                db.employeeDao().insert(cashier2)
-
-                // 2. Customers
-                val cust1 = CustomerEntity(
-                    id = 888881L,
-                    tenantId = tenantId,
-                    name = "Hotel Santika (Demo)",
-                    phone = "08123456789",
-                    address = "Jl. Raya Sidoarjo No. 10"
-                )
-                val cust2 = CustomerEntity(
-                    id = 888882L,
-                    tenantId = tenantId,
-                    name = "Catering Bu Endang (Demo)",
-                    phone = "08776543210",
-                    address = "Kec. Waru, Sidoarjo"
-                )
-                db.customerDao().insertAll(listOf(cust1, cust2))
-
-                // 3. Products matching POS system
-                val fnbProd = ProductEntity(
-                    id = 888881L,
-                    tenantId = tenantId,
-                    outletId = outletId,
-                    name = "Paket Catering Bento Box Premium",
-                    price = 150000.0,
-                    costPrice = 80000.0,
-                    stock = 500,
-                    unit = "pax",
-                    barcode = "FNB-001",
-                    category = "CATERING"
-                )
-                val rentalProd = ProductEntity(
-                    id = 888882L,
-                    tenantId = tenantId,
-                    outletId = outletId,
-                    name = "Sewa Toyota Alphard + Sopir (24 Jam)",
-                    price = 2500000.0,
-                    costPrice = 1200000.0,
-                    stock = 5,
-                    unit = "hari",
-                    barcode = "RNT-001",
-                    category = "MOBIL"
-                )
-                val laundryProd = ProductEntity(
-                    id = 888883L,
-                    tenantId = tenantId,
-                    outletId = outletId,
-                    name = "Paket Cuci Setrika Bedcover Hotel",
-                    price = 50000.0,
-                    costPrice = 20000.0,
-                    stock = 1000,
-                    unit = "pcs",
-                    barcode = "LND-001",
-                    category = "SATUAN"
-                )
-                db.productDao().insertAll(listOf(fnbProd, rentalProd, laundryProd))
-
-                // 4. Generate transactions totalling 35,500,000 IDR
-                val startMs = System.currentTimeMillis() - 5 * 24 * 60 * 60 * 1000L // 5 days ago
-                val newTxs = mutableListOf<TransactionEntity>()
-                val newTxItems = mutableListOf<TransactionItemEntity>()
-
-                var txIndex = 888881L
-                var txItemIndex = 888881L
-
-                // Catering Transactions (10 * 1.5M = 15M)
-                for (i in 0 until 10) {
-                    val date = startMs + i * 8 * 60 * 60 * 1000L
-                    val subtotal = 150000.0 * 10
-                    val total = subtotal
-                    val receiptNumber = "TX-CAT-${10000 + i}"
-                    
-                    newTxs.add(
-                        TransactionEntity(
-                            id = txIndex,
-                            tenantId = tenantId,
-                            outletId = outletId,
-                            employeeId = 888881L,
-                            customerId = 888882L,
-                            customerName = "Catering Bu Endang (Demo)",
-                            receiptNumber = receiptNumber,
-                            date = date,
-                            subtotal = subtotal,
-                            discountAmt = 0.0,
-                            total = total,
-                            discount = 0.0,
-                            paymentMethod = "TRANSFER",
-                            type = "SALES",
-                            status = "COMPLETED",
-                            createdAt = date,
-                            updatedAt = date
-                        )
-                    )
-                    newTxItems.add(
-                        TransactionItemEntity(
-                            id = txItemIndex++,
-                            transactionId = txIndex,
-                            productId = 888881L,
-                            variantId = null,
-                            variantName = null,
-                            quantity = 10,
-                            price = 150000.0,
-                            costPrice = 80000.0,
-                            discount = 0.0,
-                            note = "Pesanan Bento Box Acara Arisan"
-                        )
-                    )
-                    txIndex++
+                val mode = tenant?.businessMode ?: when {
+                    tenantId.endsWith("_BMP") -> "BMP"
+                    tenantId.endsWith("_RENTAL") -> "RENTAL"
+                    tenantId.endsWith("_LAUNDRY") -> "LAUNDRY"
+                    else -> "FNB"
                 }
 
-                // Rental Transactions (8 * 2.5M = 20M)
-                for (i in 0 until 8) {
-                    val date = startMs + i * 12 * 60 * 60 * 1000L + 4 * 60 * 60 * 1000L
-                    val subtotal = 2500000.0
-                    val total = subtotal
-                    val receiptNumber = "TX-RNT-${20000 + i}"
+                if (mode == "FNB") {
+                    // Seed PrintSettings for FNB
+                    val printSettings = PrintSettingsEntity(
+                        tenantId = tenantId,
+                        moduleKey = "FNB",
+                        logoPath = null
+                    )
+                    db.printSettingsDao().upsert(printSettings)
 
-                    newTxs.add(
-                        TransactionEntity(
-                            id = txIndex,
-                            tenantId = tenantId,
-                            outletId = outletId,
-                            employeeId = 888882L,
-                            customerId = 888881L,
-                            customerName = "Hotel Santika (Demo)",
-                            receiptNumber = receiptNumber,
-                            date = date,
-                            subtotal = subtotal,
-                            discountAmt = 0.0,
-                            total = total,
-                            discount = 0.0,
-                            paymentMethod = "CASH",
-                            type = "SALES",
-                            status = "COMPLETED",
-                            createdAt = date,
-                            updatedAt = date
-                        )
+                    // 1. Outlet Employees (Kasir)
+                    val cashier1 = Employee(
+                        id = 888881L,
+                        tenantId = tenantId,
+                        outletId = outletId,
+                        name = "Lani Kasir (FNB)",
+                        email = "lani@kasir.com",
+                        role = "KASIR",
+                        pinHash = "123456",
+                        salary = 3000000.0
                     )
-                    newTxItems.add(
-                        TransactionItemEntity(
-                            id = txItemIndex++,
-                            transactionId = txIndex,
-                            productId = 888882L,
-                            variantId = null,
-                            variantName = null,
-                            quantity = 1,
-                            price = 2500000.0,
-                            costPrice = 1200000.0,
-                            discount = 0.0,
-                            note = "Sewa Alphard Tamu VVIP Hotel"
-                        )
+                    val waiter = Employee(
+                        id = 888882L,
+                        tenantId = tenantId,
+                        outletId = outletId,
+                        name = "Budi Resto (Waiter)",
+                        email = "budi@resto.com",
+                        role = "KASIR",
+                        pinHash = "123456",
+                        salary = 2500000.0
                     )
-                    txIndex++
+                    db.employeeDao().insert(cashier1)
+                    db.employeeDao().insert(waiter)
+
+                    // 2. Customers
+                    val cust1 = CustomerEntity(
+                        id = 888881L,
+                        tenantId = tenantId,
+                        name = "Catering Bu Endang (Demo)",
+                        phone = "08776543210",
+                        address = "Kec. Waru, Sidoarjo"
+                    )
+                    val cust2 = CustomerEntity(
+                        id = 888882L,
+                        tenantId = tenantId,
+                        name = "Pelanggan Setia (Demo)",
+                        phone = "08122334455",
+                        address = "Kec. Gedangan, Sidoarjo"
+                    )
+                    db.customerDao().insertAll(listOf(cust1, cust2))
+
+                    // 3. Products
+                    val p1 = ProductEntity(
+                        id = 888881L,
+                        tenantId = tenantId,
+                        outletId = outletId,
+                        name = "Paket Catering Bento Box Premium",
+                        price = 150000.0,
+                        costPrice = 80000.0,
+                        stock = 500,
+                        unit = "pax",
+                        barcode = "FNB-001",
+                        category = "CATERING"
+                    )
+                    val p2 = ProductEntity(
+                        id = 888884L,
+                        tenantId = tenantId,
+                        outletId = outletId,
+                        name = "Nasi Goreng Spesial Posbah",
+                        price = 25000.0,
+                        costPrice = 12000.0,
+                        stock = 1000,
+                        unit = "porsi",
+                        barcode = "FNB-002",
+                        category = "MAKANAN"
+                    )
+                    val p3 = ProductEntity(
+                        id = 888885L,
+                        tenantId = tenantId,
+                        outletId = outletId,
+                        name = "Es Teh Manis Jumbo",
+                        price = 5000.0,
+                        costPrice = 1500.0,
+                        stock = 2000,
+                        unit = "gelas",
+                        barcode = "FNB-003",
+                        category = "MINUMAN"
+                    )
+                    val p4 = ProductEntity(
+                        id = 888886L,
+                        tenantId = tenantId,
+                        outletId = outletId,
+                        name = "Ayam Bakar Madu",
+                        price = 35000.0,
+                        costPrice = 18000.0,
+                        stock = 300,
+                        unit = "porsi",
+                        barcode = "FNB-004",
+                        category = "MAKANAN"
+                    )
+                    db.productDao().insertAll(listOf(p1, p2, p3, p4))
+
+                    // 4. Transactions (Total > 30M)
+                    val startMs = System.currentTimeMillis() - 5 * 24 * 60 * 60 * 1000L
+                    val newTxs = mutableListOf<TransactionEntity>()
+                    val newTxItems = mutableListOf<TransactionItemEntity>()
+                    var txIndex = 888881L
+                    var txItemIndex = 888881L
+
+                    // 15 Catering sales (15 * 1.5M = 22.5M)
+                    for (i in 0 until 15) {
+                        val date = startMs + i * 6 * 60 * 60 * 1000L
+                        val subtotal = 150000.0 * 10
+                        val dateStr = SimpleDateFormat("yyMMdd", Locale.US).format(java.util.Date(date))
+                        val receiptNum = "FNB-$dateStr-${String.format("%05d", i + 1)}"
+
+                        newTxs.add(
+                            TransactionEntity(
+                                id = txIndex,
+                                tenantId = tenantId,
+                                outletId = outletId,
+                                employeeId = 888881L,
+                                customerId = 888881L,
+                                customerName = "Catering Bu Endang (Demo)",
+                                receiptNumber = receiptNum,
+                                date = date,
+                                subtotal = subtotal,
+                                total = subtotal,
+                                paymentMethod = "TRANSFER",
+                                type = "SALES",
+                                status = "COMPLETED",
+                                createdAt = date,
+                                updatedAt = date
+                            )
+                        )
+                        newTxItems.add(
+                            TransactionItemEntity(
+                                id = txItemIndex++,
+                                transactionId = txIndex,
+                                productId = 888881L,
+                                quantity = 10,
+                                price = 150000.0,
+                                costPrice = 80000.0
+                            )
+                        )
+                        txIndex++
+                    }
+
+                    // 40 Misc Restaurant sales (40 * 300k = 12.0M)
+                    for (i in 0 until 40) {
+                        val date = startMs + i * 2 * 60 * 60 * 1000L + 30 * 60 * 1000L
+                        val subtotal = 300000.0
+                        val dateStr = SimpleDateFormat("yyMMdd", Locale.US).format(java.util.Date(date))
+                        val receiptNum = "FNB-$dateStr-${String.format("%05d", i + 16)}"
+
+                        newTxs.add(
+                            TransactionEntity(
+                                id = txIndex,
+                                tenantId = tenantId,
+                                outletId = outletId,
+                                employeeId = 888881L,
+                                customerId = 888882L,
+                                customerName = "Pelanggan Setia (Demo)",
+                                receiptNumber = receiptNum,
+                                date = date,
+                                subtotal = subtotal,
+                                total = subtotal,
+                                paymentMethod = "CASH",
+                                type = "SALES",
+                                status = "COMPLETED",
+                                createdAt = date,
+                                updatedAt = date
+                            )
+                        )
+                        newTxItems.add(
+                            TransactionItemEntity(
+                                id = txItemIndex++,
+                                transactionId = txIndex,
+                                productId = 888884L,
+                                quantity = 5,
+                                price = 25000.0,
+                                costPrice = 12000.0
+                            )
+                        )
+                        newTxItems.add(
+                            TransactionItemEntity(
+                                id = txItemIndex++,
+                                transactionId = txIndex,
+                                productId = 888886L,
+                                quantity = 5,
+                                price = 35000.0,
+                                costPrice = 18000.0
+                            )
+                        )
+                        txIndex++
+                    }
+
+                    for (tx in newTxs) {
+                        try {
+                            val txId = db.transactionDao().insert(tx)
+                            val itemsForTx = newTxItems.filter { it.transactionId == tx.id }
+                            db.transactionItemDao().insertAll(itemsForTx.map { it.copy(transactionId = txId) })
+                        } catch (e: Exception) {}
+                    }
+                } else if (mode == "RENTAL") {
+                    // Seed PrintSettings for RENTAL
+                    val printSettings = PrintSettingsEntity(
+                        tenantId = tenantId,
+                        moduleKey = "RENTAL",
+                        logoPath = null
+                    )
+                    db.printSettingsDao().upsert(printSettings)
+
+                    // 1. Outlet Employees
+                    val cashier = Employee(
+                        id = 888881L,
+                        tenantId = tenantId,
+                        outletId = outletId,
+                        name = "Rian Kasir (ARMADA)",
+                        email = "rian@kasir.com",
+                        role = "KASIR",
+                        pinHash = "123456",
+                        salary = 3200000.0
+                    )
+                    val driver = Employee(
+                        id = 888882L,
+                        tenantId = tenantId,
+                        outletId = outletId,
+                        name = "Dedi Supir (Driver)",
+                        email = "dedi@driver.com",
+                        role = "KASIR",
+                        pinHash = "123456",
+                        salary = 2800000.0
+                    )
+                    db.employeeDao().insert(cashier)
+                    db.employeeDao().insert(driver)
+
+                    // 2. Customers
+                    val cust1 = CustomerEntity(
+                        id = 888881L,
+                        tenantId = tenantId,
+                        name = "Hotel Santika (Demo)",
+                        phone = "08123456789",
+                        address = "Jl. Raya Sidoarjo No. 10"
+                    )
+                    val cust2 = CustomerEntity(
+                        id = 888882L,
+                        tenantId = tenantId,
+                        name = "Pribadi Eka (Demo)",
+                        phone = "08779988776",
+                        address = "Kec. Buduran, Sidoarjo"
+                    )
+                    db.customerDao().insertAll(listOf(cust1, cust2))
+
+                    // 3. Products (Vehicles) - Some available, some rented
+                    val v1 = ProductEntity(
+                        id = 888882L,
+                        tenantId = tenantId,
+                        outletId = outletId,
+                        name = "Sewa Toyota Alphard + Sopir (24 Jam)",
+                        price = 2500000.0,
+                        costPrice = 1200000.0,
+                        stock = 0, // 0 = Rented out
+                        unit = "hari",
+                        barcode = "RNT-001",
+                        category = "MOBIL",
+                        variants = """{"renterName":"Hotel Santika (Demo)","expiry":${System.currentTimeMillis() + 12 * 60 * 60 * 1000L},"days":2,"receiptNumber":"RN-260615-00001"}"""
+                    )
+                    val v2 = ProductEntity(
+                        id = 888887L,
+                        tenantId = tenantId,
+                        outletId = outletId,
+                        name = "Toyota Avanza Veloz",
+                        price = 350000.0,
+                        costPrice = 150000.0,
+                        stock = 1, // 1 = Available
+                        unit = "hari",
+                        barcode = "B 2038 UFX",
+                        category = "MOBIL"
+                    )
+                    val v3 = ProductEntity(
+                        id = 888888L,
+                        tenantId = tenantId,
+                        outletId = outletId,
+                        name = "Honda Beat Street",
+                        price = 80000.0,
+                        costPrice = 30000.0,
+                        stock = 1, // 1 = Available
+                        unit = "hari",
+                        barcode = "F 6432 AA",
+                        category = "MOTOR"
+                    )
+                    val v4 = ProductEntity(
+                        id = 888889L,
+                        tenantId = tenantId,
+                        outletId = outletId,
+                        name = "Mitsubishi Xpander Ultimate",
+                        price = 400000.0,
+                        costPrice = 180000.0,
+                        stock = 0, // 0 = Rented out
+                        unit = "hari",
+                        barcode = "B 1093 KLS",
+                        category = "MOBIL",
+                        variants = """{"renterName":"Pribadi Eka (Demo)","expiry":${System.currentTimeMillis() + 36 * 60 * 60 * 1000L},"days":3,"receiptNumber":"RN-260615-00002"}"""
+                    )
+                    db.productDao().insertAll(listOf(v1, v2, v3, v4))
+
+                    // 4. Transactions (Total > 30M)
+                    val startMs = System.currentTimeMillis() - 5 * 24 * 60 * 60 * 1000L
+                    val newTxs = mutableListOf<TransactionEntity>()
+                    val newTxItems = mutableListOf<TransactionItemEntity>()
+                    var txIndex = 888881L
+                    var txItemIndex = 888881L
+
+                    // 10 Sewa Alphard transactions (10 * 2.5M = 25.0M)
+                    for (i in 0 until 10) {
+                        val date = startMs + i * 10 * 60 * 60 * 1000L
+                        val subtotal = 2500000.0
+                        val dateStr = SimpleDateFormat("yyMMdd", Locale.US).format(java.util.Date(date))
+                        val receiptNum = "RN-$dateStr-${String.format("%05d", i + 1)}"
+
+                        newTxs.add(
+                            TransactionEntity(
+                                id = txIndex,
+                                tenantId = tenantId,
+                                outletId = outletId,
+                                employeeId = 888881L,
+                                customerId = 888882L, // vehicle product ID
+                                customerName = "Hotel Santika (Demo)",
+                                receiptNumber = receiptNum,
+                                date = date,
+                                subtotal = subtotal,
+                                total = subtotal,
+                                paymentMethod = "CASH",
+                                status = "COMPLETED",
+                                orderStatus = "RETURNED",
+                                queueNumber = 1,
+                                notes = "08123456789",
+                                createdAt = date,
+                                updatedAt = date
+                            )
+                        )
+                        newTxItems.add(
+                            TransactionItemEntity(
+                                id = txItemIndex++,
+                                transactionId = txIndex,
+                                productId = 888882L,
+                                quantity = 1,
+                                price = 2500000.0,
+                                costPrice = 1200000.0
+                            )
+                        )
+                        txIndex++
+                    }
+
+                    // 20 Sewa Avanza transactions (20 * 2 days * 350k = 14.0M)
+                    for (i in 0 until 20) {
+                        val date = startMs + i * 5 * 60 * 60 * 1000L + 2 * 60 * 60 * 1000L
+                        val subtotal = 700000.0
+                        val dateStr = SimpleDateFormat("yyMMdd", Locale.US).format(java.util.Date(date))
+                        val receiptNum = "RN-$dateStr-${String.format("%05d", i + 11)}"
+
+                        newTxs.add(
+                            TransactionEntity(
+                                id = txIndex,
+                                tenantId = tenantId,
+                                outletId = outletId,
+                                employeeId = 888881L,
+                                customerId = 888887L,
+                                customerName = "Pribadi Eka (Demo)",
+                                receiptNumber = receiptNum,
+                                date = date,
+                                subtotal = subtotal,
+                                total = subtotal,
+                                paymentMethod = "CASH",
+                                status = "COMPLETED",
+                                orderStatus = "RETURNED",
+                                queueNumber = 2,
+                                notes = "08779988776",
+                                createdAt = date,
+                                updatedAt = date
+                            )
+                        )
+                        newTxItems.add(
+                            TransactionItemEntity(
+                                id = txItemIndex++,
+                                transactionId = txIndex,
+                                productId = 888887L,
+                                quantity = 1,
+                                price = 350000.0,
+                                costPrice = 150000.0
+                            )
+                        )
+                        txIndex++
+                    }
+
+                    for (tx in newTxs) {
+                        try {
+                            val txId = db.transactionDao().insert(tx)
+                            val itemsForTx = newTxItems.filter { it.transactionId == tx.id }
+                            db.transactionItemDao().insertAll(itemsForTx.map { it.copy(transactionId = txId) })
+                        } catch (e: Exception) {}
+                    }
+                } else if (mode == "LAUNDRY") {
+                    // Seed PrintSettings for LAUNDRY
+                    val printSettings = PrintSettingsEntity(
+                        tenantId = tenantId,
+                        moduleKey = "LAUNDRY",
+                        logoPath = null
+                    )
+                    db.printSettingsDao().upsert(printSettings)
+
+                    // 1. Outlet Employees
+                    val cashier = Employee(
+                        id = 888881L,
+                        tenantId = tenantId,
+                        outletId = outletId,
+                        name = "Lina Kasir (LAUNDRY)",
+                        email = "lina@kasir.com",
+                        role = "KASIR",
+                        pinHash = "123456",
+                        salary = 3000000.0
+                    )
+                    val washer = Employee(
+                        id = 888882L,
+                        tenantId = tenantId,
+                        outletId = outletId,
+                        name = "Agus Cuci (Operator)",
+                        email = "agus@laundry.com",
+                        role = "KASIR",
+                        pinHash = "123456",
+                        salary = 2500000.0
+                    )
+                    db.employeeDao().insert(cashier)
+                    db.employeeDao().insert(washer)
+
+                    // 2. Customers
+                    val cust1 = CustomerEntity(
+                        id = 888881L,
+                        tenantId = tenantId,
+                        name = "Hotel Santika (Demo)",
+                        phone = "08123456789",
+                        address = "Jl. Raya Sidoarjo No. 10"
+                    )
+                    val cust2 = CustomerEntity(
+                        id = 888882L,
+                        tenantId = tenantId,
+                        name = "Kost Asri (Demo)",
+                        phone = "08199887766",
+                        address = "Kec. Gedangan, Sidoarjo"
+                    )
+                    db.customerDao().insertAll(listOf(cust1, cust2))
+
+                    // 3. Products
+                    val s1 = ProductEntity(
+                        id = 888883L,
+                        tenantId = tenantId,
+                        outletId = outletId,
+                        name = "Paket Cuci Setrika Bedcover Hotel",
+                        price = 50000.0,
+                        costPrice = 20000.0,
+                        stock = 1000,
+                        unit = "pcs",
+                        barcode = "LND-001",
+                        category = "SATUAN"
+                    )
+                    val s2 = ProductEntity(
+                        id = 888890L,
+                        tenantId = tenantId,
+                        outletId = outletId,
+                        name = "Cuci Kiloan Reguler (Cuci + Gosok)",
+                        price = 6000.0,
+                        costPrice = 2000.0,
+                        stock = 9999,
+                        unit = "Kg",
+                        barcode = "LND-002",
+                        category = "KILOAN"
+                    )
+                    val s3 = ProductEntity(
+                        id = 888891L,
+                        tenantId = tenantId,
+                        outletId = outletId,
+                        name = "Cuci Kiloan Kilat (6 Jam Selesai)",
+                        price = 12000.0,
+                        costPrice = 4000.0,
+                        stock = 9999,
+                        unit = "Kg",
+                        barcode = "LND-003",
+                        category = "KILOAN"
+                    )
+                    val s4 = ProductEntity(
+                        id = 888892L,
+                        tenantId = tenantId,
+                        outletId = outletId,
+                        name = "Gosok Setrika Saja",
+                        price = 4500.0,
+                        costPrice = 1500.0,
+                        stock = 9999,
+                        unit = "Kg",
+                        barcode = "LND-004",
+                        category = "KILOAN"
+                    )
+                    db.productDao().insertAll(listOf(s1, s2, s3, s4))
+
+                    // 4. Transactions (Total > 30M)
+                    val startMs = System.currentTimeMillis() - 5 * 24 * 60 * 60 * 1000L
+                    val newTxs = mutableListOf<TransactionEntity>()
+                    val newTxItems = mutableListOf<TransactionItemEntity>()
+                    var txIndex = 888881L
+                    var txItemIndex = 888881L
+
+                    // 12 Bulk bedcover washes (12 * 50 pcs * 50k = 30.0M)
+                    for (i in 0 until 12) {
+                        val date = startMs + i * 8 * 60 * 60 * 1000L
+                        val subtotal = 2500000.0
+                        val dateStr = SimpleDateFormat("yyMMdd", Locale.US).format(java.util.Date(date))
+                        val receiptNum = "LD-$dateStr-${String.format("%05d", i + 1)}"
+
+                        val meta = """{"phone":"08123456789","summary":"Paket Cuci Setrika Bedcover Hotel x50 Pcs"}"""
+                        newTxs.add(
+                            TransactionEntity(
+                                id = txIndex,
+                                tenantId = tenantId,
+                                outletId = outletId,
+                                employeeId = 888881L,
+                                customerName = "Hotel Santika (Demo)",
+                                receiptNumber = receiptNum,
+                                date = date,
+                                subtotal = subtotal,
+                                total = subtotal,
+                                paymentMethod = "CASH",
+                                status = "COMPLETED",
+                                orderStatus = "SELESAI",
+                                notes = meta,
+                                createdAt = date,
+                                updatedAt = date
+                            )
+                        )
+                        newTxItems.add(
+                            TransactionItemEntity(
+                                id = txItemIndex++,
+                                transactionId = txIndex,
+                                productId = 888883L,
+                                quantity = 50,
+                                price = 50000.0,
+                                costPrice = 20000.0
+                            )
+                        )
+                        txIndex++
+                    }
+
+                    // 30 Kilat laundry orders (30 * 15 Kg * 12k = 5.4M)
+                    for (i in 0 until 30) {
+                        val date = startMs + i * 3 * 60 * 60 * 1000L + i * 15 * 60 * 1000L
+                        val subtotal = 180000.0
+                        val dateStr = SimpleDateFormat("yyMMdd", Locale.US).format(java.util.Date(date))
+                        val receiptNum = "LD-$dateStr-${String.format("%05d", i + 13)}"
+
+                        val meta = """{"phone":"08199887766","summary":"Cuci Kiloan Kilat (6 Jam Selesai) x15.0 Kg"}"""
+                        newTxs.add(
+                            TransactionEntity(
+                                id = txIndex,
+                                tenantId = tenantId,
+                                outletId = outletId,
+                                employeeId = 888881L,
+                                customerName = "Kost Asri (Demo)",
+                                receiptNumber = receiptNum,
+                                date = date,
+                                subtotal = subtotal,
+                                total = subtotal,
+                                paymentMethod = "CASH",
+                                status = "COMPLETED",
+                                orderStatus = "SELESAI",
+                                notes = meta,
+                                createdAt = date,
+                                updatedAt = date
+                            )
+                        )
+                        // Kiloan quantity is stored multiplied by 10 (15.0 Kg -> 150)
+                        // Price is divided by 10 (12000 -> 1200)
+                        newTxItems.add(
+                            TransactionItemEntity(
+                                id = txItemIndex++,
+                                transactionId = txIndex,
+                                productId = 888891L,
+                                quantity = 150,
+                                price = 1200.0,
+                                costPrice = 4000.0
+                            )
+                        )
+                        txIndex++
+                    }
+
+                    for (tx in newTxs) {
+                        try {
+                            val txId = db.transactionDao().insert(tx)
+                            val itemsForTx = newTxItems.filter { it.transactionId == tx.id }
+                            db.transactionItemDao().insertAll(itemsForTx.map { it.copy(transactionId = txId) })
+                        } catch (e: Exception) {}
+                    }
                 }
-
-                // Laundry Transactions (10 * 50k = 500k)
-                for (i in 0 until 10) {
-                    val date = startMs + i * 6 * 60 * 60 * 1000L
-                    val subtotal = 50000.0
-                    val total = subtotal
-                    val receiptNumber = "TX-LND-${30000 + i}"
-
-                    newTxs.add(
-                        TransactionEntity(
-                            id = txIndex,
-                            tenantId = tenantId,
-                            outletId = outletId,
-                            employeeId = 888881L,
-                            customerId = 888881L,
-                            customerName = "Hotel Santika (Demo)",
-                            receiptNumber = receiptNumber,
-                            date = date,
-                            subtotal = subtotal,
-                            discountAmt = 0.0,
-                            total = total,
-                            discount = 0.0,
-                            paymentMethod = "CASH",
-                            type = "SALES",
-                            status = "COMPLETED",
-                            createdAt = date,
-                            updatedAt = date
-                        )
-                    )
-                    newTxItems.add(
-                        TransactionItemEntity(
-                            id = txItemIndex++,
-                            transactionId = txIndex,
-                            productId = 888883L,
-                            variantId = null,
-                            variantName = null,
-                            quantity = 1,
-                            price = 50000.0,
-                            costPrice = 20000.0,
-                            discount = 0.0,
-                            note = "Cuci Kilat Sprei Kamar Suite"
-                        )
-                    )
-                    txIndex++
-                }
-
-                for (tx in newTxs) {
-                    try {
-                        db.transactionDao().insert(tx)
-                    } catch (e: Exception) {}
-                }
-                db.transactionItemDao().insertAll(newTxItems)
             }
         }
 

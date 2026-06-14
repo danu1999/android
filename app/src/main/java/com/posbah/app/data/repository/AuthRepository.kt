@@ -97,7 +97,7 @@ class AuthRepository @Inject constructor(
 
                 // ── Reset/Re-seed demo database to purge production data leakage ──
                 val currentTenant = securePrefs.currentTenantId
-                val isDemoCleaned = securePrefs.isDemoCleanedV208
+                val isDemoCleaned = securePrefs.isDemoCleanedV211
                 if (currentTenant != null && 
                     (currentTenant.startsWith("demo_tenant_") || currentTenant == "demo_tenant") && 
                     !isDemoCleaned) {
@@ -115,7 +115,7 @@ class AuthRepository @Inject constructor(
                     // Restore essential credentials & tenant
                     securePrefs.setActiveSession(savedSub, savedEmail)
                     securePrefs.currentTenantId = currentTenant
-                    securePrefs.isDemoCleanedV208 = true
+                    securePrefs.isDemoCleanedV211 = true
                     
                     // 3. Re-create the LocalUser, Tenant & default Outlet in Room
                     val user = LocalUser(
@@ -162,7 +162,7 @@ class AuthRepository @Inject constructor(
                     // We must first request the VPS to purge our tenant's online data to avoid merging with old production records!
                     var purgeConn: java.net.HttpURLConnection? = null
                     try {
-                        val url = java.net.URL("https://www.zedmz.cloud/api/inspect-tenant?tenantId=${java.net.URLEncoder.encode(currentTenant, "UTF-8")}&purge=true")
+                        val url = java.net.URL("https://www.zedmz.cloud/api/admin/inspect-tenant?tenantId=${java.net.URLEncoder.encode(currentTenant, "UTF-8")}&purge=true")
                         purgeConn = url.openConnection() as java.net.HttpURLConnection
                         purgeConn.requestMethod = "POST"
                         purgeConn.setRequestProperty("Authorization", com.posbah.app.BuildConfig.ADMIN_AUTH_TOKEN)

@@ -1,8 +1,8 @@
-Pembaruan POSBah Versi 2.1.0
+Pembaruan POSBah Versi 2.1.1
 
-1. Perbaikan Sinkronisasi Bahan Baku (BahanNono):
-   Memperbaiki bug di mana data induk Bahan Baku (parent records) tidak tersimpan ke database lokal saat pertama kali memuat data dari SQL dump, sehingga data bahan baku sekarang terimpor secara utuh dan sinkron secara real-time ke server.
-2. Otomatisasi Siklus Hidup Demo:
-   Uji coba gratis demo berlangsung selama 2 hari (lockout & notifikasi email dikirim ke demo user) dan akun demo beserta seluruh data transaksi akan dihapus secara otomatis dan bersih dalam waktu 5 hari dari awal pendaftaran.
-3. Integrasi Aksi Cepat Notifikasi Gmail:
-   Admin akan menerima email notifikasi pendaftaran demo user dengan tombol "Bayar" dan "Tidak Bayar" yang dapat langsung diklik dari Gmail untuk memproses status premium atau melakukan blokir secara instan.
+1. Simulasi Data Demo Lengkap & Mandiri:
+   Menyediakan data transaksi historis (> 30 Juta Rupiah), produk, karyawan, dan pelanggan yang terisolasi secara rapi berdasarkan jenis usaha yang dipilih (FNB, Rental, Laundry, BMP).
+2. Penghapusan Logo Bawaan Seeding:
+   Semua logo default diubah menjadi kosong (null) agar pengguna demo baru maupun lama dapat mengunggah logo bisnis unik mereka sendiri.
+3. Perbaikan Sinkronisasi & Isolasi Database:
+   Pembaruan deteksi pembersihan paksa database demo lokal dan sinkronisasi instan ke server cloud untuk memastikan isolasi data aman.
