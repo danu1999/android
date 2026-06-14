@@ -674,6 +674,14 @@ function connectWebSocket() {
                     triggerThermalPrint(firstRow);
                     refreshData();
                 }
+            } else if (payload.event === "data_synced" && payload.data) {
+                const tenantId = localStorage.getItem("tenantId");
+                const firstRow = payload.data[0];
+                
+                if (firstRow && firstRow.tenantId === tenantId) {
+                    console.log("[WS] Silent data refresh triggered for table:", payload.table);
+                    refreshData();
+                }
             }
         } catch (e) {
             console.error("Format WebSocket tidak valid:", e);

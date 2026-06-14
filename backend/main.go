@@ -3273,14 +3273,25 @@ func handleSyncTable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if (tableName == "transactions" || tableName == "bmp_invoices") && len(rows) > 0 {
-		eventData := map[string]interface{}{
-			"event": "new_transaction",
-			"table": tableName,
-			"data":  rows,
-		}
-		if eventBytes, err := json.Marshal(eventData); err == nil {
-			broadcastWSMessage(string(eventBytes))
+	if len(rows) > 0 {
+		if tableName == "transactions" || tableName == "bmp_invoices" {
+			eventData := map[string]interface{}{
+				"event": "new_transaction",
+				"table": tableName,
+				"data":  rows,
+			}
+			if eventBytes, err := json.Marshal(eventData); err == nil {
+				broadcastWSMessage(string(eventBytes))
+			}
+		} else {
+			eventData := map[string]interface{}{
+				"event": "data_synced",
+				"table": tableName,
+				"data":  rows,
+			}
+			if eventBytes, err := json.Marshal(eventData); err == nil {
+				broadcastWSMessage(string(eventBytes))
+			}
 		}
 	}
 
