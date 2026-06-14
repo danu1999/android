@@ -94,6 +94,80 @@ class AuthRepository @Inject constructor(
                     emails = listOf("bahteramulyap@gmail.com", "syerlirahma7@gmail.com"),
                     allowedTenants = listOf("bahteramulyap@gmail.com", "ten_premium_bahteramulyap_gmail_com")
                 )
+
+                // ── Reset/Re-seed demo database to purge production data leakage ──
+                val currentTenant = securePrefs.currentTenantId
+                val isDemoCleaned = securePrefs.isDemoCleanedV208
+                if (currentTenant != null && 
+                    (currentTenant.startsWith("demo_tenant_") || currentTenant == "demo_tenant") && 
+                    !isDemoCleaned) {
+                    
+                    android.util.Log.i("AuthRepository", "Purging and resetting demo tenant database for $currentTenant to ensure clean simulated data.")
+                    
+                    // 1. Wipe all local SQLite tables (Room)
+                    db.clearAllTables()
+                    
+                    // 2. Clear prefs (except current credentials so they don't get logged out!)
+                    val savedSub = securePrefs.currentGoogleSub
+                    val savedEmail = securePrefs.currentEmail
+                    securePrefs.wipe()
+                    
+                    // Restore essential credentials & tenant
+                    securePrefs.setActiveSession(savedSub, savedEmail)
+                    securePrefs.currentTenantId = currentTenant
+                    securePrefs.isDemoCleanedV208 = true
+                    
+                    // 3. Re-create the Tenant & default Outlet in Room
+                    val user = userDao.getBySub(savedSub ?: "")
+                    val displayName = user?.displayName ?: savedEmail ?: "Demo User"
+                    
+                    // Upsert Tenant
+                    val tenant = Tenant(
+                        id = currentTenant,
+                        name = "Demo - $displayName",
+                        ownerEmail = savedEmail ?: "",
+                        businessMode = if (currentTenant.endsWith("_BMP")) "BMP" else "FNB"
+                    )
+                    tenantDao.upsert(tenant)
+                    
+                    // Insert Outlet
+                    val defaultOutletId = if (!currentTenant.endsWith("_BMP")) {
+                        outletDao.insert(
+                            Outlet(
+                                tenantId = currentTenant,
+                                name = "Outlet Utama",
+                                isDefault = true
+                            )
+                        )
+                    } else null
+                    
+                    // 4. Re-seed clean programmatic data
+                    localDataSeeder.seedFromSqlDump(context, currentTenant, defaultOutletId)
+                    
+                    // 5. Trigger a full upload sync to VPS so the server database is overwritten with clean data
+                    // We must first request the VPS to purge our tenant's online data to avoid merging with old production records!
+                    var purgeConn: java.net.HttpURLConnection? = null
+                    try {
+                        val url = java.net.URL("https://www.zedmz.cloud/api/inspect-tenant?tenantId=${java.net.URLEncoder.encode(currentTenant, "UTF-8")}&purge=true")
+                        purgeConn = url.openConnection() as java.net.HttpURLConnection
+                        purgeConn.requestMethod = "POST"
+                        purgeConn.setRequestProperty("Authorization", com.posbah.app.BuildConfig.ADMIN_AUTH_TOKEN)
+                        purgeConn.connectTimeout = 5000
+                        purgeConn.readTimeout = 5000
+                        purgeConn.responseCode // execute
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    } finally {
+                        purgeConn?.disconnect()
+                    }
+                    
+                    // Trigger syncAll
+                    try {
+                        com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, currentTenant)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
             }

@@ -785,13 +785,13 @@ func handleGetDemoUsers(w http.ResponseWriter, r *http.Request) {
 func handleInspectTenant(w http.ResponseWriter, r *http.Request) {
 	// CORS headers
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	if r.Method != http.MethodGet {
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -810,6 +810,14 @@ func handleInspectTenant(w http.ResponseWriter, r *http.Request) {
 
 	if db == nil {
 		http.Error(w, "Database not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	if r.Method == http.MethodPost && r.URL.Query().Get("purge") == "true" {
+		log.Printf("[InspectTenant] Purging tenant data via client request: %s", tenantID)
+		purgeTenantData(tenantID)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "message": "Tenant data purged successfully"})
 		return
 	}
 
