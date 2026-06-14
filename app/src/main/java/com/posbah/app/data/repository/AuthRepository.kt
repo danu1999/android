@@ -117,9 +117,23 @@ class AuthRepository @Inject constructor(
                     securePrefs.currentTenantId = currentTenant
                     securePrefs.isDemoCleanedV208 = true
                     
-                    // 3. Re-create the Tenant & default Outlet in Room
-                    val user = userDao.getBySub(savedSub ?: "")
-                    val displayName = user?.displayName ?: savedEmail ?: "Demo User"
+                    // 3. Re-create the LocalUser, Tenant & default Outlet in Room
+                    val user = LocalUser(
+                        googleSub = savedSub ?: "",
+                        email = savedEmail ?: "",
+                        displayName = savedEmail?.substringBefore("@") ?: "Demo User",
+                        photoUrl = null,
+                        role = "OWNER",
+                        tenantId = currentTenant,
+                        isPremium = false,
+                        businessModeLocked = true,
+                        registeredAt = System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis(),
+                        lastLoginAt = System.currentTimeMillis(),
+                        isActive = true
+                    )
+                    userDao.upsert(user)
+                    val displayName = user.displayName ?: "Demo User"
                     
                     // Upsert Tenant
                     val tenant = Tenant(
