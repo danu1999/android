@@ -1,8 +1,6 @@
-Pembaruan POSBah Versi 2.0.6
+Pembaruan POSBah Versi 2.0.7
 
-1. Notifikasi Perubahan Kata Sandi:
-   Setiap kali Pemilik (Owner) mengganti kata sandi karyawan, sistem akan otomatis mengirimkan email pemberitahuan berisi kata sandi baru ke email karyawan tersebut dan Pemilik untuk transparansi keamanan.
-2. Fitur Hapus Karyawan:
-   Pemilik kini dapat menghapus akun karyawan secara langsung melalui halaman manajemen karyawan. Karyawan yang telah dihapus akan otomatis diblokir dan tidak dapat mengakses aplikasi kembali.
-3. Sinkronisasi Real-Time:
-   Peningkatan interkoneksi data untuk memastikan perubahan kata sandi dan status aktif karyawan langsung tersinkronisasi dengan aman antara HP Anda dan server VPS.
+1. Proteksi & Keamanan Data Demo:
+   Sistem penyiapan data simulasi untuk Akun Demo kini sepenuhnya dipisahkan dari database produksi. Akun uji coba (demo) hanya akan memuat data sampel buatan (simulasi murni) demi menjaga keamanan dan privasi data asli.
+2. Otomatisasi Sinkronisasi & Perbaikan Interkoneksi:
+   Pembaruan backend untuk mendukung kelancaran pemindahan data antara Room DB HP dan VPS PostgreSQL tanpa tabrakan duplikasi data, sehingga data statistik pendaftar akun demo dapat langsung terupdate secara real-time di panel admin.

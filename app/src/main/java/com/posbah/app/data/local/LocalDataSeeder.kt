@@ -85,8 +85,10 @@ class LocalDataSeeder @Inject constructor(
         try {
             val tenant = db.tenantDao().getById(tenantId)
             val isBmpMode = tenant?.businessMode == "BMP"
+            val isDemo = tenantId == "demo_tenant" || tenantId.startsWith("demo_tenant_")
 
-        val assetManager = context.assets
+            if (!isDemo) {
+                val assetManager = context.assets
         // Select the right seed SQL file based on tenantId
         val sqlFileName = when {
             tenantId == "hanafiariful@gmail.com" || tenantId.contains("hanafiariful_gmail_com") ->
@@ -714,8 +716,9 @@ class LocalDataSeeder @Inject constructor(
         if (bmpBahanBakuItemList.isNotEmpty()) {
             db.bmpBahanBakuItemDao().insertAll(bmpBahanBakuItemList)
         }
+        }
 
-        if (tenantId.startsWith("demo_tenant_")) {
+        if (tenantId.startsWith("demo_tenant_") || tenantId == "demo_tenant") {
             val isBmp = tenantId.endsWith("_BMP") || tenant?.businessMode == "BMP"
             if (isBmp) {
                 // 1. Generate PT. Globalindo as client
@@ -853,6 +856,98 @@ class LocalDataSeeder @Inject constructor(
                     createdAt = System.currentTimeMillis()
                 )
                 db.bmpCashFlowDao().insert(bmpCashflow)
+
+                // 7. Generate default BMP Settings
+                val bmpSettings = BmpSettingsEntity(
+                    id = 888888L,
+                    tenantId = tenantId,
+                    clientName = "Pabrik Plastik Mandiri Jaya",
+                    clientLogo = null,
+                    addressLine1 = "Kawasan Industri Driyorejo, Gresik",
+                    province = "Jawa Timur",
+                    postalCode = "61177",
+                    phoneNumber = "6281234567890",
+                    emailAddress = "contact@mandirijaya.co.id",
+                    taxNumber = "01.999.888.7-011.000",
+                    listrikBulanan = 35000000.0,
+                    jumlahMesin = 6,
+                    jumlahKaryawan = 25,
+                    gajiHarian = 90000.0,
+                    hariKerjaSebulan = 26,
+                    biayaKarungPer1000 = 2200000.0,
+                    hoursPerDay = 24,
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
+                )
+                db.bmpSettingsDao().upsert(bmpSettings)
+
+                // 8. Generate default BMP Master Products
+                val masterProds = listOf(
+                    BmpMasterProductEntity(
+                        id = 1L,
+                        tenantId = tenantId,
+                        title = "Botol Plastik PET 500ml (Premium)",
+                        description = "Botol plastik tebal untuk minuman teh/kopi premium",
+                        unit = "pcs",
+                        price = 1000.0,
+                        beratGram = 24.5,
+                        cycleTime = 12.0,
+                        cavity = 4,
+                        rejectRate = 0.02,
+                        uniqueID = "master-pet-500",
+                        slug = "botol-plastik-pet-500ml-premium",
+                        createdAt = System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis()
+                    ),
+                    BmpMasterProductEntity(
+                        id = 2L,
+                        tenantId = tenantId,
+                        title = "Botol Plastik PET 250ml (Premium)",
+                        description = "Botol plastik kecil untuk susu/jus premium",
+                        unit = "pcs",
+                        price = 1000.0,
+                        beratGram = 18.0,
+                        cycleTime = 10.0,
+                        cavity = 4,
+                        rejectRate = 0.015,
+                        uniqueID = "master-pet-250",
+                        slug = "botol-plastik-pet-250ml-premium",
+                        createdAt = System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis()
+                    )
+                )
+                for (item in masterProds) {
+                    db.bmpMasterProductDao().upsert(item)
+                }
+
+                // 9. Generate default BmpBahanBaku and BmpBahanBakuItem
+                val bahanBakuId = 888888L
+                val bahanBaku = BmpBahanBakuEntity(
+                    id = bahanBakuId,
+                    tenantId = tenantId,
+                    tanggal = System.currentTimeMillis() - 2 * 24 * 60 * 60 * 1000L,
+                    noTagihan = "BILL-SUPPLIER-001",
+                    totalHarga = 45000000.0,
+                    nominal = 45000000.0,
+                    notes = "Pengiriman bijih plastik PET premium dari PT. Petrochem",
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
+                )
+                db.bmpBahanBakuDao().upsert(bahanBaku)
+
+                val bbItems = listOf(
+                    BmpBahanBakuItemEntity(
+                        id = 888881L,
+                        tenantId = tenantId,
+                        bahanBakuId = bahanBakuId,
+                        jenisBahan = "PET",
+                        kuantitas = 3000.0,
+                        unit = "Kg",
+                        rate = 15000.0,
+                        createdAt = System.currentTimeMillis()
+                    )
+                )
+                db.bmpBahanBakuItemDao().insertAll(bbItems)
 
             } else {
                 // POS Mode (FNB / RENTAL / LAUNDRY) -> Generate transactions > 30M
