@@ -726,47 +726,16 @@ func handleManualLockoutCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if db == nil {
-		http.Error(w, "Local database not initialized", http.StatusInternalServerError)
+	if err := checkAndLockoutDemoUsers(); err != nil {
+		http.Error(w, "Manual check failed: "+err.Error(), http.StatusInternalServerError)
 		return
-	}
-
-	twoDaysAgoMillis := time.Now().UnixNano()/int64(time.Millisecond) - (2 * 24 * 60 * 60 * 1000)
-
-	// Fetch affected users first to report them
-	rows, err := db.Query(`SELECT "googleSub", "email", "registeredAt" FROM "local_users" WHERE "isPremium" = FALSE AND "registeredAt" < $1`, twoDaysAgoMillis)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
-	var users []LocalUser
-	for rows.Next() {
-		var u LocalUser
-		var registeredAt int64
-		if err := rows.Scan(&u.GoogleSub, &u.Email, &registeredAt); err == nil {
-			u.RegisteredAt = registeredAt
-			users = append(users, u)
-		}
-	}
-
-	lockedOutEmails := []string{}
-	for _, user := range users {
-		_, err := db.Exec(`UPDATE "local_users" SET "isActive" = FALSE, "updatedAt" = $1 WHERE "googleSub" = $2`,
-			time.Now().UnixNano()/int64(time.Millisecond), user.GoogleSub)
-		if err == nil {
-			lockedOutEmails = append(lockedOutEmails, user.Email)
-		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	response := map[string]interface{}{
-		"message":      "Manual demo lockout check completed successfully.",
-		"checkedCount": len(users),
-		"lockedOut":    lockedOutEmails,
-	}
-	json.NewEncoder(w).Encode(response)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Manual demo lockout check (including Day 2 warnings and Day 5 purges) completed successfully.",
+	})
 }
 
 type ApproveUserRequest struct {
