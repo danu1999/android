@@ -5579,6 +5579,40 @@ func handleApproveRejoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Automatically pre-register the user in local_users on approve-rejoin
+	// so they immediately appear in the Web Admin Panel.
+	cleanEmail := strings.TrimSpace(strings.ToLower(email))
+	defaultDisplayName := strings.Split(cleanEmail, "@")[0]
+	if len(defaultDisplayName) > 0 {
+		defaultDisplayName = strings.ToUpper(defaultDisplayName[0:1]) + defaultDisplayName[1:]
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO "local_users" ("googleSub", "email", "displayName", "role", "tenantId", "isPremium", "isActive", "registeredAt", "updatedAt")
+		VALUES ($1, $1, $2, 'OWNER', NULL, FALSE, TRUE, $3, $3)
+		ON CONFLICT ("googleSub") DO UPDATE 
+		SET "isActive" = TRUE, "updatedAt" = EXCLUDED."updatedAt"
+		ON CONFLICT ("email") DO UPDATE
+		SET "isActive" = TRUE, "updatedAt" = EXCLUDED."updatedAt"`,
+		cleanEmail, defaultDisplayName, time.Now().UnixNano()/1e6)
+	if err != nil {
+		log.Printf("[RejoinAuto] Failed to insert/update local_user: %v", err)
+	}
+
+	// Trigger sync count calculation to update stats counters
+	syncDatabaseUsersAndTenants()
+
+	// Broadcast WebSocket message to refresh stats on admin web panel immediately
+	wsMsg := map[string]interface{}{
+		"type":      "user_registered",
+		"googleSub": cleanEmail,
+		"email":     cleanEmail,
+		"status":    "demo",
+	}
+	if msgBytes, err := json.Marshal(wsMsg); err == nil {
+		broadcastWSMessage(string(msgBytes))
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(fmt.Sprintf(`
 	<!DOCTYPE html>
