@@ -713,6 +713,11 @@ class LocalDataSeeder @Inject constructor(
                 db.bmpPayrollDao().insert(item)
             }
         }
+        if (bmpBahanBakuList.isNotEmpty()) {
+            for (item in bmpBahanBakuList) {
+                db.bmpBahanBakuDao().insert(item)
+            }
+        }
         if (bmpBahanBakuItemList.isNotEmpty()) {
             db.bmpBahanBakuItemDao().insertAll(bmpBahanBakuItemList)
         }

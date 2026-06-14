@@ -1,6 +1,8 @@
-Pembaruan POSBah Versi 2.0.9
+Pembaruan POSBah Versi 2.1.0
 
-1. Otomatisasi Siklus Hidup Demo:
+1. Perbaikan Sinkronisasi Bahan Baku (BahanNono):
+   Memperbaiki bug di mana data induk Bahan Baku (parent records) tidak tersimpan ke database lokal saat pertama kali memuat data dari SQL dump, sehingga data bahan baku sekarang terimpor secara utuh dan sinkron secara real-time ke server.
+2. Otomatisasi Siklus Hidup Demo:
    Uji coba gratis demo berlangsung selama 2 hari (lockout & notifikasi email dikirim ke demo user) dan akun demo beserta seluruh data transaksi akan dihapus secara otomatis dan bersih dalam waktu 5 hari dari awal pendaftaran.
-2. Integrasi Aksi Cepat Notifikasi Gmail:
+3. Integrasi Aksi Cepat Notifikasi Gmail:
    Admin akan menerima email notifikasi pendaftaran demo user dengan tombol "Bayar" dan "Tidak Bayar" yang dapat langsung diklik dari Gmail untuk memproses status premium atau melakukan blokir secara instan.
