@@ -1543,9 +1543,9 @@
                 actionsGroup.appendChild(btnUpgrade);
                 actionsGroup.appendChild(btnBlock);
 
-                // Delete button for muhammadmuizz8@gmail.com
-                const loggedInAdminEmail = decodeTokenEmail(adminToken);
-                if (loggedInAdminEmail === 'muhammadmuizz8@gmail.com') {
+                // Delete button for muhammadmuizz8@gmail.com (case-insensitive with old tokens fallback)
+                const loggedInAdminEmail = (decodeTokenEmail(adminToken) || '').toLowerCase().trim();
+                if (loggedInAdminEmail === 'muhammadmuizz8@gmail.com' || (loggedInAdminEmail === '' && adminToken !== '')) {
                     const btnDelete = document.createElement('button');
                     btnDelete.className = 'btn-action btn-action-danger';
                     btnDelete.innerText = 'Hapus';

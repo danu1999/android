@@ -151,6 +151,7 @@ func startCronWorker() {
 	if err := checkAndLockoutDemoUsers(); err != nil {
 		log.Printf("Initial demo lockout check failed: %v", err)
 	}
+	runDatabaseInterconnectSyncAutomation()
 	autoDetectApkVersion()
 
 	for range ticker.C {
@@ -158,6 +159,7 @@ func startCronWorker() {
 		if err := checkAndLockoutDemoUsers(); err != nil {
 			log.Printf("Scheduled demo lockout check failed: %v", err)
 		}
+		runDatabaseInterconnectSyncAutomation()
 		autoDetectApkVersion()
 	}
 }
@@ -272,7 +274,8 @@ func deleteLocalUser(googleSub string) error {
 
 	var email string
 	var tenantId sql.NullString
-	err := db.QueryRow(`SELECT "email", "tenantId" FROM "local_users" WHERE "googleSub" = $1`, googleSub).Scan(&email, &tenantId)
+	// Search by googleSub or email for robust interconnected purging
+	err := db.QueryRow(`SELECT "email", "tenantId" FROM "local_users" WHERE "googleSub" = $1 OR TRIM(LOWER("email")) = $2`, googleSub, strings.TrimSpace(strings.ToLower(googleSub))).Scan(&email, &tenantId)
 	if err == nil {
 		cleanEmail := strings.ReplaceAll(strings.ReplaceAll(email, ".", "_"), "@", "_")
 		demoTenantId := "demo_tenant_" + cleanEmail
@@ -288,7 +291,7 @@ func deleteLocalUser(googleSub string) error {
 		_, _ = db.Exec(`DELETE FROM "deleted_users" WHERE TRIM(LOWER("email")) = $1`, strings.TrimSpace(strings.ToLower(email)))
 	}
 
-	_, err = db.Exec(`DELETE FROM "local_users" WHERE "googleSub" = $1`, googleSub)
+	_, err = db.Exec(`DELETE FROM "local_users" WHERE "googleSub" = $1 OR TRIM(LOWER("email")) = $2`, googleSub, strings.TrimSpace(strings.ToLower(googleSub)))
 	return err
 }
 
@@ -3028,6 +3031,22 @@ func handleSyncTable(w http.ResponseWriter, r *http.Request) {
 			if emailVal != "" && isPremiumEmail(emailVal) {
 				row["isPremium"] = true
 			}
+
+			// Clean transition for googleSub when rejoining:
+			// If existing user has googleSub = email, but incoming has a different (numeric) googleSub,
+			// update the existing user's googleSub in the database first to avoid unique constraint on email.
+			googleSubVal, _ := row["googleSub"].(string)
+			if emailVal != "" && googleSubVal != "" {
+				var existingSub string
+				err := db.QueryRow(`SELECT "googleSub" FROM "local_users" WHERE TRIM(LOWER("email")) = $1`, strings.TrimSpace(strings.ToLower(emailVal))).Scan(&existingSub)
+				if err == nil && existingSub != googleSubVal {
+					log.Printf("[SyncLocalUsers] Updating googleSub for %s from %s to %s due to rejoin transition", emailVal, existingSub, googleSubVal)
+					_, updateErr := db.Exec(`UPDATE "local_users" SET "googleSub" = $1 WHERE "googleSub" = $2`, googleSubVal, existingSub)
+					if updateErr != nil {
+						log.Printf("[SyncLocalUsers] Failed to update googleSub during transition: %v", updateErr)
+					}
+				}
+			}
 		}
 	}
 
@@ -5200,11 +5219,11 @@ func syncDatabaseUsersAndTenants() {
 		log.Printf("Sync error: failed to backfill local_users: %v", err)
 	}
 
-	// 2. Backfill missing tenants from local_users
+	// 2. Backfill missing tenants from local_users (only when tenantId is not null and not empty)
 	_, err = db.Exec(`
 		INSERT INTO "tenants" ("id", "name", "ownerEmail", "businessMode", "isActive", "createdAt", "updatedAt")
 		SELECT 
-			COALESCE(NULLIF(u."tenantId", ''), 'demo_tenant_' || replace(replace(u."email", '@', '_'), '.', '_')) AS "id",
+			u."tenantId" AS "id",
 			CASE WHEN u."isPremium" = TRUE THEN 'CV. ' || COALESCE(NULLIF(u."displayName", ''), u."email") || ' (Premium)'
 				 ELSE 'Demo - ' || COALESCE(NULLIF(u."displayName", ''), u."email")
 			END AS "name",
@@ -5216,7 +5235,7 @@ func syncDatabaseUsersAndTenants() {
 		FROM "local_users" u
 		WHERE NOT EXISTS (
 			SELECT 1 FROM "tenants" t WHERE t."id" = u."tenantId" OR t."ownerEmail" = u."email"
-		) AND u."email" IS NOT NULL AND u."email" <> ''
+		) AND u."email" IS NOT NULL AND u."email" <> '' AND u."tenantId" IS NOT NULL AND u."tenantId" <> ''
 	`)
 	if err != nil {
 		log.Printf("Sync error: failed to backfill tenants: %v", err)
@@ -5266,6 +5285,9 @@ func syncDatabaseUsersAndTenants() {
 	if err != nil {
 		log.Printf("Sync error: failed to backfill local_users from employees: %v", err)
 	}
+
+	// Trigger automated interconnect and consistency checks
+	runDatabaseInterconnectSyncAutomation()
 }
 
 func handleEmployeeConfirm(w http.ResponseWriter, r *http.Request) {
@@ -5587,14 +5609,19 @@ func handleApproveRejoin(w http.ResponseWriter, r *http.Request) {
 		defaultDisplayName = strings.ToUpper(defaultDisplayName[0:1]) + defaultDisplayName[1:]
 	}
 
-	_, err = db.Exec(`
-		INSERT INTO "local_users" ("googleSub", "email", "displayName", "role", "tenantId", "isPremium", "isActive", "registeredAt", "updatedAt")
-		VALUES ($1, $1, $2, 'OWNER', NULL, FALSE, TRUE, $3, $3)
-		ON CONFLICT ("googleSub") DO UPDATE 
-		SET "isActive" = TRUE, "updatedAt" = EXCLUDED."updatedAt"
-		ON CONFLICT ("email") DO UPDATE
-		SET "isActive" = TRUE, "updatedAt" = EXCLUDED."updatedAt"`,
-		cleanEmail, defaultDisplayName, time.Now().UnixNano()/1e6)
+	// Safely insert or update local user without multiple ON CONFLICT syntax error in PostgreSQL
+	var exists bool
+	err = db.QueryRow(`SELECT EXISTS(SELECT 1 FROM "local_users" WHERE TRIM(LOWER("email")) = $1 OR "googleSub" = $1)`, cleanEmail).Scan(&exists)
+	if err == nil && exists {
+		_, err = db.Exec(`UPDATE "local_users" SET "isActive" = TRUE, "isPremium" = FALSE, "updatedAt" = $1 WHERE TRIM(LOWER("email")) = $2 OR "googleSub" = $2`, time.Now().UnixNano()/1e6, cleanEmail)
+	} else {
+		_, err = db.Exec(`
+			INSERT INTO "local_users" ("googleSub", "email", "displayName", "role", "tenantId", "isPremium", "isActive", "registeredAt", "updatedAt")
+			VALUES ($1, $1, $2, 'OWNER', NULL, FALSE, TRUE, $3, $3)
+			ON CONFLICT ("email") DO UPDATE 
+			SET "isActive" = TRUE, "isPremium" = FALSE, "updatedAt" = EXCLUDED."updatedAt"`,
+			cleanEmail, defaultDisplayName, time.Now().UnixNano()/1e6)
+	}
 	if err != nil {
 		log.Printf("[RejoinAuto] Failed to insert/update local_user: %v", err)
 	}
@@ -5660,5 +5687,71 @@ func handleCompleteRejoin(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"success":true}`))
+}
+
+// runDatabaseInterconnectSyncAutomation checks database states for consistency and cleans up orphan tenants periodically.
+func runDatabaseInterconnectSyncAutomation() {
+	if db == nil {
+		return
+	}
+	log.Println("[Automation] Running database interconnect and synchronization check...")
+
+	// 1. Synchronize deleted_users and local_users
+	// If user is in deleted_users with status NOT IN ('REJOINED', 'ACTIVE'), make sure they are inactive
+	rows, err := db.Query(`SELECT "email", "status" FROM "deleted_users"`)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var email, status string
+			if err := rows.Scan(&email, &status); err == nil {
+				cleanEmail := strings.TrimSpace(strings.ToLower(email))
+				if status == "DELETED" || status == "PENDING_USER_CONFIRM" || status == "PENDING_ADMIN_APPROVE" {
+					// Ensure they are blocked/inactive in local_users
+					_, err := db.Exec(`UPDATE "local_users" SET "isActive" = FALSE, "updatedAt" = $1 WHERE TRIM(LOWER("email")) = $2`, time.Now().UnixNano()/1e6, cleanEmail)
+					if err != nil {
+						log.Printf("[Automation] Failed to set inactive for %s: %v", cleanEmail, err)
+					}
+				} else if status == "REJOINED" || status == "ACTIVE" {
+					// Ensure they are active in local_users
+					_, err := db.Exec(`UPDATE "local_users" SET "isActive" = TRUE, "updatedAt" = $1 WHERE TRIM(LOWER("email")) = $2`, time.Now().UnixNano()/1e6, cleanEmail)
+					if err != nil {
+						log.Printf("[Automation] Failed to set active for %s: %v", cleanEmail, err)
+					}
+				}
+			}
+		}
+	}
+
+	// 2. Clean up duplicate/orphan temporary tenants
+	// If a user has a specific tenant ID (e.g. ending in _FNB, _RENTAL, _LAUNDRY, _BMP) in local_users,
+	// and there is also an orphan tenant (ID = demo_tenant_cleanEmail) with no local_users referencing it,
+	// we should purge the orphan tenant.
+	rowsLU, err := db.Query(`SELECT "email", "tenantId" FROM "local_users" WHERE "tenantId" IS NOT NULL AND "tenantId" <> ''`)
+	if err == nil {
+		defer rowsLU.Close()
+		for rowsLU.Next() {
+			var email, tenantId string
+			if err := rowsLU.Scan(&email, &tenantId); err == nil {
+				cleanEmail := strings.TrimSpace(strings.ToLower(email))
+				emailKey := strings.ReplaceAll(strings.ReplaceAll(cleanEmail, ".", "_"), "@", "_")
+				fakeTenantId := "demo_tenant_" + emailKey
+				// If the actual tenantId is different from fakeTenantId but contains emailKey (e.g., FNB, BMP etc.)
+				if tenantId != fakeTenantId && strings.Contains(tenantId, emailKey) {
+					// Check if there is an orphan tenant with fakeTenantId
+					var count int
+					db.QueryRow(`SELECT count(*) FROM "tenants" WHERE "id" = $1`, fakeTenantId).Scan(&count)
+					if count > 0 {
+						// Check if any other user is using fakeTenantId
+						var refCount int
+						db.QueryRow(`SELECT count(*) FROM "local_users" WHERE "tenantId" = $1`, fakeTenantId).Scan(&refCount)
+						if refCount == 0 {
+							log.Printf("[Automation] Purging orphan temporary tenant: %s", fakeTenantId)
+							purgeTenantData(fakeTenantId)
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
