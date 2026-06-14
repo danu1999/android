@@ -88,6 +88,7 @@ func main() {
 	http.HandleFunc("/api/admin/diagnose", handleAdminDiagnose)
 	http.HandleFunc("/status", handleStatus)
 	http.HandleFunc("/api/admin/deploy", handleAdminDeploy)
+	http.HandleFunc("/api/admin/delete-user", handleAdminDeleteUser)
 	http.HandleFunc("/api/admin/check-demo-lockout", handleManualLockoutCheck)
 	http.HandleFunc("/api/admin/demo-users", handleGetDemoUsers)
 	http.HandleFunc("/api/admin/approve-user", handleApproveUser)
@@ -281,6 +282,9 @@ func deleteLocalUser(googleSub string) error {
 		if tenantId.Valid && tenantId.String != "" {
 			purgeTenantData(tenantId.String)
 		}
+
+		// Also purge from deleted_users table to allow them to register again
+		_, _ = db.Exec(`DELETE FROM "deleted_users" WHERE TRIM(LOWER("email")) = $1`, strings.TrimSpace(strings.ToLower(email)))
 	}
 
 	_, err = db.Exec(`DELETE FROM "local_users" WHERE "googleSub" = $1`, googleSub)
@@ -435,6 +439,75 @@ func handleAdminDeploy(w http.ResponseWriter, r *http.Request) {
 	})
 
 	go runAutoDeploy()
+}
+
+func getAdminEmail(r *http.Request) string {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == adminAuthToken {
+		return "muhammadmuizz8@gmail.com"
+	}
+	token := getBearerToken(r)
+	if token != "" {
+		adminSessionsMu.Lock()
+		email, exists := adminSessions[token]
+		adminSessionsMu.Unlock()
+		if exists {
+			return email
+		}
+	}
+	return ""
+}
+
+func handleAdminDeleteUser(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if !isAdminAuthenticated(r) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	adminEmail := getAdminEmail(r)
+	if adminEmail != "muhammadmuizz8@gmail.com" {
+		http.Error(w, "Forbidden: Only muhammadmuizz8@gmail.com can delete users", http.StatusForbidden)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		GoogleSub string `json:"googleSub"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.GoogleSub == "" {
+		http.Error(w, "googleSub is required", http.StatusBadRequest)
+		return
+	}
+
+	err := deleteLocalUser(req.GoogleSub)
+	if err != nil {
+		http.Error(w, "Failed to delete user: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "User and all interconnected data successfully deleted",
+	})
 }
 
 func runAutoDeploy() {
