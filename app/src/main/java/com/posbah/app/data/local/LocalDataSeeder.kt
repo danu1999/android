@@ -727,7 +727,7 @@ class LocalDataSeeder @Inject constructor(
                     id = clientId,
                     tenantId = tenantId,
                     outletId = outletId,
-                    clientName = "PT. Globalindo Manufaktur Jaya",
+                    clientName = "PT. Globalindo Manufaktur (Simulasi Demo)",
                     saldoTitipan = 0.0,
                     addressLine1 = "Kawasan Industri MM2100, Blok C-10, Cikarang",
                     province = "Jawa Barat",
@@ -736,7 +736,7 @@ class LocalDataSeeder @Inject constructor(
                     emailAddress = "info@globalindo.co.id",
                     taxNumber = "01.234.567.8-012.000",
                     uniqueID = "client-globalindo",
-                    slug = "pt-globalindo-manufaktur-jaya",
+                    slug = "pt-globalindo-manufaktur-simulasi-demo",
                     createdAt = System.currentTimeMillis(),
                     updatedAt = System.currentTimeMillis()
                 )
@@ -861,7 +861,7 @@ class LocalDataSeeder @Inject constructor(
                 val bmpSettings = BmpSettingsEntity(
                     id = 888888L,
                     tenantId = tenantId,
-                    clientName = "Pabrik Plastik Mandiri Jaya",
+                    clientName = "Pabrik Plastik Mandiri Jaya (Demo)",
                     clientLogo = null,
                     addressLine1 = "Kawasan Industri Driyorejo, Gresik",
                     province = "Jawa Timur",
@@ -979,14 +979,14 @@ class LocalDataSeeder @Inject constructor(
                 val cust1 = CustomerEntity(
                     id = 888881L,
                     tenantId = tenantId,
-                    name = "Hotel Santika Sidoarjo",
+                    name = "Hotel Santika (Demo)",
                     phone = "08123456789",
                     address = "Jl. Raya Sidoarjo No. 10"
                 )
                 val cust2 = CustomerEntity(
                     id = 888882L,
                     tenantId = tenantId,
-                    name = "Catering Bu Endang",
+                    name = "Catering Bu Endang (Demo)",
                     phone = "08776543210",
                     address = "Kec. Waru, Sidoarjo"
                 )
@@ -1053,7 +1053,7 @@ class LocalDataSeeder @Inject constructor(
                             outletId = outletId,
                             employeeId = 888881L,
                             customerId = 888882L,
-                            customerName = "Catering Bu Endang",
+                            customerName = "Catering Bu Endang (Demo)",
                             receiptNumber = receiptNumber,
                             date = date,
                             subtotal = subtotal,
@@ -1098,7 +1098,7 @@ class LocalDataSeeder @Inject constructor(
                             outletId = outletId,
                             employeeId = 888882L,
                             customerId = 888881L,
-                            customerName = "Hotel Santika Sidoarjo",
+                            customerName = "Hotel Santika (Demo)",
                             receiptNumber = receiptNumber,
                             date = date,
                             subtotal = subtotal,
@@ -1143,7 +1143,7 @@ class LocalDataSeeder @Inject constructor(
                             outletId = outletId,
                             employeeId = 888881L,
                             customerId = 888881L,
-                            customerName = "Hotel Santika Sidoarjo",
+                            customerName = "Hotel Santika (Demo)",
                             receiptNumber = receiptNumber,
                             date = date,
                             subtotal = subtotal,

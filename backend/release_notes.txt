@@ -1,6 +1,6 @@
-Pembaruan POSBah Versi 2.0.7
+Pembaruan POSBah Versi 2.0.8
 
-1. Proteksi & Keamanan Data Demo:
-   Sistem penyiapan data simulasi untuk Akun Demo kini sepenuhnya dipisahkan dari database produksi. Akun uji coba (demo) hanya akan memuat data sampel buatan (simulasi murni) demi menjaga keamanan dan privasi data asli.
+1. Isolasi Total Data Demo:
+   Seluruh data simulasi (nama klien, nama usaha, customer transaksi, dsb.) pada Akun Demo kini sepenuhnya disematkan penanda "(Demo)"/"(Simulasi Demo)" dan diisolasi secara ketat agar tidak tercampur dengan data produksi demi kepatuhan keamanan data.
 2. Otomatisasi Sinkronisasi & Perbaikan Interkoneksi:
    Pembaruan backend untuk mendukung kelancaran pemindahan data antara Room DB HP dan VPS PostgreSQL tanpa tabrakan duplikasi data, sehingga data statistik pendaftar akun demo dapat langsung terupdate secara real-time di panel admin.
