@@ -88,6 +88,7 @@ func main() {
 	http.HandleFunc("/api/admin/diagnose", handleAdminDiagnose)
 	http.HandleFunc("/status", handleStatus)
 	http.HandleFunc("/api/admin/deploy", handleAdminDeploy)
+	http.HandleFunc("/api/admin/deploy-log", handleAdminDeployLog)
 	http.HandleFunc("/api/admin/delete-user", handleAdminDeleteUser)
 	http.HandleFunc("/api/admin/check-demo-lockout", handleManualLockoutCheck)
 	http.HandleFunc("/api/admin/demo-users", handleGetDemoUsers)
@@ -511,17 +512,34 @@ func handleAdminDeleteUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func runAutoDeploy() {
-	log.Println("[AutoDeploy] Memulai deploy otomatis...")
+	logFile, _ := os.OpenFile("/home/muizz9900/deploy_log.txt", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if logFile == nil {
+		logFile, _ = os.OpenFile("./deploy_log.txt", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	}
+
+	writeLog := func(format string, v ...interface{}) {
+		msg := fmt.Sprintf(format, v...)
+		log.Println(msg)
+		if logFile != nil {
+			logFile.WriteString(time.Now().Format("2006-01-02 15:04:05") + " " + msg + "\n")
+		}
+	}
+
+	if logFile != nil {
+		defer logFile.Close()
+	}
+
+	writeLog("[AutoDeploy] Memulai deploy otomatis...")
 
 	runCmd := func(name string, args []string, dir string) error {
 		cmd := exec.Command(name, args...)
 		cmd.Dir = dir
 		output, err := cmd.CombinedOutput()
 		if err != nil {
-			log.Printf("[AutoDeploy] Perintah %s %v gagal: %v. Output: %s", name, args, err, string(output))
+			writeLog("[AutoDeploy] Perintah %s %v gagal: %v. Output: %s", name, args, err, string(output))
 			return err
 		}
-		log.Printf("[AutoDeploy] Perintah %s %v sukses. Output: %s", name, args, string(output))
+		writeLog("[AutoDeploy] Perintah %s %v sukses. Output: %s", name, args, string(output))
 		return nil
 	}
 
@@ -531,15 +549,19 @@ func runAutoDeploy() {
 	destAdminHtml := "/home/muizz9900/admin.html"
 	destWebAdminHtml := "/home/muizz9900/web/admin.html"
 
-	// 1. Git pull
+	// 1a. Discard any local modifications in repository on VPS to prevent conflicts during pull
+	_ = runCmd("git", []string{"reset", "--hard"}, repoDir)
+	_ = runCmd("git", []string{"clean", "-fd"}, repoDir)
+
+	// 1b. Git pull
 	if err := runCmd("git", []string{"pull"}, repoDir); err != nil {
-		log.Printf("[AutoDeploy] Git pull gagal: %v", err)
+		writeLog("[AutoDeploy] Git pull gagal: %v", err)
 		return
 	}
 
 	// 2. Go build
 	if err := runCmd("go", []string{"build", "-o", "posbah-backend"}, backendDir); err != nil {
-		log.Printf("[AutoDeploy] Go build gagal: %v", err)
+		writeLog("[AutoDeploy] Go build gagal: %v", err)
 		return
 	}
 
@@ -550,7 +572,7 @@ func runAutoDeploy() {
 	// 4. Copy new binary
 	srcBin := backendDir + "/posbah-backend"
 	if err := copyFile(srcBin, destBin); err != nil {
-		log.Printf("[AutoDeploy] Gagal menyalin binary baru: %v", err)
+		writeLog("[AutoDeploy] Gagal menyalin binary baru: %v", err)
 		return
 	}
 	_ = os.Chmod(destBin, 0755)
@@ -573,9 +595,41 @@ func runAutoDeploy() {
 	// 8. Copy release_notes.txt
 	_ = copyFile(backendDir+"/release_notes.txt", "/home/muizz9900/release_notes.txt")
 
-	log.Println("[AutoDeploy] Pembaruan file berhasil. Keluar dari proses untuk me-restart layanan...")
+	writeLog("[AutoDeploy] Pembaruan file berhasil. Keluar dari proses untuk me-restart layanan...")
 	time.Sleep(1 * time.Second)
 	os.Exit(0) // Systemd akan otomatis me-restart process karena Restart=always
+}
+
+func handleAdminDeployLog(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if !isAdminAuthenticated(r) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	logBytes, err := os.ReadFile("/home/muizz9900/deploy_log.txt")
+	if err != nil {
+		logBytes, err = os.ReadFile("./deploy_log.txt")
+	}
+
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   fmt.Sprintf("Gagal membaca file log: %v", err),
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Write(logBytes)
 }
 
 func copyFile(src, dst string) error {
