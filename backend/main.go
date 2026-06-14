@@ -3897,8 +3897,10 @@ func sendEmail(to string, subject string, body string) error {
 
 	auth := smtp.PlainAuth("", smtpUser, smtpPass, smtpHost)
 
-	msg := []byte("To: " + to + "\r\n" +
+	msg := []byte("From: POSBah <" + smtpSender + ">\r\n" +
+		"To: " + to + "\r\n" +
 		"Subject: " + subject + "\r\n" +
+		"MIME-Version: 1.0\r\n" +
 		"Content-Type: text/html; charset=UTF-8\r\n" +
 		"\r\n" +
 		body + "\r\n")
@@ -5010,8 +5012,28 @@ func handleAdminDiagnose(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	premiumEmailsRows, err := db.Query(`
+		SELECT DISTINCT "email" FROM "local_users" WHERE "isPremium" = TRUE AND "email" IS NOT NULL AND "email" != ''
+		UNION
+		SELECT DISTINCT e."email"
+		FROM "employees" e
+		JOIN "local_users" u ON e."tenantId" = u."tenantId"
+		WHERE u."isPremium" = TRUE AND e."email" IS NOT NULL AND e."email" != '' AND e."isActive" = TRUE
+	`)
+	var premiumEmails []string
+	if err == nil {
+		for premiumEmailsRows.Next() {
+			var pe string
+			if err := premiumEmailsRows.Scan(&pe); err == nil {
+				premiumEmails = append(premiumEmails, pe)
+			}
+		}
+		premiumEmailsRows.Close()
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
+		"premium_emails":    premiumEmails,
 		"tenant_row_counts": tenantCounts,
 		"stats": map[string]int{
 			"total":   totalUsers,
