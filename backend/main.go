@@ -170,6 +170,7 @@ func checkAndLockoutDemoUsers() error {
 	if db == nil {
 		return fmt.Errorf("local database not initialized")
 	}
+	go checkAndNotifyAdminOfNewDemoUsers()
 	syncDatabaseUsersAndTenants()
 	nowMillis := time.Now().UnixNano() / int64(time.Millisecond)
 	twoDaysAgoMillis := nowMillis - (2 * 24 * 60 * 60 * 1000)
