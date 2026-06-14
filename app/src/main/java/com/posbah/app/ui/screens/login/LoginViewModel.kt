@@ -119,8 +119,10 @@ class LoginViewModel @Inject constructor(
         }
     }
 
-    fun checkForUpdates() {
-        _uiState.update { it.copy(isCheckingUpdate = true, errorMessage = null) }
+    fun checkForUpdates(isManual: Boolean = false) {
+        if (isManual) {
+            _uiState.update { it.copy(isCheckingUpdate = true, errorMessage = null) }
+        }
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             var conn: java.net.HttpURLConnection? = null
             try {
@@ -130,36 +132,44 @@ class LoginViewModel @Inject constructor(
                 conn.connectTimeout = 5000
                 conn.readTimeout = 5000
                 
+                val currentVersion = com.posbah.app.BuildConfig.VERSION_NAME
                 if (conn.responseCode in 200..299) {
                     val response = conn.inputStream.bufferedReader().use { it.readText() }
                     val obj = org.json.JSONObject(response)
                     val version = obj.optString("version", "")
                     val description = obj.optString("description", "")
                     
+                    val hasUpdate = version.isNotEmpty() && version != currentVersion
+                    
                     _uiState.update {
                         it.copy(
                             isCheckingUpdate = false,
                             updateVersion = version,
                             updateDescription = description,
-                            showUpdateDialog = true
+                            showUpdateDialog = hasUpdate || (isManual && version.isNotEmpty()),
+                            errorMessage = if (isManual && !hasUpdate) "Aplikasi Anda sudah versi terbaru." else it.errorMessage
                         )
                     }
                 } else {
                     val code = conn.responseCode
-                    _uiState.update {
-                        it.copy(
-                            isCheckingUpdate = false,
-                            errorMessage = "Gagal mengecek update: Server merespon $code"
-                        )
+                    if (isManual) {
+                        _uiState.update {
+                            it.copy(
+                                isCheckingUpdate = false,
+                                errorMessage = "Gagal mengecek update: Server merespon $code"
+                            )
+                        }
                     }
                 }
             } catch (e: Exception) {
-                val msg = e.localizedMessage ?: "Koneksi gagal"
-                _uiState.update {
-                    it.copy(
-                        isCheckingUpdate = false,
-                        errorMessage = "Gagal mengecek update: $msg"
-                    )
+                if (isManual) {
+                    val msg = e.localizedMessage ?: "Koneksi gagal"
+                    _uiState.update {
+                        it.copy(
+                            isCheckingUpdate = false,
+                            errorMessage = "Gagal mengecek update: $msg"
+                        )
+                    }
                 }
             } finally {
                 conn?.disconnect()

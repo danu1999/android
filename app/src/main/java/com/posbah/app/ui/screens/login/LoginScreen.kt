@@ -66,6 +66,10 @@ fun LoginScreen(
 
 
 
+    LaunchedEffect(Unit) {
+        viewModel.checkForUpdates(isManual = false)
+    }
+
     LaunchedEffect(ui.signedInUser) { if (ui.signedInUser != null) onLoggedIn() }
     LaunchedEffect(ui.needsTenantPicker) { if (ui.needsTenantPicker != null) onNeedTenantPick() }
 
@@ -173,7 +177,7 @@ fun LoginScreen(
                         )
                     } else {
                         TextButton(
-                            onClick = { viewModel.checkForUpdates() },
+                            onClick = { viewModel.checkForUpdates(isManual = true) },
                             modifier = Modifier.align(Alignment.CenterHorizontally)
                         ) {
                             Text(
@@ -210,9 +214,10 @@ fun LoginScreen(
     }
 
     if (ui.showUpdateDialog) {
+        val hasUpdate = ui.updateVersion != null && ui.updateVersion != com.posbah.app.BuildConfig.VERSION_NAME
         AlertDialog(
             onDismissRequest = { viewModel.dismissUpdateDialog() },
-            title = { Text("Informasi Update Aplikasi") },
+            title = { Text(if (hasUpdate) "Pembaruan Tersedia!" else "Informasi Aplikasi") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Versi Saat Ini: v${com.posbah.app.BuildConfig.VERSION_NAME}")
@@ -222,10 +227,27 @@ fun LoginScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = { viewModel.dismissUpdateDialog() }) {
-                    Text("Tutup")
+                if (hasUpdate) {
+                    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+                    Button(onClick = {
+                        viewModel.dismissUpdateDialog()
+                        uriHandler.openUri("https://www.zedmz.cloud/api/download-apk")
+                    }) {
+                        Text("Unduh Pembaruan")
+                    }
+                } else {
+                    TextButton(onClick = { viewModel.dismissUpdateDialog() }) {
+                        Text("Tutup")
+                    }
                 }
-            }
+            },
+            dismissButton = if (hasUpdate) {
+                {
+                    TextButton(onClick = { viewModel.dismissUpdateDialog() }) {
+                        Text("Tutup")
+                    }
+                }
+            } else null
         )
     }
 
