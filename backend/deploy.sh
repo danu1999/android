@@ -4,6 +4,8 @@
 
 set -e
 
+cd "$(dirname "$0")"
+
 echo "=== PosBah Backend Deployment ==="
 
 # Stop current service
