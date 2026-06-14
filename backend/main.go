@@ -2497,7 +2497,24 @@ func validateTenantAccess(r *http.Request) error {
 		return fmt.Errorf("unauthorized: missing x-tenant-id or x-user-email headers")
 	}
 
-	// 2. Verify if user is active and belongs to tenantId (either as OWNER or Employee)
+	// 2. Allow registration/rejoin POST requests to local_users and tenants 
+	// for new users or approved rejoining users.
+	if r.Method == http.MethodPost && (tableName == "local_users" || tableName == "tenants") {
+		var status string
+		err := db.QueryRow(`SELECT "status" FROM "deleted_users" WHERE TRIM(LOWER("email")) = $1`, strings.TrimSpace(strings.ToLower(userEmail))).Scan(&status)
+		if err == nil {
+			// Email exists in deleted_users. Only allow if status is ACTIVE (approved to rejoin)
+			if status != "ACTIVE" {
+				return fmt.Errorf("forbidden: user %s is deleted or pending rejoin approval (status: %s)", userEmail, status)
+			}
+		} else if err != sql.ErrNoRows {
+			return fmt.Errorf("database error: %v", err)
+		}
+		// Approved to rejoin or completely new user: allowed to initialize user/tenant record
+		return nil
+	}
+
+	// 3. Verify if user is active and belongs to tenantId (either as OWNER or Employee)
 	var isAllowed bool
 
 	// Check local_users (owner)
@@ -3001,8 +3018,13 @@ func handleSyncTable(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if tableName == "local_users" {
+		userEmail := r.Header.Get("x-user-email")
 		for _, row := range rows {
 			emailVal, _ := row["email"].(string)
+			if strings.TrimSpace(strings.ToLower(emailVal)) != strings.TrimSpace(strings.ToLower(userEmail)) {
+				http.Error(w, "Forbidden: cannot sync local_user record for a different email address", http.StatusForbidden)
+				return
+			}
 			if emailVal != "" && isPremiumEmail(emailVal) {
 				row["isPremium"] = true
 			}
@@ -3036,7 +3058,13 @@ func handleSyncTable(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		} else if tableName == "tenants" {
+			userEmail := r.Header.Get("x-user-email")
 			for _, row := range rows {
+				ownerEmailVal, _ := row["ownerEmail"].(string)
+				if ownerEmailVal != "" && strings.TrimSpace(strings.ToLower(ownerEmailVal)) != strings.TrimSpace(strings.ToLower(userEmail)) {
+					http.Error(w, "Forbidden: cannot sync tenant owned by a different email address", http.StatusForbidden)
+					return
+				}
 				idVal, hasId := row["id"]
 				if hasId {
 					if fmt.Sprintf("%v", idVal) != tenantID {
