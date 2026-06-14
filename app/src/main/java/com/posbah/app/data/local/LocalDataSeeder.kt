@@ -933,7 +933,7 @@ class LocalDataSeeder @Inject constructor(
                     createdAt = System.currentTimeMillis(),
                     updatedAt = System.currentTimeMillis()
                 )
-                db.bmpBahanBakuDao().upsert(bahanBaku)
+                db.bmpBahanBakuDao().insert(bahanBaku)
 
                 val bbItems = listOf(
                     BmpBahanBakuItemEntity(
