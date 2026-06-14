@@ -257,6 +257,7 @@ fun PosScreen(
         val html = com.posbah.app.ui.print.ReceiptPrinter.generateReceiptHtml(
             context, tx, lines, viewModel.products.value, ui.printConfig
         )
+         
         printHtmlReceipt(context, html)
     }
 

@@ -1,8 +1,8 @@
-Pembaruan POSBah Versi 2.0.5
+Pembaruan POSBah Versi 2.0.6
 
-1. Pembaruan Keamanan Masuk:
-   Akun Premium sekarang diwajibkan menggunakan tab Masuk Premium (Email & PIN) demi keamanan data. Login Demo (Google SSO) kini dibatasi untuk akun non-premium saja.
-2. Fitur Pemulihan Akun (Rejoin):
-   Bantuan pemulihan bagi akun terhapus kini dapat diajukan dengan mudah lewat tombol "Hubungi Admin" di halaman masuk untuk memulihkan akun secara resmi melalui konfirmasi email.
-3. Peningkatan Kinerja:
-   Sinkronisasi database serta koneksi real-time antara aplikasi kasir dan server berjalan lebih lancar dan aman.
+1. Notifikasi Perubahan Kata Sandi:
+   Setiap kali Pemilik (Owner) mengganti kata sandi karyawan, sistem akan otomatis mengirimkan email pemberitahuan berisi kata sandi baru ke email karyawan tersebut dan Pemilik untuk transparansi keamanan.
+2. Fitur Hapus Karyawan:
+   Pemilik kini dapat menghapus akun karyawan secara langsung melalui halaman manajemen karyawan. Karyawan yang telah dihapus akan otomatis diblokir dan tidak dapat mengakses aplikasi kembali.
+3. Sinkronisasi Real-Time:
+   Peningkatan interkoneksi data untuk memastikan perubahan kata sandi dan status aktif karyawan langsung tersinkronisasi dengan aman antara HP Anda dan server VPS.

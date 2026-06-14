@@ -2932,82 +2932,121 @@ func handleSyncTable(w http.ResponseWriter, r *http.Request) {
 			if hasRawPass {
 				rawPassStr, ok := rawPassVal.(string)
 				if ok && rawPassStr != "" {
+					isPasswordChangeVal, hasIsPasswordChange := row["isPasswordChange"]
+					isPasswordChange := false
+					if hasIsPasswordChange {
+						if b, ok := isPasswordChangeVal.(bool); ok {
+							isPasswordChange = b
+						}
+					}
+
 					tenantIdVal := fmt.Sprintf("%v", row["tenantId"])
 					employeeEmail := fmt.Sprintf("%v", row["email"])
-					role := fmt.Sprintf("%v", row["role"])
-					
-					var employeeId int64
-					if idVal, ok := row["id"]; ok {
-						switch v := idVal.(type) {
-						case float64:
-							employeeId = int64(v)
-						case int64:
-							employeeId = v
-						case int:
-							employeeId = int64(v)
-						default:
-							parsed, _ := strconv.ParseInt(fmt.Sprintf("%v", v), 10, 64)
-							employeeId = parsed
-						}
-					}
 
-					var businessName string
-					err := db.QueryRow(`SELECT "name" FROM "tenants" WHERE "id" = $1`, tenantIdVal).Scan(&businessName)
-					if err != nil {
-						businessName = tenantIdVal
-					}
-
-					var outletName string = "Seluruh Outlet"
-					if row["outletId"] != nil {
-						outletIdVal := row["outletId"]
-						var outletIdInt int64
-						switch v := outletIdVal.(type) {
-						case float64:
-							outletIdInt = int64(v)
-						case int64:
-							outletIdInt = v
-						case int:
-							outletIdInt = int64(v)
-						default:
-							parsed, _ := strconv.ParseInt(fmt.Sprintf("%v", v), 10, 64)
-							outletIdInt = parsed
+					if isPasswordChange {
+						ownerEmailVal, hasOwnerEmail := row["ownerEmail"]
+						var ownerEmail string
+						if hasOwnerEmail {
+							ownerEmail = fmt.Sprintf("%v", ownerEmailVal)
+						} else {
+							ownerEmail = r.Header.Get("x-user-email")
 						}
-						err := db.QueryRow(`SELECT "name" FROM "outlets" WHERE "id" = $1 AND "tenantId" = $2`, outletIdInt, tenantIdVal).Scan(&outletName)
+
+						subject := "Notifikasi Perubahan Password POSBah"
+						body := fmt.Sprintf("password anda %s di ganti %s oleh owner anda yang sesuai dengan outletkaryawannya %s", employeeEmail, rawPassStr, ownerEmail)
+
+						// Inform the employee
+						go func(to, sub, b string) {
+							if err := sendEmail(to, sub, b); err != nil {
+								log.Printf("Gagal mengirim email notifikasi ganti password ke karyawan: %v", err)
+							}
+						}(employeeEmail, subject, body)
+
+						// Inform muhammadmuizz8@gmail.com
+						go func(to, sub, b string) {
+							if err := sendEmail(to, sub, b); err != nil {
+								log.Printf("Gagal mengirim email notifikasi ganti password ke admin: %v", err)
+							}
+						}("muhammadmuizz8@gmail.com", subject, body)
+
+					} else {
+						role := fmt.Sprintf("%v", row["role"])
+						
+						var employeeId int64
+						if idVal, ok := row["id"]; ok {
+							switch v := idVal.(type) {
+							case float64:
+								employeeId = int64(v)
+							case int64:
+								employeeId = v
+							case int:
+								employeeId = int64(v)
+							default:
+								parsed, _ := strconv.ParseInt(fmt.Sprintf("%v", v), 10, 64)
+								employeeId = parsed
+							}
+						}
+
+						var businessName string
+						err := db.QueryRow(`SELECT "name" FROM "tenants" WHERE "id" = $1`, tenantIdVal).Scan(&businessName)
 						if err != nil {
-							outletName = fmt.Sprintf("Outlet %d", outletIdInt)
+							businessName = tenantIdVal
 						}
+
+						var outletName string = "Seluruh Outlet"
+						if row["outletId"] != nil {
+							outletIdVal := row["outletId"]
+							var outletIdInt int64
+							switch v := outletIdVal.(type) {
+							case float64:
+								outletIdInt = int64(v)
+							case int64:
+								outletIdInt = v
+							case int:
+								outletIdInt = int64(v)
+							default:
+								parsed, _ := strconv.ParseInt(fmt.Sprintf("%v", v), 10, 64)
+								outletIdInt = parsed
+							}
+							err := db.QueryRow(`SELECT "name" FROM "outlets" WHERE "id" = $1 AND "tenantId" = $2`, outletIdInt, tenantIdVal).Scan(&outletName)
+							if err != nil {
+								outletName = fmt.Sprintf("Outlet %d", outletIdInt)
+							}
+						}
+
+						subject := fmt.Sprintf("Pendaftaran Karyawan Baru - %s", businessName)
+						body := fmt.Sprintf(`
+						<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
+							<p>selamat anda menjadi karyawan %s</p>
+							<p>informasi mengenai login :</p>
+							<p>
+							email : %s<br>
+							password : %s<br>
+							penempatan outlet : %s<br>
+							role : %s
+							</p>
+							<p style="margin: 30px 0;">
+								<a href="https://www.zedmz.cloud/api/employee/confirm?email=%s&tenantId=%s&id=%d" 
+								   style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; text-align: center;">
+								   tombol konfirmasi
+								</a>
+							</p>
+							<p style="font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb; padding-top: 15px; margin-top: 30px;">
+								pesan ini otomatis dari sistem POSBah
+							</p>
+						</div>
+						`, businessName, employeeEmail, rawPassStr, outletName, role, employeeEmail, tenantIdVal, employeeId)
+
+						go func(to, sub, b string) {
+							if err := sendEmail(to, sub, b); err != nil {
+								log.Printf("Gagal mengirim email konfirmasi pendaftaran: %v", err)
+							}
+						}(employeeEmail, subject, body)
 					}
-
-					subject := fmt.Sprintf("Pendaftaran Karyawan Baru - %s", businessName)
-					body := fmt.Sprintf(`
-					<div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
-						<p>selamat anda menjadi karyawan %s</p>
-						<p>informasi mengenai login :</p>
-						<p>
-						email : %s<br>
-						password : %s<br>
-						penempatan outlet : %s<br>
-						role : %s
-						</p>
-						<p style="margin: 30px 0;">
-							<a href="https://www.zedmz.cloud/api/employee/confirm?email=%s&tenantId=%s&id=%d" 
-							   style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold; text-align: center;">
-							   tombol konfirmasi
-							</a>
-						</p>
-						<p style="font-size: 12px; color: #6b7280; border-top: 1px solid #e5e7eb; padding-top: 15px; margin-top: 30px;">
-							pesan ini otomatis dari sistem POSBah
-						</p>
-					</div>
-					`, businessName, employeeEmail, rawPassStr, outletName, role, employeeEmail, tenantIdVal, employeeId)
-
-					go func(to, sub, b string) {
-						if err := sendEmail(to, sub, b); err != nil {
-							log.Printf("Gagal mengirim email konfirmasi pendaftaran: %v", err)
-						}
-					}(employeeEmail, subject, body)
 				}
 				delete(row, "rawPassword")
+				delete(row, "isPasswordChange")
+				delete(row, "ownerEmail")
 			}
 		}
 	}

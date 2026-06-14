@@ -530,6 +530,9 @@ class AuthRepository @Inject constructor(
         } else {
             // Check employees table in database
             var emp = employeeDao.findByEmail(cleanEmail)
+            if (emp != null && !emp.isActive) {
+                emp = null
+            }
             if (emp == null) {
                 // Fetch from VPS remote database
                 var conn: java.net.HttpURLConnection? = null
@@ -610,21 +613,25 @@ class AuthRepository @Inject constructor(
                             )
                             // Save to local database
                             employeeDao.insert(fetchedEmp)
-                            emp = fetchedEmp
+                            if (fetchedEmp.isActive) {
+                                emp = fetchedEmp
 
-                            // We should also check if the user is in local_users table locally, if not create them.
-                            val existingUser = userDao.getByEmail(cleanEmail)
-                            if (existingUser == null) {
-                                val user = LocalUser(
-                                    googleSub = obj.optString("googleSub", "emp:${fetchedEmp.id}"),
-                                    email = cleanEmail,
-                                    displayName = fetchedEmp.name,
-                                    photoUrl = null,
-                                    role = fetchedEmp.role,
-                                    isPremium = true,
-                                    tenantId = tenantId
-                                )
-                                userDao.upsert(user)
+                                // We should also check if the user is in local_users table locally, if not create them.
+                                val existingUser = userDao.getByEmail(cleanEmail)
+                                if (existingUser == null) {
+                                    val user = LocalUser(
+                                        googleSub = obj.optString("googleSub", "emp:${fetchedEmp.id}"),
+                                        email = cleanEmail,
+                                        displayName = fetchedEmp.name,
+                                        photoUrl = null,
+                                        role = fetchedEmp.role,
+                                        isPremium = true,
+                                        tenantId = tenantId
+                                    )
+                                    userDao.upsert(user)
+                                }
+                            } else {
+                                emp = null
                             }
                         }
                     }

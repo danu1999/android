@@ -175,9 +175,19 @@ class EmployeeViewModel @Inject constructor(
             db.employeeDao().update(updated)
             checkPermissionAndLoad()
 
+            val ownerEmail = authRepository.activeUserEmail().orEmpty()
+
             // Trigger auto-sync to VPS
             viewModelScope.launch(Dispatchers.IO) {
                 try {
+                    com.posbah.app.data.remote.SupabaseSyncManager.syncEmployeePasswordChange(
+                        context,
+                        db,
+                        tenantId,
+                        emp.email.orEmpty(),
+                        newPassword,
+                        ownerEmail
+                    )
                     com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -255,6 +265,29 @@ class EmployeeViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.localizedMessage ?: "Gagal memproses pembayaran gaji.") }
+            }
+        }
+    }
+
+    /**
+     * Hapus karyawan (soft delete) oleh Owner.
+     */
+    fun deleteEmployee(employeeId: Long) {
+        viewModelScope.launch {
+            try {
+                db.employeeDao().softDelete(employeeId)
+                checkPermissionAndLoad()
+
+                // Trigger auto-sync to VPS
+                viewModelScope.launch(Dispatchers.IO) {
+                    try {
+                        com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.localizedMessage ?: "Gagal menghapus karyawan.") }
             }
         }
     }

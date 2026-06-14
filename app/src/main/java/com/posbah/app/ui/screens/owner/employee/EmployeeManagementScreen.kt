@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Payments
@@ -96,6 +97,9 @@ fun EmployeeManagementScreen(
     var showPasswordChangeDialog by remember { mutableStateOf(false) }
     var activeEmployeeForPasswordChange by remember { mutableStateOf<Employee?>(null) }
     var newPasswordInput by remember { mutableStateOf("") }
+
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var activeEmployeeForDelete by remember { mutableStateOf<Employee?>(null) }
 
     var outletDropdownExpanded by remember { mutableStateOf(false) }
     var roleDropdownExpanded by remember { mutableStateOf(false) }
@@ -238,6 +242,10 @@ fun EmployeeManagementScreen(
                                 activeEmployeeForPasswordChange = emp
                                 newPasswordInput = ""
                                 showPasswordChangeDialog = true
+                            },
+                            onDelete = {
+                                activeEmployeeForDelete = emp
+                                showDeleteConfirmDialog = true
                             }
                         )
                     }
@@ -539,13 +547,45 @@ fun EmployeeManagementScreen(
             }
         )
     }
+
+    // Delete Confirmation Dialog
+    if (showDeleteConfirmDialog && activeEmployeeForDelete != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmDialog = false },
+            title = { Text("Hapus Karyawan") },
+            text = {
+                Text("Apakah Anda yakin ingin menghapus karyawan ${activeEmployeeForDelete?.name}? Tindakan ini tidak dapat dibatalkan.", fontSize = 14.sp)
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        activeEmployeeForDelete?.let { emp ->
+                            viewModel.deleteEmployee(emp.id)
+                        }
+                        showDeleteConfirmDialog = false
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Hapus", color = MaterialTheme.colorScheme.onError)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
 }
 
 @Composable
 fun EmployeeCard(
     employee: Employee,
     onPaySalary: () -> Unit,
-    onChangePassword: () -> Unit
+    onChangePassword: () -> Unit,
+    onDelete: () -> Unit
 ) {
     Card(
         colors = CardDefaults.cardColors(
@@ -614,14 +654,25 @@ fun EmployeeCard(
                     }
                 }
 
-                // Password Change Icon
-                IconButton(onClick = onChangePassword) {
-                    Icon(
-                        Icons.Outlined.Key,
-                        contentDescription = "Ganti Password",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
+                Row {
+                    // Password Change Icon
+                    IconButton(onClick = onChangePassword) {
+                        Icon(
+                            Icons.Outlined.Key,
+                            contentDescription = "Ganti Password",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    // Delete Icon
+                    IconButton(onClick = onDelete) {
+                        Icon(
+                            Icons.Outlined.Delete,
+                            contentDescription = "Hapus Karyawan",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
 

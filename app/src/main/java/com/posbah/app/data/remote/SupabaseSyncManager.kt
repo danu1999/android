@@ -89,6 +89,56 @@ object SupabaseSyncManager {
     }
 
     /**
+     * Sinkronisasikan perubahan password karyawan beserta password mentah dan email owner.
+     */
+    suspend fun syncEmployeePasswordChange(
+        context: Context,
+        db: PosBahDatabase,
+        activeTenantId: String,
+        employeeEmail: String,
+        rawPass: String,
+        ownerEmail: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        currentTenantId = activeTenantId
+        if (!isNetworkAvailable(context)) {
+            Log.w(TAG, "Sinkronisasi dibatalkan: tidak ada koneksi internet.")
+            return@withContext false
+        }
+        try {
+            val emp = db.employeeDao().findByEmail(employeeEmail)
+            if (emp == null) {
+                Log.e(TAG, "Employee tidak ditemukan di local DB untuk email: $employeeEmail")
+                return@withContext false
+            }
+            val array = JSONArray()
+            array.put(JSONObject().apply {
+                put("id", emp.id)
+                put("tenantId", emp.tenantId)
+                put("outletId", emp.outletId ?: JSONObject.NULL)
+                put("name", emp.name)
+                put("email", emp.email ?: JSONObject.NULL)
+                put("role", emp.role)
+                put("pinHash", emp.pinHash)
+                put("phone", emp.phone ?: JSONObject.NULL)
+                put("salary", emp.salary)
+                put("isActive", emp.isActive)
+                put("payPeriod", emp.payPeriod)
+                put("lastPaidAt", emp.lastPaidAt ?: JSONObject.NULL)
+                put("emailVerified", emp.emailVerified)
+                put("createdAt", emp.createdAt)
+                put("updatedAt", emp.updatedAt)
+                put("rawPassword", rawPass)
+                put("isPasswordChange", true)
+                put("ownerEmail", ownerEmail)
+            })
+            uploadTable(context, "employees", array)
+        } catch (e: Exception) {
+            Log.e(TAG, "Gagal mensinkronisasikan perubahan password: ${e.message}", e)
+            false
+        }
+    }
+
+    /**
      * Jalankan sinkronisasi penuh untuk seluruh data di database lokal.
      */
     suspend fun syncAll(context: Context, db: PosBahDatabase, activeTenantId: String): SyncResult = withContext(Dispatchers.IO) {
