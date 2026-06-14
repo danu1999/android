@@ -49,9 +49,11 @@ func initSchema() error {
 			"updatedAt" BIGINT,
 			"lastLoginAt" BIGINT,
 			"isActive" BOOLEAN DEFAULT TRUE,
-			"demoEmailSent" BOOLEAN DEFAULT FALSE
+			"demoEmailSent" BOOLEAN DEFAULT FALSE,
+			"demoDay2Notified" BOOLEAN DEFAULT FALSE
 		);`,
 		`ALTER TABLE "local_users" ADD COLUMN IF NOT EXISTS "demoEmailSent" BOOLEAN DEFAULT FALSE;`,
+		`ALTER TABLE "local_users" ADD COLUMN IF NOT EXISTS "demoDay2Notified" BOOLEAN DEFAULT FALSE;`,
 		`CREATE TABLE IF NOT EXISTS "tenants" (
 			"id" VARCHAR(100) PRIMARY KEY,
 			"name" VARCHAR(255) NOT NULL,

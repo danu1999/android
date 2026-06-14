@@ -16,6 +16,7 @@ import (
 	"net"
 	"net/http"
 	"net/smtp"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -170,42 +171,97 @@ func checkAndLockoutDemoUsers() error {
 		return fmt.Errorf("local database not initialized")
 	}
 	syncDatabaseUsersAndTenants()
-	twoDaysAgoMillis := time.Now().UnixNano()/int64(time.Millisecond) - (2 * 24 * 60 * 60 * 1000)
+	nowMillis := time.Now().UnixNano() / int64(time.Millisecond)
+	twoDaysAgoMillis := nowMillis - (2 * 24 * 60 * 60 * 1000)
+	fiveDaysAgoMillis := nowMillis - (5 * 24 * 60 * 60 * 1000)
 
-	// Query local database for demo users who registered more than 2 days ago
-	rows, err := db.Query(`SELECT "googleSub", "email", "registeredAt" FROM "local_users" WHERE "isPremium" = FALSE AND "registeredAt" < $1`, twoDaysAgoMillis)
-	if err != nil {
-		return fmt.Errorf("failed to query expired demo users: %w", err)
+	// --- 1. Day 5 Deletion / Purge ---
+	rows5, err5 := db.Query(`SELECT "googleSub", "email" FROM "local_users" WHERE "isPremium" = FALSE AND "registeredAt" < $1`, fiveDaysAgoMillis)
+	if err5 == nil {
+		type UserToPurge struct {
+			GoogleSub string
+			Email     string
+		}
+		var toPurge []UserToPurge
+		for rows5.Next() {
+			var p UserToPurge
+			if err := rows5.Scan(&p.GoogleSub, &p.Email); err == nil {
+				toPurge = append(toPurge, p)
+			}
+		}
+		rows5.Close()
+
+		for _, p := range toPurge {
+			log.Printf("[Cron] Purging expired demo user after 5 days: %s (sub: %s)", p.Email, p.GoogleSub)
+			if err := deleteLocalUser(p.GoogleSub); err != nil {
+				log.Printf("[Cron] Error purging user %s: %v", p.Email, err)
+			} else {
+				log.Printf("[Cron] Successfully purged expired demo user: %s", p.Email)
+				wsMsg := map[string]interface{}{
+					"type":      "user_status_changed",
+					"googleSub": p.GoogleSub,
+					"status":    "deleted",
+				}
+				if msgBytes, err := json.Marshal(wsMsg); err == nil {
+					broadcastWSMessage(string(msgBytes))
+				}
+			}
+		}
+	} else {
+		log.Printf("[Cron] Error querying 5-day expired demo users: %v", err5)
 	}
-	defer rows.Close()
 
-	var users []LocalUser
-	for rows.Next() {
+	// --- 2. Day 2 Warning & Lockout ---
+	rows2, err2 := db.Query(`SELECT "googleSub", "email", "registeredAt" FROM "local_users" WHERE "isPremium" = FALSE AND "registeredAt" < $1 AND "demoDay2Notified" = FALSE`, twoDaysAgoMillis)
+	if err2 != nil {
+		return fmt.Errorf("failed to query 2-day expired demo users: %w", err2)
+	}
+	defer rows2.Close()
+
+	var users2 []LocalUser
+	for rows2.Next() {
 		var u LocalUser
 		var registeredAt int64
-		if err := rows.Scan(&u.GoogleSub, &u.Email, &registeredAt); err != nil {
+		if err := rows2.Scan(&u.GoogleSub, &u.Email, &registeredAt); err != nil {
 			log.Printf("Failed to scan user: %v", err)
 			continue
 		}
 		u.RegisteredAt = registeredAt
-		users = append(users, u)
+		users2 = append(users2, u)
 	}
 
-	if len(users) == 0 {
-		log.Println("No expired demo users found.")
-		return nil
-	}
+	for _, user := range users2 {
+		log.Printf("[Cron] Locking out and warning demo user: %s", user.Email)
+		
+		// Send Day 2 warning email to demouser
+		subject := "[POSBah] Masa Uji Coba Demo POSBah Segera Berakhir"
+		body := fmt.Sprintf(`
+			<div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 500px; margin: 0 auto; padding: 30px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+				<h2 style="color: #dc2626; font-size: 20px; font-weight: 700; margin-bottom: 16px; text-align: center;">Uji Coba Demo Berakhir</h2>
+				<p>Halo,</p>
+				<p>Masa uji coba gratis (demo) 2 hari Anda di <strong>POSBah</strong> telah berakhir, dan akun Anda telah ditangguhkan.</p>
+				<p>Untuk menghindari kehilangan data, akun dan seluruh data transaksi Anda akan dihapus secara permanen dalam waktu <strong>3 hari</strong> (total 5 hari sejak pendaftaran).</p>
+				<p>Silakan lakukan pembayaran dan upgrade ke Premium sekarang juga agar data Anda tidak terhapus.</p>
+				<div style="text-align: center; margin: 24px 0;">
+					<span style="display: inline-block; background-color: #2563eb; color: #ffffff; padding: 14px 28px; font-weight: 600; font-size: 15px; border-radius: 10px; text-decoration: none;">Hubungi Admin untuk Upgrade</span>
+				</div>
+				<p style="font-size: 13px; color: #64748b; line-height: 1.5;">Catatan: Data yang telah dihapus tidak dapat dipulihkan kembali. Terima kasih atas pengertiannya.</p>
+			</div>
+		`)
 
-	log.Printf("Found %d expired demo users. Lockout in progress...", len(users))
+		errMail := sendEmail(user.Email, subject, body)
+		if errMail != nil {
+			log.Printf("[Cron] Warning: Could not send day 2 email to %s: %v", user.Email, errMail)
+		}
 
-	for _, user := range users {
-		_, err := db.Exec(`UPDATE "local_users" SET "isActive" = FALSE, "updatedAt" = $1 WHERE "googleSub" = $2`,
-			time.Now().UnixNano()/int64(time.Millisecond), user.GoogleSub)
+		// Update user to inactive and mark day 2 notified
+		_, err := db.Exec(`UPDATE "local_users" SET "isActive" = FALSE, "demoDay2Notified" = TRUE, "updatedAt" = $1 WHERE "googleSub" = $2`,
+			nowMillis, user.GoogleSub)
 		if err != nil {
 			log.Printf("Failed to lockout expired demo user %s: %v", user.Email, err)
 		} else {
 			regTime := time.Unix(user.RegisteredAt/1000, 0).Format("2006-01-02 15:04:05")
-			log.Printf("Successfully locked out demo user: %s (Registered at: %s)", user.Email, regTime)
+			log.Printf("Successfully locked out demo user and set day 2 notified: %s (Registered at: %s)", user.Email, regTime)
 			
 			// Broadcast WS message
 			wsMsg := map[string]interface{}{
@@ -218,7 +274,6 @@ func checkAndLockoutDemoUsers() error {
 			}
 		}
 	}
-
 	return nil
 }
 
@@ -4036,7 +4091,7 @@ func checkAndNotifyAdminOfNewDemoUsers() {
 	if db == nil {
 		return
 	}
-	rows, err := db.Query(`SELECT "googleSub", "email", COALESCE("displayName", '') FROM "local_users" WHERE "isPremium" = FALSE AND "demoEmailSent" = FALSE`)
+	rows, err := db.Query(`SELECT "googleSub", "email", COALESCE("displayName", '') FROM "local_users" WHERE "isPremium" = FALSE AND "demoEmailSent" = FALSE AND "googleSub" IS NOT NULL AND "googleSub" <> ''`)
 	if err != nil {
 		log.Printf("[Sync-Notify] Query error: %v", err)
 		return
@@ -4057,35 +4112,34 @@ func checkAndNotifyAdminOfNewDemoUsers() {
 	}
 
 	for _, d := range newDemos {
-		subject := fmt.Sprintf("[POSBah] Konfirmasi Pembayaran Demo User - %s", d.Email)
-		confirmUrl := fmt.Sprintf("https://www.zedmz.cloud/api/admin/confirm-payment-page?sub=%s&email=%s&name=%s", d.GoogleSub, d.Email, d.DisplayName)
-		
+		subject := fmt.Sprintf("pendaftaran demouser - %s", d.Email)
+		payUrl := fmt.Sprintf("https://zedmz.cloud/api/admin/confirm-payment-action?action=approve&sub=%s&email=%s&name=%s", url.QueryEscape(d.GoogleSub), url.QueryEscape(d.Email), url.QueryEscape(d.DisplayName))
+		noPayUrl := fmt.Sprintf("https://zedmz.cloud/api/admin/confirm-payment-action?action=reject&sub=%s&email=%s&name=%s", url.QueryEscape(d.GoogleSub), url.QueryEscape(d.Email), url.QueryEscape(d.DisplayName))
+
 		body := fmt.Sprintf(`
-			<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
-				<h2 style="color: #3B82F6;">Konfirmasi Pembayaran POSBah Premium</h2>
-				<p>Halo Admin,</p>
-				<p>Seorang pengguna demo baru telah terdaftar di POSBah dan membutuhkan konfirmasi pembayaran untuk di-upgrade ke premium:</p>
-				<table style="width: 100%%; border-collapse: collapse; margin: 20px 0;">
+			<div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
+				<h2 style="color: #2563eb; font-size: 18px; font-weight: 700; margin-top: 0; margin-bottom: 20px; text-align: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px;">Pendaftaran Demo User</h2>
+				
+				<div style="margin-bottom: 25px; font-size: 15px; line-height: 1.6; color: #334155;">
+					<p style="margin: 0 0 8px 0; font-weight: 600; color: #64748b;">Pesan Notifikasi:</p>
+					<p style="margin: 0; font-size: 16px; font-weight: bold; background-color: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; font-family: monospace;">
+						pendaftaran demouser<br>
+						email : %s
+					</p>
+				</div>
+
+				<table width="100%%" border="0" cellspacing="0" cellpadding="0" style="margin-top: 20px;">
 					<tr>
-						<td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Nama:</td>
-						<td style="padding: 8px; border-bottom: 1px solid #eee;">%s</td>
-					</tr>
-					<tr>
-						<td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Email:</td>
-						<td style="padding: 8px; border-bottom: 1px solid #eee;">%s</td>
-					</tr>
-					<tr>
-						<td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Google Sub:</td>
-						<td style="padding: 8px; border-bottom: 1px solid #eee;">%s</td>
+						<td align="center" width="50%%" style="padding-right: 8px;">
+							<a href="%s" style="display: block; background-color: #10b981; color: #ffffff; padding: 12px 18px; text-decoration: none; font-weight: 600; font-size: 14px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);">Bayar</a>
+						</td>
+						<td align="center" width="50%%" style="padding-left: 8px;">
+							<a href="%s" style="display: block; background-color: #ef4444; color: #ffffff; padding: 12px 18px; text-decoration: none; font-weight: 600; font-size: 14px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);">Tidak Bayar</a>
+						</td>
 					</tr>
 				</table>
-				<p>Silakan klik tombol di bawah ini untuk melihat detail dan mengonfirmasi pembayaran:</p>
-				<div style="text-align: center; margin: 30px 0;">
-					<a href="%s" style="background-color: #10B981; color: white; padding: 12px 24px; text-decoration: none; font-weight: bold; border-radius: 6px; display: inline-block;">Proses Konfirmasi Pembayaran</a>
-				</div>
-				<p style="color: #666; font-size: 12px;">Jika dibiarkan selama 2 hari, pengguna demo ini akan diblokir secara otomatis.</p>
 			</div>
-		`, d.DisplayName, d.Email, d.GoogleSub, confirmUrl)
+		`, d.Email, payUrl, noPayUrl)
 
 		err := sendEmail("muhammadmuizz8@gmail.com", subject, body)
 		if err == nil {
@@ -4375,7 +4429,7 @@ func upgradeUserToPremium(googleSub, email, displayName string) (string, error) 
 }
 
 func handleConfirmPaymentAction(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+	if r.Method != http.MethodPost && r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -4455,8 +4509,9 @@ func handleConfirmPaymentAction(w http.ResponseWriter, r *http.Request) {
 			</head>
 			<body>
 				<div class="card">
-					<h1>Pembayaran Ditolak & Diblokir</h1>
-					<p>Akun <strong>` + email + `</strong> telah diblokir secara permanen dari sistem.</p>
+					<h1>Pembayaran Ditolak & Dinonaktifkan</h1>
+					<p>Akun <strong>` + email + `</strong> telah dinonaktifkan.</p>
+					<p>Seluruh data akun ini akan dihapus secara otomatis dalam waktu 5 hari dari tanggal pendaftaran awal.</p>
 					<p>Tutup tab ini atau kembali.</p>
 				</div>
 			</body>
