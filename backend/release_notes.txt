@@ -1,8 +1,7 @@
-Pembaruan POSBah Versi 2.1.1
+Pembaruan POSBah Versi 2.1.2
 
-1. Simulasi Data Demo Lengkap & Mandiri:
-   Menyediakan data transaksi historis (> 30 Juta Rupiah), produk, karyawan, dan pelanggan yang terisolasi secara rapi berdasarkan jenis usaha yang dipilih (FNB, Rental, Laundry, BMP).
-2. Penghapusan Logo Bawaan Seeding:
-   Semua logo default diubah menjadi kosong (null) agar pengguna demo baru maupun lama dapat mengunggah logo bisnis unik mereka sendiri.
-3. Perbaikan Sinkronisasi & Isolasi Database:
-   Pembaruan deteksi pembersihan paksa database demo lokal dan sinkronisasi instan ke server cloud untuk memastikan isolasi data aman.
+1. Perbaikan Login Akun Premium (Transisi Demo):
+   Memperbaiki bug "akun demo wajib menggunakan google login" bagi pengguna demo yang baru saja melakukan pembayaran premium dan beralih ke Premium (Email & Password/PIN). Aplikasi sekarang menyinkronkan status premium secara instan dari server sebelum memeriksa batasan lokal.
+2. Keamanan & Sinkronisasi Real-time:
+   Meningkatkan keterhubungan database dan pembaruan profil pengguna premium secara instan setelah dikonfirmasi oleh admin.
+
