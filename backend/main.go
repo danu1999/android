@@ -4398,7 +4398,7 @@ func handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionToken := fmt.Sprintf("admin_sess_%d_%s", time.Now().UnixNano(), randString(16))
+	sessionToken := fmt.Sprintf("admin_sess_%d_%s_%s", time.Now().UnixNano(), req.Email, randString(16))
 	adminSessionsMu.Lock()
 	adminSessions[sessionToken] = req.Email
 	adminSessionsMu.Unlock()
