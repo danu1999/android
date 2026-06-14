@@ -4880,12 +4880,12 @@ func sendApkUpdateEmailToAllPremiumUsersAndEmployees(version, description string
 	}
 
 	query := `
-		SELECT DISTINCT "email" FROM "local_users" WHERE "isPremium" = TRUE AND "email" IS NOT NULL AND "email" != ''
+		SELECT DISTINCT "email" FROM "local_users" WHERE "isPremium" = TRUE AND "isActive" = TRUE AND "email" IS NOT NULL AND "email" != ''
 		UNION
 		SELECT DISTINCT e."email"
 		FROM "employees" e
 		JOIN "local_users" u ON e."tenantId" = u."tenantId"
-		WHERE u."isPremium" = TRUE AND e."email" IS NOT NULL AND e."email" != '' AND e."isActive" = TRUE
+		WHERE u."isPremium" = TRUE AND u."isActive" = TRUE AND e."email" IS NOT NULL AND e."email" != '' AND e."isActive" = TRUE
 	`
 
 	rows, err := db.Query(query)
@@ -4899,7 +4899,10 @@ func sendApkUpdateEmailToAllPremiumUsersAndEmployees(version, description string
 	for rows.Next() {
 		var email string
 		if err := rows.Scan(&email); err == nil {
-			emails = append(emails, email)
+			email = strings.TrimSpace(strings.ToLower(email))
+			if email != "" {
+				emails = append(emails, email)
+			}
 		}
 	}
 
@@ -5076,19 +5079,22 @@ func handleAdminDiagnose(w http.ResponseWriter, r *http.Request) {
 	}
 
 	premiumEmailsRows, err := db.Query(`
-		SELECT DISTINCT "email" FROM "local_users" WHERE "isPremium" = TRUE AND "email" IS NOT NULL AND "email" != ''
+		SELECT DISTINCT "email" FROM "local_users" WHERE "isPremium" = TRUE AND "isActive" = TRUE AND "email" IS NOT NULL AND "email" != ''
 		UNION
 		SELECT DISTINCT e."email"
 		FROM "employees" e
 		JOIN "local_users" u ON e."tenantId" = u."tenantId"
-		WHERE u."isPremium" = TRUE AND e."email" IS NOT NULL AND e."email" != '' AND e."isActive" = TRUE
+		WHERE u."isPremium" = TRUE AND u."isActive" = TRUE AND e."email" IS NOT NULL AND e."email" != '' AND e."isActive" = TRUE
 	`)
 	var premiumEmails []string
 	if err == nil {
 		for premiumEmailsRows.Next() {
 			var pe string
 			if err := premiumEmailsRows.Scan(&pe); err == nil {
-				premiumEmails = append(premiumEmails, pe)
+				pe = strings.TrimSpace(strings.ToLower(pe))
+				if pe != "" {
+					premiumEmails = append(premiumEmails, pe)
+				}
 			}
 		}
 		premiumEmailsRows.Close()
