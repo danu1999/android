@@ -1603,19 +1603,6 @@ class LocalDataSeeder @Inject constructor(
                     isActive = true,
                     payPeriod = "MONTHLY",
                     emailVerified = true
-                ),
-                Employee(
-                    id = 10004L,
-                    tenantId = "ten_premium_hanafiariful_gmail_com",
-                    outletId = outletId,
-                    name = "Mamet PKR",
-                    email = "alfarisirosi04@gmail.com",
-                    role = "KASIR",
-                    pinHash = "a10301e4a133374bddc5f4f246aead30ba95b4f60c65df80418df2c6338141c9606262b07348fb0ee75964d460de3a459377217afa4b85b7bde3f8572d3b791c",
-                    salary = 2500000.0,
-                    isActive = true,
-                    payPeriod = "MONTHLY",
-                    emailVerified = true
                 )
             )
             for (emp in staticEmployees) {
