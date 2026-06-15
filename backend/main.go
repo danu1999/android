@@ -1623,7 +1623,7 @@ func handleDownloadApk(w http.ResponseWriter, r *http.Request) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
-            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            --bg-gradient: linear-gradient(135deg, #0f172a 0%%, #1e1b4b 100%%);
             --primary: #f59e0b;
             --primary-hover: #d97706;
             --card-bg: rgba(30, 41, 59, 0.7);
@@ -1647,7 +1647,7 @@ func handleDownloadApk(w http.ResponseWriter, r *http.Request) {
             padding: 20px;
         }
         .container {
-            width: 100%;
+            width: 100%%;
             max-width: 500px;
             background: var(--card-bg);
             border: 1px solid var(--card-border);
