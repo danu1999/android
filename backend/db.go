@@ -85,11 +85,14 @@ func initSchema() error {
 			"email" VARCHAR(255),
 			"role" VARCHAR(50) DEFAULT 'KASIR',
 			"pinHash" VARCHAR(255) NOT NULL,
+			"phone" VARCHAR(50),
 			"salary" DOUBLE PRECISION DEFAULT 0,
 			"isActive" BOOLEAN DEFAULT TRUE,
 			"payPeriod" VARCHAR(50) DEFAULT 'MONTHLY',
 			"lastPaidAt" BIGINT,
 			"emailVerified" BOOLEAN DEFAULT FALSE,
+			"passwordChangeCount" INT DEFAULT 0,
+			"lastPasswordChangeDate" BIGINT DEFAULT 0,
 			"createdAt" BIGINT,
 			"updatedAt" BIGINT
 		);`,
@@ -576,6 +579,10 @@ func initSchema() error {
 		`UPDATE "transactions" SET "tenantId" = 'demo_tenant' WHERE "tenantId" IS NULL OR "tenantId" = '';`,
 		`ALTER TABLE "transactions" DROP CONSTRAINT IF EXISTS "transactions_pkey";`,
 		`ALTER TABLE "transactions" ADD PRIMARY KEY ("id", "tenantId");`,
+
+		`ALTER TABLE "employees" ADD COLUMN IF NOT EXISTS "phone" VARCHAR(50);`,
+		`ALTER TABLE "employees" ADD COLUMN IF NOT EXISTS "passwordChangeCount" INT DEFAULT 0;`,
+		`ALTER TABLE "employees" ADD COLUMN IF NOT EXISTS "lastPasswordChangeDate" BIGINT DEFAULT 0;`,
 	}
 
 	for _, q := range migrationQueries {
