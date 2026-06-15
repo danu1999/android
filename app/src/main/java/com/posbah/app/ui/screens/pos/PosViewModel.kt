@@ -97,6 +97,11 @@ class PosViewModel @Inject constructor(
     private val currentOutletId get() = sessionState.outletId.value
     val activeTenantId get() = tenantId
 
+    val tenantName = flow {
+        val t = db.tenantDao().getById(tenantId)
+        emit(t?.name ?: "Kasir F&B")
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, "Kasir F&B")
+
     private val _uiState = MutableStateFlow(PosUiState())
     val uiState = _uiState.asStateFlow()
 

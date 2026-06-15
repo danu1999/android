@@ -51,6 +51,11 @@ class LaundryViewModel @Inject constructor(
     private val tenantId = authRepository.activeTenantId().orEmpty()
     private val currentOutletId get() = sessionState.outletId.value
 
+    val tenantName = flow {
+        val t = db.tenantDao().getById(tenantId)
+        emit(t?.name ?: "Laundry POS")
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, "Laundry POS")
+
     init {
         viewModelScope.launch {
             if (sessionState.outletId.value == null) {

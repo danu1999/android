@@ -149,6 +149,7 @@ fun PosScreen(
     val productList by viewModel.products.collectAsState()
     val customerList by viewModel.customers.collectAsState()
     val queueList by viewModel.pendingQueues.collectAsState()
+    val tenantName by viewModel.tenantName.collectAsState()
 
     var activeProductForVariant by remember { mutableStateOf<ProductEntity?>(null) }
     var showBluetoothDialog by remember { mutableStateOf(false) }
@@ -269,7 +270,7 @@ fun PosScreen(
             topBar = {
                 Box {
                     PosBahTopBar(
-                        title = "Kasir F&B",
+                        title = tenantName,
                         subtitle = "Outlet: $activeOutletName",
                         onBack = onBack,
                         onTitleClick = { showOutletDropdown = true },
@@ -418,11 +419,16 @@ fun PosScreen(
                 }
             }
         ) { paddingValues ->
-            Row(
+            Column(
                 modifier = Modifier
                     .padding(paddingValues)
                     .fillMaxSize()
             ) {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                ) {
                 // Left pane: Search, categories, and products grid
                 Column(
                     modifier = Modifier
@@ -604,8 +610,28 @@ fun PosScreen(
                         )
                     }
                 }
+                
+                // Close Row
+                }
+                
+                // Footer showing the business name
+                Text(
+                    text = tenantName,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                        .testTag("dashboard-footer-name")
+                )
+                
+                // Close Column
+                }
             }
-        }
 
         // Mobile cart sheet modal
         if (!isTablet && ui.showPayModal && viewModel.cart.isNotEmpty()) {

@@ -173,7 +173,7 @@ fun BmpDashboardScreen(
                 .background(MaterialTheme.colorScheme.background)
         ) {
             PosBahTopBar(
-                title = "BMP",
+                title = ui.tenantName ?: "BMP",
                 subtitle = ui.tenantId?.let { "Tenant: $it" } ?: "Tenant tidak aktif",
                 actions = {
                     IconButton(onClick = { onNavigate(Screen.QrScanner.route) }, modifier = Modifier.testTag("btn-qr-scanner")) {

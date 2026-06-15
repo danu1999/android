@@ -118,6 +118,7 @@ fun RentalScreen(
 
     val vehicles by viewModel.vehicles.collectAsState()
     val rentalOrders by viewModel.rentalOrders.collectAsState()
+    val tenantName by viewModel.tenantName.collectAsState()
     val isOwner by viewModel.isOwner.collectAsState()
     val canViewMargin by viewModel.canViewMargin.collectAsState()
     val activityLogsList by viewModel.activityLogs.collectAsState()
@@ -216,7 +217,7 @@ fun RentalScreen(
         topBar = {
             Box {
                 PosBahTopBar(
-                    title = "Rental POS",
+                    title = tenantName,
                     subtitle = "Outlet: $activeOutletName",
                     onBack = onBack,
                     onTitleClick = { showOutletDropdown = true },
@@ -313,7 +314,9 @@ fun RentalScreen(
         ) {
             val isCompact = maxWidth < 600.dp
 
-            if (isCompact) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Box(modifier = Modifier.weight(1f)) {
+                    if (isCompact) {
                 // === MOBILE LAYOUT: Vertical with Tabs ===
                 Column(modifier = Modifier.fillMaxSize()) {
                     // Tab Switcher
@@ -436,9 +439,30 @@ fun RentalScreen(
                                 selectedOrderForReturn = order
                                 lateDaysInput = "0"
                             },
-                            modifier = Modifier.fillMaxSize()
+                             modifier = Modifier.fillMaxSize()
                         )
                     }
+                }
+                
+                // Close Box
+                }
+                
+                // Footer showing the business name
+                Text(
+                    text = tenantName,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                        .testTag("dashboard-footer-name")
+                )
+                
+                // Close Column
                 }
             }
         }

@@ -126,6 +126,7 @@ fun LaundryScreen(
 
     val services by viewModel.services.collectAsState()
     val orders by viewModel.orders.collectAsState()
+    val tenantName by viewModel.tenantName.collectAsState()
     val cart = viewModel.cart
     val customerList by viewModel.customers.collectAsState(emptyList())
     val transactionList by viewModel.transactions.collectAsState(emptyList())
@@ -216,7 +217,7 @@ fun LaundryScreen(
         topBar = {
             Box {
                 PosBahTopBar(
-                    title = "Laundry POS",
+                    title = tenantName,
                     subtitle = "Outlet: $activeOutletName",
                     onBack = onBack,
                     onTitleClick = { showOutletDropdown = true },
@@ -320,7 +321,9 @@ fun LaundryScreen(
         ) {
             val isCompact = maxWidth < 600.dp
 
-            if (isCompact) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Box(modifier = Modifier.weight(1f)) {
+                    if (isCompact) {
                 // === MOBILE LAYOUT: Vertical with Tabs ===
                 Column(modifier = Modifier.fillMaxSize()) {
                     // Tab Switcher
@@ -488,6 +491,27 @@ fun LaundryScreen(
                             modifier = Modifier.fillMaxSize()
                         )
                     }
+                }
+                
+                // Close Box
+                }
+                
+                // Footer showing the business name
+                Text(
+                    text = tenantName,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                        .testTag("dashboard-footer-name")
+                )
+                
+                // Close Column
                 }
             }
         }
