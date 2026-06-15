@@ -4537,7 +4537,7 @@ func upgradeUserToPremium(googleSub, email, displayName, customPinHash string) (
 	employeeId := int((time.Now().Unix() + int64(time.Now().Nanosecond())) % 2000000000)
 	_, err = tx.Exec(`INSERT INTO "employees" ("id", "tenantId", "outletId", "name", "email", "role", "pinHash", "salary", "isActive", "createdAt", "updatedAt") 
 		VALUES ($1, $2, NULL, $3, $4, 'OWNER', $5, 0.0, true, $6, $7)
-		ON CONFLICT ("id") DO NOTHING`,
+		ON CONFLICT ("id", "tenantId") DO NOTHING`,
 		employeeId, premiumTenantId, displayName, email, hashedPassword, nowMillis, nowMillis)
 	if err != nil {
 		return "", fmt.Errorf("Failed to create owner employee: %w", err)

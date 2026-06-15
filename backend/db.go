@@ -437,11 +437,11 @@ func initSchema() error {
 
 		`INSERT INTO "employees" ("id", "tenantId", "name", "email", "role", "pinHash", "isActive", "createdAt", "updatedAt")
 		VALUES (10001, 'ten_premium_hanafiariful_gmail_com', 'PISANG KEJU RAMAYANA', 'hanafiariful@gmail.com', 'OWNER', '20710a82f8d6b458af10d49fbb1f985ac8aaf696e6b32e776d4f4ebbc30d08565e2bb5e1902ace18297d8db47ad35e49c086669125b1d6ac867c0d2d7e265e50', true, 1685642632000, 1685642632000)
-		ON CONFLICT ("id") DO UPDATE SET "tenantId" = EXCLUDED."tenantId", "role" = EXCLUDED."role", "pinHash" = EXCLUDED."pinHash";`,
+		ON CONFLICT ("id", "tenantId") DO UPDATE SET "role" = EXCLUDED."role", "pinHash" = EXCLUDED."pinHash";`,
 
 		`INSERT INTO "employees" ("id", "tenantId", "name", "email", "role", "pinHash", "isActive", "createdAt", "updatedAt")
 		VALUES (10002, 'ten_premium_hanafiariful_gmail_com', 'FahriP', 'fahrup22@gmail.com', 'ADMIN', '63e71711d1481b6da8b756e114aa2ac71a704929c0accf46f419706a5c1416ae1a312899ae84d3d8e33d255811e98fd4d17e59371a08e2f9c21c01d1b1c13a8d', true, 1685642632000, 1685642632000)
-		ON CONFLICT ("id") DO UPDATE SET "tenantId" = EXCLUDED."tenantId", "role" = EXCLUDED."role", "pinHash" = EXCLUDED."pinHash";`,
+		ON CONFLICT ("id", "tenantId") DO UPDATE SET "role" = EXCLUDED."role", "pinHash" = EXCLUDED."pinHash";`,
 
 		`UPDATE "bmp_payrolls" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
 		`UPDATE "bmp_clients" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
@@ -474,7 +474,7 @@ func initSchema() error {
 
 		`INSERT INTO "employees" ("id", "tenantId", "name", "email", "role", "pinHash", "isActive", "createdAt", "updatedAt")
 		VALUES (20001, 'ten_premium_bahteramulyap_gmail_com', 'CV. BAHTERA MULYA PLASTIK', 'bahteramulyap@gmail.com', 'OWNER', '8a0ff1f8926195dfde55af7e68c028591602dacc30dc3c7caef27a949ca45142b25514004cf4540c46eca830100d06517c6facc0faf77fc57140e9df5fe5ffc7', true, 1685642632000, 1685642632000)
-		ON CONFLICT ("id") DO UPDATE SET "tenantId" = EXCLUDED."tenantId", "role" = EXCLUDED."role", "pinHash" = EXCLUDED."pinHash";`,
+		ON CONFLICT ("id", "tenantId") DO UPDATE SET "role" = EXCLUDED."role", "pinHash" = EXCLUDED."pinHash";`,
 
 		`UPDATE "bmp_payrolls" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
 		`UPDATE "bmp_clients" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,

@@ -1,8 +1,6 @@
-Pembaruan POSBah Versi 2.1.6
+Pembaruan POSBah Versi 2.1.7
 
-1. Kolom Lunas & Belum Lunas pada Pembuatan Invoice Baru:
-   Menyediakan kolom input "Jumlah Lunas (DP)" dan tampilan kalkulasi otomatis "Belum Lunas (Sisa)" pada form pembuatan invoice baru di modul BMP (Invoice & Manufaktur). Hal ini memudahkan pencatatan uang muka atau pembayaran di awal.
-2. Interkoneksi Pembayaran & Arus Kas Otomatis:
-   Ketika invoice baru disimpan dengan nilai "Lunas" > 0, sistem secara otomatis menerbitkan data pembayaran BmpInvoicePayment dan mencatat pemasukan kas masuk BmpCashFlow di database lokal maupun cloud secara real-time.
-3. Sinkronisasi & Pembaruan Versi Mandiri:
-   Secara otomatis mendeteksi biner pembaruan v2.1.6 di VPS, memperbarui database apk_config, mengirimkan siaran realtime ke semua klien aktif, serta mengirimkan email pemberitahuan ke semua akun premium secara otomatis.
+1. Perbaikan Bug Upgrade Akun (Constraint Error Fix):
+   Memperbaiki bug database PostgreSQL ("pq: there is no unique or exclusion constraint matching the ON CONFLICT specification") yang terjadi saat melakukan upgrade akun premium dari userdemo. Modifikasi dilakukan pada target konflik query INSERT tabel employees agar sesuai dengan skema primary key komposit terbaru.
+2. Sinkronisasi & Penyiaran Versi 2.1.7:
+   Deteksi otomatis biner baru versi 2.1.7 di VPS, pembaruan database config, serta pengiriman siaran pembaruan real-time dan email pemberitahuan ke seluruh pengguna aktif secara langsung.
