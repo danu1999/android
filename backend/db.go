@@ -50,10 +50,12 @@ func initSchema() error {
 			"lastLoginAt" BIGINT,
 			"isActive" BOOLEAN DEFAULT TRUE,
 			"demoEmailSent" BOOLEAN DEFAULT FALSE,
-			"demoDay2Notified" BOOLEAN DEFAULT FALSE
+			"demoDay2Notified" BOOLEAN DEFAULT FALSE,
+			"apkVersion" VARCHAR(50) DEFAULT '2.0.3'
 		);`,
 		`ALTER TABLE "local_users" ADD COLUMN IF NOT EXISTS "demoEmailSent" BOOLEAN DEFAULT FALSE;`,
 		`ALTER TABLE "local_users" ADD COLUMN IF NOT EXISTS "demoDay2Notified" BOOLEAN DEFAULT FALSE;`,
+		`ALTER TABLE "local_users" ADD COLUMN IF NOT EXISTS "apkVersion" VARCHAR(50) DEFAULT '2.0.3';`,
 		`CREATE TABLE IF NOT EXISTS "tenants" (
 			"id" VARCHAR(100) PRIMARY KEY,
 			"name" VARCHAR(255) NOT NULL,
@@ -254,7 +256,8 @@ func initSchema() error {
 		);`,
 		`CREATE TABLE IF NOT EXISTS "print_settings" (
 			"id" BIGINT PRIMARY KEY,
-			"tenantId" VARCHAR(100) UNIQUE NOT NULL,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"moduleKey" VARCHAR(50) DEFAULT 'BMP',
 			"jpgUseLogo" BOOLEAN DEFAULT TRUE,
 			"jpgHeaderAlign" VARCHAR(50) DEFAULT 'LEFT',
 			"jpgUseSignature" BOOLEAN DEFAULT TRUE,
@@ -282,11 +285,16 @@ func initSchema() error {
 			"receiptIsColor" BOOLEAN DEFAULT FALSE,
 			"receiptShowItemPrice" BOOLEAN DEFAULT TRUE,
 			"receiptFooterText" VARCHAR(255) DEFAULT 'Terima kasih sudah berbelanja!',
+			"jpgTemplateType" VARCHAR(50) DEFAULT 'MODERN',
+			"sjTemplateType" VARCHAR(50) DEFAULT 'MODERN',
+			"invoiceTemplateType" VARCHAR(50) DEFAULT 'MODERN',
 			"bankOwnerName" VARCHAR(100) DEFAULT '',
 			"bankName" VARCHAR(50) DEFAULT 'BCA',
 			"bankAccountNumber" VARCHAR(100) DEFAULT '',
+			"logoPath" TEXT,
 			"createdAt" BIGINT,
-			"updatedAt" BIGINT
+			"updatedAt" BIGINT,
+			CONSTRAINT "print_settings_tenantId_moduleKey_key" UNIQUE ("tenantId", "moduleKey")
 		);`,
 		`CREATE TABLE IF NOT EXISTS "products" (
 			"id" INT PRIMARY KEY,
@@ -488,6 +496,9 @@ func initSchema() error {
 		// print_settings schema updates
 		`ALTER TABLE "print_settings" ADD COLUMN IF NOT EXISTS "moduleKey" VARCHAR(50) DEFAULT 'BMP';`,
 		`ALTER TABLE "print_settings" ADD COLUMN IF NOT EXISTS "logoPath" TEXT;`,
+		`ALTER TABLE "print_settings" ADD COLUMN IF NOT EXISTS "jpgTemplateType" VARCHAR(50) DEFAULT 'MODERN';`,
+		`ALTER TABLE "print_settings" ADD COLUMN IF NOT EXISTS "sjTemplateType" VARCHAR(50) DEFAULT 'MODERN';`,
+		`ALTER TABLE "print_settings" ADD COLUMN IF NOT EXISTS "invoiceTemplateType" VARCHAR(50) DEFAULT 'MODERN';`,
 		`ALTER TABLE "print_settings" DROP CONSTRAINT IF EXISTS "print_settings_tenantId_key";`,
 		`ALTER TABLE "print_settings" DROP CONSTRAINT IF EXISTS "print_settings_tenantId_moduleKey_key";`,
 		`ALTER TABLE "print_settings" ADD CONSTRAINT "print_settings_tenantId_moduleKey_key" UNIQUE ("tenantId", "moduleKey");`,
@@ -500,6 +511,71 @@ func initSchema() error {
 		`ALTER TABLE "bmp_payrolls" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT FALSE;`,
 		`ALTER TABLE "bmp_bahan_baku" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT FALSE;`,
 		`ALTER TABLE "bmp_bahan_baku_item" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT FALSE;`,
+
+		// Drop single PKs and create composite PKs (id, tenantId) for multi-tenant tables
+		`UPDATE "outlets" SET "tenantId" = 'demo_tenant' WHERE "tenantId" IS NULL OR "tenantId" = '';`,
+		`ALTER TABLE "outlets" DROP CONSTRAINT IF EXISTS "outlets_pkey";`,
+		`ALTER TABLE "outlets" ADD PRIMARY KEY ("id", "tenantId");`,
+
+		`UPDATE "employees" SET "tenantId" = 'demo_tenant' WHERE "tenantId" IS NULL OR "tenantId" = '';`,
+		`ALTER TABLE "employees" DROP CONSTRAINT IF EXISTS "employees_pkey";`,
+		`ALTER TABLE "employees" ADD PRIMARY KEY ("id", "tenantId");`,
+
+		`UPDATE "bmp_clients" SET "tenantId" = 'demo_tenant' WHERE "tenantId" IS NULL OR "tenantId" = '';`,
+		`ALTER TABLE "bmp_clients" DROP CONSTRAINT IF EXISTS "bmp_clients_pkey";`,
+		`ALTER TABLE "bmp_clients" ADD PRIMARY KEY ("id", "tenantId");`,
+
+		`UPDATE "bmp_invoices" SET "tenantId" = 'demo_tenant' WHERE "tenantId" IS NULL OR "tenantId" = '';`,
+		`ALTER TABLE "bmp_invoices" DROP CONSTRAINT IF EXISTS "bmp_invoices_pkey";`,
+		`ALTER TABLE "bmp_invoices" ADD PRIMARY KEY ("id", "tenantId");`,
+
+		`UPDATE "bmp_products" SET "tenantId" = 'demo_tenant' WHERE "tenantId" IS NULL OR "tenantId" = '';`,
+		`ALTER TABLE "bmp_products" DROP CONSTRAINT IF EXISTS "bmp_products_pkey";`,
+		`ALTER TABLE "bmp_products" ADD PRIMARY KEY ("id", "tenantId");`,
+
+		`UPDATE "bmp_master_products" SET "tenantId" = 'demo_tenant' WHERE "tenantId" IS NULL OR "tenantId" = '';`,
+		`ALTER TABLE "bmp_master_products" DROP CONSTRAINT IF EXISTS "bmp_master_products_pkey";`,
+		`ALTER TABLE "bmp_master_products" ADD PRIMARY KEY ("id", "tenantId");`,
+
+		`UPDATE "bmp_invoice_payments" SET "tenantId" = 'demo_tenant' WHERE "tenantId" IS NULL OR "tenantId" = '';`,
+		`ALTER TABLE "bmp_invoice_payments" DROP CONSTRAINT IF EXISTS "bmp_invoice_payments_pkey";`,
+		`ALTER TABLE "bmp_invoice_payments" ADD PRIMARY KEY ("id", "tenantId");`,
+
+		`UPDATE "bmp_cashflow" SET "tenantId" = 'demo_tenant' WHERE "tenantId" IS NULL OR "tenantId" = '';`,
+		`ALTER TABLE "bmp_cashflow" DROP CONSTRAINT IF EXISTS "bmp_cashflow_pkey";`,
+		`ALTER TABLE "bmp_cashflow" ADD PRIMARY KEY ("id", "tenantId");`,
+
+		`UPDATE "bmp_settings" SET "tenantId" = 'demo_tenant' WHERE "tenantId" IS NULL OR "tenantId" = '';`,
+		`ALTER TABLE "bmp_settings" DROP CONSTRAINT IF EXISTS "bmp_settings_pkey";`,
+		`ALTER TABLE "bmp_settings" ADD PRIMARY KEY ("id", "tenantId");`,
+
+		`UPDATE "bmp_employees" SET "tenantId" = 'demo_tenant' WHERE "tenantId" IS NULL OR "tenantId" = '';`,
+		`ALTER TABLE "bmp_employees" DROP CONSTRAINT IF EXISTS "bmp_employees_pkey";`,
+		`ALTER TABLE "bmp_employees" ADD PRIMARY KEY ("id", "tenantId");`,
+
+		`UPDATE "bmp_payrolls" SET "tenantId" = 'demo_tenant' WHERE "tenantId" IS NULL OR "tenantId" = '';`,
+		`ALTER TABLE "bmp_payrolls" DROP CONSTRAINT IF EXISTS "bmp_payrolls_pkey";`,
+		`ALTER TABLE "bmp_payrolls" ADD PRIMARY KEY ("id", "tenantId");`,
+
+		`UPDATE "bmp_bahan_baku" SET "tenantId" = 'demo_tenant' WHERE "tenantId" IS NULL OR "tenantId" = '';`,
+		`ALTER TABLE "bmp_bahan_baku" DROP CONSTRAINT IF EXISTS "bmp_bahan_baku_pkey";`,
+		`ALTER TABLE "bmp_bahan_baku" ADD PRIMARY KEY ("id", "tenantId");`,
+
+		`UPDATE "bmp_bahan_baku_item" SET "tenantId" = 'demo_tenant' WHERE "tenantId" IS NULL OR "tenantId" = '';`,
+		`ALTER TABLE "bmp_bahan_baku_item" DROP CONSTRAINT IF EXISTS "bmp_bahan_baku_item_pkey";`,
+		`ALTER TABLE "bmp_bahan_baku_item" ADD PRIMARY KEY ("id", "tenantId");`,
+
+		`UPDATE "products" SET "tenantId" = 'demo_tenant' WHERE "tenantId" IS NULL OR "tenantId" = '';`,
+		`ALTER TABLE "products" DROP CONSTRAINT IF EXISTS "products_pkey";`,
+		`ALTER TABLE "products" ADD PRIMARY KEY ("id", "tenantId");`,
+
+		`UPDATE "customers" SET "tenantId" = 'demo_tenant' WHERE "tenantId" IS NULL OR "tenantId" = '';`,
+		`ALTER TABLE "customers" DROP CONSTRAINT IF EXISTS "customers_pkey";`,
+		`ALTER TABLE "customers" ADD PRIMARY KEY ("id", "tenantId");`,
+
+		`UPDATE "transactions" SET "tenantId" = 'demo_tenant' WHERE "tenantId" IS NULL OR "tenantId" = '';`,
+		`ALTER TABLE "transactions" DROP CONSTRAINT IF EXISTS "transactions_pkey";`,
+		`ALTER TABLE "transactions" ADD PRIMARY KEY ("id", "tenantId");`,
 	}
 
 	for _, q := range migrationQueries {
@@ -521,6 +597,17 @@ func initSchema() error {
 	return nil
 }
 
+func hasTenantIdColumn(tableName string) bool {
+	switch tableName {
+	case "outlets", "employees", "bmp_clients", "bmp_invoices", "bmp_products",
+		"bmp_master_products", "bmp_invoice_payments", "bmp_cashflow", "bmp_settings",
+		"bmp_employees", "bmp_payrolls", "bmp_bahan_baku", "bmp_bahan_baku_item",
+		"products", "customers", "transactions":
+		return true
+	}
+	return false
+}
+
 func isPKColumn(tableName string, colName string) bool {
 	if tableName == "local_users" && colName == "googleSub" {
 		return true
@@ -528,7 +615,10 @@ func isPKColumn(tableName string, colName string) bool {
 	if tableName == "print_settings" && (colName == "tenantId" || colName == "moduleKey") {
 		return true
 	}
-	if tableName != "local_users" && tableName != "print_settings" && colName == "id" {
+	if hasTenantIdColumn(tableName) && (colName == "id" || colName == "tenantId") {
+		return true
+	}
+	if colName == "id" {
 		return true
 	}
 	return false
@@ -576,6 +666,8 @@ func dynamicUpsert(tableName string, rows []map[string]interface{}) error {
 			conflictTarget = `"googleSub"`
 		} else if tableName == "print_settings" {
 			conflictTarget = `"tenantId", "moduleKey"`
+		} else if hasTenantIdColumn(tableName) {
+			conflictTarget = `"id", "tenantId"`
 		}
 
 		query := fmt.Sprintf(

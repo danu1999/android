@@ -44,18 +44,32 @@ class TenantPickerViewModel @Inject constructor(
         val email = securePrefs.currentEmail ?: return
         viewModelScope.launch {
             val user = authRepository.getActiveUser()
-            val isPremium = user?.isPremium == true
-            tenantRepository.observeForOwner(email).collect { list ->
-                val filteredList = when (email.lowercase().trim()) {
-                    "hanafiariful@gmail.com" -> list.filter { it.id == "ten_premium_hanafiariful_gmail_com" }
-                    "bahteramulyap@gmail.com" -> list.filter { it.id == "ten_premium_bahteramulyap_gmail_com" }
-                    else -> list
+            val activeTenantId = user?.tenantId ?: securePrefs.currentTenantId
+
+            if (email.lowercase().trim() == "muhammadmuizz8@gmail.com") {
+                tenantRepository.observeForOwner(email).collect { list ->
+                    _ui.update { 
+                        it.copy(
+                            isLoading = false, 
+                            tenants = list,
+                            canAddTenant = true
+                        ) 
+                    }
                 }
+            } else {
+                // Regular owners and employees (outletkaryawan) cannot add tenant or choose more than 1.
+                // We lock them to exactly their active/assigned tenant.
+                val tenant = if (!activeTenantId.isNullOrBlank()) {
+                    tenantRepository.getById(activeTenantId)
+                } else {
+                    null
+                }
+                val tenantList = if (tenant != null) listOf(tenant) else emptyList()
                 _ui.update { 
                     it.copy(
                         isLoading = false, 
-                        tenants = filteredList,
-                        canAddTenant = email == "muhammadmuizz8@gmail.com" || isPremium
+                        tenants = tenantList,
+                        canAddTenant = false
                     ) 
                 }
             }

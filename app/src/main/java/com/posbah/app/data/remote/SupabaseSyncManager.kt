@@ -170,6 +170,7 @@ object SupabaseSyncManager {
                         put("updatedAt", u.updatedAt)
                         put("lastLoginAt", u.lastLoginAt)
                         put("isActive", u.isActive)
+                        put("apkVersion", u.apkVersion)
                     })
                 }
                 uploadTable(context, "local_users", array)

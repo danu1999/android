@@ -139,7 +139,23 @@ class LoginViewModel @Inject constructor(
                     val version = obj.optString("version", "")
                     val description = obj.optString("description", "")
                     
-                    val hasUpdate = version.isNotEmpty() && version != currentVersion
+                    val hasUpdate = version.isNotEmpty() && run {
+                        val parts1 = version.split(".")
+                        val parts2 = currentVersion.split(".")
+                        val length = maxOf(parts1.size, parts2.size)
+                        var isNewer = false
+                        for (i in 0 until length) {
+                            val n1 = parts1.getOrNull(i)?.toIntOrNull() ?: 0
+                            val n2 = parts2.getOrNull(i)?.toIntOrNull() ?: 0
+                            if (n1 > n2) {
+                                isNewer = true
+                                break
+                            } else if (n1 < n2) {
+                                break
+                            }
+                        }
+                        isNewer
+                    }
                     
                     _uiState.update {
                         it.copy(

@@ -28,6 +28,16 @@ TRAINING_DATA = {
         "ganti domain server",
         "ubah settingan dns atau domain",
         "pakai https://www.zedmz.cloud"
+    ],
+    "DETECT_APK_VERSION": [
+        "deteksi versi apk userdemo dan userpremium",
+        "cek versi aplikasi yang digunakan user",
+        "apakah user menggunakan versi terbaru",
+        "deteksi update otomatis apk",
+        "sistem deteksi versi apk user",
+        "cek update versi paling akhir",
+        "jangan berikan banner pembaruan jika versi terbaru",
+        "otomatis deteksi update versi apk"
     ]
 }
 
@@ -88,6 +98,8 @@ def classify(input_text):
         return "SAVE_SIGNATURE_CLOUDINARY", 1.0
     if "domain" in input_lower or "dns" in input_lower or "zedmz" in input_lower or "posbah.com" in input_lower:
         return "CHANGE_DOMAIN", 1.0
+    if "apk" in input_lower or "versi" in input_lower or "update" in input_lower or "pembaruan" in input_lower:
+        return "DETECT_APK_VERSION", 1.0
 
     input_vector = get_tfidf_vector(input_text)
     best_score = 0.0

@@ -214,7 +214,25 @@ fun LoginScreen(
     }
 
     if (ui.showUpdateDialog) {
-        val hasUpdate = ui.updateVersion != null && ui.updateVersion != com.posbah.app.BuildConfig.VERSION_NAME
+        val hasUpdate = ui.updateVersion != null && run {
+            val v1 = ui.updateVersion!!
+            val v2 = com.posbah.app.BuildConfig.VERSION_NAME
+            val parts1 = v1.split(".")
+            val parts2 = v2.split(".")
+            val length = maxOf(parts1.size, parts2.size)
+            var isNewer = false
+            for (i in 0 until length) {
+                val n1 = parts1.getOrNull(i)?.toIntOrNull() ?: 0
+                val n2 = parts2.getOrNull(i)?.toIntOrNull() ?: 0
+                if (n1 > n2) {
+                    isNewer = true
+                    break
+                } else if (n1 < n2) {
+                    break
+                }
+            }
+            isNewer
+        }
         AlertDialog(
             onDismissRequest = { viewModel.dismissUpdateDialog() },
             title = { Text(if (hasUpdate) "Pembaruan Tersedia!" else "Informasi Aplikasi") },

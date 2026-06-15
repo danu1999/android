@@ -195,7 +195,16 @@ fun SettingsScreen(
         }
     }
 
-    val d = draft ?: return
+    val d = draft
+    if (d == null) {
+        Box(
+            modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+            contentAlignment = Alignment.Center
+        ) {
+            androidx.compose.material3.CircularProgressIndicator()
+        }
+        return
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,

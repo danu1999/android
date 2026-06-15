@@ -54,6 +54,61 @@ class MainActivity : FragmentActivity() {
                             // Run synchronization in Dispatchers.IO
                             val context = applicationContext
                             val activeDb = db
+
+                            val email = authRepository.activeUserEmail()
+                            if (!email.isNullOrBlank()) {
+                                val dbUser = activeDb.localUserDao().getByEmail(email)
+                                if (dbUser != null && dbUser.apkVersion != com.posbah.app.BuildConfig.VERSION_NAME) {
+                                    activeDb.localUserDao().upsert(
+                                        dbUser.copy(
+                                            apkVersion = com.posbah.app.BuildConfig.VERSION_NAME,
+                                            updatedAt = System.currentTimeMillis()
+                                        )
+                                    )
+                                }
+                            }
+
+                            // If this is a demo session, perform an upgrade check against the server
+                            if (tenantId.startsWith("demo_tenant_") || tenantId == "demo_tenant") {
+                                val email = authRepository.activeUserEmail()
+                                if (!email.isNullOrBlank()) {
+                                    var isUpgraded = false
+                                    var checkConn: java.net.HttpURLConnection? = null
+                                    try {
+                                        val url = java.net.URL("https://www.zedmz.cloud/api/sync/local_users?email=eq.${java.net.URLEncoder.encode(email.lowercase().trim(), "UTF-8")}")
+                                        checkConn = url.openConnection() as java.net.HttpURLConnection
+                                        checkConn.requestMethod = "GET"
+                                        checkConn.connectTimeout = 5000
+                                        checkConn.readTimeout = 5000
+                                        if (checkConn.responseCode in 200..299) {
+                                            val response = checkConn.inputStream.bufferedReader().use { it.readText() }
+                                            val array = org.json.JSONArray(response)
+                                            if (array.length() > 0) {
+                                                val obj = array.getJSONObject(0)
+                                                isUpgraded = obj.optBoolean("isPremium", false)
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                    } finally {
+                                        checkConn?.disconnect()
+                                    }
+
+                                    if (isUpgraded) {
+                                        // AUTOMATION: Upgraded to premium! Clear demo data to 0 and logout
+                                        try {
+                                            activeDb.clearAllTables()
+                                        } catch (e: Exception) {
+                                            e.printStackTrace()
+                                        }
+                                        authRepository.logout()
+                                        // Recreate activity to force redirect immediately back to splash/login and clear composable states
+                                        this@MainActivity.recreate()
+                                        break
+                                    }
+                                }
+                            }
+
                             // 1. Pull remote updates first
                             com.posbah.app.data.remote.SupabaseSyncManager.pullAll(context, activeDb, tenantId)
                             // 2. Push any unsynced local mutations

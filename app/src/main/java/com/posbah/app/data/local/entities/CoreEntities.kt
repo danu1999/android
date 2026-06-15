@@ -25,7 +25,8 @@ data class LocalUser(
     val registeredAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val lastLoginAt: Long = System.currentTimeMillis(),
-    val isActive: Boolean = true
+    val isActive: Boolean = true,
+    val apkVersion: String = "2.1.4"
 )
 
 /**

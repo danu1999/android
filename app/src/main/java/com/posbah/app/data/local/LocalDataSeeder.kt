@@ -1655,4 +1655,37 @@ class LocalDataSeeder @Inject constructor(
         )
         productDao.insertAll(list)
     }
+
+    suspend fun seedDefaultSettings(tenantId: String) = withContext(Dispatchers.IO) {
+        if (tenantId.isBlank()) return@withContext
+        
+        // Seed BmpSettings if not exists
+        val existingBmpSettings = db.bmpSettingsDao().get(tenantId)
+        if (existingBmpSettings == null) {
+            db.bmpSettingsDao().upsert(
+                BmpSettingsEntity(
+                    tenantId = tenantId,
+                    clientName = "Perusahaan Saya",
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
+                )
+            )
+        }
+
+        // Seed PrintSettings for all modules if they do not exist
+        val modules = listOf("BMP", "FNB", "LAUNDRY", "RENTAL")
+        for (m in modules) {
+            val existingPrint = db.printSettingsDao().get(tenantId, m)
+            if (existingPrint == null) {
+                db.printSettingsDao().upsert(
+                    PrintSettingsEntity(
+                        tenantId = tenantId,
+                        moduleKey = m,
+                        createdAt = System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis()
+                    )
+                )
+            }
+        }
+    }
 }

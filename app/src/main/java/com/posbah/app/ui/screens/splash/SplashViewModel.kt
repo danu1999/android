@@ -25,7 +25,8 @@ sealed class SplashRoute {
 class SplashViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val authRepository: AuthRepository,
-    private val integrityChecker: IntegrityChecker
+    private val integrityChecker: IntegrityChecker,
+    private val db: com.posbah.app.data.local.PosBahDatabase
 ) : ViewModel() {
 
     private val _route = MutableStateFlow<SplashRoute>(SplashRoute.NotReady)
@@ -52,11 +53,52 @@ class SplashViewModel @Inject constructor(
             // 3) Session-based routing
             val sub = authRepository.activeUserSub()
             val tenant = authRepository.activeTenantId()
-            _route.value = when {
+            var targetRoute = when {
                 sub == null -> SplashRoute.GoToLogin
                 tenant == null -> SplashRoute.GoToLogin
                 else -> SplashRoute.GoToLock // require biometric/PIN to resume
             }
+
+            // If the user has an active session but is a demo user, check if they've been upgraded to premium on the server
+            if (targetRoute == SplashRoute.GoToLock && tenant != null && (tenant.startsWith("demo_tenant_") || tenant == "demo_tenant")) {
+                val email = authRepository.activeUserEmail()
+                if (!email.isNullOrBlank()) {
+                    var isUpgraded = false
+                    var checkConn: java.net.HttpURLConnection? = null
+                    try {
+                        val url = java.net.URL("https://www.zedmz.cloud/api/sync/local_users?email=eq.${java.net.URLEncoder.encode(email.lowercase().trim(), "UTF-8")}")
+                        checkConn = url.openConnection() as java.net.HttpURLConnection
+                        checkConn.requestMethod = "GET"
+                        checkConn.connectTimeout = 3000
+                        checkConn.readTimeout = 3000
+                        if (checkConn.responseCode in 200..299) {
+                            val response = checkConn.inputStream.bufferedReader().use { it.readText() }
+                            val array = org.json.JSONArray(response)
+                            if (array.length() > 0) {
+                                val obj = array.getJSONObject(0)
+                                isUpgraded = obj.optBoolean("isPremium", false)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    } finally {
+                        checkConn?.disconnect()
+                    }
+
+                    if (isUpgraded) {
+                        // AUTOMATION: Upgraded to premium! Clear demo data to 0 and logout
+                        try {
+                            db.clearAllTables()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                        authRepository.logout()
+                        targetRoute = SplashRoute.GoToLogin
+                    }
+                }
+            }
+
+            _route.value = targetRoute
         }
     }
 }

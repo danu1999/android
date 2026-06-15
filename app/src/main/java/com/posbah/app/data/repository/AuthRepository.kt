@@ -424,7 +424,8 @@ class AuthRepository @Inject constructor(
             businessModeLocked = businessModeLocked,
             isPremium = isPremiumFinal,
             lastLoginAt = System.currentTimeMillis(),
-            updatedAt = System.currentTimeMillis()
+            updatedAt = System.currentTimeMillis(),
+            apkVersion = com.posbah.app.BuildConfig.VERSION_NAME
         )
         userDao.upsert(user)
 
@@ -540,10 +541,28 @@ class AuthRepository @Inject constructor(
                         val isPremiumOnServer = obj.optBoolean("isPremium", false)
                         if (isPremiumOnServer) {
                             val serverTenantId = obj.optString("tenantId", "")
-                            val updatedUser = dbUser.copy(
+
+                            // INTERCONNECT AUTOMATION: Wipe local Room database of all demo tables
+                            try {
+                                db.clearAllTables()
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+
+                            // Re-insert the updated user, tenant, and default outlet
+                            val updatedUser = LocalUser(
+                                googleSub = obj.optString("googleSub", cleanEmail),
+                                email = cleanEmail,
+                                displayName = obj.optString("displayName", "Owner Premium"),
+                                photoUrl = if (obj.isNull("photoUrl")) null else obj.optString("photoUrl"),
+                                role = obj.optString("role", "OWNER"),
+                                tenantId = serverTenantId,
                                 isPremium = true,
-                                tenantId = if (serverTenantId.isNotEmpty()) serverTenantId else dbUser.tenantId,
-                                updatedAt = System.currentTimeMillis()
+                                businessModeLocked = true,
+                                registeredAt = obj.optLong("registeredAt", System.currentTimeMillis()),
+                                updatedAt = System.currentTimeMillis(),
+                                lastLoginAt = System.currentTimeMillis(),
+                                apkVersion = obj.optString("apkVersion", com.posbah.app.BuildConfig.VERSION_NAME)
                             )
                             userDao.upsert(updatedUser)
                             dbUser = userDao.getByEmail(cleanEmail)
@@ -578,6 +597,18 @@ class AuthRepository @Inject constructor(
                                     businessMode = tenantBusinessMode
                                 )
                                 tenantDao.upsert(tenant)
+
+                                // Insert fresh default outlet
+                                outletDao.insert(
+                                    Outlet(
+                                        tenantId = serverTenantId,
+                                        name = "Outlet Utama",
+                                        isDefault = true
+                                    )
+                                )
+
+                                // Seed default configurations for premium user
+                                localDataSeeder.seedDefaultSettings(serverTenantId)
                             }
                         }
                     }
@@ -675,7 +706,8 @@ class AuthRepository @Inject constructor(
                 isPremium = true,
                 businessModeLocked = true,
                 lastLoginAt = System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis()
+                updatedAt = System.currentTimeMillis(),
+                apkVersion = com.posbah.app.BuildConfig.VERSION_NAME
             )
             userDao.upsert(user)
 
@@ -860,6 +892,9 @@ class AuthRepository @Inject constructor(
             securePrefs.setActiveSession(successUser.googleSub, successUser.email)
             securePrefs.currentTenantId = successUser.tenantId
 
+            // Seed default configurations if they do not exist
+            localDataSeeder.seedDefaultSettings(successUser.tenantId.orEmpty())
+
             // Trigger background pull sync right after successful login
             CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
                 try {
@@ -937,6 +972,14 @@ class AuthRepository @Inject constructor(
         val emailKey = cleanEmail.replace(".", "_").replace("@", "_")
 
         val targetTenantId = "ten_premium_${emailKey}_BMP"
+
+        // Wipe local database of all demo tables before transition
+        try {
+            db.clearAllTables()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
         val t = Tenant(
             id = targetTenantId,
             name = "${businessName.ifBlank { "CV. $cleanEmail" }} (Invoice & Manufaktur)",
@@ -945,13 +988,19 @@ class AuthRepository @Inject constructor(
         )
         tenantDao.upsert(t)
 
-        val outlets = outletDao.listForTenant(targetTenantId)
-        val outletId = outlets.firstOrNull { it.isDefault }?.id ?: outlets.firstOrNull()?.id
+        // Insert fresh default outlet
+        val defaultOutletId = outletDao.insert(
+            Outlet(
+                tenantId = targetTenantId,
+                name = "Outlet Utama",
+                isDefault = true
+            )
+        )
 
         val passwordHash = PinHasher.hash(password)
         val employee = Employee(
             tenantId = targetTenantId,
-            outletId = outletId,
+            outletId = defaultOutletId,
             name = "Premium Owner",
             email = cleanEmail,
             role = "OWNER",
@@ -967,25 +1016,34 @@ class AuthRepository @Inject constructor(
             role = "OWNER",
             tenantId = targetTenantId,
             isPremium = true,
-            businessModeLocked = true
+            businessModeLocked = true,
+            apkVersion = com.posbah.app.BuildConfig.VERSION_NAME
         )
         userDao.upsert(user)
 
+        // Seed default configurations
+        localDataSeeder.seedDefaultSettings(targetTenantId)
+
         try {
-            localDataSeeder.seedFromSqlDump(context, targetTenantId, outletId)
+            localDataSeeder.seedFromSqlDump(context, targetTenantId, defaultOutletId)
         } catch (e: Exception) {
             android.util.Log.e("AuthRepository", "Error seeding simulated payment data", e)
         }
 
         securePrefs.setActiveSession(cleanEmail, cleanEmail)
         securePrefs.currentTenantId = targetTenantId
-        sessionState.setOutlet(outletId)
+        sessionState.setOutlet(defaultOutletId)
 
         return@withContext LoginOutcome.Success(user, t)
     }
 
-    suspend fun logout() {
+    suspend fun logout() = withContext(Dispatchers.IO) {
         googleClient.signOut()
+        try {
+            db.clearAllTables()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
         securePrefs.wipe()
     }
 

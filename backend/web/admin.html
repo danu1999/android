@@ -1060,6 +1060,7 @@
                                 <tr>
                                     <th>User / Email</th>
                                     <th>Google Sub</th>
+                                    <th>APK Version</th>
                                     <th>Terdaftar Pada</th>
                                     <th>Status</th>
                                     <th>Tenant ID</th>
@@ -1460,7 +1461,7 @@
             });
 
             if (filtered.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 40px;">Tidak ada pengguna yang cocok dengan filter.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 40px;">Tidak ada pengguna yang cocok dengan filter.</td></tr>`;
                 return;
             }
 
@@ -1484,6 +1485,11 @@
                 const subCell = document.createElement('td');
                 subCell.className = 'sub-text-mono';
                 subCell.innerText = user.googleSub;
+
+                // APK Version
+                const versionCell = document.createElement('td');
+                versionCell.className = 'sub-text-mono';
+                versionCell.innerText = user.apkVersion || '-';
 
                 // Registered date
                 const dateCell = document.createElement('td');
@@ -1557,6 +1563,7 @@
 
                 tr.appendChild(userCell);
                 tr.appendChild(subCell);
+                tr.appendChild(versionCell);
                 tr.appendChild(dateCell);
                 tr.appendChild(statusCell);
                 tr.appendChild(tenantCell);

@@ -236,7 +236,7 @@ func checkAndLockoutDemoUsers() error {
 		
 		// Send Day 2 warning email to demouser
 		subject := "[POSBah] Masa Uji Coba Demo POSBah Segera Berakhir"
-		body := fmt.Sprintf(`
+		body := `
 			<div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 500px; margin: 0 auto; padding: 30px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
 				<h2 style="color: #dc2626; font-size: 20px; font-weight: 700; margin-bottom: 16px; text-align: center;">Uji Coba Demo Berakhir</h2>
 				<p>Halo,</p>
@@ -248,7 +248,7 @@ func checkAndLockoutDemoUsers() error {
 				</div>
 				<p style="font-size: 13px; color: #64748b; line-height: 1.5;">Catatan: Data yang telah dihapus tidak dapat dipulihkan kembali. Terima kasih atas pengertiannya.</p>
 			</div>
-		`)
+		`
 
 		errMail := sendEmail(user.Email, subject, body)
 		if errMail != nil {
@@ -295,11 +295,14 @@ func purgeTenantData(tenantID string) {
 		"bmp_payrolls",
 		"bmp_clients",
 		"bmp_invoices",
+		"bmp_products",
 		"bmp_master_products",
+		"bmp_invoice_payments",
 		"bmp_cashflow",
 		"bmp_settings",
 		"bmp_employees",
 		"bmp_bahan_baku",
+		"bmp_bahan_baku_item",
 		"print_settings",
 		"products",
 		"customers",
@@ -341,6 +344,19 @@ func deleteLocalUser(googleSub string) error {
 		purgeTenantData(premiumTenantId)
 		if tenantId.Valid && tenantId.String != "" {
 			purgeTenantData(tenantId.String)
+		}
+
+		// Purge any tenants starting with demo_tenant_<cleanEmail> or ten_premium_<cleanEmail>
+		rows, errRows := db.Query(`SELECT "id" FROM "tenants" WHERE "ownerEmail" = $1 OR "id" LIKE $2 OR "id" LIKE $3`, 
+			email, "demo_tenant_" + cleanEmail + "%", "ten_premium_" + cleanEmail + "%")
+		if errRows == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var tid string
+				if errScan := rows.Scan(&tid); errScan == nil {
+					purgeTenantData(tid)
+				}
+			}
 		}
 
 		// Also purge from deleted_users table to allow them to register again
@@ -979,68 +995,23 @@ func handleApproveUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cleanEmail := strings.ReplaceAll(strings.ReplaceAll(reqData.Email, ".", "_"), "@", "_")
-	demoTenantId := "demo_tenant_" + cleanEmail
-	premiumTenantId := "ten_premium_" + cleanEmail
-
-	// Start SQL Transaction
-	tx, err := db.Begin()
+	premiumTenantId, err := upgradeUserToPremium(reqData.GoogleSub, reqData.Email, reqData.DisplayName, reqData.PinHash)
 	if err != nil {
-		http.Error(w, "Failed to start transaction: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer tx.Rollback()
-
-	// Check if demo tenant exists to fetch businessMode
-	var businessMode string = "FNB"
-	err = tx.QueryRow(`SELECT "businessMode" FROM "tenants" WHERE "id" = $1`, demoTenantId).Scan(&businessMode)
-	if err != nil {
-		// Default to "FNB" if not found
-		businessMode = "FNB"
-	}
-
-	nowMillis := time.Now().UnixNano() / int64(time.Millisecond)
-
-	// Create Premium Tenant
-	displayName := reqData.DisplayName
-	if displayName == "" {
-		displayName = "Owner Premium"
-	}
-	tenantName := "CV. " + displayName + " (Premium)"
-	_, err = tx.Exec(`INSERT INTO "tenants" ("id", "name", "ownerEmail", "businessMode", "isActive", "createdAt", "updatedAt") 
-		VALUES ($1, $2, $3, $4, $5, $6, $7) 
-		ON CONFLICT ("id") DO UPDATE SET "name" = EXCLUDED."name", "businessMode" = EXCLUDED."businessMode", "updatedAt" = EXCLUDED."updatedAt"`,
-		premiumTenantId, tenantName, reqData.Email, businessMode, true, nowMillis, nowMillis)
-	if err != nil {
-		http.Error(w, "Failed to create premium tenant: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to upgrade user: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Create Owner Employee
-	// Use unique 32-bit positive integer for employee ID to avoid postgres INT overflow
-	employeeId := int((time.Now().Unix() + int64(time.Now().Nanosecond())) % 2000000000)
-	_, err = tx.Exec(`INSERT INTO "employees" ("id", "tenantId", "outletId", "name", "email", "role", "pinHash", "salary", "isActive", "createdAt", "updatedAt") 
-		VALUES ($1, $2, NULL, $3, $4, 'OWNER', $5, 0.0, true, $6, $7)
-		ON CONFLICT ("id") DO NOTHING`,
-		employeeId, premiumTenantId, displayName, reqData.Email, reqData.PinHash, nowMillis, nowMillis)
-	if err != nil {
-		http.Error(w, "Failed to create owner employee: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
+	// Sync database records instantly
+	syncDatabaseUsersAndTenants()
 
-	// Update Local User to Premium
-	_, err = tx.Exec(`UPDATE "local_users" SET "isPremium" = TRUE, "tenantId" = $1, "updatedAt" = $2 WHERE "googleSub" = $3`,
-		premiumTenantId, nowMillis, reqData.GoogleSub)
-	if err != nil {
-		http.Error(w, "Failed to update local user: "+err.Error(), http.StatusInternalServerError)
-		return
+	// Broadcast WS message
+	wsMsg := map[string]interface{}{
+		"type":      "user_upgraded",
+		"googleSub": reqData.GoogleSub,
+		"email":     reqData.Email,
 	}
-
-	// Commit transaction
-	if err := tx.Commit(); err != nil {
-		http.Error(w, "Failed to commit transaction: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
+	msgBytes, _ := json.Marshal(wsMsg)
+	broadcastWSMessage(string(msgBytes))
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -1436,6 +1407,16 @@ var trainingData = map[string][]string{
 		"ubah settingan dns atau domain",
 		"pakai https://www.zedmz.cloud",
 	},
+	"DETECT_APK_VERSION": {
+		"deteksi versi apk userdemo dan userpremium",
+		"cek versi aplikasi yang digunakan user",
+		"apakah user menggunakan versi terbaru",
+		"deteksi update otomatis apk",
+		"sistem deteksi versi apk user",
+		"cek update versi paling akhir",
+		"jangan berikan banner pembaruan jika versi terbaru",
+		"otomatis deteksi update versi apk",
+	},
 }
 
 var nonAlphanumericRegex = regexp.MustCompile(`[^a-z0-9\s]`)
@@ -1544,6 +1525,9 @@ func classifyGo(inputText string) (string, float64) {
 	if strings.Contains(inputLower, "domain") || strings.Contains(inputLower, "dns") || strings.Contains(inputLower, "zedmz") || strings.Contains(inputLower, "posbah.com") {
 		return "CHANGE_DOMAIN", 1.0
 	}
+	if strings.Contains(inputLower, "apk") || strings.Contains(inputLower, "versi") || strings.Contains(inputLower, "update") || strings.Contains(inputLower, "pembaruan") {
+		return "DETECT_APK_VERSION", 1.0
+	}
 
 	initTfidfModel()
 	inputVector := getTfidfVector(inputText)
@@ -1629,6 +1613,7 @@ func handleApkVersion(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	autoDetectApkVersion()
 	var version, description, downloadUrl string
 	err := db.QueryRow(`SELECT "version", "description", "downloadUrl" FROM "apk_config" WHERE "id" = 1`).Scan(&version, &description, &downloadUrl)
 	if err != nil {
@@ -4325,17 +4310,23 @@ func handleConfirmPaymentPage(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(htmlContent))
 }
 
-func upgradeUserToPremium(googleSub, email, displayName string) (string, error) {
+func upgradeUserToPremium(googleSub, email, displayName, customPinHash string) (string, error) {
 	if db == nil {
 		return "", fmt.Errorf("Database not initialized")
 	}
 
-	passwordGenerated := generateRandomPassword()
-	hashedPassword := hashPassword(passwordGenerated)
+	var passwordGenerated string
+	var hashedPassword string
+	if customPinHash != "" {
+		passwordGenerated = "(custom)"
+		hashedPassword = customPinHash
+	} else {
+		passwordGenerated = generateRandomPassword()
+		hashedPassword = hashPassword(passwordGenerated)
+	}
 
 	cleanEmail := strings.ReplaceAll(strings.ReplaceAll(email, ".", "_"), "@", "_")
-	demoTenantId := "demo_tenant_" + cleanEmail
-	premiumTenantId := "ten_premium_" + cleanEmail
+	demoTenantPrefix := "demo_tenant_" + cleanEmail
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -4343,12 +4334,26 @@ func upgradeUserToPremium(googleSub, email, displayName string) (string, error) 
 	}
 	defer tx.Rollback()
 
-	var businessMode string = "FNB"
-	err = tx.QueryRow(`SELECT "businessMode" FROM "tenants" WHERE "id" = $1`, demoTenantId).Scan(&businessMode)
+	// Query to find the exact demo tenant and business mode
+	var actualDemoTenantId string
+	var businessMode string = "FNB" // default to FNB if not found
+
+	err = tx.QueryRow(`SELECT "id", "businessMode" FROM "tenants" WHERE "id" = $1 OR "id" LIKE $2 LIMIT 1`,
+		demoTenantPrefix, demoTenantPrefix+"_%").Scan(&actualDemoTenantId, &businessMode)
 	if err != nil {
-		businessMode = "FNB"
+		// Fallback to local_users search
+		var localUserTenantId sql.NullString
+		errUser := tx.QueryRow(`SELECT "tenantId" FROM "local_users" WHERE TRIM(LOWER("email")) = $1 OR "googleSub" = $2`, 
+			strings.TrimSpace(strings.ToLower(email)), googleSub).Scan(&localUserTenantId)
+		if errUser == nil && localUserTenantId.Valid && localUserTenantId.String != "" {
+			actualDemoTenantId = localUserTenantId.String
+			_ = tx.QueryRow(`SELECT "businessMode" FROM "tenants" WHERE "id" = $1`, actualDemoTenantId).Scan(&businessMode)
+		} else {
+			actualDemoTenantId = demoTenantPrefix
+		}
 	}
 
+	premiumTenantId := "ten_premium_" + cleanEmail + "_" + businessMode
 	nowMillis := time.Now().UnixNano() / int64(time.Millisecond)
 
 	tenantName := "CV. " + displayName + " (Premium)"
@@ -4369,8 +4374,8 @@ func upgradeUserToPremium(googleSub, email, displayName string) (string, error) 
 		return "", fmt.Errorf("Failed to create owner employee: %w", err)
 	}
 
-	_, err = tx.Exec(`UPDATE "local_users" SET "isPremium" = TRUE, "tenantId" = $1, "isActive" = TRUE, "updatedAt" = $2 WHERE "googleSub" = $3`,
-		premiumTenantId, nowMillis, googleSub)
+	_, err = tx.Exec(`UPDATE "local_users" SET "isPremium" = TRUE, "tenantId" = $1, "isActive" = TRUE, "updatedAt" = $2 WHERE "googleSub" = $3 OR TRIM(LOWER("email")) = $4`,
+		premiumTenantId, nowMillis, googleSub, strings.TrimSpace(strings.ToLower(email)))
 	if err != nil {
 		return "", fmt.Errorf("Failed to update local user: %w", err)
 	}
@@ -4379,31 +4384,50 @@ func upgradeUserToPremium(googleSub, email, displayName string) (string, error) 
 		return "", fmt.Errorf("Failed to commit transaction: %w", err)
 	}
 
-	// Send Email
-	subject := "[POSBah] Informasi Akun Premium POSBah Anda"
-	body := fmt.Sprintf(`
-		<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
-			<h2 style="color: #10B981;">Pembayaran Sukses - Akun Premium POSBah Aktif!</h2>
-			<p>Halo %s,</p>
-			<p>Terima kasih atas pembayaran Anda. Akun Anda telah berhasil di-upgrade ke <strong>Premium</strong>.</p>
-			<p>Untuk login ke aplikasi POSBah Anda, silakan gunakan kredensial berikut:</p>
-			<table style="width: 100%%; margin-top: 15px; border-collapse: collapse;">
-				<tr>
-					<td style="padding: 8px; font-weight: bold; width: 120px;">Email:</td>
-					<td style="padding: 8px;">%s</td>
-				</tr>
-				<tr>
-					<td style="padding: 8px; font-weight: bold;">Password:</td>
-					<td style="padding: 8px; font-family: monospace; color: #EF4444; font-size: 1.1em;">%s</td>
-				</tr>
-			</table>
-			<p style="margin-top: 20px;">Silakan login di aplikasi POSBah dengan email ini dan password di atas.</p>
-		</div>
-	`, displayName, email, passwordGenerated)
+	// AUTOMATION: Purge the old demo tenant data from the PostgreSQL server
+	go purgeTenantData(actualDemoTenantId)
+	if actualDemoTenantId != demoTenantPrefix {
+		go purgeTenantData(demoTenantPrefix)
+	}
 
-	err = sendEmail(email, subject, body)
-	if err != nil {
-		log.Printf("Warning: Premium upgrade email could not be sent: %v", err)
+	// Send Email
+	if customPinHash == "" {
+		subject := "[POSBah] Informasi Akun Premium POSBah Anda"
+		body := fmt.Sprintf(`
+			<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+				<h2 style="color: #10B981;">Pembayaran Sukses - Akun Premium POSBah Aktif!</h2>
+				<p>Halo %s,</p>
+				<p>Terima kasih atas pembayaran Anda. Akun Anda telah berhasil di-upgrade ke <strong>Premium</strong>.</p>
+				<p>Untuk login ke aplikasi POSBah Anda, silakan gunakan kredensial berikut:</p>
+				<table style="width: 100%%; margin-top: 15px; border-collapse: collapse;">
+					<tr>
+						<td style="padding: 8px; font-weight: bold; width: 120px;">Email:</td>
+						<td style="padding: 8px;">%s</td>
+					</tr>
+					<tr>
+						<td style="padding: 8px; font-weight: bold;">Password:</td>
+						<td style="padding: 8px; font-family: monospace; color: #EF4444; font-size: 1.1em;">%s</td>
+					</tr>
+				</table>
+				<p style="margin-top: 20px;">Silakan login di aplikasi POSBah dengan email ini dan password di atas.</p>
+			</div>
+		`, displayName, email, passwordGenerated)
+
+		err = sendEmail(email, subject, body)
+		if err != nil {
+			log.Printf("Warning: Premium upgrade email could not be sent: %v", err)
+		}
+	} else {
+		subject := "[POSBah] Akun Premium POSBah Anda Telah Aktif!"
+		body := fmt.Sprintf(`
+			<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+				<h2 style="color: #10B981;">Akun Premium POSBah Aktif!</h2>
+				<p>Halo %s,</p>
+				<p>Akun Anda telah berhasil di-upgrade ke <strong>Premium</strong>.</p>
+				<p>Silakan masuk di aplikasi POSBah menggunakan email Anda dan password/PIN yang telah diinformasikan oleh Admin.</p>
+			</div>
+		`, displayName)
+		_ = sendEmail(email, subject, body)
 	}
 
 	return passwordGenerated, nil
@@ -4431,7 +4455,7 @@ func handleConfirmPaymentAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if action == "approve" {
-		passwordGenerated, err := upgradeUserToPremium(googleSub, email, displayName)
+		passwordGenerated, err := upgradeUserToPremium(googleSub, email, displayName, "")
 		if err != nil {
 			http.Error(w, "Failed to upgrade user: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -4661,7 +4685,7 @@ func handleAdminGetUsers(w http.ResponseWriter, r *http.Request) {
 
 	syncDatabaseUsersAndTenants()
 
-	rows, err := db.Query(`SELECT "googleSub", "email", COALESCE("displayName", ''), "registeredAt", "isActive", COALESCE("tenantId", ''), "isPremium" FROM "local_users" ORDER BY "registeredAt" DESC`)
+	rows, err := db.Query(`SELECT "googleSub", "email", COALESCE("displayName", ''), "registeredAt", "isActive", COALESCE("tenantId", ''), "isPremium", COALESCE("apkVersion", '2.0.3') FROM "local_users" ORDER BY "registeredAt" DESC`)
 	if err != nil {
 		http.Error(w, "Database query failed: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -4676,12 +4700,13 @@ func handleAdminGetUsers(w http.ResponseWriter, r *http.Request) {
 		IsActive     bool   `json:"isActive"`
 		TenantId     string `json:"tenantId"`
 		IsPremium    bool   `json:"isPremium"`
+		ApkVersion   string `json:"apkVersion"`
 	}
 
 	users := []UserItem{}
 	for rows.Next() {
 		var u UserItem
-		if err := rows.Scan(&u.GoogleSub, &u.Email, &u.DisplayName, &u.RegisteredAt, &u.IsActive, &u.TenantId, &u.IsPremium); err != nil {
+		if err := rows.Scan(&u.GoogleSub, &u.Email, &u.DisplayName, &u.RegisteredAt, &u.IsActive, &u.TenantId, &u.IsPremium, &u.ApkVersion); err != nil {
 			log.Printf("Failed to scan user: %v", err)
 			continue
 		}
@@ -4776,7 +4801,7 @@ func handleAdminConfirmPayment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	passwordGenerated, err := upgradeUserToPremium(req.GoogleSub, req.Email, req.DisplayName)
+	passwordGenerated, err := upgradeUserToPremium(req.GoogleSub, req.Email, req.DisplayName, "")
 	if err != nil {
 		http.Error(w, "Upgrade failed: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -4821,6 +4846,7 @@ func handleAdminApkConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodGet {
+		autoDetectApkVersion()
 		var version, description, downloadUrl string
 		var updatedAt int64
 		err := db.QueryRow(`SELECT "version", "description", "downloadUrl", "updatedAt" FROM "apk_config" WHERE "id" = 1`).Scan(&version, &description, &downloadUrl, &updatedAt)

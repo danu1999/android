@@ -1,7 +1,12 @@
-Pembaruan POSBah Versi 2.1.2
+Pembaruan POSBah Versi 2.1.5
 
-1. Perbaikan Login Akun Premium (Transisi Demo):
-   Memperbaiki bug "akun demo wajib menggunakan google login" bagi pengguna demo yang baru saja melakukan pembayaran premium dan beralih ke Premium (Email & Password/PIN). Aplikasi sekarang menyinkronkan status premium secara instan dari server sebelum memeriksa batasan lokal.
-2. Keamanan & Sinkronisasi Real-time:
-   Meningkatkan keterhubungan database dan pembaruan profil pengguna premium secara instan setelah dikonfirmasi oleh admin.
-
+1. Pembersihan Data Demo Otomatis (Purge Tenant Data):
+   Sistem di VPS backend dan database PostgreSQL sekarang otomatis mereset seluruh data transaksi, kas masuk/keluar, produk, pelanggan, dan struk ketika akun userdemo bermigrasi ke userpremium, memastikan pencatatan premium dimulai bersih dari nol.
+2. Penanganan Graceful Fallback Layar Cetak:
+   Menyematkan loading indicator dan auto-seeder setelan awal pada layar pengaturan cetak struk & invoice untuk mengatasi masalah blank hitam ketika data kosong.
+3. Migrasi Primary Key Komposit:
+   Mengupgrade schema database PostgreSQL menggunakan composite primary key ("id", "tenantId") untuk menghindari tabrakan ID (collision) antar tenant saat sinkronisasi data.
+4. Optimalisasi Penyimpanan VPS:
+   Membersihkan seluruh file APK usang dari penyimpanan VPS untuk meminimalkan beban disk server dan mempercepat deployment.
+5. Pembatasan Pemilihan & Penambahan Tenant:
+   Pemilik biasa (OWNER) dan karyawan (outletkaryawan) hanya dapat melihat/memilih 1 tenant aktif mereka, serta menyembunyikan tombol penambahan tenant baru. Hanya super admin muhammadmuizz8@gmail.com yang memiliki hak akses penuh untuk membuat dan berganti tenant.
