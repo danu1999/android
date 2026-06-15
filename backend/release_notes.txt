@@ -1,6 +1,8 @@
-Pembaruan POSBah Versi 2.1.8
+Pembaruan POSBah Versi 2.1.9
 
-1. Isolasi Data Demo & Premium Secara Menyeluruh (Data Leakage Fix):
-   Menjamin isolasi total antara akun demo dan premium. Ketika akun dikonfirmasi premium, sistem kini secara otomatis menghapus seluruh demo tenant di database PostgreSQL server, memblokir pengulangan layar pemilihan sistem, serta membersihkan SQLite Room database klien sebelum memuat dashboard premium. Ini mencegah data produk, kas, dan transaksi demo tersangkut/tercampur ke dalam database premium baru.
-2. Sinkronisasi & Penyiaran Versi 2.1.8:
+1. Fitur Edit dan Hapus Pembayaran Global (Invoice & Manufaktur):
+   Menambahkan dukungan penuh untuk memodifikasi (ubah jumlah/metode pembayaran) dan menghapus pembayaran langsung dari daftar pembayaran global (PaymentsListScreen). Fitur ini terintegrasi dengan penyesuaian otomatis cash flow dan status piutang invoice (Lunas/Kurang/Belum Lunas), serta secara otomatis melakukan sinkronisasi real-time ke VPS.
+2. Penjaminan Isolasi Data Demo & Premium via Login Email/PIN:
+   Saat login dengan email/password, sistem akan selalu melakukan sinkronisasi status ke VPS terlebih dahulu jika terdeteksi transisi dari demo tenant ke premium tenant. Hal ini memicu penghapusan database lokal (`db.clearAllTables()`), mencegah sisa-sisa data HPP demo, data master produk demo, dan data manufaktur demo terbawa ke akun premium.
+3. Sinkronisasi & Penyiaran Versi 2.1.9:
    Penerapan versi terbaru secara real-time di VPS, pembaharuan database konfigurasi, dan penyiaran notifikasi update serta email ke seluruh pengguna aktif secara langsung.

@@ -714,118 +714,133 @@ class AuthRepository @Inject constructor(
             successUser = user
             successTenant = tenantDao.getById(tenantId)!!
         } else {
-            // Check employees table in database
-            var emp = employeeDao.findByEmail(cleanEmail)
-            if (emp != null && !emp.isActive) {
-                emp = null
-            }
-            if (emp == null) {
-                // Fetch from VPS remote database
-                var conn: java.net.HttpURLConnection? = null
-                try {
-                    val url = java.net.URL("https://www.zedmz.cloud/api/sync/employees?email=eq.$cleanEmail")
-                    conn = url.openConnection() as java.net.HttpURLConnection
-                    conn.requestMethod = "GET"
-                    conn.connectTimeout = 10000
-                    conn.readTimeout = 10000
-
-                    val code = conn.responseCode
-                    if (code in 200..299) {
-                        val response = conn.inputStream.bufferedReader().use { it.readText() }
-                        val array = org.json.JSONArray(response)
-                        if (array.length() > 0) {
-                            val obj = array.getJSONObject(0)
-                            val tenantId = obj.getString("tenantId")
-                            
-                             // Let's first make sure the Tenant exists locally! If not, create it or query from VPS.
-                            var tenantName = "CV. Premium Owner (Premium)"
-                            var tenantBusinessMode = "BMP"
-                            var tenantConn: java.net.HttpURLConnection? = null
+            // Check if we can fetch the latest employee details from the server (if online)
+            var fetchedEmp: Employee? = null
+            var conn: java.net.HttpURLConnection? = null
+            try {
+                val url = java.net.URL("https://www.zedmz.cloud/api/sync/employees?email=eq.$cleanEmail")
+                conn = url.openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 5000
+                conn.readTimeout = 5000
+                if (conn.responseCode in 200..299) {
+                    val response = conn.inputStream.bufferedReader().use { it.readText() }
+                    val array = org.json.JSONArray(response)
+                    if (array.length() > 0) {
+                        val obj = array.getJSONObject(0)
+                        val tenantId = obj.getString("tenantId")
+                        
+                        // Check if transitioned from demo to premium
+                        val localEmp = employeeDao.findByEmail(cleanEmail)
+                        val transitioned = localEmp != null && 
+                                           localEmp.tenantId.startsWith("demo_tenant_") && 
+                                           tenantId.startsWith("ten_premium_")
+                                           
+                        if (transitioned) {
+                            // Clear all local SQLite tables (Room)
                             try {
-                                val tUrl = java.net.URL("https://www.zedmz.cloud/api/sync/tenants?id=eq.$tenantId")
-                                tenantConn = tUrl.openConnection() as java.net.HttpURLConnection
-                                tenantConn.requestMethod = "GET"
-                                if (tenantConn.responseCode in 200..299) {
-                                    val tResponse = tenantConn.inputStream.bufferedReader().use { it.readText() }
-                                    val tArray = org.json.JSONArray(tResponse)
-                                    if (tArray.length() > 0) {
-                                        val tObj = tArray.getJSONObject(0)
-                                        tenantName = tObj.getString("name")
-                                        tenantBusinessMode = tObj.getString("businessMode")
-                                    }
-                                }
-                            } catch (e: java.lang.Exception) {
+                                db.clearAllTables()
+                            } catch (e: Exception) {
                                 e.printStackTrace()
-                            } finally {
-                                tenantConn?.disconnect()
-                            }
-
-                            // Upsert the tenant locally
-                            val tenant = Tenant(
-                                id = tenantId,
-                                name = tenantName,
-                                ownerEmail = cleanEmail,
-                                businessMode = tenantBusinessMode
-                            )
-                            tenantDao.upsert(tenant)
-
-                            // Ensure an outlet exists locally for this tenant
-                            val outlets = outletDao.listForTenant(tenantId)
-                            val outletId = if (outlets.isEmpty()) {
-                                outletDao.insert(
-                                    Outlet(
-                                        tenantId = tenantId,
-                                        name = "Outlet Utama",
-                                        isDefault = true
-                                    )
-                                )
-                            } else {
-                                outlets.first().id
-                            }
-
-                            // Build the Employee entity
-                            val fetchedEmp = Employee(
-                                id = obj.getLong("id"),
-                                tenantId = tenantId,
-                                outletId = outletId,
-                                name = obj.getString("name"),
-                                email = cleanEmail,
-                                role = obj.getString("role"),
-                                pinHash = obj.getString("pinHash"),
-                                salary = obj.optDouble("salary", 0.0),
-                                isActive = obj.optBoolean("isActive", true),
-                                createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
-                                updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
-                            )
-                            // Save to local database
-                            employeeDao.insert(fetchedEmp)
-                            if (fetchedEmp.isActive) {
-                                emp = fetchedEmp
-
-                                // We should also check if the user is in local_users table locally, if not create them.
-                                val existingUser = userDao.getByEmail(cleanEmail)
-                                if (existingUser == null) {
-                                    val user = LocalUser(
-                                        googleSub = obj.optString("googleSub", "emp:${fetchedEmp.id}"),
-                                        email = cleanEmail,
-                                        displayName = fetchedEmp.name,
-                                        photoUrl = null,
-                                        role = fetchedEmp.role,
-                                        isPremium = tenantId.startsWith("ten_premium_"),
-                                        businessModeLocked = true,
-                                        tenantId = tenantId
-                                    )
-                                    userDao.upsert(user)
-                                }
-                            } else {
-                                emp = null
                             }
                         }
+                        
+                        // Let's first make sure the Tenant exists locally! If not, create it or query from VPS.
+                        var tenantName = "CV. Premium Owner (Premium)"
+                        var tenantBusinessMode = "BMP"
+                        var tenantConn: java.net.HttpURLConnection? = null
+                        try {
+                            val tUrl = java.net.URL("https://www.zedmz.cloud/api/sync/tenants?id=eq.$tenantId")
+                            tenantConn = tUrl.openConnection() as java.net.HttpURLConnection
+                            tenantConn.requestMethod = "GET"
+                            if (tenantConn.responseCode in 200..299) {
+                                val tResponse = tenantConn.inputStream.bufferedReader().use { it.readText() }
+                                val tArray = org.json.JSONArray(tResponse)
+                                if (tArray.length() > 0) {
+                                    val tObj = tArray.getJSONObject(0)
+                                    tenantName = tObj.getString("name")
+                                    tenantBusinessMode = tObj.getString("businessMode")
+                                }
+                            }
+                        } catch (e: java.lang.Exception) {
+                            e.printStackTrace()
+                        } finally {
+                            tenantConn?.disconnect()
+                        }
+
+                        // Upsert the tenant locally
+                        val tenant = Tenant(
+                            id = tenantId,
+                            name = tenantName,
+                            ownerEmail = cleanEmail,
+                            businessMode = tenantBusinessMode
+                        )
+                        tenantDao.upsert(tenant)
+
+                        // Ensure an outlet exists locally for this tenant
+                        val outlets = outletDao.listForTenant(tenantId)
+                        val outletId = if (outlets.isEmpty()) {
+                            outletDao.insert(
+                                Outlet(
+                                    tenantId = tenantId,
+                                    name = "Outlet Utama",
+                                    isDefault = true
+                                )
+                            )
+                        } else {
+                            outlets.first().id
+                        }
+
+                        val fetchedEmpEntity = Employee(
+                            id = obj.getLong("id"),
+                            tenantId = tenantId,
+                            outletId = outletId,
+                            name = obj.getString("name"),
+                            email = cleanEmail,
+                            role = obj.getString("role"),
+                            pinHash = obj.getString("pinHash"),
+                            salary = obj.optDouble("salary", 0.0),
+                            isActive = obj.optBoolean("isActive", true),
+                            createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
+                            updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                        )
+                        // Save to local database
+                        employeeDao.insert(fetchedEmpEntity)
+                        if (fetchedEmpEntity.isActive) {
+                            fetchedEmp = fetchedEmpEntity
+
+                            // Update/Upsert the local user record as premium
+                            val existingUser = userDao.getByEmail(cleanEmail)
+                            val updatedUser = (existingUser ?: LocalUser(
+                                googleSub = obj.optString("googleSub", "emp:${fetchedEmpEntity.id}"),
+                                email = cleanEmail,
+                                displayName = fetchedEmpEntity.name,
+                                photoUrl = null,
+                                role = fetchedEmpEntity.role
+                            )).copy(
+                                isPremium = tenantId.startsWith("ten_premium_"),
+                                businessModeLocked = true,
+                                tenantId = tenantId
+                            )
+                            userDao.upsert(updatedUser)
+
+                            // Seed default configurations/settings for this tenant
+                            localDataSeeder.seedDefaultSettings(tenantId)
+                        }
                     }
-                } catch (e: java.lang.Exception) {
-                    e.printStackTrace()
-                } finally {
-                    conn?.disconnect()
+                }
+            } catch (e: java.lang.Exception) {
+                e.printStackTrace()
+            } finally {
+                conn?.disconnect()
+            }
+
+            var emp = fetchedEmp
+            if (emp == null) {
+                // Offline fallback: check local employees table in database
+                emp = employeeDao.findByEmail(cleanEmail)
+                if (emp != null && !emp.isActive) {
+                    emp = null
                 }
             }
 
