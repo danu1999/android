@@ -1586,22 +1586,191 @@ func handleGetApkDownloadToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleDownloadApk(w http.ResponseWriter, r *http.Request) {
-	var version string
+	var version, description string
 	if db != nil {
-		_ = db.QueryRow(`SELECT "version" FROM "apk_config" WHERE "id" = 1`).Scan(&version)
+		_ = db.QueryRow(`SELECT "version", "description" FROM "apk_config" WHERE "id" = 1`).Scan(&version, &description)
 	}
 	if version == "" {
 		version = "2.0.3" // Fallback
 	}
-	apkPath := fmt.Sprintf("./posbah-v%s.apk", version)
-	if _, err := os.Stat(apkPath); err == nil {
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=POSBah-v%s.apk", version))
-		w.Header().Set("Content-Type", "application/vnd.android.package-archive")
-		http.ServeFile(w, r, apkPath)
+	if description == "" {
+		description = "Pembaruan sistem dan optimalisasi."
+	}
+
+	direct := r.URL.Query().Get("direct") == "true"
+	if direct {
+		apkPath := fmt.Sprintf("./posbah-v%s.apk", version)
+		if _, err := os.Stat(apkPath); err == nil {
+			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=POSBah-v%s.apk", version))
+			w.Header().Set("Content-Type", "application/vnd.android.package-archive")
+			http.ServeFile(w, r, apkPath)
+			return
+		}
+		// Fallback redirect to Google Drive
+		http.Redirect(w, r, "https://drive.google.com/uc?export=download&id=1grCDSGp1qacBES1hcO29d_03HNPstdbM", http.StatusFound)
 		return
 	}
-	// Fallback redirect to Google Drive
-	http.Redirect(w, r, "https://drive.google.com/uc?export=download&id=1grCDSGp1qacBES1hcO29d_03HNPstdbM", http.StatusFound)
+
+	// Serve the beautiful landing page
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	html := fmt.Sprintf(`<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unduh Pembaruan POSBah v%s</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            --primary: #f59e0b;
+            --primary-hover: #d97706;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg-gradient);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            width: 100%;
+            max-width: 500px;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 24px;
+            padding: 40px 30px;
+            text-align: center;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        }
+        .logo {
+            font-size: 32px;
+            font-weight: 800;
+            color: var(--primary);
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+        .subtitle {
+            font-size: 15px;
+            color: var(--text-muted);
+            margin-bottom: 30px;
+        }
+        .version-badge {
+            display: inline-block;
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--primary);
+            padding: 6px 16px;
+            border-radius: 99px;
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+        .btn-download {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            background: var(--primary);
+            color: #0f172a;
+            text-decoration: none;
+            padding: 16px 32px;
+            border-radius: 16px;
+            font-size: 16px;
+            font-weight: 700;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 14px rgba(245, 158, 11, 0.3);
+            margin-bottom: 24px;
+        }
+        .btn-download:hover {
+            background: var(--primary-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);
+        }
+        .file-info {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 30px;
+        }
+        .release-notes-box {
+            text-align: left;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .release-notes-title {
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .release-notes-content {
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+        .instructions-list {
+            margin-top: 24px;
+            font-size: 12px;
+            color: var(--text-muted);
+            text-align: left;
+            padding-left: 20px;
+            line-height: 1.5;
+        }
+        .instructions-list li {
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">POSBah</div>
+        <div class="subtitle">Unduh Pembaruan Aplikasi Android</div>
+        
+        <div class="version-badge">Versi %s Terbaru</div>
+        
+        <a href="/api/download-apk?direct=true" class="btn-download">
+            <i class="fa-solid fa-cloud-arrow-down"></i> Unduh APK Sekarang
+        </a>
+        
+        <div class="file-info">Format: APK • Kompatibel dengan Android 7.0+</div>
+        
+        <div class="release-notes-box">
+            <div class="release-notes-title">
+                <i class="fa-solid fa-list-check" style="color: var(--primary);"></i> Catatan Pembaruan:
+            </div>
+            <div class="release-notes-content">%s</div>
+        </div>
+
+        <ul class="instructions-list">
+            <li>Buka file APK yang telah diunduh di perangkat Android Anda.</li>
+            <li>Jika muncul peringatan keamanan, aktifkan "Izinkan instalasi dari sumber tidak dikenal" di pengaturan browser Anda.</li>
+            <li>Klik "Instal" atau "Perbarui" untuk menyelesaikan proses pembaruan.</li>
+        </ul>
+    </div>
+</body>
+</html>`, version, version, description)
+	w.Write([]byte(html))
 }
 
 func handleApkVersion(w http.ResponseWriter, r *http.Request) {
