@@ -907,6 +907,9 @@ class AuthRepository @Inject constructor(
             successTenant = tenant
         }
 
+            if (successUser.isPremium) {
+                securePrefs.tempPlainPassword = password
+            }
             securePrefs.setActiveSession(successUser.googleSub, successUser.email)
             securePrefs.currentTenantId = successUser.tenantId
 

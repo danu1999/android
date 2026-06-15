@@ -1,8 +1,13 @@
-Pembaruan POSBah Versi 2.1.9
+Pembaruan POSBah Versi 2.2.0
 
-1. Fitur Edit dan Hapus Pembayaran Global (Invoice & Manufaktur):
-   Menambahkan dukungan penuh untuk memodifikasi (ubah jumlah/metode pembayaran) dan menghapus pembayaran langsung dari daftar pembayaran global (PaymentsListScreen). Fitur ini terintegrasi dengan penyesuaian otomatis cash flow dan status piutang invoice (Lunas/Kurang/Belum Lunas), serta secara otomatis melakukan sinkronisasi real-time ke VPS.
-2. Penjaminan Isolasi Data Demo & Premium via Login Email/PIN:
-   Saat login dengan email/password, sistem akan selalu melakukan sinkronisasi status ke VPS terlebih dahulu jika terdeteksi transisi dari demo tenant ke premium tenant. Hal ini memicu penghapusan database lokal (`db.clearAllTables()`), mencegah sisa-sisa data HPP demo, data master produk demo, dan data manufaktur demo terbawa ke akun premium.
-3. Sinkronisasi & Penyiaran Versi 2.1.9:
-   Penerapan versi terbaru secara real-time di VPS, pembaharuan database konfigurasi, dan penyiaran notifikasi update serta email ke seluruh pengguna aktif secara langsung.
+1. Form Profil Akun Premium & Keamanan Kata Sandi:
+   Premium user baru akan diarahkan untuk mengisi form profil sebelum dapat memilih sistem POS spesialis mereka. Form ini mempermudah identifikasi bisnis dengan input Nama Usaha kustom, menampilkan password generated Gmail ("bebas ganti atau tidak"), serta memfasilitasi penggantian kata sandi masuk secara instan.
+2. Verifikasi OTP WhatsApp (Simulasi):
+   Menambahkan form input nomor telepon WhatsApp usaha yang dilindungi dengan dialog verifikasi kode OTP simulasi 6-digit demi menjamin keabsahan kontak bisnis.
+3. Kustomisasi Nama Usaha pada Pemilihan Tenant dan Footer:
+   Nama Usaha yang didaftarkan otomatis digunakan sebagai nama tenant (menggantikan "CV Bahtera..." / nama acak) dan ditampilkan secara elegan pada footer Dashboard utama BMP.
+4. Tombol Kirim WhatsApp Notifikasi Pelanggan:
+   Menyediakan tombol "Kirim WA" pada modul aktif Laundry untuk pesanan yang berstatus "SELESAI". Tombol ini langsung meluncurkan chat WhatsApp ke klien dengan pesan terenkode otomatis berisi pemberitahuan penyelesaian pesanan.
+5. Sinkronisasi & Penyiaran Versi 2.2.0:
+   Penerapan versi terbaru secara real-time di VPS, pembaruan database konfigurasi, dan sinkronisasi data profil pengguna ke Supabase.
+

@@ -656,6 +656,38 @@ fun LaundryScreen(
                                             ) {
                                                 Text("Status: ${o.orderStatus}", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                             }
+
+                                            if (o.orderStatus == "SELESAI") {
+                                                Button(
+                                                    onClick = {
+                                                        try {
+                                                            val cleanPhone = o.phone.trim()
+                                                            val formattedPhone = if (cleanPhone.startsWith("0")) {
+                                                                "62" + cleanPhone.substring(1)
+                                                            } else {
+                                                                cleanPhone
+                                                            }
+                                                            val msg = "Halo, pesanan laundry Anda dengan ID ${o.id} telah SELESAI. Silakan mengambil pesanan Anda di outlet kami atau hubungi kami untuk pengantaran. Terima kasih!"
+                                                            val url = "https://api.whatsapp.com/send?phone=$formattedPhone&text=${android.net.Uri.encode(msg)}"
+                                                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)).apply {
+                                                                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                            }
+                                                            context.startActivity(intent)
+                                                        } catch (e: Exception) {
+                                                            Toast.makeText(context, "Gagal membuka WhatsApp: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    },
+                                                    colors = ButtonDefaults.buttonColors(
+                                                        containerColor = Color(0xFF25D366),
+                                                        contentColor = Color.White
+                                                    ),
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                                    modifier = Modifier.height(28.dp).testTag("btn-notify-laundry-wa-${o.id}")
+                                                ) {
+                                                    Text("Kirim WA", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
                                         }
                                     }
                                 }

@@ -4543,7 +4543,7 @@ func upgradeUserToPremium(googleSub, email, displayName, customPinHash string) (
 		return "", fmt.Errorf("Failed to create owner employee: %w", err)
 	}
 
-	_, err = tx.Exec(`UPDATE "local_users" SET "isPremium" = TRUE, "tenantId" = $1, "businessModeLocked" = TRUE, "isActive" = TRUE, "updatedAt" = $2 WHERE "googleSub" = $3 OR TRIM(LOWER("email")) = $4`,
+	_, err = tx.Exec(`UPDATE "local_users" SET "isPremium" = TRUE, "tenantId" = $1, "businessModeLocked" = FALSE, "isActive" = TRUE, "updatedAt" = $2 WHERE "googleSub" = $3 OR TRIM(LOWER("email")) = $4`,
 		premiumTenantId, nowMillis, googleSub, strings.TrimSpace(strings.ToLower(email)))
 	if err != nil {
 		return "", fmt.Errorf("Failed to update local user: %w", err)

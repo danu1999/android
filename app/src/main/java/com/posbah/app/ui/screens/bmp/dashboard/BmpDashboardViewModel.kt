@@ -47,6 +47,7 @@ class BmpDashboardViewModel @Inject constructor(
     private val cashFlowRepo: BmpCashFlowRepository,
     private val bahanBakuRepo: BmpBahanBakuRepository,
     private val localDataSeeder: com.posbah.app.data.local.LocalDataSeeder,
+    private val db: com.posbah.app.data.local.PosBahDatabase,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) : ViewModel() {
 
@@ -58,6 +59,16 @@ class BmpDashboardViewModel @Inject constructor(
         val userEmail = authRepository.activeUserEmail()
         if (tenantId != null) {
             _ui.value = _ui.value.copy(tenantId = tenantId, ownerEmail = userEmail, isLoading = false)
+            viewModelScope.launch {
+                try {
+                    val t = db.tenantDao().getById(tenantId)
+                    if (t != null) {
+                        _ui.value = _ui.value.copy(tenantName = t.name)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
             viewModelScope.launch {
                 try {
                     val list = bahanBakuRepo.observe(tenantId).first()

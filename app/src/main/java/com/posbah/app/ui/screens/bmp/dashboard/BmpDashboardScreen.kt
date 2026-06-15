@@ -62,6 +62,8 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextAlign
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.posbah.app.ui.components.PosBahTopBar
@@ -300,6 +302,23 @@ fun BmpDashboardScreen(
                         }
                         if (pair.size == 1) Box(Modifier.weight(1f))
                     }
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Text(
+                        text = ui.tenantName ?: "POSBah Premium",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp)
+                            .testTag("dashboard-footer-name")
+                    )
                 }
             }
         }

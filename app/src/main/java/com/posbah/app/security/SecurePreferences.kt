@@ -67,6 +67,10 @@ class SecurePreferences @Inject constructor(
         get() = prefs.getBoolean("demo_cleaned_v211", false)
         set(value) = prefs.edit().putBoolean("demo_cleaned_v211", value).apply()
 
+    var tempPlainPassword: String?
+        get() = prefs.getString("temp_plain_password", null)
+        set(value) = prefs.edit().putString("temp_plain_password", value).apply()
+
     /** Wipe entire encrypted session. Called on logout / tamper detection. */
     fun wipe() {
         prefs.edit().clear().apply()
