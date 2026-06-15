@@ -4543,20 +4543,27 @@ func upgradeUserToPremium(googleSub, email, displayName, customPinHash string) (
 		return "", fmt.Errorf("Failed to create owner employee: %w", err)
 	}
 
-	_, err = tx.Exec(`UPDATE "local_users" SET "isPremium" = TRUE, "tenantId" = $1, "isActive" = TRUE, "updatedAt" = $2 WHERE "googleSub" = $3 OR TRIM(LOWER("email")) = $4`,
+	_, err = tx.Exec(`UPDATE "local_users" SET "isPremium" = TRUE, "tenantId" = $1, "businessModeLocked" = TRUE, "isActive" = TRUE, "updatedAt" = $2 WHERE "googleSub" = $3 OR TRIM(LOWER("email")) = $4`,
 		premiumTenantId, nowMillis, googleSub, strings.TrimSpace(strings.ToLower(email)))
 	if err != nil {
 		return "", fmt.Errorf("Failed to update local user: %w", err)
 	}
-
+ 
 	if err := tx.Commit(); err != nil {
 		return "", fmt.Errorf("Failed to commit transaction: %w", err)
 	}
-
-	// AUTOMATION: Purge the old demo tenant data from the PostgreSQL server
-	go purgeTenantData(actualDemoTenantId)
-	if actualDemoTenantId != demoTenantPrefix {
-		go purgeTenantData(demoTenantPrefix)
+ 
+	// AUTOMATION: Purge all old demo tenant data for this user from the PostgreSQL server
+	if rows, err := db.Query(`SELECT "id" FROM "tenants" WHERE "ownerEmail" = $1 OR "id" LIKE $2`, email, "demo_tenant_"+cleanEmail+"%"); err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var tId string
+			if err := rows.Scan(&tId); err == nil {
+				if strings.HasPrefix(tId, "demo_tenant_") {
+					go purgeTenantData(tId)
+				}
+			}
+		}
 	}
 
 	// Send Email

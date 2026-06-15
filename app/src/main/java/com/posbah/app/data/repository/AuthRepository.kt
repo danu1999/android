@@ -811,7 +811,8 @@ class AuthRepository @Inject constructor(
                                         displayName = fetchedEmp.name,
                                         photoUrl = null,
                                         role = fetchedEmp.role,
-                                        isPremium = true,
+                                        isPremium = tenantId.startsWith("ten_premium_"),
+                                        businessModeLocked = true,
                                         tenantId = tenantId
                                     )
                                     userDao.upsert(user)
@@ -881,7 +882,9 @@ class AuthRepository @Inject constructor(
                 displayName = emp.name,
                 photoUrl = null,
                 role = emp.role,
-                tenantId = emp.tenantId
+                tenantId = emp.tenantId,
+                isPremium = emp.tenantId.startsWith("ten_premium_"),
+                businessModeLocked = true
             )
             userDao.upsert(user)
 

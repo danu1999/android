@@ -1,6 +1,6 @@
-Pembaruan POSBah Versi 2.1.7
+Pembaruan POSBah Versi 2.1.8
 
-1. Perbaikan Bug Upgrade Akun (Constraint Error Fix):
-   Memperbaiki bug database PostgreSQL ("pq: there is no unique or exclusion constraint matching the ON CONFLICT specification") yang terjadi saat melakukan upgrade akun premium dari userdemo. Modifikasi dilakukan pada target konflik query INSERT tabel employees agar sesuai dengan skema primary key komposit terbaru.
-2. Sinkronisasi & Penyiaran Versi 2.1.7:
-   Deteksi otomatis biner baru versi 2.1.7 di VPS, pembaruan database config, serta pengiriman siaran pembaruan real-time dan email pemberitahuan ke seluruh pengguna aktif secara langsung.
+1. Isolasi Data Demo & Premium Secara Menyeluruh (Data Leakage Fix):
+   Menjamin isolasi total antara akun demo dan premium. Ketika akun dikonfirmasi premium, sistem kini secara otomatis menghapus seluruh demo tenant di database PostgreSQL server, memblokir pengulangan layar pemilihan sistem, serta membersihkan SQLite Room database klien sebelum memuat dashboard premium. Ini mencegah data produk, kas, dan transaksi demo tersangkut/tercampur ke dalam database premium baru.
+2. Sinkronisasi & Penyiaran Versi 2.1.8:
+   Penerapan versi terbaru secara real-time di VPS, pembaharuan database konfigurasi, dan penyiaran notifikasi update serta email ke seluruh pengguna aktif secara langsung.

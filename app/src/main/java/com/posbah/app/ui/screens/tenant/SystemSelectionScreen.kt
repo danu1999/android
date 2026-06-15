@@ -99,6 +99,17 @@ class SystemSelectionViewModel @Inject constructor(
                     }
                 }
 
+                if (isPremiumUser) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        try {
+                            db.clearAllTables()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                    userDao.upsert(user)
+                }
+
                 // Create the tenant if it doesn't exist
                 var tenant = tenantDao.getById(chosenTenantId)
                 if (tenant == null) {
@@ -135,6 +146,14 @@ class SystemSelectionViewModel @Inject constructor(
                 val outlets = db.outletDao().listForTenant(chosenTenantId)
                 val activeOutlet = outlets.firstOrNull { it.isDefault } ?: outlets.firstOrNull()
                 sessionState.setOutlet(activeOutlet?.id)
+
+                if (isPremiumUser) {
+                    try {
+                        localDataSeeder.seedDefaultSettings(chosenTenantId)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
 
                 // Seed simulated data instantly
                 try {
