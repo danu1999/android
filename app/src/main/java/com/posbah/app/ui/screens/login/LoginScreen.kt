@@ -222,8 +222,8 @@ fun LoginScreen(
             val length = maxOf(parts1.size, parts2.size)
             var isNewer = false
             for (i in 0 until length) {
-                val n1 = parts1.getOrNull(i)?.toIntOrNull() ?: 0
-                val n2 = parts2.getOrNull(i)?.toIntOrNull() ?: 0
+                val n1 = parts1.getOrNull(i)?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 0
+                val n2 = parts2.getOrNull(i)?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 0
                 if (n1 > n2) {
                     isNewer = true
                     break
