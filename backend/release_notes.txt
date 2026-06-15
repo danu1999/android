@@ -1,12 +1,8 @@
-Pembaruan POSBah Versi 2.1.5
+Pembaruan POSBah Versi 2.1.6
 
-1. Pembersihan Data Demo Otomatis (Purge Tenant Data):
-   Sistem di VPS backend dan database PostgreSQL sekarang otomatis mereset seluruh data transaksi, kas masuk/keluar, produk, pelanggan, dan struk ketika akun userdemo bermigrasi ke userpremium, memastikan pencatatan premium dimulai bersih dari nol.
-2. Penanganan Graceful Fallback Layar Cetak:
-   Menyematkan loading indicator dan auto-seeder setelan awal pada layar pengaturan cetak struk & invoice untuk mengatasi masalah blank hitam ketika data kosong.
-3. Migrasi Primary Key Komposit:
-   Mengupgrade schema database PostgreSQL menggunakan composite primary key ("id", "tenantId") untuk menghindari tabrakan ID (collision) antar tenant saat sinkronisasi data.
-4. Optimalisasi Penyimpanan VPS:
-   Membersihkan seluruh file APK usang dari penyimpanan VPS untuk meminimalkan beban disk server dan mempercepat deployment.
-5. Pembatasan Pemilihan & Penambahan Tenant:
-   Pemilik biasa (OWNER) dan karyawan (outletkaryawan) hanya dapat melihat/memilih 1 tenant aktif mereka, serta menyembunyikan tombol penambahan tenant baru. Hanya super admin muhammadmuizz8@gmail.com yang memiliki hak akses penuh untuk membuat dan berganti tenant.
+1. Kolom Lunas & Belum Lunas pada Pembuatan Invoice Baru:
+   Menyediakan kolom input "Jumlah Lunas (DP)" dan tampilan kalkulasi otomatis "Belum Lunas (Sisa)" pada form pembuatan invoice baru di modul BMP (Invoice & Manufaktur). Hal ini memudahkan pencatatan uang muka atau pembayaran di awal.
+2. Interkoneksi Pembayaran & Arus Kas Otomatis:
+   Ketika invoice baru disimpan dengan nilai "Lunas" > 0, sistem secara otomatis menerbitkan data pembayaran BmpInvoicePayment dan mencatat pemasukan kas masuk BmpCashFlow di database lokal maupun cloud secara real-time.
+3. Sinkronisasi & Pembaruan Versi Mandiri:
+   Secara otomatis mendeteksi biner pembaruan v2.1.6 di VPS, memperbarui database apk_config, mengirimkan siaran realtime ke semua klien aktif, serta mengirimkan email pemberitahuan ke semua akun premium secara otomatis.

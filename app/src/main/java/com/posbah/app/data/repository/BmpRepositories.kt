@@ -77,11 +77,44 @@ class BmpInvoiceRepository @Inject constructor(
         products: List<BmpProductEntity>
     ): Long {
         val total = products.sumOf { it.price * it.quantity * it.jumlahLusin }
-        val final = invoice.copy(totalAmount = total, slug = invoice.slug.ifBlank { autoSlug(invoice.number) })
+        val totalPaid = invoice.paidAmount
+        val newStatus = when {
+            totalPaid >= total - 0.01 -> "PAID"
+            totalPaid > 0 -> "PARTIAL"
+            else -> "UNPAID"
+        }
+        val final = invoice.copy(
+            totalAmount = total,
+            status = newStatus,
+            slug = invoice.slug.ifBlank { autoSlug(invoice.number) }
+        )
         return db.withTransaction {
             val id = invoiceDao.insert(final)
             val mappedProducts = products.map { it.copy(invoiceId = id) }
             productDao.insertAll(mappedProducts)
+
+            if (totalPaid > 0) {
+                val paymentId = paymentDao.insert(
+                    BmpInvoicePaymentEntity(
+                        tenantId = invoice.tenantId,
+                        invoiceId = id,
+                        paymentDate = System.currentTimeMillis(),
+                        paymentAmount = totalPaid,
+                        paymentMethod = "CASH",
+                        notes = "Uang muka saat pembuatan Invoice"
+                    )
+                )
+                cashFlowDao.insert(
+                    BmpCashFlowEntity(
+                        tenantId = invoice.tenantId,
+                        transactionDate = System.currentTimeMillis(),
+                        transactionType = "MASUK",
+                        description = "Pembayaran Invoice ${final.number}",
+                        amount = totalPaid,
+                        paymentRefId = paymentId
+                    )
+                )
+            }
             
             // Check for isKhusus items with hargaBeli > 0
             for (prod in mappedProducts) {

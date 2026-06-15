@@ -190,6 +190,37 @@ fun InvoiceFormScreen(
                         }
                     }
                 }
+
+                if (invoice.id == 0L) {
+                    Spacer(Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = if (invoice.paidAmount == 0.0) "" else invoice.paidAmount.toLong().toString(),
+                            onValueChange = { v ->
+                                val cleaned = v.replace(Regex("[^0-9]"), "")
+                                val n = cleaned.toDoubleOrNull() ?: 0.0
+                                viewModel.updateInvoice { it.copy(paidAmount = n.coerceAtMost(total)) }
+                            },
+                            label = { Text("Jumlah Lunas (DP)") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.weight(1f).testTag("invoice-paid-input")
+                        )
+                        val belumLunas = maxOf(0.0, total - invoice.paidAmount)
+                        OutlinedTextField(
+                            value = Formatters.rupiah(belumLunas),
+                            onValueChange = {},
+                            label = { Text("Belum Lunas (Sisa)") },
+                            singleLine = true,
+                            enabled = false,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
                 Spacer(Modifier.height(16.dp))
                 PrimaryButton(
                     label = if (ui.isLoading) "Menyimpan\u2026" else "Simpan Invoice",
