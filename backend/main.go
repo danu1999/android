@@ -631,6 +631,10 @@ func runAutoDeploy() {
 	_ = runCmd("git", []string{"reset", "--hard"}, repoDir)
 	_ = runCmd("git", []string{"clean", "-fd"}, repoDir)
 
+	// Diagnostics: log git remote and test SSH connection to GitHub
+	_ = runCmd("git", []string{"remote", "-v"}, repoDir)
+	_ = runCmd("ssh", []string{"-T", "-o", "StrictHostKeyChecking=no", "git@github.com"}, repoDir)
+
 	// 1b. Git pull
 	if err := runCmd("git", []string{"pull"}, repoDir); err != nil {
 		writeLog("[AutoDeploy] Git pull gagal: %v", err)
