@@ -49,7 +49,8 @@ class MarginAnalysisViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val productRepository: ProductRepository,
     private val transactionRepository: TransactionRepository,
-    private val db: com.posbah.app.data.local.PosBahDatabase
+    private val db: com.posbah.app.data.local.PosBahDatabase,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context
 ) : ViewModel() {
 
     val tenantId = authRepository.activeTenantId().orEmpty()
@@ -74,6 +75,10 @@ class MarginAnalysisViewModel @Inject constructor(
             transactions.collect {
                 refreshItems()
             }
+        }
+        // Trigger background pull sync
+        viewModelScope.launch(Dispatchers.IO) {
+            com.posbah.app.data.remote.SupabaseSyncManager.pullAll(context, db, tenantId)
         }
     }
 

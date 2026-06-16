@@ -49,6 +49,10 @@ class EmployeeViewModel @Inject constructor(
 
     init {
         checkPermissionAndLoad()
+        // Trigger background pull sync
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            com.posbah.app.data.remote.SupabaseSyncManager.pullAll(context, db, tenantId)
+        }
     }
 
     fun checkPermissionAndLoad() {

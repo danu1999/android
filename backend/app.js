@@ -24,6 +24,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setupPOSListeners();
     setupTabListeners();
     setupInvoiceListeners();
+    setupMarginOutletListeners();
 });
 
 function checkAuthentication() {
@@ -189,6 +190,17 @@ function initializeDashboard() {
             invoicesMenu.style.display = "block";
         } else {
             invoicesMenu.style.display = "none";
+        }
+    }
+
+    // Handle Margin Outlet visibility (Owner Only)
+    const role = localStorage.getItem("role") || "KASIR";
+    const marginMenu = document.getElementById("margin-outlet-menu-item");
+    if (marginMenu) {
+        if (role.toUpperCase() === "OWNER") {
+            marginMenu.style.display = "block";
+        } else {
+            marginMenu.style.display = "none";
         }
     }
 
@@ -802,6 +814,17 @@ function setupNavigation() {
 
             item.classList.add("active");
             document.getElementById(targetId).classList.add("active-section");
+
+            if (targetId === "margin-outlet-section") {
+                fetchOutletMarginReport(7);
+                document.querySelectorAll(".margin-period-btn").forEach(btn => {
+                    if (btn.getAttribute("data-days") === "7") {
+                        btn.classList.add("active");
+                    } else {
+                        btn.classList.remove("active");
+                    }
+                });
+            }
         });
     });
 
@@ -1692,4 +1715,116 @@ async function computeHmacSha256(message, secret) {
         .replace(/\+/g, "-")
         .replace(/\//g, "_")
         .replace(/=+$/, "");
+}
+
+function setupMarginOutletListeners() {
+    const periodBtns = document.querySelectorAll(".margin-period-btn");
+    periodBtns.forEach(btn => {
+        btn.addEventListener("click", () => {
+            periodBtns.forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            const days = Number(btn.getAttribute("data-days")) || 7;
+            fetchOutletMarginReport(days);
+        });
+    });
+}
+
+async function fetchOutletMarginReport(days = 7) {
+    const tenantId = localStorage.getItem("tenantId");
+    const email = localStorage.getItem("email");
+    const headers = {
+        "x-tenant-id": tenantId || "",
+        "x-user-email": email || ""
+    };
+
+    const tbody = document.getElementById("margin-outlet-list-body");
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center"><div class="spinner" style="margin: 20px auto;"></div> Memuat analisis margin...</td></tr>`;
+
+    try {
+        // Fetch outlets details
+        const resOutlets = await fetch(`${BASE_URL}/api/sync/outlets?tenantId=eq.${tenantId}`, { headers });
+        const outlets = resOutlets.ok ? await resOutlets.json() : [];
+
+        // Fetch margin data
+        const resMargin = await fetch(`${BASE_URL}/api/reports/outlet-margin?tenantId=${tenantId}&days=${days}`, { headers });
+        if (!resMargin.ok) throw new Error("Gagal mengambil data dari API margin");
+        const marginData = await resMargin.json();
+
+        // Aggregate by outlet
+        const outletMap = {};
+        // Initialize map with all outlets
+        outlets.forEach(o => {
+            outletMap[o.id] = {
+                id: o.id,
+                name: o.name,
+                address: o.address || "Lokasi tidak diset",
+                revenue: 0,
+                cost: 0,
+                margin: 0
+            };
+        });
+
+        // Sum data from API
+        marginData.forEach(row => {
+            const id = row.outletId;
+            if (!outletMap[id]) {
+                outletMap[id] = {
+                    id: id,
+                    name: row.outletName || `Outlet ${id}`,
+                    address: "Lokasi tidak diset",
+                    revenue: 0,
+                    cost: 0,
+                    margin: 0
+                };
+            }
+            outletMap[id].revenue += row.revenue || 0;
+            outletMap[id].cost += row.cost || 0;
+            outletMap[id].margin += row.margin || 0;
+        });
+
+        // Convert map to array
+        const aggregated = Object.values(outletMap);
+
+        // Render summary cards
+        let totalRevenue = 0;
+        let totalCogs = 0;
+        let totalMargin = 0;
+
+        tbody.innerHTML = "";
+
+        if (aggregated.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center">Belum ada outlet terdaftar</td></tr>`;
+        } else {
+            aggregated.forEach(row => {
+                totalRevenue += row.revenue;
+                totalCogs += row.cost;
+                totalMargin += row.margin;
+
+                const marginPercent = row.revenue > 0 ? ((row.margin / row.revenue) * 100).toFixed(1) : "0.0";
+                
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td>${row.id}</td>
+                    <td><strong>${row.name}</strong></td>
+                    <td>${row.address}</td>
+                    <td>${formatRupiah(row.revenue)}</td>
+                    <td>${formatRupiah(row.cost)}</td>
+                    <td style="color: ${row.margin >= 0 ? '#10B981' : '#EF4444'}; font-weight: 700;">${formatRupiah(row.margin)}</td>
+                    <td><span class="badge ${row.margin >= 0 ? 'success' : 'danger'}">${marginPercent}%</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Update card values
+        document.getElementById("margin-total-revenue").innerText = formatRupiah(totalRevenue);
+        document.getElementById("margin-total-cogs").innerText = formatRupiah(totalCogs);
+        
+        const totalMarginPercent = totalRevenue > 0 ? ((totalMargin / totalRevenue) * 100).toFixed(1) : "0.0";
+        document.getElementById("margin-total-profit").innerText = `${formatRupiah(totalMargin)} (${totalMarginPercent}%)`;
+
+    } catch (err) {
+        console.error("Gagal memuat laporan margin outlet:", err);
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> Gagal memuat data analisis margin: ${err.message}</td></tr>`;
+    }
 }

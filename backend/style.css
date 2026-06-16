@@ -766,6 +766,18 @@ body {
 
 .btn-primary { background: var(--primary); }
 
+.btn-outline {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+}
+
+.btn-outline:hover, .btn-outline.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
 .tab-btn {
     background: transparent;
     border: none;

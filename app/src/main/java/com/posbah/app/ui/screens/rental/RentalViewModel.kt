@@ -67,6 +67,10 @@ class RentalViewModel @Inject constructor(
                 }
             }
         }
+        // Trigger background pull sync
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            com.posbah.app.data.remote.SupabaseSyncManager.pullAll(appContext, db, tenantId)
+        }
     }
 
     val availableOutlets = db.outletDao().observeForTenant(tenantId)

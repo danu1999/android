@@ -56,6 +56,10 @@ class OutletControlViewModel @Inject constructor(
 
     init {
         loadData()
+        // Trigger background pull sync
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            com.posbah.app.data.remote.SupabaseSyncManager.pullAll(context, db, tenantId)
+        }
     }
 
     fun loadData() {
