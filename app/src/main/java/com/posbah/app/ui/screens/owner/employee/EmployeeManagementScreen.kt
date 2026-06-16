@@ -98,6 +98,12 @@ fun EmployeeManagementScreen(
     var activeEmployeeForPasswordChange by remember { mutableStateOf<Employee?>(null) }
     var newPasswordInput by remember { mutableStateOf("") }
 
+    var showSalaryChangeDialog by remember { mutableStateOf(false) }
+    var activeEmployeeForSalaryChange by remember { mutableStateOf<Employee?>(null) }
+    var newSalaryInput by remember { mutableStateOf("") }
+    var newPayPeriodInput by remember { mutableStateOf("MONTHLY") }
+    var salaryPeriodDropdownExpanded by remember { mutableStateOf(false) }
+
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var activeEmployeeForDelete by remember { mutableStateOf<Employee?>(null) }
 
@@ -238,6 +244,12 @@ fun EmployeeManagementScreen(
                         EmployeeCard(
                             employee = emp,
                             onPaySalary = { viewModel.paySalary(emp) },
+                            onChangeSalary = {
+                                activeEmployeeForSalaryChange = emp
+                                newSalaryInput = emp.salary.toLong().toString()
+                                newPayPeriodInput = emp.payPeriod
+                                showSalaryChangeDialog = true
+                            },
                             onChangePassword = {
                                 activeEmployeeForPasswordChange = emp
                                 newPasswordInput = ""
@@ -578,12 +590,90 @@ fun EmployeeManagementScreen(
             }
         )
     }
+
+// ── Salary Change Dialog ─────────────────────────────────────────────────────
+    if (showSalaryChangeDialog && activeEmployeeForSalaryChange != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showSalaryChangeDialog = false
+            },
+            title = { Text("Edit Gaji: ${activeEmployeeForSalaryChange?.name}") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "Owner dapat mengubah gaji pokok karyawan ini.",
+                        fontSize = 12.sp, color = Color.Gray
+                    )
+                    OutlinedTextField(
+                        value = newSalaryInput,
+                        onValueChange = { newSalaryInput = it.filter { c -> c.isDigit() } },
+                        label = { Text("Gaji Pokok Baru (Rp)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    // Pay period dropdown
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        val periodLabel = when (newPayPeriodInput) {
+                            "WEEKLY" -> "Per Minggu"
+                            "BI_WEEKLY" -> "Per 2 Minggu"
+                            else -> "Per Bulan"
+                        }
+                        OutlinedTextField(
+                            value = periodLabel,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Siklus Pembayaran") },
+                            trailingIcon = { Text("▾", modifier = Modifier.clickable { salaryPeriodDropdownExpanded = true }) },
+                            modifier = Modifier.fillMaxWidth().clickable { salaryPeriodDropdownExpanded = true }
+                        )
+                        DropdownMenu(
+                            expanded = salaryPeriodDropdownExpanded,
+                            onDismissRequest = { salaryPeriodDropdownExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Per Minggu") },
+                                onClick = { newPayPeriodInput = "WEEKLY"; salaryPeriodDropdownExpanded = false }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Per 2 Minggu") },
+                                onClick = { newPayPeriodInput = "BI_WEEKLY"; salaryPeriodDropdownExpanded = false }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Per Bulan") },
+                                onClick = { newPayPeriodInput = "MONTHLY"; salaryPeriodDropdownExpanded = false }
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val newSal = newSalaryInput.toDoubleOrNull() ?: 0.0
+                        activeEmployeeForSalaryChange?.let { emp ->
+                            viewModel.changeSalary(emp.id, newSal, newPayPeriodInput)
+                        }
+                        showSalaryChangeDialog = false
+                    }
+                ) {
+                    Text("Simpan Gaji")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSalaryChangeDialog = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
 }
 
 @Composable
 fun EmployeeCard(
     employee: Employee,
     onPaySalary: () -> Unit,
+    onChangeSalary: () -> Unit,
     onChangePassword: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -655,6 +745,15 @@ fun EmployeeCard(
                 }
 
                 Row {
+                    // Edit Salary Icon
+                    IconButton(onClick = onChangeSalary) {
+                        Icon(
+                            Icons.Outlined.Payments,
+                            contentDescription = "Edit Gaji",
+                            tint = Color(0xFF1E824C),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                     // Password Change Icon
                     IconButton(onClick = onChangePassword) {
                         Icon(

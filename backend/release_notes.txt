@@ -1,13 +1,17 @@
-Pembaruan POSBah Versi 2.2.0
+Pembaruan Aplikasi POSBah v2.3.0
 
-1. Form Profil Akun Premium & Keamanan Kata Sandi:
-   Premium user baru akan diarahkan untuk mengisi form profil sebelum dapat memilih sistem POS spesialis mereka. Form ini mempermudah identifikasi bisnis dengan input Nama Usaha kustom, menampilkan password generated Gmail ("bebas ganti atau tidak"), serta memfasilitasi penggantian kata sandi masuk secara instan.
-2. Verifikasi OTP WhatsApp (Simulasi):
-   Menambahkan form input nomor telepon WhatsApp usaha yang dilindungi dengan dialog verifikasi kode OTP simulasi 6-digit demi menjamin keabsahan kontak bisnis.
-3. Kustomisasi Nama Usaha pada Pemilihan Tenant dan Footer:
-   Nama Usaha yang didaftarkan otomatis digunakan sebagai nama tenant (menggantikan "CV Bahtera..." / nama acak) dan ditampilkan secara elegan pada footer Dashboard utama BMP.
-4. Tombol Kirim WhatsApp Notifikasi Pelanggan:
-   Menyediakan tombol "Kirim WA" pada modul aktif Laundry untuk pesanan yang berstatus "SELESAI". Tombol ini langsung meluncurkan chat WhatsApp ke klien dengan pesan terenkode otomatis berisi pemberitahuan penyelesaian pesanan.
-5. Sinkronisasi & Penyiaran Versi 2.2.0:
-   Penerapan versi terbaru secara real-time di VPS, pembaruan database konfigurasi, dan sinkronisasi data profil pengguna ke Supabase.
+Halo Mitra POSBah! Berikut adalah ringkasan fitur baru dan perbaikan pada pembaruan versi 2.3.0 ini:
 
+1. Perhitungan Keuntungan Terpisah Per Toko/Cabang:
+   Sekarang Anda bisa melihat laporan dan grafik keuntungan bersih masing-masing cabang/outlet secara mandiri. Sangat praktis untuk memantau cabang mana yang paling menguntungkan!
+
+2. Ubah Gaji Karyawan Kapan Saja:
+   Sebagai Pemilik (Owner), kini Anda bisa dengan mudah mengubah nominal gaji karyawan dan menentukan cara pembayaran (bisa Mingguan, 2 Mingguan, atau Bulanan) langsung dari aplikasi. Akun Pemilik (Owner) sendiri secara otomatis tidak tercatat sebagai karyawan dan tidak memiliki gaji.
+
+3. Pembersihan Data & Akun Karyawan Ganda:
+   Kami telah merapikan data sistem dan menghapus email karyawan ganda/salah ketik agar pencatatan absensi dan laporan keuangan usaha Anda menjadi lebih rapi dan bebas dari kesalahan.
+
+4. Sinkronisasi Data Lebih Lancar & Cepat:
+   Proses kirim-terima data antara aplikasi di HP dan server internet kini jauh lebih cepat dan stabil. Kami juga memblokir data usang dari perangkat lama agar tidak mengotori laporan keuangan Anda yang sudah bersih.
+
+Terima kasih telah mempercayai POSBah untuk membantu pertumbuhan bisnis Anda!

@@ -29,7 +29,10 @@ data class EmployeeManagementUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val emailVerificationOtp: String? = null,
-    val pendingEmployee: Employee? = null
+    val pendingEmployee: Employee? = null,
+    // ── Ganti Gaji ──────────────────────────────────────────────────────────
+    val showSalaryChangeDialog: Boolean = false,
+    val activeEmployeeForSalaryChange: Employee? = null
 )
 
 @HiltViewModel
@@ -188,6 +191,79 @@ class EmployeeViewModel @Inject constructor(
                         newPassword,
                         ownerEmail
                     )
+                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
+    /**
+     * Buka dialog ubah gaji.
+     */
+    fun openSalaryChangeDialog(employee: Employee) {
+        if (employee.role == "OWNER") {
+            _uiState.update { it.copy(error = "Owner tidak memiliki gaji dan tidak bisa diubah.") }
+            return
+        }
+        _uiState.update {
+            it.copy(
+                showSalaryChangeDialog = true,
+                activeEmployeeForSalaryChange = employee
+            )
+        }
+    }
+
+    fun dismissSalaryChangeDialog() {
+        _uiState.update {
+            it.copy(
+                showSalaryChangeDialog = false,
+                activeEmployeeForSalaryChange = null
+            )
+        }
+    }
+
+    /**
+     * Ubah gaji dan siklus pembayaran karyawan oleh Owner.
+     * Owner tidak punya gaji dan tidak termasuk karyawan.
+     */
+    fun changeSalary(employeeId: Long, newSalary: Double, newPayPeriod: String) {
+        viewModelScope.launch {
+            val emp = db.employeeDao().getById(employeeId) ?: return@launch
+            if (emp.role == "OWNER") {
+                _uiState.update { it.copy(error = "Owner tidak dapat memiliki gaji.") }
+                return@launch
+            }
+            val now = System.currentTimeMillis()
+            db.employeeDao().updateSalaryAndPeriod(
+                id = employeeId,
+                salary = newSalary,
+                payPeriod = newPayPeriod,
+                updatedAt = now
+            )
+
+            // Log activity
+            val outletName = emp.outletId?.let { oid ->
+                db.outletDao().getById(oid)?.name
+            } ?: "Seluruh Outlet"
+            db.activityLogDao().insertLog(
+                com.posbah.app.data.local.entities.ActivityLogEntity(
+                    tenantId = tenantId,
+                    action = "UPDATE_SALARY",
+                    description = "Owner mengubah gaji ${emp.name} (Outlet: $outletName) menjadi Rp $newSalary / $newPayPeriod",
+                    date = now,
+                    employeeName = authRepository.getActiveUser()?.displayName ?: "Owner",
+                    appMode = "FNB"
+                )
+            )
+
+            dismissSalaryChangeDialog()
+            checkPermissionAndLoad()
+
+            // Sync ke VPS
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
                     com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
                 } catch (e: Exception) {
                     e.printStackTrace()

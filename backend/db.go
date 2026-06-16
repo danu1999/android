@@ -51,11 +51,11 @@ func initSchema() error {
 			"isActive" BOOLEAN DEFAULT TRUE,
 			"demoEmailSent" BOOLEAN DEFAULT FALSE,
 			"demoDay2Notified" BOOLEAN DEFAULT FALSE,
-			"apkVersion" VARCHAR(50) DEFAULT '2.0.3'
+			"apkVersion" VARCHAR(50) DEFAULT '2.3.0'
 		);`,
 		`ALTER TABLE "local_users" ADD COLUMN IF NOT EXISTS "demoEmailSent" BOOLEAN DEFAULT FALSE;`,
 		`ALTER TABLE "local_users" ADD COLUMN IF NOT EXISTS "demoDay2Notified" BOOLEAN DEFAULT FALSE;`,
-		`ALTER TABLE "local_users" ADD COLUMN IF NOT EXISTS "apkVersion" VARCHAR(50) DEFAULT '2.0.3';`,
+		`ALTER TABLE "local_users" ADD COLUMN IF NOT EXISTS "apkVersion" VARCHAR(50) DEFAULT '2.3.0';`,
 		`CREATE TABLE IF NOT EXISTS "tenants" (
 			"id" VARCHAR(100) PRIMARY KEY,
 			"name" VARCHAR(255) NOT NULL,
@@ -583,6 +583,14 @@ func initSchema() error {
 		`ALTER TABLE "employees" ADD COLUMN IF NOT EXISTS "phone" VARCHAR(50);`,
 		`ALTER TABLE "employees" ADD COLUMN IF NOT EXISTS "passwordChangeCount" INT DEFAULT 0;`,
 		`ALTER TABLE "employees" ADD COLUMN IF NOT EXISTS "lastPasswordChangeDate" BIGINT DEFAULT 0;`,
+
+		// v2.3.0: Hapus duplikasi karyawan dengan email typo "alfarisirosi04"
+		// (email aktif yang benar adalah "alfarisirosi40@gmail.com")
+		`DELETE FROM "employees" WHERE TRIM(LOWER("email")) = 'alfarisirosi04@gmail.com';`,
+
+		// v2.3.0: Tambah index outletId pada transactions untuk query margin per outlet lebih cepat
+		`CREATE INDEX IF NOT EXISTS "idx_transactions_outlet" ON "transactions" ("outletId", "tenantId");`,
+		`CREATE INDEX IF NOT EXISTS "idx_transaction_items_tx" ON "transaction_items" ("transactionId");`,
 	}
 
 	for _, q := range migrationQueries {
@@ -594,12 +602,10 @@ func initSchema() error {
 	_, _ = db.Exec(`INSERT INTO "system_admins" ("email", "passwordHash", "createdAt")
 		VALUES ('muhammadmuizz8@gmail.com', $1, $2)
 		ON CONFLICT ("email") DO UPDATE SET "passwordHash" = EXCLUDED."passwordHash";`, defaultAdminHash, time.Now().UnixNano()/int64(time.Millisecond))
-
-	// Seed default apk_config
+	// Seed default apk_config — v2.3.0
 	_, _ = db.Exec(`INSERT INTO "apk_config" ("id", "version", "description", "downloadUrl", "updatedAt")
-		VALUES (1, '2.0.3', 'Integrasi & perbaikan interkoneksi data premium bahteramulyap@gmail.com, sinkronisasi penuh modul Pabrik (BMP) dua arah, serta penataan visual dan tata letak menu Rental & Laundry.', '/api/download-apk', $1)
-		ON CONFLICT ("id") DO NOTHING;`, time.Now().UnixNano()/int64(time.Millisecond))
-
+		VALUES (1, '2.3.0', 'POSBah v2.3.0: Margin per outlet (Pendekatan A), ubah gaji karyawan oleh owner, penghapusan duplikasi karyawan, peningkatan interconnect & sinkronisasi.', '/api/download-apk', $1)
+		ON CONFLICT ("id") DO UPDATE SET "version" = EXCLUDED."version", "description" = EXCLUDED."description", "updatedAt" = EXCLUDED."updatedAt";`, time.Now().UnixNano()/int64(time.Millisecond))
 	log.Println("Database schemas verified / migrated successfully.")
 	return nil
 }

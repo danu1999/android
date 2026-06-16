@@ -75,14 +75,15 @@ class LoginViewModel @Inject constructor(
 
     fun signInWithPassword() {
         val s = _uiState.value
-        if (s.email.isBlank() || s.password.isBlank()) {
+        val cleanEmail = s.email.trim().lowercase()
+        if (cleanEmail.isBlank() || s.password.isBlank()) {
             _uiState.update { it.copy(errorMessage = "Email dan password wajib diisi") }
             return
         }
         _uiState.update { it.copy(isLoading = true, errorMessage = null) }
         viewModelScope.launch {
             try {
-                when (val outcome = authRepository.loginWithEmailPassword(s.email, s.password)) {
+                when (val outcome = authRepository.loginWithEmailPassword(cleanEmail, s.password)) {
                     is AuthRepository.LoginOutcome.Success ->
                         _uiState.update { it.copy(isLoading = false, signedInUser = outcome.user) }
                     is AuthRepository.LoginOutcome.Error ->
@@ -200,11 +201,12 @@ class LoginViewModel @Inject constructor(
     fun clearRejoinMessage() = _uiState.update { it.copy(rejoinMessage = null) }
 
     fun requestRejoin(email: String) {
+        val cleanEmail = email.trim().lowercase()
         _uiState.update { it.copy(isLoading = true, errorMessage = null, rejoinMessage = null) }
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             var conn: java.net.HttpURLConnection? = null
             try {
-                val url = java.net.URL("https://www.zedmz.cloud/api/auth/request-rejoin?email=${java.net.URLEncoder.encode(email, "UTF-8")}")
+                val url = java.net.URL("https://www.zedmz.cloud/api/auth/request-rejoin?email=${java.net.URLEncoder.encode(cleanEmail, "UTF-8")}")
                 conn = url.openConnection() as java.net.HttpURLConnection
                 conn.requestMethod = "POST"
                 conn.connectTimeout = 5000

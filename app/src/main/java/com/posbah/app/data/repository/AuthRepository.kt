@@ -75,19 +75,23 @@ class AuthRepository @Inject constructor(
                 // Dulu, tenantId memakai email langsung (misal "hanafiariful@gmail.com").
                 // Setelah migrasi ke format "ten_premium_...", data lama perlu dibersihkan
                 // agar tidak terbaca oleh akun lain yang query-nya filter by tenantId.
+                // Cleanup legacy tenantId entries that used email as tenantId (pre-v2.0)
+                // Note: "alfarisirosi04@gmail.com" was a TYPO of "alfarisirosi40@gmail.com" — removed from this list.
                 val legacyEmailTenantIds = listOf(
                     "hanafiariful@gmail.com",
                     "bahteramulyap@gmail.com",
                     "fahrup22@gmail.com",
                     "alfarisirosi40@gmail.com",
-                    "alfarisirosi04@gmail.com",
                     "syerlirahma7@gmail.com"
                 )
                 for (legacyId in legacyEmailTenantIds) {
                     bmpSettingsDao.deleteByTenantId(legacyId)
                     printSettingsDao.deleteByTenantId(legacyId)
                 }
-                
+
+                // Delete duplicate employee entry with typo email "alfarisirosi04" if it exists
+                employeeDao.deleteByEmail("alfarisirosi04@gmail.com")
+
                 // Delete wrong employees seeded from CV Bahtera dump
                 employeeDao.deleteIncorrectEmployees(
                     emails = listOf("bahteramulyap@gmail.com", "syerlirahma7@gmail.com"),

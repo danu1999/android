@@ -136,6 +136,9 @@ func main() {
 	// Serve static files from TTD
 	http.Handle("/api/signatures/", http.StripPrefix("/api/signatures/", http.FileServer(http.Dir("./TTD"))))
 
+	// Reports API
+	http.HandleFunc("/api/reports/outlet-margin", handleOutletMarginReport)
+
 	log.Printf("Server listening on port %s", port)
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
@@ -1586,12 +1589,13 @@ func handleGetApkDownloadToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleDownloadApk(w http.ResponseWriter, r *http.Request) {
+	autoDetectApkVersion()
 	var version, description string
 	if db != nil {
 		_ = db.QueryRow(`SELECT "version", "description" FROM "apk_config" WHERE "id" = 1`).Scan(&version, &description)
 	}
 	if version == "" {
-		version = "2.0.3" // Fallback
+		version = "2.3.0" // Fallback
 	}
 	if description == "" {
 		description = "Pembaruan sistem dan optimalisasi."
@@ -1772,12 +1776,11 @@ func handleDownloadApk(w http.ResponseWriter, r *http.Request) {
 </html>`, version, version, description)
 	w.Write([]byte(html))
 }
-
 func handleApkVersion(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if db == nil {
 		json.NewEncoder(w).Encode(map[string]string{
-			"version":     "2.0.3",
+			"version":     "2.3.0",
 			"description": "Database not initialized. Fallback version.",
 		})
 		return
@@ -1787,7 +1790,7 @@ func handleApkVersion(w http.ResponseWriter, r *http.Request) {
 	err := db.QueryRow(`SELECT "version", "description", "downloadUrl" FROM "apk_config" WHERE "id" = 1`).Scan(&version, &description, &downloadUrl)
 	if err != nil {
 		json.NewEncoder(w).Encode(map[string]string{
-			"version":     "2.0.3",
+			"version":     "2.3.0",
 			"description": "Query failed. Fallback version.",
 		})
 		return
@@ -3296,6 +3299,16 @@ func handleSyncTable(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if tableName == "employees" {
+		var filteredRows []map[string]interface{}
+		for _, row := range rows {
+			emailVal, _ := row["email"].(string)
+			if strings.TrimSpace(strings.ToLower(emailVal)) == "alfarisirosi04@gmail.com" {
+				continue
+			}
+			filteredRows = append(filteredRows, row)
+		}
+		rows = filteredRows
+
 		for _, row := range rows {
 			rawPassVal, hasRawPass := row["rawPassword"]
 			if hasRawPass {
@@ -4860,7 +4873,7 @@ func handleAdminGetUsers(w http.ResponseWriter, r *http.Request) {
 
 	syncDatabaseUsersAndTenants()
 
-	rows, err := db.Query(`SELECT "googleSub", "email", COALESCE("displayName", ''), "registeredAt", "isActive", COALESCE("tenantId", ''), "isPremium", COALESCE("apkVersion", '2.0.3') FROM "local_users" ORDER BY "registeredAt" DESC`)
+	rows, err := db.Query(`SELECT "googleSub", "email", COALESCE("displayName", ''), "registeredAt", "isActive", COALESCE("tenantId", ''), "isPremium", COALESCE("apkVersion", '2.3.0') FROM "local_users" ORDER BY "registeredAt" DESC`)
 	if err != nil {
 		http.Error(w, "Database query failed: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -5998,5 +6011,103 @@ func runDatabaseInterconnectSyncAutomation() {
 			}
 		}
 	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/reports/outlet-margin?tenantId=xxx&days=7
+// Mengembalikan margin keuntungan per outlet per hari (Pendekatan A).
+// Response: [ { outletId, outletName, date, revenue, cost, margin } ]
+// ─────────────────────────────────────────────────────────────────────────────
+func handleOutletMarginReport(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	tenantId := strings.TrimSpace(r.URL.Query().Get("tenantId"))
+	if tenantId == "" {
+		http.Error(w, `{"error":"tenantId is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	daysStr := r.URL.Query().Get("days")
+	days := 7
+	if d, err := strconv.Atoi(daysStr); err == nil && d > 0 && d <= 90 {
+		days = d
+	}
+
+	if db == nil {
+		http.Error(w, `{"error":"database not available"}`, http.StatusServiceUnavailable)
+		return
+	}
+
+	// Hitung batas waktu
+	nowMs := time.Now().UnixNano() / int64(time.Millisecond)
+	fromMs := nowMs - int64(days)*24*60*60*1000
+
+	// Query margin per outlet per hari dari tabel transactions + transaction_items
+	query := `
+		SELECT
+			o."id"          AS outlet_id,
+			o."name"        AS outlet_name,
+			TO_CHAR(TO_TIMESTAMP(t."date" / 1000), 'YYYY-MM-DD') AS day_str,
+			COALESCE(SUM(t."total"), 0)  AS revenue,
+			COALESCE(SUM(
+				(SELECT COALESCE(SUM(ti."costPrice" * ti."quantity"), 0)
+				 FROM "transaction_items" ti
+				 WHERE ti."transactionId" = t."id")
+			), 0) AS cost
+		FROM "outlets" o
+		LEFT JOIN "transactions" t
+			ON t."outletId" = o."id"
+			AND t."tenantId" = $1
+			AND t."status" = 'COMPLETED'
+			AND t."date" >= $2
+		WHERE o."tenantId" = $1
+		GROUP BY o."id", o."name", day_str
+		ORDER BY o."id", day_str;
+	`
+
+	rows, err := db.Query(query, tenantId, fromMs)
+	if err != nil {
+		log.Printf("[OutletMargin] query error: %v", err)
+		http.Error(w, `{"error":"query failed"}`, http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type OutletMarginRow struct {
+		OutletId   int64   `json:"outletId"`
+		OutletName string  `json:"outletName"`
+		DayStr     string  `json:"date"`
+		Revenue    float64 `json:"revenue"`
+		Cost       float64 `json:"cost"`
+		Margin     float64 `json:"margin"`
+	}
+
+	var result []OutletMarginRow
+	for rows.Next() {
+		var row OutletMarginRow
+		var dayStr *string
+		if err := rows.Scan(&row.OutletId, &row.OutletName, &dayStr, &row.Revenue, &row.Cost); err != nil {
+			continue
+		}
+		if dayStr != nil {
+			row.DayStr = *dayStr
+		} else {
+			row.DayStr = ""
+		}
+		row.Margin = row.Revenue - row.Cost
+		result = append(result, row)
+	}
+
+	if result == nil {
+		result = []OutletMarginRow{}
+	}
+
+	json.NewEncoder(w).Encode(result)
 }
 

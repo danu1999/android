@@ -36,9 +36,32 @@ object SupabaseSyncManager {
 
     /** Check network connection status */
     fun isNetworkAvailable(context: Context): Boolean {
-        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
-        val capabilities = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
-        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: run {
+            Log.e(TAG, "[Network] ConnectivityManager tidak tersedia")
+            return false
+        }
+        val activeNetwork = cm.activeNetwork
+        if (activeNetwork == null) {
+            Log.w(TAG, "[Network] Tidak ada jaringan aktif terdeteksi")
+            return false
+        }
+        val capabilities = cm.getNetworkCapabilities(activeNetwork) ?: run {
+            Log.w(TAG, "[Network] Gagal mengambil NetworkCapabilities")
+            return false
+        }
+        val isInternet = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        if (isInternet) {
+            val transport = when {
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "WIFI"
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "CELLULAR"
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "ETHERNET"
+                else -> "OTHER"
+            }
+            Log.i(TAG, "[Network] Internet tersedia via $transport")
+        } else {
+            Log.w(TAG, "[Network] Koneksi ada tetapi tidak memiliki kemampuan NET_CAPABILITY_INTERNET")
+        }
+        return isInternet
     }
 
     /**

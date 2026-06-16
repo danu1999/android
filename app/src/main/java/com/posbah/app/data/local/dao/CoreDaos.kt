@@ -128,5 +128,13 @@ interface EmployeeDao {
 
     @Query("DELETE FROM employees WHERE email IN (:emails) AND tenantId NOT IN (:allowedTenants)")
     suspend fun deleteIncorrectEmployees(emails: List<String>, allowedTenants: List<String>)
+
+    /** Hapus karyawan berdasarkan email (untuk cleanup data duplikat/typo). */
+    @Query("DELETE FROM employees WHERE email = :email COLLATE NOCASE")
+    suspend fun deleteByEmail(email: String)
+
+    /** Update gaji dan siklus pembayaran karyawan oleh Owner. */
+    @Query("UPDATE employees SET salary = :salary, payPeriod = :payPeriod, updatedAt = :updatedAt WHERE id = :id")
+    suspend fun updateSalaryAndPeriod(id: Long, salary: Double, payPeriod: String, updatedAt: Long = System.currentTimeMillis())
 }
 
