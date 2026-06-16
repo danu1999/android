@@ -239,7 +239,7 @@ class InvoiceDetailViewModel @Inject constructor(
     }
 
     fun selectEditPayment(payment: BmpInvoicePaymentEntity) =
-        _ui.update { it.copy(editingPayment = payment, newPaymentAmount = payment.paymentAmount.toString(), newPaymentMethod = payment.paymentMethod) }
+        _ui.update { it.copy(editingPayment = payment, newPaymentAmount = payment.paymentAmount.toLong().toString(), newPaymentMethod = payment.paymentMethod) }
 
     fun cancelEditPayment() =
         _ui.update { it.copy(editingPayment = null, newPaymentAmount = "", newPaymentMethod = "TRANSFER") }

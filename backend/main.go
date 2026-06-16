@@ -2753,12 +2753,12 @@ func validateTenantAccess(r *http.Request) error {
 
 func getLatestVersionFromDb() string {
 	if db == nil {
-		return "2.4.0"
+		return "2.5.0"
 	}
 	var version string
 	err := db.QueryRow(`SELECT "version" FROM "apk_config" WHERE "id" = 1`).Scan(&version)
 	if err != nil || version == "" {
-		return "2.4.0"
+		return "2.5.0"
 	}
 	return version
 }

@@ -1,3 +1,16 @@
+POSBah v2.5.0 - Perbaikan Tampilan Angka Pembayaran
+
+Halo Kak! Kami telah memperbaiki bug tampilan angka pada halaman pembayaran Invoice dan Manufaktur. Silakan perbarui ke versi 2.5.0 agar jumlah pembayaran tidak lagi tampil dalam format seperti "1.408E7" melainkan "14080000".
+
+Apa saja yang baru?
+1. Fix Angka Pembayaran: Jumlah pembayaran pada dialog Ubah Pembayaran kini tampil dalam format angka biasa (contoh: 14080000) bukan notasi saintifik (1.408E7).
+2. Fix Input Qty & Lusin: Kolom Qty dan Lsn di form Invoice kini juga tidak menampilkan notasi saintifik.
+3. Sinkronisasi Lebih Stabil: Peningkatan koneksi antar modul Invoice, Pembayaran, dan Sinkronisasi data server.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.4.0 - Pembaruan Wajib & Peningkatan Keamanan
 
 Halo Kak! Agar aplikasi kasir POSBah berjalan lebih cepat, aman, dan data transaksi selalu tersimpan dengan benar di server, semua pengguna wajib memperbarui ke versi 2.4.0 terbaru ini.

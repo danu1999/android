@@ -78,7 +78,7 @@ class PaymentsListViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 editingPayment = payment,
-                newPaymentAmount = payment.paymentAmount.toString(),
+                newPaymentAmount = payment.paymentAmount.toLong().toString(),
                 newPaymentMethod = payment.paymentMethod
             )
         }

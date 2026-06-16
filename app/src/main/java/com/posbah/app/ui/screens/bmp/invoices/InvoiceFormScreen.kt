@@ -392,7 +392,7 @@ private fun ProductLineEditor(
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 OutlinedTextField(
-                    value = if (line.quantity == 0.0) "" else line.quantity.toString(),
+                    value = if (line.quantity == 0.0) "" else Formatters.plainDecimal(line.quantity),
                     onValueChange = { v ->
                         val n = v.replace(",", ".").toDoubleOrNull() ?: 0.0
                         onChange { it.copy(quantity = n) }
@@ -403,7 +403,7 @@ private fun ProductLineEditor(
                     modifier = Modifier.weight(0.8f)
                 )
                 OutlinedTextField(
-                    value = if (line.jumlahLusin == 0.0) "" else line.jumlahLusin.toString(),
+                    value = if (line.jumlahLusin == 0.0) "" else Formatters.plainDecimal(line.jumlahLusin),
                     onValueChange = { v ->
                         val n = v.replace(",", ".").toDoubleOrNull() ?: 0.0
                         onChange { it.copy(jumlahLusin = n) }
