@@ -2751,8 +2751,33 @@ func validateTenantAccess(r *http.Request) error {
 	return nil
 }
 
+func getLatestVersionFromDb() string {
+	if db == nil {
+		return "2.4.0"
+	}
+	var version string
+	err := db.QueryRow(`SELECT "version" FROM "apk_config" WHERE "id" = 1`).Scan(&version)
+	if err != nil || version == "" {
+		return "2.4.0"
+	}
+	return version
+}
+
 // handleSyncRoute acts as a gateway for both GET (query) and POST (upsert) requests on /api/sync/
 func handleSyncRoute(w http.ResponseWriter, r *http.Request) {
+	clientVersion := strings.TrimSpace(r.Header.Get("x-client-version"))
+	latestVersion := getLatestVersionFromDb()
+	if clientVersion == "" || compareVersions(clientVersion, latestVersion) < 0 {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUpgradeRequired)
+		json.NewEncoder(w).Encode(map[string]string{
+			"error":         "Upgrade Required",
+			"message":       "Pembaruan wajib untuk kelancaran sinkronisasi data transaksi dan peningkatan keamanan sistem POSBah Anda. Silakan unduh versi terbaru untuk melanjutkan.",
+			"latestVersion": latestVersion,
+		})
+		return
+	}
+
 	if err := validateTenantAccess(r); err != nil {
 		if strings.HasPrefix(err.Error(), "unauthorized") {
 			http.Error(w, err.Error(), http.StatusUnauthorized)

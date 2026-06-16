@@ -745,6 +745,7 @@ object SupabaseSyncManager {
                 readTimeout = 30_000
                 setRequestProperty("Content-Type", "application/json")
                 setRequestProperty("x-tenant-id", currentTenantId)
+                setRequestProperty("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
                 val securePrefs = com.posbah.app.security.SecurePreferences(context)
                 val email = securePrefs.currentEmail
                 if (!email.isNullOrBlank()) {
@@ -792,6 +793,7 @@ object SupabaseSyncManager {
                 readTimeout = 30_000
                 setRequestProperty("Accept", "application/json")
                 setRequestProperty("x-tenant-id", tenantId)
+                setRequestProperty("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
                 val securePrefs = com.posbah.app.security.SecurePreferences(context)
                 val email = securePrefs.currentEmail
                 if (!email.isNullOrBlank()) {

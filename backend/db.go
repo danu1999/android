@@ -604,7 +604,7 @@ func initSchema() error {
 		ON CONFLICT ("email") DO UPDATE SET "passwordHash" = EXCLUDED."passwordHash";`, defaultAdminHash, time.Now().UnixNano()/int64(time.Millisecond))
 	// Seed default apk_config — v2.4.0
 	_, _ = db.Exec(`INSERT INTO "apk_config" ("id", "version", "description", "downloadUrl", "updatedAt")
-		VALUES (1, '2.4.0', 'Pembaruan keamanan penting agar aplikasi kasir berjalan lancar, cepat, dan data transaksi selalu sinkron dengan server. Silakan unduh versi v2.4.0 terbaru untuk melanjutkan transaksi usaha Anda.', '/api/download-apk', $1)
+		VALUES (1, '2.4.0', 'Pembaruan wajib untuk kelancaran sinkronisasi data transaksi dan peningkatan keamanan sistem POSBah Anda. Silakan unduh versi terbaru untuk melanjutkan.', '/api/download-apk', $1)
 		ON CONFLICT ("id") DO UPDATE SET "version" = EXCLUDED."version", "description" = EXCLUDED."description", "updatedAt" = EXCLUDED."updatedAt";`, time.Now().UnixNano()/int64(time.Millisecond))
 	log.Println("Database schemas verified / migrated successfully.")
 	return nil
