@@ -1,11 +1,9 @@
-Pembaruan Aplikasi POSBah v2.4.0
+POSBah v2.4.0 - Pembaruan Wajib & Peningkatan Keamanan
 
-Halo Mitra POSBah! Berikut adalah ringkasan fitur baru pada pembaruan versi 2.4.0 ini:
+Halo Kak! Agar aplikasi kasir POSBah berjalan lebih cepat, aman, dan data transaksi selalu tersimpan dengan benar di server, semua pengguna wajib memperbarui ke versi 2.4.0 terbaru ini.
 
-1. Pembaruan Versi Wajib (Forced Update):
-   Untuk menjaga keamanan data transaksi dan stabilitas sinkronisasi, sistem kini mewajibkan semua pengguna untuk menggunakan versi aplikasi POSBah terbaru. Jika Anda menggunakan versi usang, banner pemblokir layar penuh akan muncul untuk menuntut Anda mengunduh pembaruan.
+Apa saja yang baru?
+1. Pembaruan Otomatis: Aplikasi akan mendeteksi secara otomatis jika ada versi terbaru agar Anda selalu menggunakan sistem yang paling aman.
+2. Sinkronisasi Data Lebih Stabil: Transaksi penjualan Anda dari HP ke server kini terkirim lebih lancar tanpa kendala.
 
-2. Peningkatan Integrasi & Interkoneksi Sistem:
-   Penyatuan database dan pembaruan versi server kini terhubung secara otomatis ke seluruh POS aktif guna menghindari ketidakcocokan versi data.
-
-Terima kasih telah mempercayai POSBah untuk membantu pertumbuhan bisnis Anda!
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
