@@ -19,7 +19,10 @@ cp ./posbah-backend /home/muizz9900/posbah-backend
 chmod +x /home/muizz9900/posbah-backend
 cp ./admin.html /home/muizz9900/admin.html
 mkdir -p /home/muizz9900/web
-cp ./web/admin.html /home/muizz9900/web/admin.html 2>/dev/null || true
+cp ./admin.html /home/muizz9900/web/admin.html
+cp ./index.html /home/muizz9900/web/index.html
+cp ./app.js /home/muizz9900/web/app.js
+cp ./style.css /home/muizz9900/web/style.css
 cp ./posbah-v*.apk /home/muizz9900/ 2>/dev/null || true
 cp ./release_notes.txt /home/muizz9900/release_notes.txt 2>/dev/null || true
 
