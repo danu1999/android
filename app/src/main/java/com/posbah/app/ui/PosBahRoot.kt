@@ -343,6 +343,10 @@ fun ForcedUpdateOverlay(
 ) {
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
     
+    androidx.activity.compose.BackHandler(enabled = true) {
+        // Intercept back button to prevent escaping the update screen
+    }
+    
     Box(
         modifier = Modifier
             .fillMaxSize()
