@@ -51,11 +51,11 @@ func initSchema() error {
 			"isActive" BOOLEAN DEFAULT TRUE,
 			"demoEmailSent" BOOLEAN DEFAULT FALSE,
 			"demoDay2Notified" BOOLEAN DEFAULT FALSE,
-			"apkVersion" VARCHAR(50) DEFAULT '2.3.0'
+			"apkVersion" VARCHAR(50) DEFAULT '2.4.0'
 		);`,
 		`ALTER TABLE "local_users" ADD COLUMN IF NOT EXISTS "demoEmailSent" BOOLEAN DEFAULT FALSE;`,
 		`ALTER TABLE "local_users" ADD COLUMN IF NOT EXISTS "demoDay2Notified" BOOLEAN DEFAULT FALSE;`,
-		`ALTER TABLE "local_users" ADD COLUMN IF NOT EXISTS "apkVersion" VARCHAR(50) DEFAULT '2.3.0';`,
+		`ALTER TABLE "local_users" ADD COLUMN IF NOT EXISTS "apkVersion" VARCHAR(50) DEFAULT '2.4.0';`,
 		`CREATE TABLE IF NOT EXISTS "tenants" (
 			"id" VARCHAR(100) PRIMARY KEY,
 			"name" VARCHAR(255) NOT NULL,
@@ -602,9 +602,9 @@ func initSchema() error {
 	_, _ = db.Exec(`INSERT INTO "system_admins" ("email", "passwordHash", "createdAt")
 		VALUES ('muhammadmuizz8@gmail.com', $1, $2)
 		ON CONFLICT ("email") DO UPDATE SET "passwordHash" = EXCLUDED."passwordHash";`, defaultAdminHash, time.Now().UnixNano()/int64(time.Millisecond))
-	// Seed default apk_config — v2.3.0
+	// Seed default apk_config — v2.4.0
 	_, _ = db.Exec(`INSERT INTO "apk_config" ("id", "version", "description", "downloadUrl", "updatedAt")
-		VALUES (1, '2.3.0', 'POSBah v2.3.0: Margin per outlet (Pendekatan A), ubah gaji karyawan oleh owner, penghapusan duplikasi karyawan, peningkatan interconnect & sinkronisasi.', '/api/download-apk', $1)
+		VALUES (1, '2.4.0', 'POSBah v2.4.0: Pembaruan wajib (Forced Update) otomatis dan banner pemblokir layar penuh untuk keamanan serta sinkronisasi versi yang lebih baik.', '/api/download-apk', $1)
 		ON CONFLICT ("id") DO UPDATE SET "version" = EXCLUDED."version", "description" = EXCLUDED."description", "updatedAt" = EXCLUDED."updatedAt";`, time.Now().UnixNano()/int64(time.Millisecond))
 	log.Println("Database schemas verified / migrated successfully.")
 	return nil

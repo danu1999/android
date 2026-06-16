@@ -1,17 +1,11 @@
-Pembaruan Aplikasi POSBah v2.3.0
+Pembaruan Aplikasi POSBah v2.4.0
 
-Halo Mitra POSBah! Berikut adalah ringkasan fitur baru dan perbaikan pada pembaruan versi 2.3.0 ini:
+Halo Mitra POSBah! Berikut adalah ringkasan fitur baru pada pembaruan versi 2.4.0 ini:
 
-1. Perhitungan Keuntungan Terpisah Per Toko/Cabang:
-   Sekarang Anda bisa melihat laporan dan grafik keuntungan bersih masing-masing cabang/outlet secara mandiri. Sangat praktis untuk memantau cabang mana yang paling menguntungkan!
+1. Pembaruan Versi Wajib (Forced Update):
+   Untuk menjaga keamanan data transaksi dan stabilitas sinkronisasi, sistem kini mewajibkan semua pengguna untuk menggunakan versi aplikasi POSBah terbaru. Jika Anda menggunakan versi usang, banner pemblokir layar penuh akan muncul untuk menuntut Anda mengunduh pembaruan.
 
-2. Ubah Gaji Karyawan Kapan Saja:
-   Sebagai Pemilik (Owner), kini Anda bisa dengan mudah mengubah nominal gaji karyawan dan menentukan cara pembayaran (bisa Mingguan, 2 Mingguan, atau Bulanan) langsung dari aplikasi. Akun Pemilik (Owner) sendiri secara otomatis tidak tercatat sebagai karyawan dan tidak memiliki gaji.
-
-3. Pembersihan Data & Akun Karyawan Ganda:
-   Kami telah merapikan data sistem dan menghapus email karyawan ganda/salah ketik agar pencatatan absensi dan laporan keuangan usaha Anda menjadi lebih rapi dan bebas dari kesalahan.
-
-4. Sinkronisasi Data Lebih Lancar & Cepat:
-   Proses kirim-terima data antara aplikasi di HP dan server internet kini jauh lebih cepat dan stabil. Kami juga memblokir data usang dari perangkat lama agar tidak mengotori laporan keuangan Anda yang sudah bersih.
+2. Peningkatan Integrasi & Interkoneksi Sistem:
+   Penyatuan database dan pembaruan versi server kini terhubung secara otomatis ke seluruh POS aktif guna menghindari ketidakcocokan versi data.
 
 Terima kasih telah mempercayai POSBah untuk membantu pertumbuhan bisnis Anda!

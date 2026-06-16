@@ -66,9 +66,7 @@ fun LoginScreen(
 
 
 
-    LaunchedEffect(Unit) {
-        viewModel.checkForUpdates(isManual = false)
-    }
+
 
     LaunchedEffect(ui.signedInUser) { if (ui.signedInUser != null) onLoggedIn() }
     LaunchedEffect(ui.needsTenantPicker) { if (ui.needsTenantPicker != null) onNeedTenantPick() }
@@ -165,29 +163,7 @@ fun LoginScreen(
                         }
                     }
 
-                    Spacer(Modifier.height(16.dp))
 
-                    if (ui.isCheckingUpdate) {
-                        CircularProgressIndicator(
-                            modifier = Modifier
-                                .align(Alignment.CenterHorizontally)
-                                .size(24.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        TextButton(
-                            onClick = { viewModel.checkForUpdates(isManual = true) },
-                            modifier = Modifier.align(Alignment.CenterHorizontally)
-                        ) {
-                            Text(
-                                "Cek Update Aplikasi (v${com.posbah.app.BuildConfig.VERSION_NAME})",
-                                color = MaterialTheme.colorScheme.primary,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
                 }
             }
 
@@ -213,61 +189,7 @@ fun LoginScreen(
         }
     }
 
-    if (ui.showUpdateDialog) {
-        val hasUpdate = ui.updateVersion != null && run {
-            val v1 = ui.updateVersion!!
-            val v2 = com.posbah.app.BuildConfig.VERSION_NAME
-            val parts1 = v1.split(".")
-            val parts2 = v2.split(".")
-            val length = maxOf(parts1.size, parts2.size)
-            var isNewer = false
-            for (i in 0 until length) {
-                val n1 = parts1.getOrNull(i)?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 0
-                val n2 = parts2.getOrNull(i)?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 0
-                if (n1 > n2) {
-                    isNewer = true
-                    break
-                } else if (n1 < n2) {
-                    break
-                }
-            }
-            isNewer
-        }
-        AlertDialog(
-            onDismissRequest = { viewModel.dismissUpdateDialog() },
-            title = { Text(if (hasUpdate) "Pembaruan Tersedia!" else "Informasi Aplikasi") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Versi Saat Ini: v${com.posbah.app.BuildConfig.VERSION_NAME}")
-                    Text("Versi Terbaru: v${ui.updateVersion ?: "-"}", fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(4.dp))
-                    Text(ui.updateDescription ?: "Tidak ada deskripsi pembaruan.")
-                }
-            },
-            confirmButton = {
-                if (hasUpdate) {
-                    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
-                    Button(onClick = {
-                        viewModel.dismissUpdateDialog()
-                        uriHandler.openUri("https://www.zedmz.cloud/api/download-apk")
-                    }) {
-                        Text("Unduh Pembaruan")
-                    }
-                } else {
-                    TextButton(onClick = { viewModel.dismissUpdateDialog() }) {
-                        Text("Tutup")
-                    }
-                }
-            },
-            dismissButton = if (hasUpdate) {
-                {
-                    TextButton(onClick = { viewModel.dismissUpdateDialog() }) {
-                        Text("Tutup")
-                    }
-                }
-            } else null
-        )
-    }
+
 
     ui.rejoinMessage?.let { msg ->
         AlertDialog(

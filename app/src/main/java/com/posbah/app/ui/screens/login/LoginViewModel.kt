@@ -24,11 +24,7 @@ data class LoginUiState(
     val rejoinMessage: String? = null,
     val signedInUser: LocalUser? = null,
     val needsTenantPicker: Pair<LocalUser, List<Tenant>>? = null,
-    val locked: Boolean = false,
-    val updateVersion: String? = null,
-    val updateDescription: String? = null,
-    val isCheckingUpdate: Boolean = false,
-    val showUpdateDialog: Boolean = false
+    val locked: Boolean = false
 )
 
 enum class LoginMode { Google, Password }
@@ -120,83 +116,7 @@ class LoginViewModel @Inject constructor(
         }
     }
 
-    fun checkForUpdates(isManual: Boolean = false) {
-        if (isManual) {
-            _uiState.update { it.copy(isCheckingUpdate = true, errorMessage = null) }
-        }
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            var conn: java.net.HttpURLConnection? = null
-            try {
-                val url = java.net.URL("https://www.zedmz.cloud/api/apk-version")
-                conn = url.openConnection() as java.net.HttpURLConnection
-                conn.requestMethod = "GET"
-                conn.connectTimeout = 5000
-                conn.readTimeout = 5000
-                
-                val currentVersion = com.posbah.app.BuildConfig.VERSION_NAME
-                if (conn.responseCode in 200..299) {
-                    val response = conn.inputStream.bufferedReader().use { it.readText() }
-                    val obj = org.json.JSONObject(response)
-                    val version = obj.optString("version", "")
-                    val description = obj.optString("description", "")
-                    
-                    val hasUpdate = version.isNotEmpty() && run {
-                        val parts1 = version.split(".")
-                        val parts2 = currentVersion.split(".")
-                        val length = maxOf(parts1.size, parts2.size)
-                        var isNewer = false
-                        for (i in 0 until length) {
-                            val n1 = parts1.getOrNull(i)?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 0
-                            val n2 = parts2.getOrNull(i)?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 0
-                            if (n1 > n2) {
-                                isNewer = true
-                                break
-                            } else if (n1 < n2) {
-                                break
-                            }
-                        }
-                        isNewer
-                    }
-                    
-                    _uiState.update {
-                        it.copy(
-                            isCheckingUpdate = false,
-                            updateVersion = version,
-                            updateDescription = description,
-                            showUpdateDialog = hasUpdate || (isManual && version.isNotEmpty()),
-                            errorMessage = if (isManual && !hasUpdate) "Aplikasi Anda sudah versi terbaru." else it.errorMessage
-                        )
-                    }
-                } else {
-                    val code = conn.responseCode
-                    if (isManual) {
-                        _uiState.update {
-                            it.copy(
-                                isCheckingUpdate = false,
-                                errorMessage = "Gagal mengecek update: Server merespon $code"
-                            )
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                if (isManual) {
-                    val msg = e.localizedMessage ?: "Koneksi gagal"
-                    _uiState.update {
-                        it.copy(
-                            isCheckingUpdate = false,
-                            errorMessage = "Gagal mengecek update: $msg"
-                        )
-                    }
-                }
-            } finally {
-                conn?.disconnect()
-            }
-        }
-    }
 
-    fun dismissUpdateDialog() {
-        _uiState.update { it.copy(showUpdateDialog = false) }
-    }
 
     fun clearRejoinMessage() = _uiState.update { it.copy(rejoinMessage = null) }
 

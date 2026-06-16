@@ -1599,7 +1599,7 @@ func handleDownloadApk(w http.ResponseWriter, r *http.Request) {
 		_ = db.QueryRow(`SELECT "version", "description" FROM "apk_config" WHERE "id" = 1`).Scan(&version, &description)
 	}
 	if version == "" {
-		version = "2.3.0" // Fallback
+		version = "2.4.0" // Fallback
 	}
 	if description == "" {
 		description = "Pembaruan sistem dan optimalisasi."
@@ -1784,7 +1784,7 @@ func handleApkVersion(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if db == nil {
 		json.NewEncoder(w).Encode(map[string]string{
-			"version":     "2.3.0",
+			"version":     "2.4.0",
 			"description": "Database not initialized. Fallback version.",
 		})
 		return
@@ -1794,7 +1794,7 @@ func handleApkVersion(w http.ResponseWriter, r *http.Request) {
 	err := db.QueryRow(`SELECT "version", "description", "downloadUrl" FROM "apk_config" WHERE "id" = 1`).Scan(&version, &description, &downloadUrl)
 	if err != nil {
 		json.NewEncoder(w).Encode(map[string]string{
-			"version":     "2.3.0",
+			"version":     "2.4.0",
 			"description": "Query failed. Fallback version.",
 		})
 		return
@@ -4877,7 +4877,7 @@ func handleAdminGetUsers(w http.ResponseWriter, r *http.Request) {
 
 	syncDatabaseUsersAndTenants()
 
-	rows, err := db.Query(`SELECT "googleSub", "email", COALESCE("displayName", ''), "registeredAt", "isActive", COALESCE("tenantId", ''), "isPremium", COALESCE("apkVersion", '2.3.0') FROM "local_users" ORDER BY "registeredAt" DESC`)
+	rows, err := db.Query(`SELECT "googleSub", "email", COALESCE("displayName", ''), "registeredAt", "isActive", COALESCE("tenantId", ''), "isPremium", COALESCE("apkVersion", '2.4.0') FROM "local_users" ORDER BY "registeredAt" DESC`)
 	if err != nil {
 		http.Error(w, "Database query failed: "+err.Error(), http.StatusInternalServerError)
 		return
