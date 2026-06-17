@@ -71,6 +71,7 @@ param(
     [switch]$SkipDeploy,
 
     [string]$VpsHost    = "muizz9900@zedmz.cloud",
+    [string]$VpsPemKey  = "C:\Users\danus\Documents\muizz.pem",
     [string]$VpsApkDir  = "/home/muizz9900",
     [string]$AdminUrl   = "https://www.zedmz.cloud",
     [string]$AdminPassword = ""
@@ -217,9 +218,10 @@ if (-not $SkipApkUpload) {
         Write-Fail "scp tidak ditemukan. Install OpenSSH atau gunakan PuTTY/WinSCP."
         Write-Info "Upload manual: scp `"$apkLocalPath`" ${VpsHost}:${VpsApkDir}/${apkFileName}"
     } else {
+        $scpArgs = @("-i", $VpsPemKey, "-o", "StrictHostKeyChecking=no")
         $vpsTarget = "${VpsHost}:${VpsApkDir}/${apkFileName}"
         Write-Info "Upload: $apkLocalPath -> $vpsTarget"
-        scp "$apkLocalPath" $vpsTarget
+        scp @scpArgs "$apkLocalPath" $vpsTarget
         if ($LASTEXITCODE -ne 0) {
             Write-Fail "SCP upload gagal. Coba upload manual:"
             Write-Info "  scp `"$apkLocalPath`" $vpsTarget"
