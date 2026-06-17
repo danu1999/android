@@ -117,7 +117,8 @@ android {
             .map { it as com.android.build.gradle.internal.api.BaseVariantOutputImpl }
             .forEach { output ->
                 output.outputFileName = if (variant.buildType.isDebuggable) {
-                    "posbah-v$versionName-debug.apk"
+                    if (versionName.endsWith("-debug")) "posbah-v$versionName.apk"
+                    else "posbah-v$versionName-debug.apk"
                 } else {
                     "posbah-v$versionName.apk"
                 }
