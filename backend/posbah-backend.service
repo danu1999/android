@@ -1,7 +1,9 @@
 [Unit]
 Description=PosBah Go Backend Service
-After=network.target
-After=postgresql.service
+After=network.target postgresql.service
+# Jika backend crash karena env tidak ada, jangan restart tanpa batas
+StartLimitIntervalSec=60
+StartLimitBurst=3
 
 [Service]
 Type=simple
@@ -13,9 +15,6 @@ EnvironmentFile=/home/muizz9900/.posbah-env
 ExecStart=/home/muizz9900/posbah-backend
 Restart=always
 RestartSec=5
-# Jika backend crash karena env tidak ada, jangan restart tanpa batas
-StartLimitIntervalSec=60
-StartLimitBurst=3
 
 [Install]
 WantedBy=multi-user.target
