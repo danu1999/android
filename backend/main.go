@@ -5260,6 +5260,11 @@ func handleAdminApkConfig(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Otomatis potong deskripsi ke versi terbaru saja jika ada separator ---
+		if strings.Contains(req.Description, "\n---\n") || strings.Contains(req.Description, "\n---") {
+			req.Description = extractLatestReleaseNote(req.Description)
+		}
+
 		_, err := db.Exec(`UPDATE "apk_config" SET "version" = $1, "description" = $2, "downloadUrl" = $3, "updatedAt" = $4 WHERE "id" = 1`,
 			req.Version, req.Description, req.DownloadUrl, time.Now().UnixNano()/int64(time.Millisecond))
 		if err != nil {
@@ -5307,6 +5312,24 @@ func compareVersions(v1, v2 string) int {
 	return 0
 }
 
+// extractLatestReleaseNote mengambil hanya section versi terbaru dari release_notes.txt.
+// Section dipisah oleh baris "---". Hanya section pertama (terbaru) yang dikembalikan.
+// Ini mencegah deskripsi terlalu panjang di banner pembaruan Android.
+func extractLatestReleaseNote(content string) string {
+	content = strings.TrimSpace(content)
+	// Hapus separator di awal jika ada
+	content = strings.TrimPrefix(content, "---")
+	content = strings.TrimSpace(content)
+	// Ambil hanya section pertama (sebelum separator --- berikutnya)
+	for _, sep := range []string{"\n---\n", "\n\n---\n", "\n---\r\n"} {
+		if idx := strings.Index(content, sep); idx > 0 {
+			content = content[:idx]
+			break
+		}
+	}
+	return strings.TrimSpace(content)
+}
+
 func autoDetectApkVersion() {
 	if db == nil {
 		return
@@ -5344,7 +5367,8 @@ func autoDetectApkVersion() {
 		description := ""
 		notesBytes, err := os.ReadFile("./release_notes.txt")
 		if err == nil {
-			description = strings.TrimSpace(string(notesBytes))
+			// Hanya ambil section versi terbaru, bukan seluruh riwayat
+			description = extractLatestReleaseNote(string(notesBytes))
 		}
 		if description == "" {
 			description = fmt.Sprintf("Pembaruan ke versi %s terdeteksi otomatis. Silakan unduh pembaruan.", latestVersion)
