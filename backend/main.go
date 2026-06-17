@@ -92,6 +92,7 @@ func main() {
 	http.HandleFunc("/api/admin/deploy", handleAdminDeploy)
 	http.HandleFunc("/api/admin/deploy-log", handleAdminDeployLog)
 	http.HandleFunc("/api/admin/delete-user", handleAdminDeleteUser)
+	http.HandleFunc("/api/admin/blast-update-email", handleAdminBlastUpdateEmail)
 	http.HandleFunc("/api/admin/check-demo-lockout", handleManualLockoutCheck)
 	http.HandleFunc("/api/admin/demo-users", handleGetDemoUsers)
 	http.HandleFunc("/api/admin/approve-user", handleApproveUser)
@@ -452,6 +453,123 @@ func generateUUID() string {
 	b[8] = (b[8] & 0x3f) | 0x80 // variant 10
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%12x",
 		b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+}
+
+// handleAdminBlastUpdateEmail mengirim email notifikasi update APK ke semua user aktif.
+// Pesan diambil dari release_notes.txt (section terbaru) atau dari request body.
+func handleAdminBlastUpdateEmail(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if !isAdminAuthenticated(r) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if db == nil {
+		http.Error(w, "Database not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	var req struct {
+		Subject string `json:"subject"`
+		Message string `json:"message"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+
+	// Fallback: ambil section pertama dari release_notes.txt
+	if req.Message == "" {
+		for _, path := range []string{"/home/muizz9900/release_notes.txt", "./release_notes.txt"} {
+			data, err := os.ReadFile(path)
+			if err == nil {
+				content := string(data)
+				if idx := strings.Index(content, "\n---\n"); idx > 0 {
+					content = content[:idx]
+				}
+				req.Message = strings.TrimSpace(content)
+				break
+			}
+		}
+	}
+
+	if req.Subject == "" {
+		req.Subject = "Pembaruan POSBah - Versi Terbaru Tersedia!"
+	}
+
+	if req.Message == "" {
+		http.Error(w, "Tidak ada pesan yang bisa dikirim. Periksa release_notes.txt di VPS.", http.StatusBadRequest)
+		return
+	}
+
+	// Ambil semua email user aktif
+	rows, err := db.Query(`SELECT "email", "displayName" FROM "local_users" WHERE "isActive" = TRUE AND "email" != '' ORDER BY "registeredAt" DESC`)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Gagal ambil daftar user: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type userInfo struct {
+		Email string
+		Name  string
+	}
+	var users []userInfo
+	for rows.Next() {
+		var u userInfo
+		if err := rows.Scan(&u.Email, &u.Name); err == nil && u.Email != "" {
+			users = append(users, u)
+		}
+	}
+
+	if len(users) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": "Tidak ada user aktif ditemukan untuk dikirimi email.",
+			"total":   0,
+		})
+		return
+	}
+
+	msg := req.Message
+	subj := req.Subject
+
+	// Kirim secara asinkron (background) agar response tidak timeout
+	go func() {
+		sent, failed := 0, 0
+		for _, u := range users {
+			name := u.Name
+			if name == "" {
+				name = "Pengguna POSBah"
+			}
+			body := fmt.Sprintf("Halo %s,\n\n%s\n\nUnduh pembaruan: https://www.zedmz.cloud/api/download-apk\n\nTerima kasih,\nTim POSBah", name, msg)
+			if err := sendEmail(u.Email, subj, body); err != nil {
+				log.Printf("[BlastEmail] Gagal kirim ke %s: %v", u.Email, err)
+				failed++
+			} else {
+				log.Printf("[BlastEmail] Terkirim ke: %s", u.Email)
+				sent++
+			}
+		}
+		log.Printf("[BlastEmail] Selesai. Terkirim: %d, Gagal: %d dari total %d user", sent, failed, len(users))
+	}()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Email sedang dikirim ke %d user aktif secara background. Pantau log server untuk hasilnya.", len(users)),
+		"total":   len(users),
+	})
 }
 
 func handleAdminDeleteUser(w http.ResponseWriter, r *http.Request) {

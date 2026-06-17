@@ -10,7 +10,7 @@ import javax.inject.Singleton
  * Encrypted shared preferences for session data:
  *   - current Google sub & email
  *   - active tenantId, outletId
- *   - login lockout counters
+ *   - session timestamps
  *
  * Backed by AES256_GCM + Android Keystore master key. The XML file on disk is
  * encrypted at rest, so even with root + file extraction the contents are useless.
@@ -55,14 +55,6 @@ class SecurePreferences @Inject constructor(
         get() = prefs.getLong(KEY_LAST_SESSION, 0L)
         set(value) = prefs.edit().putLong(KEY_LAST_SESSION, value).apply()
 
-    var failedPinAttempts: Int
-        get() = prefs.getInt(KEY_FAILED_PIN, 0)
-        set(value) = prefs.edit().putInt(KEY_FAILED_PIN, value).apply()
-
-    var lockoutUntil: Long
-        get() = prefs.getLong(KEY_LOCKOUT_UNTIL, 0L)
-        set(value) = prefs.edit().putLong(KEY_LOCKOUT_UNTIL, value).apply()
-
     var isDemoCleanedV211: Boolean
         get() = prefs.getBoolean("demo_cleaned_v211", false)
         set(value) = prefs.edit().putBoolean("demo_cleaned_v211", value).apply()
@@ -73,7 +65,7 @@ class SecurePreferences @Inject constructor(
 
     /**
      * ID outlet yang dikunci untuk karyawan non-OWNER.
-     * Diset otomatis saat login PIN berhasil, berdasarkan employee.outletId.
+     * Diset otomatis saat login berhasil, berdasarkan employee.outletId.
      * Hanya OWNER yang bisa null (bebas ganti outlet).
      */
     var employeeOutletIdLocked: Long?
@@ -104,8 +96,6 @@ class SecurePreferences @Inject constructor(
         private const val KEY_TENANT = "tenant_id"
         private const val KEY_OUTLET = "outlet_id"
         private const val KEY_LAST_SESSION = "last_session_ts"
-        private const val KEY_FAILED_PIN = "failed_pin"
-        private const val KEY_LOCKOUT_UNTIL = "lockout_until"
         private const val KEY_EMPLOYEE_OUTLET = "employee_outlet_locked"
     }
 }

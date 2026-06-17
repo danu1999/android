@@ -1021,6 +1021,12 @@
                             APK & Update Notif
                         </a>
                     </li>
+                    <li>
+                        <a href="#" class="nav-item" onclick="switchSection('email', event)">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                            Blast Email Update
+                        </a>
+                    </li>
                 </ul>
             </nav>
             
@@ -1209,6 +1215,63 @@
                 </div>
             </section>
 
+            <!-- VIEW SECTION 3: BLAST UPDATE EMAIL -->
+            <section id="viewEmail" class="section-view">
+                <div class="content-card glass">
+                    <h2 class="card-title" style="margin-bottom: 8px;">📧 Kirim Email Update ke Semua User</h2>
+                    <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 24px;">
+                        Email akan dikirim ke semua akun aktif (premium + demo) secara background. Kosongkan Subject & Pesan untuk menggunakan Release Notes v2.16.0 otomatis.
+                    </p>
+
+                    <div class="config-grid" style="margin-bottom: 24px;">
+                        <div>
+                            <div class="form-group">
+                                <label class="form-label" for="blastSubject">Subject Email (opsional)</label>
+                                <input type="text" id="blastSubject" class="form-input"
+                                    placeholder="Pembaruan POSBah - Versi Terbaru Tersedia!">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="blastMessage">Isi Pesan (opsional — kosongkan = pakai release notes terbaru)</label>
+                                <textarea id="blastMessage" class="form-input" rows="8"
+                                    style="resize: vertical; font-family: inherit; font-size: 14px;"
+                                    placeholder="Biarkan kosong untuk menggunakan catatan rilis v2.16.0 secara otomatis..."></textarea>
+                            </div>
+                            <button class="btn" id="btnBlastEmail" onclick="sendBlastEmail()"
+                                style="background: linear-gradient(135deg, #10B981, #059669); border: none; padding: 12px 24px; border-radius: 10px; color: white; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 15px;">
+                                <span>📨</span> Kirim Email ke Semua User
+                            </button>
+                        </div>
+                        <div style="background: rgba(15,23,42,0.4); border: 1px solid var(--border-color); border-radius: 12px; padding: 24px;">
+                            <h3 style="font-size: 14px; font-weight: 600; color: var(--text-secondary); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px;">Informasi</h3>
+                            <div style="display: flex; flex-direction: column; gap: 14px;">
+                                <div style="display: flex; gap: 12px; align-items: flex-start;">
+                                    <span style="font-size: 20px; flex-shrink: 0;">✅</span>
+                                    <div>
+                                        <div style="font-size: 13px; font-weight: 600; color: #fff;">Pengiriman Asinkron</div>
+                                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Email dikirim di background. Halaman tidak akan freeze. Pantau log deploy untuk hasilnya.</div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 12px; align-items: flex-start;">
+                                    <span style="font-size: 20px; flex-shrink: 0;">📋</span>
+                                    <div>
+                                        <div style="font-size: 13px; font-weight: 600; color: #fff;">Otomatis dari Release Notes</div>
+                                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Jika pesan dikosongkan, backend membaca section pertama dari release_notes.txt di VPS.</div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 12px; align-items: flex-start;">
+                                    <span style="font-size: 20px; flex-shrink: 0;">👥</span>
+                                    <div>
+                                        <div style="font-size: 13px; font-weight: 600; color: #fff;">Target: Semua User Aktif</div>
+                                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Dikirim ke semua akun dengan isActive = true (Premium & Demo), tidak termasuk akun yang diblokir.</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="blastEmailResult" style="display: none; margin-top: 20px; padding: 16px; border-radius: 10px; border: 1px solid;"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
         </main>
     </div>
 
@@ -1288,6 +1351,9 @@
                 document.getElementById('viewApk').classList.add('active');
                 document.getElementById('mainHeaderTitle').innerText = 'APK & Update Notifikasi';
                 fetchApkConfig();
+            } else if (sectionId === 'email') {
+                document.getElementById('viewEmail').classList.add('active');
+                document.getElementById('mainHeaderTitle').innerText = 'Blast Email Update';
             }
         }
 
@@ -1850,6 +1916,52 @@
             } catch (err) {
                 console.error("Save apk config error:", err);
                 showToast("Koneksi gagal. Gagal memperbarui rilis APK.", "error");
+            }
+        }
+
+        async function sendBlastEmail() {
+            const subject = document.getElementById('blastSubject').value.trim();
+            const message = document.getElementById('blastMessage').value.trim();
+            const btn = document.getElementById('btnBlastEmail');
+            const resultEl = document.getElementById('blastEmailResult');
+
+            if (!confirm('Kirim email update ke SEMUA user aktif? Tindakan ini tidak bisa dibatalkan.')) return;
+
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> Mengirim...';
+            resultEl.style.display = 'none';
+
+            try {
+                const response = await apiRequest('/api/admin/blast-update-email', {
+                    method: 'POST',
+                    body: { subject, message }
+                });
+                const data = await response.json();
+
+                resultEl.style.display = 'block';
+                if (data.success) {
+                    resultEl.style.background = 'rgba(16, 185, 129, 0.1)';
+                    resultEl.style.borderColor = '#10B981';
+                    resultEl.style.color = '#fff';
+                    resultEl.innerHTML = `<strong>✅ Berhasil!</strong><br>${data.message}`;
+                    showToast(data.message, 'success');
+                } else {
+                    resultEl.style.background = 'rgba(244, 63, 94, 0.1)';
+                    resultEl.style.borderColor = '#F43F5E';
+                    resultEl.style.color = '#fff';
+                    resultEl.innerHTML = `<strong>⚠️ Gagal:</strong><br>${data.message || 'Terjadi kesalahan.'}`;
+                    showToast('Gagal mengirim blast email.', 'error');
+                }
+            } catch (err) {
+                resultEl.style.display = 'block';
+                resultEl.style.background = 'rgba(244, 63, 94, 0.1)';
+                resultEl.style.borderColor = '#F43F5E';
+                resultEl.style.color = '#fff';
+                resultEl.innerHTML = `<strong>⚠️ Error:</strong><br>${err.message}`;
+                showToast('Koneksi gagal saat kirim blast email.', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>📨</span> Kirim Email ke Semua User';
             }
         }
 
