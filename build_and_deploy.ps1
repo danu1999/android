@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    POSBah Build & Deploy Automation v2 — Full Pipeline
+    POSBah Build & Deploy Automation v2 - Full Pipeline
 
 .DESCRIPTION
     Otomasi penuh rilis POSBah:
@@ -148,7 +148,8 @@ if (-not (Test-Path $apkLocalPath)) {
         exit 1
     }
 }
-Write-OK "APK ditemukan: $apkLocalPath ($('{0:N1}' -f ((Get-Item $apkLocalPath).Length / 1MB)) MB)"
+$apkSizeMB = '{0:N1}' -f ((Get-Item $apkLocalPath).Length / 1MB)
+Write-OK "APK ditemukan: $apkLocalPath ($apkSizeMB MB)"
 
 # ============================================================
 # STEP 2: CROSS-COMPILE BACKEND GO UNTUK LINUX
@@ -157,7 +158,7 @@ if (-not $SkipGoCompile) {
     Write-Step "Cross-compile backend Go untuk Linux/amd64"
     $goExe = Get-Command go -ErrorAction SilentlyContinue
     if (-not $goExe) {
-        Write-Info "Go tidak terinstall — melewati cross-compile (gunakan binary lama)"
+        Write-Info "Go tidak terinstall - melewati cross-compile (gunakan binary lama)"
     } else {
         Push-Location $BackendDir
         try {
