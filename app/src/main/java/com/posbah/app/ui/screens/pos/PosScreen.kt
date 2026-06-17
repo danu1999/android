@@ -273,7 +273,7 @@ fun PosScreen(
                         title = tenantName,
                         subtitle = "Outlet: $activeOutletName",
                         onBack = onBack,
-                        onTitleClick = { showOutletDropdown = true },
+                        onTitleClick = if (ui.isOwner) { { showOutletDropdown = true } } else null,
                         actions = {
                             if (ui.canViewMargin) {
                                 IconButton(onClick = { onNavigate(Screen.MarginAnalysis.route) }) {
@@ -349,7 +349,7 @@ fun PosScreen(
                                 )
                             }
                         }
-                        if (ui.canViewMargin) {
+                        if (true) {
                             item {
                                 FooterButton(
                                     icon = Icons.Outlined.Storefront,

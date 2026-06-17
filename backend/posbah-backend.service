@@ -1,20 +1,21 @@
 [Unit]
 Description=PosBah Go Backend Service
 After=network.target
+After=postgresql.service
 
 [Service]
 Type=simple
 User=muizz9900
 WorkingDirectory=/home/muizz9900
 Environment=PORT=3000
-Environment=SMTP_HOST=smtp.gmail.com
-Environment=SMTP_PORT=587
-Environment=SMTP_USER=muhammadmuizz8@gmail.com
-Environment=SMTP_PASS=mrdtcnhmdcglfwko
-Environment=SMTP_SENDER=muhammadmuizz8@gmail.com
+# Muat semua secret dari file env (tidak di-commit ke git)
+EnvironmentFile=/home/muizz9900/.posbah-env
 ExecStart=/home/muizz9900/posbah-backend
 Restart=always
 RestartSec=5
+# Jika backend crash karena env tidak ada, jangan restart tanpa batas
+StartLimitIntervalSec=60
+StartLimitBurst=3
 
 [Install]
 WantedBy=multi-user.target

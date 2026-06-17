@@ -71,6 +71,18 @@ class SecurePreferences @Inject constructor(
         get() = prefs.getString("temp_plain_password", null)
         set(value) = prefs.edit().putString("temp_plain_password", value).apply()
 
+    /**
+     * ID outlet yang dikunci untuk karyawan non-OWNER.
+     * Diset otomatis saat login PIN berhasil, berdasarkan employee.outletId.
+     * Hanya OWNER yang bisa null (bebas ganti outlet).
+     */
+    var employeeOutletIdLocked: Long?
+        get() = prefs.getLong(KEY_EMPLOYEE_OUTLET, -1L).takeIf { it >= 0 }
+        set(value) {
+            if (value == null) prefs.edit().remove(KEY_EMPLOYEE_OUTLET).apply()
+            else prefs.edit().putLong(KEY_EMPLOYEE_OUTLET, value).apply()
+        }
+
     /** Wipe entire encrypted session. Called on logout / tamper detection. */
     fun wipe() {
         prefs.edit().clear().apply()
@@ -94,5 +106,6 @@ class SecurePreferences @Inject constructor(
         private const val KEY_LAST_SESSION = "last_session_ts"
         private const val KEY_FAILED_PIN = "failed_pin"
         private const val KEY_LOCKOUT_UNTIL = "lockout_until"
+        private const val KEY_EMPLOYEE_OUTLET = "employee_outlet_locked"
     }
 }

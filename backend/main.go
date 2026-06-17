@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -39,6 +40,10 @@ var (
 	adminAuthToken    string
 	adminSessions     = make(map[string]string) // sessionToken -> adminEmail
 	adminSessionsMu   sync.Mutex
+	// paymentTokens: one-time tokens for confirm-payment-action links in admin emails
+	// key = token (UUID), value = "action:sub:email" validated once then deleted
+	paymentTokens   = make(map[string]string)
+	paymentTokensMu sync.Mutex
 )
 
 func main() {
@@ -50,7 +55,7 @@ func main() {
 
 	adminAuthToken = os.Getenv("ADMIN_AUTH_TOKEN")
 	if adminAuthToken == "" {
-		adminAuthToken = "Bearer BahteraMigrate123!"
+		log.Fatal("FATAL: ADMIN_AUTH_TOKEN environment variable is required. Set it before starting the server.")
 	}
 
 	log.Printf("Starting PosBah Go backend...")
@@ -58,17 +63,13 @@ func main() {
 	// Initialize local PostgreSQL database
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		dbURL = "postgres://postgres:Bahtera1!@localhost:5432/posbah?sslmode=disable"
+		log.Fatal("FATAL: DATABASE_URL environment variable is required. Set it before starting the server.")
 	}
 	if err := initDatabase(dbURL); err != nil {
 		log.Printf("Warning: local database initialization failed: %v", err)
 	}
 	// Run initial synchronization of local users and tenants
 	syncDatabaseUsersAndTenants()
-	// Purge all data associated with jonio9012@gmail.com
-	purgeJonio9012Data()
-	// Purge all data associated with syerlirahma7@gmail.com
-	purgeSyerliData()
 	// Detect current APK version automatically on startup
 	autoDetectApkVersion()
 
@@ -370,104 +371,6 @@ func deleteLocalUser(googleSub string) error {
 	return err
 }
 
-// Purges all database entries associated with email jonio9012@gmail.com
-func purgeJonio9012Data() {
-	if db == nil {
-		log.Printf("Cannot purge jonio9012 data: database is nil")
-		return
-	}
-
-	var status string
-	err := db.QueryRow(`SELECT "status" FROM "deleted_users" WHERE TRIM(LOWER("email")) = $1`, "jonio9012@gmail.com").Scan(&status)
-	if err == sql.ErrNoRows {
-		_, _ = db.Exec(`INSERT INTO "deleted_users" ("email", "status", "updatedAt") VALUES ($1, 'DELETED', $2)`, "jonio9012@gmail.com", time.Now().UnixNano()/1e6)
-		status = "DELETED"
-	}
-
-	if status == "ACTIVE" {
-		log.Printf("Skipping purge for jonio9012@gmail.com because user rejoined and is now ACTIVE")
-		return
-	}
-
-	log.Printf("Purging all data for email: jonio9012@gmail.com")
-
-	// 1. Find all tenant IDs associated with jonio9012@gmail.com in local_users
-	rows, err := db.Query(`SELECT "tenantId" FROM "local_users" WHERE TRIM(LOWER("email")) = $1`, "jonio9012@gmail.com")
-	if err == nil {
-		defer rows.Close()
-		for rows.Next() {
-			var tenantId sql.NullString
-			if err := rows.Scan(&tenantId); err == nil {
-				if tenantId.Valid && tenantId.String != "" {
-					purgeTenantData(tenantId.String)
-				}
-			}
-		}
-	}
-
-	// 2. Also search all tenants by ID wildcard or ownerEmail
-	rowsTenant, err := db.Query(`SELECT "id" FROM "tenants" WHERE LOWER("id") LIKE '%jonio9012_gmail_com%' OR TRIM(LOWER("ownerEmail")) = $1`, "jonio9012@gmail.com")
-	if err == nil {
-		defer rowsTenant.Close()
-		for rowsTenant.Next() {
-			var tenantId string
-			if err := rowsTenant.Scan(&tenantId); err == nil {
-				if tenantId != "" {
-					purgeTenantData(tenantId)
-				}
-			}
-		}
-	}
-
-	// 3. Purge employee records with this email (if any exist)
-	_, err = db.Exec(`DELETE FROM "employees" WHERE TRIM(LOWER("email")) = $1`, "jonio9012@gmail.com")
-	if err != nil {
-		log.Printf("Error deleting jonio9012@gmail.com from employees: %v", err)
-	}
-
-	// 4. Delete the user from local_users
-	_, err = db.Exec(`DELETE FROM "local_users" WHERE TRIM(LOWER("email")) = $1`, "jonio9012@gmail.com")
-	if err != nil {
-		log.Printf("Error deleting jonio9012@gmail.com from local_users: %v", err)
-	}
-	log.Printf("Finished purging all data for jonio9012@gmail.com")
-}
-
-func purgeSyerliData() {
-	if db == nil {
-		log.Printf("Cannot purge syerli data: database is nil")
-		return
-	}
-
-	var status string
-	err := db.QueryRow(`SELECT "status" FROM "deleted_users" WHERE TRIM(LOWER("email")) = $1`, "syerlirahma7@gmail.com").Scan(&status)
-	if err == sql.ErrNoRows {
-		_, _ = db.Exec(`INSERT INTO "deleted_users" ("email", "status", "updatedAt") VALUES ($1, 'DELETED', $2)`, "syerlirahma7@gmail.com", time.Now().UnixNano()/1e6)
-		status = "DELETED"
-	}
-
-	if status == "ACTIVE" {
-		log.Printf("Skipping purge for syerlirahma7@gmail.com because user rejoined and is now ACTIVE")
-		return
-	}
-
-	log.Printf("Purging all data for email: syerlirahma7@gmail.com")
-
-	// 1. Delete employee records with this email
-	_, err = db.Exec(`DELETE FROM "employees" WHERE TRIM(LOWER("email")) = $1`, "syerlirahma7@gmail.com")
-	if err != nil {
-		log.Printf("Error deleting syerlirahma7@gmail.com from employees: %v", err)
-	}
-
-	// 2. Delete user record from local_users
-	_, err = db.Exec(`DELETE FROM "local_users" WHERE TRIM(LOWER("email")) = $1`, "syerlirahma7@gmail.com")
-	if err != nil {
-		log.Printf("Error deleting syerlirahma7@gmail.com from local_users: %v", err)
-	}
-	log.Printf("Finished purging all data for syerlirahma7@gmail.com")
-}
-
-
 // Handler: GET /status
 func handleStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
@@ -535,6 +438,20 @@ func getAdminEmail(r *http.Request) string {
 		}
 	}
 	return ""
+}
+
+// generateUUID creates a cryptographically random UUID v4 string.
+func generateUUID() string {
+	b := make([]byte, 16)
+	_, err := rand.Read(b)
+	if err != nil {
+		// fallback to timestamp if rand fails
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	b[6] = (b[6] & 0x0f) | 0x40 // version 4
+	b[8] = (b[8] & 0x3f) | 0x80 // variant 10
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%12x",
+		b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
 func handleAdminDeleteUser(w http.ResponseWriter, r *http.Request) {
@@ -683,6 +600,9 @@ func runAutoDeploy() {
 		}
 	}
 
+	// 7b. Cleanup APK lama di VPS — pertahankan hanya 2 versi terbaru
+	cleanupOldApks("/home/muizz9900/", writeLog)
+
 	// 8. Copy release_notes.txt
 	_ = copyFile(backendDir+"/release_notes.txt", "/home/muizz9900/release_notes.txt")
 
@@ -721,6 +641,70 @@ func handleAdminDeployLog(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.Write(logBytes)
+}
+
+// cleanupOldApks hapus APK lama di folder VPS, pertahankan hanya 2 versi terbaru.
+// Dipanggil otomatis setelah deploy berhasil agar VPS tidak penuh file APK lama.
+func cleanupOldApks(dir string, writeLog func(string, ...interface{})) {
+	pattern := filepath.Join(dir, "posbah-v*.apk")
+	apks, err := filepath.Glob(pattern)
+	if err != nil {
+		writeLog("[AutoDeploy] Gagal scan APK di %s: %v", dir, err)
+		return
+	}
+	if len(apks) <= 2 {
+		writeLog("[AutoDeploy] APK di VPS: %d file — tidak perlu cleanup", len(apks))
+		return
+	}
+
+	// Sort versi semantic descending (terbaru di index 0)
+	sort.Slice(apks, func(i, j int) bool {
+		return compareApkVersions(filepath.Base(apks[i]), filepath.Base(apks[j])) > 0
+	})
+
+	writeLog("[AutoDeploy] Ditemukan %d APK. Mempertahankan 2 terbaru, menghapus sisanya.", len(apks))
+
+	// Hapus semua selain 2 terbaru
+	for _, apkPath := range apks[2:] {
+		if err := os.Remove(apkPath); err != nil {
+			writeLog("[AutoDeploy] Gagal menghapus %s: %v", filepath.Base(apkPath), err)
+		} else {
+			writeLog("[AutoDeploy] Dihapus: %s", filepath.Base(apkPath))
+		}
+	}
+}
+
+// compareApkVersions membandingkan versi semantic dari nama file APK.
+// Return > 0 jika a lebih baru dari b.
+func compareApkVersions(a, b string) int {
+	extractVer := func(name string) []int {
+		name = strings.TrimPrefix(name, "posbah-v")
+		name = strings.TrimSuffix(name, ".apk")
+		parts := strings.Split(name, ".")
+		nums := make([]int, len(parts))
+		for i, p := range parts {
+			nums[i], _ = strconv.Atoi(p)
+		}
+		return nums
+	}
+	va, vb := extractVer(a), extractVer(b)
+	length := len(va)
+	if len(vb) > length {
+		length = len(vb)
+	}
+	for i := 0; i < length; i++ {
+		na, nb := 0, 0
+		if i < len(va) {
+			na = va[i]
+		}
+		if i < len(vb) {
+			nb = vb[i]
+		}
+		if na != nb {
+			return na - nb
+		}
+	}
+	return 0
 }
 
 func copyFile(src, dst string) error {
@@ -4289,8 +4273,17 @@ func checkAndNotifyAdminOfNewDemoUsers() {
 
 	for _, d := range newDemos {
 		subject := fmt.Sprintf("pendaftaran demouser - %s", d.Email)
-		payUrl := fmt.Sprintf("https://zedmz.cloud/api/admin/confirm-payment-action?action=approve&sub=%s&email=%s&name=%s", url.QueryEscape(d.GoogleSub), url.QueryEscape(d.Email), url.QueryEscape(d.DisplayName))
-		noPayUrl := fmt.Sprintf("https://zedmz.cloud/api/admin/confirm-payment-action?action=reject&sub=%s&email=%s&name=%s", url.QueryEscape(d.GoogleSub), url.QueryEscape(d.Email), url.QueryEscape(d.DisplayName))
+
+		// Generate one-time security tokens for approve/reject links (valid 48 hours)
+		approveToken := fmt.Sprintf("%s-%d", generateUUID(), time.Now().UnixMilli())
+		rejectToken := fmt.Sprintf("%s-%d", generateUUID(), time.Now().UnixMilli()+1)
+		paymentTokensMu.Lock()
+		paymentTokens[approveToken] = fmt.Sprintf("approve:%s:%s:%s", d.GoogleSub, d.Email, d.DisplayName)
+		paymentTokens[rejectToken] = fmt.Sprintf("reject:%s:%s:%s", d.GoogleSub, d.Email, d.DisplayName)
+		paymentTokensMu.Unlock()
+
+		payUrl := fmt.Sprintf("https://zedmz.cloud/api/admin/confirm-payment-action?token=%s", url.QueryEscape(approveToken))
+		noPayUrl := fmt.Sprintf("https://zedmz.cloud/api/admin/confirm-payment-action?token=%s", url.QueryEscape(rejectToken))
 
 		body := fmt.Sprintf(`
 			<div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 500px; margin: 0 auto; padding: 25px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff; color: #1e293b;">
@@ -4575,11 +4568,21 @@ func upgradeUserToPremium(googleSub, email, displayName, customPinHash string) (
 		return "", fmt.Errorf("Failed to create premium tenant: %w", err)
 	}
 
+	// INTERCONNECT & SYNC AUTOMATION: Create a default outlet for this premium tenant server-side
+	defaultOutletId := 1
+	_, err = tx.Exec(`INSERT INTO "outlets" ("id", "tenantId", "name", "isDefault", "isOpen", "createdAt", "updatedAt") 
+		VALUES ($1, $2, 'Outlet Utama', true, true, $3, $4)
+		ON CONFLICT ("id", "tenantId") DO NOTHING`,
+		defaultOutletId, premiumTenantId, nowMillis, nowMillis)
+	if err != nil {
+		return "", fmt.Errorf("Failed to create default outlet: %w", err)
+	}
+
 	employeeId := int((time.Now().Unix() + int64(time.Now().Nanosecond())) % 2000000000)
 	_, err = tx.Exec(`INSERT INTO "employees" ("id", "tenantId", "outletId", "name", "email", "role", "pinHash", "salary", "isActive", "createdAt", "updatedAt") 
-		VALUES ($1, $2, NULL, $3, $4, 'OWNER', $5, 0.0, true, $6, $7)
+		VALUES ($1, $2, $3, $4, $5, 'OWNER', $6, 0.0, true, $7, $8)
 		ON CONFLICT ("id", "tenantId") DO NOTHING`,
-		employeeId, premiumTenantId, displayName, email, hashedPassword, nowMillis, nowMillis)
+		employeeId, premiumTenantId, defaultOutletId, displayName, email, hashedPassword, nowMillis, nowMillis)
 	if err != nil {
 		return "", fmt.Errorf("Failed to create owner employee: %w", err)
 	}
@@ -4656,10 +4659,51 @@ func handleConfirmPaymentAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	action := r.URL.Query().Get("action")
-	googleSub := r.URL.Query().Get("sub")
-	email := r.URL.Query().Get("email")
-	displayName := r.URL.Query().Get("name")
+	var action, googleSub, email, displayName string
+
+	// Security: verify one-time token OR admin session
+	token := r.URL.Query().Get("token")
+	if token != "" {
+		// One-time token path (from email link)
+		paymentTokensMu.Lock()
+		payload, exists := paymentTokens[token]
+		if exists {
+			delete(paymentTokens, token) // consume token (one-time use)
+		}
+		paymentTokensMu.Unlock()
+
+		if !exists {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`<!DOCTYPE html><html><body style="font-family:sans-serif;padding:40px;text-align:center"><h2 style="color:#dc2626">&#x26D4; Link Tidak Valid</h2><p>Link ini sudah digunakan atau telah kedaluwarsa.<br>Silakan login ke panel admin untuk melakukan konfirmasi manual.</p></body></html>`))
+			return
+		}
+
+		// Parse payload: "action:sub:email:name"
+		parts := strings.SplitN(payload, ":", 4)
+		if len(parts) < 3 {
+			http.Error(w, "Invalid token payload", http.StatusInternalServerError)
+			return
+		}
+		action = parts[0]
+		googleSub = parts[1]
+		email = parts[2]
+		if len(parts) == 4 {
+			displayName = parts[3]
+		}
+	} else {
+		// Legacy/manual path: require admin session authentication
+		if !isAdminAuthenticated(r) {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`<!DOCTYPE html><html><body style="font-family:sans-serif;padding:40px;text-align:center"><h2 style="color:#dc2626">&#x1F512; Akses Ditolak</h2><p>Endpoint ini memerlukan autentikasi admin.<br>Silakan login ke <a href="/admin">panel admin</a> terlebih dahulu.</p></body></html>`))
+			return
+		}
+		action = r.URL.Query().Get("action")
+		googleSub = r.URL.Query().Get("sub")
+		email = r.URL.Query().Get("email")
+		displayName = r.URL.Query().Get("name")
+	}
 
 	if googleSub == "" || email == "" {
 		http.Error(w, "sub and email are required", http.StatusBadRequest)
@@ -5307,7 +5351,7 @@ func handleAdminDiagnose(w http.ResponseWriter, r *http.Request) {
 
 	targetEmail := r.URL.Query().Get("email")
 	if targetEmail == "" {
-		targetEmail = "jonio9012@gmail.com"
+		targetEmail = ""
 	}
 
 	syncDatabaseUsersAndTenants()
@@ -5571,6 +5615,42 @@ func syncDatabaseUsersAndTenants() {
 	`)
 	if err != nil {
 		log.Printf("Sync error: failed to backfill local_users from employees: %v", err)
+	}
+
+	// 6. Fix isPremium flag: any user whose tenantId starts with 'ten_premium_' MUST be isPremium=TRUE
+	_, err = db.Exec(`
+		UPDATE "local_users"
+		SET "isPremium" = TRUE, "updatedAt" = $1
+		WHERE "tenantId" LIKE 'ten_premium_%' AND "isPremium" = FALSE
+	`, time.Now().UnixNano()/int64(time.Millisecond))
+	if err != nil {
+		log.Printf("Sync error: failed to fix isPremium for premium tenants: %v", err)
+	}
+
+	// 7. Protect active premium users: if a premium user is in deleted_users with a blocking status,
+	// update them to ACTIVE so they are never purged or blocked.
+	_, err = db.Exec(`
+		UPDATE "deleted_users" du
+		SET "status" = 'ACTIVE', "updatedAt" = $1
+		FROM "local_users" u
+		WHERE TRIM(LOWER(du."email")) = TRIM(LOWER(u."email"))
+		  AND u."isPremium" = TRUE
+		  AND du."status" NOT IN ('ACTIVE')
+	`, time.Now().UnixNano()/int64(time.Millisecond))
+	if err != nil {
+		log.Printf("Sync error: failed to protect premium users in deleted_users: %v", err)
+	}
+
+	// 8. Ensure all premium users have isActive=TRUE (they paid — must never be blocked by demo cron)
+	_, err = db.Exec(`
+		UPDATE "local_users"
+		SET "isActive" = TRUE, "updatedAt" = $1
+		WHERE "isPremium" = TRUE AND "isActive" = FALSE
+	`, time.Now().UnixNano()/int64(time.Millisecond))
+	if err != nil {
+		log.Printf("Sync error: failed to re-activate blocked premium users: %v", err)
+	} else {
+		log.Printf("[Sync] Premium user protection checks completed.")
 	}
 
 	// Trigger automated interconnect and consistency checks

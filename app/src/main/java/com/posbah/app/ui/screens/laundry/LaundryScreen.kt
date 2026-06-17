@@ -220,7 +220,7 @@ fun LaundryScreen(
                     title = tenantName,
                     subtitle = "Outlet: $activeOutletName",
                     onBack = onBack,
-                    onTitleClick = { showOutletDropdown = true },
+                    onTitleClick = if (isOwner) { { showOutletDropdown = true } } else null,
                     actions = {
                         if (canViewMargin) {
                             IconButton(onClick = { onNavigate(Screen.MarginAnalysis.route) }) {

@@ -150,38 +150,7 @@ class LocalDataSeeder @Inject constructor(
 
                         when (currentTable) {
                             "Product" -> {
-                                val id = rowMap["id"]?.toLongOrNull() ?: 0L
-                                val name = rowMap["name"]
-                                if (name.isNullOrBlank() || name == "\\N") continue
-                                val price = rowMap["price"]?.toDoubleOrNull() ?: 0.0
-                                val costPrice = rowMap["costPrice"]?.toDoubleOrNull() ?: 0.0
-                                val stock = rowMap["stock"]?.toIntOrNull() ?: 0
-                                val unit = rowMap["unit"]?.takeIf { it != "\\N" } ?: "pcs"
-                                val barcode = rowMap["barcode"]?.takeIf { it != "\\N" }
-                                val category = rowMap["category"]?.takeIf { it != "\\N" } ?: "Umum"
-                                val wholesaleEnabled = rowMap["wholesaleEnabled"] == "t"
-                                val wholesalePrices = rowMap["wholesalePrices"]?.takeIf { it != "\\N" }
-                                val variants = rowMap["variants"]?.takeIf { it != "\\N" }
-                                val image = rowMap["image"]?.takeIf { it != "\\N" }
-
-                                productList.add(
-                                    ProductEntity(
-                                        id = id,
-                                        tenantId = tenantId,
-                                        outletId = outletId,
-                                        name = name,
-                                        price = price,
-                                        costPrice = costPrice,
-                                        stock = stock,
-                                        unit = unit,
-                                        barcode = barcode,
-                                        category = category,
-                                        wholesaleEnabled = wholesaleEnabled,
-                                        wholesalePrices = wholesalePrices,
-                                        variants = variants,
-                                        image = image
-                                    )
-                                )
+                                // Skip seeding POS products to allow manual uploads per outlet
                             }
                             "Customer" -> {
                                 val id = rowMap["id"]?.toLongOrNull() ?: 0L
@@ -230,65 +199,10 @@ class LocalDataSeeder @Inject constructor(
                                 )
                             }
                             "Transaction" -> {
-                                val id = rowMap["id"]?.toLongOrNull() ?: 0L
-                                val receiptNumber = rowMap["receiptNumber"] ?: continue
-                                if (receiptNumber.isBlank() || receiptNumber == "\\N") continue
-                                val dateMs = parseSqlTimestamp(rowMap["date"])
-                                val subtotal = rowMap["subtotal"]?.toDoubleOrNull() ?: 0.0
-                                val discountAmt = rowMap["discountAmt"]?.toDoubleOrNull() ?: 0.0
-                                val total = rowMap["total"]?.toDoubleOrNull() ?: subtotal
-                                val discount = rowMap["discount"]?.toDoubleOrNull() ?: 0.0
-                                val paymentMethod = rowMap["paymentMethod"]?.takeIf { it != "\\N" } ?: "CASH"
-                                val type = rowMap["type"]?.takeIf { it != "\\N" } ?: "SALES"
-                                val status = rowMap["status"]?.takeIf { it != "\\N" } ?: "COMPLETED"
-                                val employeeId = rowMap["employeeId"]?.toLongOrNull() ?: 1L
-
-                                transactionList.add(
-                                    TransactionEntity(
-                                        id = id,
-                                        tenantId = tenantId,
-                                        outletId = outletId,
-                                        employeeId = employeeId,
-                                        receiptNumber = receiptNumber,
-                                        date = dateMs,
-                                        subtotal = subtotal,
-                                        discountAmt = discountAmt,
-                                        total = total,
-                                        discount = discount,
-                                        paymentMethod = paymentMethod,
-                                        type = type,
-                                        status = status,
-                                        createdAt = dateMs,
-                                        updatedAt = dateMs
-                                    )
-                                )
+                                // Skip seeding POS transactions
                             }
                             "TransactionItem" -> {
-                                val id = rowMap["id"]?.toLongOrNull() ?: continue
-                                val transactionId = rowMap["transactionId"]?.toLongOrNull() ?: continue
-                                val productId = rowMap["productId"]?.toLongOrNull() ?: continue
-                                val variantId = rowMap["variantId"]?.toLongOrNull()
-                                val variantName = rowMap["variantName"]?.takeIf { it != "\\N" }
-                                val quantity = rowMap["quantity"]?.toIntOrNull() ?: 1
-                                val price = rowMap["price"]?.toDoubleOrNull() ?: 0.0
-                                val costPrice = rowMap["costPrice"]?.toDoubleOrNull() ?: 0.0
-                                val discount = rowMap["discount"]?.toDoubleOrNull() ?: 0.0
-                                val note = rowMap["note"]?.takeIf { it != "\\N" }
-
-                                transactionItemList.add(
-                                    TransactionItemEntity(
-                                        id = id,
-                                        transactionId = transactionId,
-                                        productId = productId,
-                                        variantId = variantId,
-                                        variantName = variantName,
-                                        quantity = quantity,
-                                        price = price,
-                                        costPrice = costPrice,
-                                        discount = discount,
-                                        note = note
-                                    )
-                                )
+                                // Skip seeding POS transaction items
                             }
                             "BmpClient" -> {
                                 val id = rowMap["id"]?.toLongOrNull() ?: continue
@@ -1071,7 +985,7 @@ class LocalDataSeeder @Inject constructor(
                         barcode = "FNB-004",
                         category = "MAKANAN"
                     )
-                    db.productDao().insertAll(listOf(p1, p2, p3, p4))
+                    // db.productDao().insertAll(listOf(p1, p2, p3, p4))
 
                     // 4. Transactions (Total > 30M)
                     val startMs = System.currentTimeMillis() - 5 * 24 * 60 * 60 * 1000L
@@ -1168,6 +1082,7 @@ class LocalDataSeeder @Inject constructor(
                         txIndex++
                     }
 
+                    /* Skip demo transactions
                     for (tx in newTxs) {
                         try {
                             val txId = db.transactionDao().insert(tx)
@@ -1175,6 +1090,7 @@ class LocalDataSeeder @Inject constructor(
                             db.transactionItemDao().insertAll(itemsForTx.map { it.copy(transactionId = txId) })
                         } catch (e: Exception) {}
                     }
+                    */
                 } else if (mode == "RENTAL") {
                     // Seed PrintSettings for RENTAL
                     val printSettings = PrintSettingsEntity(
@@ -1276,7 +1192,7 @@ class LocalDataSeeder @Inject constructor(
                         category = "MOBIL",
                         variants = """{"renterName":"Pribadi Eka (Demo)","expiry":${System.currentTimeMillis() + 36 * 60 * 60 * 1000L},"days":3,"receiptNumber":"RN-260615-00002"}"""
                     )
-                    db.productDao().insertAll(listOf(v1, v2, v3, v4))
+                    // db.productDao().insertAll(listOf(v1, v2, v3, v4))
 
                     // 4. Transactions (Total > 30M)
                     val startMs = System.currentTimeMillis() - 5 * 24 * 60 * 60 * 1000L
@@ -1367,6 +1283,7 @@ class LocalDataSeeder @Inject constructor(
                         txIndex++
                     }
 
+                    /* Skip demo transactions
                     for (tx in newTxs) {
                         try {
                             val txId = db.transactionDao().insert(tx)
@@ -1374,6 +1291,7 @@ class LocalDataSeeder @Inject constructor(
                             db.transactionItemDao().insertAll(itemsForTx.map { it.copy(transactionId = txId) })
                         } catch (e: Exception) {}
                     }
+                    */
                 } else if (mode == "LAUNDRY") {
                     // Seed PrintSettings for LAUNDRY
                     val printSettings = PrintSettingsEntity(
@@ -1473,7 +1391,7 @@ class LocalDataSeeder @Inject constructor(
                         barcode = "LND-004",
                         category = "KILOAN"
                     )
-                    db.productDao().insertAll(listOf(s1, s2, s3, s4))
+                    // db.productDao().insertAll(listOf(s1, s2, s3, s4))
 
                     // 4. Transactions (Total > 30M)
                     val startMs = System.currentTimeMillis() - 5 * 24 * 60 * 60 * 1000L
@@ -1564,6 +1482,7 @@ class LocalDataSeeder @Inject constructor(
                         txIndex++
                     }
 
+                    /* Skip demo transactions
                     for (tx in newTxs) {
                         try {
                             val txId = db.transactionDao().insert(tx)
@@ -1571,6 +1490,7 @@ class LocalDataSeeder @Inject constructor(
                             db.transactionItemDao().insertAll(itemsForTx.map { it.copy(transactionId = txId) })
                         } catch (e: Exception) {}
                     }
+                    */
                 }
             }
         }

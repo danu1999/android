@@ -512,8 +512,10 @@ class BmpSettingsRepository @Inject constructor(
 
 @Singleton
 class BmpEmployeeRepository @Inject constructor(
+    private val db: com.posbah.app.data.local.PosBahDatabase,
     private val empDao: BmpEmployeeDao,
-    private val payrollDao: BmpPayrollDao
+    private val payrollDao: BmpPayrollDao,
+    private val cashFlowDao: BmpCashFlowDao
 ) {
     fun observe(tenantId: String) = empDao.observe(tenantId)
     suspend fun upsert(e: BmpEmployeeEntity) = empDao.upsert(e.copy(updatedAt = System.currentTimeMillis()))
@@ -521,8 +523,39 @@ class BmpEmployeeRepository @Inject constructor(
 
     fun observePayrolls(tenantId: String) = payrollDao.observe(tenantId)
     fun observePayrollsForEmployee(empId: Long) = payrollDao.observeForEmployee(empId)
-    suspend fun insertPayroll(p: BmpPayrollEntity) = payrollDao.insert(p)
-    suspend fun deletePayroll(id: Long) = payrollDao.delete(id)
+
+    /**
+     * Simpan catatan penggajian. Secara otomatis membuat entri CashFlow KELUAR
+     * agar saldo kas real mencerminkan pengeluaran gaji karyawan.
+     */
+    suspend fun insertPayroll(p: BmpPayrollEntity): Long {
+        return db.withTransaction {
+            val id = payrollDao.insert(p)
+            if (p.amount > 0) {
+                cashFlowDao.insert(
+                    BmpCashFlowEntity(
+                        tenantId = p.tenantId,
+                        transactionDate = p.paymentDate,
+                        transactionType = "KELUAR",
+                        description = "Penggajian Karyawan ID ${p.employeeId}",
+                        amount = p.amount,
+                        paymentRefId = id
+                    )
+                )
+            }
+            id
+        }
+    }
+
+    /**
+     * Hapus catatan penggajian beserta entri CashFlow terkait.
+     */
+    suspend fun deletePayroll(id: Long) {
+        db.withTransaction {
+            cashFlowDao.deleteByPaymentRefId(id)
+            payrollDao.delete(id)
+        }
+    }
 }
 
 /**

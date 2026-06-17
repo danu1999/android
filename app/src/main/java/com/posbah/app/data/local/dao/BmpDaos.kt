@@ -66,6 +66,10 @@ interface BmpInvoiceDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(invoice: BmpInvoiceEntity): Long
 
+    /** Upsert — digunakan oleh pullAll() agar tidak terjadi duplikasi saat re-pull. */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(invoice: BmpInvoiceEntity): Long
+
     @Update suspend fun update(invoice: BmpInvoiceEntity)
 
     @Query("UPDATE bmp_invoices SET status = :status, updatedAt = :ts WHERE id = :id")
@@ -126,6 +130,9 @@ interface BmpProductDao {
 
     @Query("DELETE FROM bmp_products WHERE invoiceId = :invoiceId")
     suspend fun deleteByInvoice(invoiceId: Long)
+
+    @Query("UPDATE bmp_products SET isSynced = 1 WHERE id = :id")
+    suspend fun markSynced(id: Long)
 }
 
 @Dao
@@ -162,6 +169,10 @@ interface BmpPaymentDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(payment: BmpInvoicePaymentEntity): Long
 
+    /** Upsert — digunakan oleh pullAll() agar tidak terjadi duplikasi saat re-pull. */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(payment: BmpInvoicePaymentEntity): Long
+
     @Query("SELECT * FROM bmp_invoice_payments WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): BmpInvoicePaymentEntity?
 
@@ -191,6 +202,10 @@ interface BmpCashFlowDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entry: BmpCashFlowEntity): Long
+
+    /** Upsert — digunakan oleh pullAll() agar tidak terjadi duplikasi saat re-pull. */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entry: BmpCashFlowEntity): Long
 
     @Query("DELETE FROM bmp_cashflow WHERE id = :id")
     suspend fun delete(id: Long)
@@ -269,6 +284,10 @@ interface BmpPayrollDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(payroll: BmpPayrollEntity): Long
 
+    /** Upsert — digunakan oleh pullAll() agar tidak terjadi duplikasi saat re-pull. */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(payroll: BmpPayrollEntity): Long
+
     @Query("DELETE FROM bmp_payrolls WHERE id = :id")
     suspend fun delete(id: Long)
 
@@ -296,6 +315,10 @@ interface BmpBahanBakuDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entry: com.posbah.app.data.local.entities.BmpBahanBakuEntity): Long
+
+    /** Upsert — digunakan oleh pullAll() agar tidak terjadi duplikasi saat re-pull. */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entry: com.posbah.app.data.local.entities.BmpBahanBakuEntity): Long
 
     @Update
     suspend fun update(entry: com.posbah.app.data.local.entities.BmpBahanBakuEntity)

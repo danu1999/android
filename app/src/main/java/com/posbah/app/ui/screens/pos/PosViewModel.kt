@@ -128,7 +128,7 @@ class PosViewModel @Inject constructor(
                     isOwner = user?.role == "OWNER",
                     isPremium = user?.isPremium == true,
                     isSeedTenant = isSeed,
-                    canViewMargin = user?.role == "OWNER" || user?.role == "ADMIN"
+                    canViewMargin = user?.role == "OWNER"
                 )
             }
         }
@@ -196,7 +196,16 @@ class PosViewModel @Inject constructor(
     val activeOutletId = sessionState.outletId
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    /**
+     * Ganti outlet aktif.
+     * Hanya OWNER yang diizinkan. KASIR/ADMIN dikunci ke outlet yang ditetapkan saat login.
+     */
     fun selectOutlet(id: Long?) {
+        val isOwner = _uiState.value.isOwner
+        if (!isOwner) {
+            android.util.Log.w("PosViewModel", "selectOutlet() ditolak: hanya OWNER yang bisa ganti outlet.")
+            return
+        }
         sessionState.setOutlet(id)
     }
 
@@ -494,7 +503,12 @@ class PosViewModel @Inject constructor(
                 )
             }
             viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
+                sessionState.setSyncing(true)
+                try {
+                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
+                } finally {
+                    sessionState.setSyncing(false)
+                }
             }
         }
     }

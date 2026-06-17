@@ -7,6 +7,8 @@ import android.util.Log
 import com.posbah.app.data.local.PosBahDatabase
 import com.posbah.app.data.local.entities.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -27,6 +29,12 @@ object SupabaseSyncManager {
 
     @Volatile
     private var currentTenantId: String = ""
+
+    /**
+     * Mutex untuk mencegah dua coroutine menjalankan pullAll secara bersamaan
+     * (race condition dari multi-ViewModel init).
+     */
+    private val pullMutex = Mutex()
 
     sealed class SyncResult {
         object Success : SyncResult()
@@ -331,11 +339,12 @@ object SupabaseSyncManager {
                 }
             }
  
-            // 7. bmp_products (Metadata - upload all)
+            // 7. bmp_products (Operational - filter unsynced)
             val bmpProducts = db.bmpProductDao().getAll().filter { it.tenantId == activeTenantId }
-            if (bmpProducts.isNotEmpty()) {
+            val unsyncedBmpProducts = bmpProducts.filter { !it.isSynced }
+            if (unsyncedBmpProducts.isNotEmpty()) {
                 val array = JSONArray()
-                bmpProducts.forEach { p ->
+                unsyncedBmpProducts.forEach { p ->
                     array.put(JSONObject().apply {
                         put("id", p.id)
                         put("tenantId", p.tenantId)
@@ -351,11 +360,14 @@ object SupabaseSyncManager {
                         put("currency", p.currency)
                         put("uniqueID", p.uniqueID ?: JSONObject.NULL)
                         put("slug", p.slug ?: JSONObject.NULL)
+                        put("isSynced", true)
                         put("createdAt", p.createdAt)
                         put("updatedAt", p.updatedAt)
                     })
                 }
-                uploadTable(context, "bmp_products", array)
+                if (uploadTable(context, "bmp_products", array)) {
+                    unsyncedBmpProducts.forEach { db.bmpProductDao().markSynced(it.id) }
+                }
             }
  
             // 8. bmp_master_products (Metadata - upload all)
@@ -467,6 +479,7 @@ object SupabaseSyncManager {
                     array.put(JSONObject().apply {
                         put("id", e.id)
                         put("tenantId", e.tenantId)
+                        put("outletId", e.outletId ?: JSONObject.NULL)
                         put("name", e.name)
                         put("position", e.position ?: JSONObject.NULL)
                         put("salaryAmount", e.salaryAmount)
@@ -778,6 +791,49 @@ object SupabaseSyncManager {
     }
 
     /**
+     * Hapus satu baris data dari VPS REST API.
+     */
+    suspend fun deleteRow(context: Context, tableName: String, id: Long, tenantId: String): Boolean = withContext(Dispatchers.IO) {
+        if (!isNetworkAvailable(context)) {
+            Log.w(TAG, "Penghapusan dibatalkan: tidak ada koneksi internet.")
+            return@withContext false
+        }
+        var conn: HttpURLConnection? = null
+        try {
+            val endpointUrl = "$VPS_URL/api/sync/$tableName?id=eq.$id"
+            val url = URL(endpointUrl)
+
+            conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "DELETE"
+                connectTimeout = 15_000
+                readTimeout = 30_000
+                setRequestProperty("x-tenant-id", tenantId)
+                setRequestProperty("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
+                val securePrefs = com.posbah.app.security.SecurePreferences(context)
+                val email = securePrefs.currentEmail
+                if (!email.isNullOrBlank()) {
+                    setRequestProperty("x-user-email", email)
+                }
+            }
+
+            val responseCode = conn.responseCode
+            if (responseCode in 200..299) {
+                Log.d(TAG, "Berhasil menghapus baris dari tabel $tableName di server: ID $id")
+                true
+            } else {
+                val errorStream = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                Log.e(TAG, "Gagal menghapus baris dari tabel $tableName di server: ID $id ($responseCode): $errorStream")
+                false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception saat menghapus baris dari tabel $tableName: ${e.message}", e)
+            false
+        } finally {
+            conn?.disconnect()
+        }
+    }
+
+    /**
      * Download data dari VPS REST API.
      */
     private fun pullTable(context: Context, tableName: String, tenantId: String, queryParams: String = ""): JSONArray? {
@@ -822,16 +878,20 @@ object SupabaseSyncManager {
      * Jalankan sinkronisasi unduh penuh untuk data Master: outlets, employees, dan products.
      */
     suspend fun pullAll(context: Context, db: PosBahDatabase, activeTenantId: String): SyncResult = withContext(Dispatchers.IO) {
-        if (activeTenantId.isBlank()) {
-            Log.w(TAG, "Pull sinkronisasi dibatalkan: tenantId kosong.")
-            return@withContext SyncResult.Error("tenantId kosong")
+        // Anti race-condition: jika pullAll sudah berjalan, skip tanpa error
+        if (!pullMutex.tryLock()) {
+            Log.w(TAG, "[pullAll] Sudah berjalan di thread lain, skip untuk menghindari race condition.")
+            return@withContext SyncResult.Success
         }
-        if (!isNetworkAvailable(context)) {
-            Log.w(TAG, "Pull sinkronisasi dibatalkan: tidak ada koneksi internet.")
-            return@withContext SyncResult.NoConnection
-        }
-
         try {
+            if (activeTenantId.isBlank()) {
+                Log.w(TAG, "Pull sinkronisasi dibatalkan: tenantId kosong.")
+                return@withContext SyncResult.Error("tenantId kosong")
+            }
+            if (!isNetworkAvailable(context)) {
+                Log.w(TAG, "Pull sinkronisasi dibatalkan: tidak ada koneksi internet.")
+                return@withContext SyncResult.NoConnection
+            }
             Log.d(TAG, "Memulai pull data master dari VPS...")
 
             // 1. Pull outlets
@@ -943,8 +1003,8 @@ object SupabaseSyncManager {
             // 5. Pull transactions
             val transactionsArray = pullTable(context, "transactions", activeTenantId)
             val activeTxIds = mutableListOf<Long>()
+            val transactionEntities = mutableListOf<TransactionEntity>()
             if (transactionsArray != null) {
-                val list = mutableListOf<TransactionEntity>()
                 for (i in 0 until transactionsArray.length()) {
                     val obj = transactionsArray.getJSONObject(i)
                     val idVal = obj.optLong("id", 0L)
@@ -965,7 +1025,7 @@ object SupabaseSyncManager {
                         activeTxIds.add(idVal)
                     }
 
-                    list.add(TransactionEntity(
+                    transactionEntities.add(TransactionEntity(
                         id = idVal,
                         tenantId = obj.optString("tenantId", activeTenantId),
                         outletId = outletId,
@@ -994,13 +1054,23 @@ object SupabaseSyncManager {
                         updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
                     ))
                 }
-                if (list.isNotEmpty()) {
-                    list.forEach { db.transactionDao().insert(it) }
+                if (transactionEntities.isNotEmpty()) {
+                    transactionEntities.forEach { db.transactionDao().insert(it) }
                 }
             }
 
-            // 6. Pull transaction_items for active transactions
-            activeTxIds.forEach { txId ->
+            // 6. Pull transaction_items
+            // For active Rental/Laundry: always pull items so status is current on any device
+            // For FNB/BMP: pull items for all transactions from last 30 days (supports HP-ganti use case)
+            val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
+            val recentFnbTxIds = transactionEntities.filter { tx ->
+                val isRental = tx.receiptNumber.startsWith("RN-")
+                val isLaundry = tx.receiptNumber.startsWith("LD-")
+                !isRental && !isLaundry && tx.createdAt >= thirtyDaysAgo
+            }.map { it.id }.toSet()
+
+            val allTargetTxIds = (activeTxIds + recentFnbTxIds).toSet()
+            for (txId in allTargetTxIds) {
                 val itemsArray = pullTable(context, "transaction_items", activeTenantId, "transactionId=eq.$txId")
                 if (itemsArray != null) {
                     val itemsList = mutableListOf<TransactionItemEntity>()
@@ -1089,7 +1159,7 @@ object SupabaseSyncManager {
                     ))
                 }
                 if (list.isNotEmpty()) {
-                    list.forEach { db.bmpInvoiceDao().insert(it) }
+                    list.forEach { db.bmpInvoiceDao().upsert(it) }
                 }
             }
 
@@ -1114,6 +1184,7 @@ object SupabaseSyncManager {
                         currency = obj.optString("currency", "Rp"),
                         uniqueID = if (obj.isNull("uniqueID")) null else obj.optString("uniqueID"),
                         slug = if (obj.isNull("slug")) null else obj.optString("slug"),
+                        isSynced = true,
                         createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
                         updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
                     ))
@@ -1170,7 +1241,7 @@ object SupabaseSyncManager {
                     ))
                 }
                 if (list.isNotEmpty()) {
-                    list.forEach { db.bmpPaymentDao().insert(it) }
+                    list.forEach { db.bmpPaymentDao().upsert(it) }
                 }
             }
 
@@ -1193,7 +1264,7 @@ object SupabaseSyncManager {
                     ))
                 }
                 if (list.isNotEmpty()) {
-                    list.forEach { db.bmpCashFlowDao().insert(it) }
+                    list.forEach { db.bmpCashFlowDao().upsert(it) }
                 }
             }
 
@@ -1239,6 +1310,7 @@ object SupabaseSyncManager {
                     list.add(BmpEmployeeEntity(
                         id = obj.optLong("id", 0L),
                         tenantId = obj.optString("tenantId", activeTenantId),
+                        outletId = if (obj.isNull("outletId")) null else obj.optLong("outletId"),
                         name = obj.optString("name"),
                         position = if (obj.isNull("position")) null else obj.optString("position"),
                         salaryAmount = obj.optDouble("salaryAmount", 0.0),
@@ -1273,7 +1345,7 @@ object SupabaseSyncManager {
                     ))
                 }
                 if (list.isNotEmpty()) {
-                    list.forEach { db.bmpPayrollDao().insert(it) }
+                    list.forEach { db.bmpPayrollDao().upsert(it) }
                 }
             }
 
@@ -1298,7 +1370,7 @@ object SupabaseSyncManager {
                     ))
                 }
                 if (list.isNotEmpty()) {
-                    list.forEach { db.bmpBahanBakuDao().insert(it) }
+                    list.forEach { db.bmpBahanBakuDao().upsert(it) }
                 }
             }
 
@@ -1378,11 +1450,34 @@ object SupabaseSyncManager {
                 }
             }
 
+            // 19. Pull activity_logs
+            val activityLogsArray = pullTable(context, "activity_logs", activeTenantId)
+            if (activityLogsArray != null) {
+                val list = mutableListOf<com.posbah.app.data.local.entities.ActivityLogEntity>()
+                for (i in 0 until activityLogsArray.length()) {
+                    val obj = activityLogsArray.getJSONObject(i)
+                    list.add(com.posbah.app.data.local.entities.ActivityLogEntity(
+                        id = obj.optLong("id", 0L),
+                        tenantId = obj.optString("tenantId", activeTenantId),
+                        action = obj.optString("action"),
+                        description = obj.optString("description"),
+                        date = obj.optLong("date", System.currentTimeMillis()),
+                        employeeName = obj.optString("employeeName"),
+                        appMode = obj.optString("appMode", "FNB")
+                    ))
+                }
+                if (list.isNotEmpty()) {
+                    list.forEach { db.activityLogDao().insertLog(it) }
+                }
+            }
+
             Log.d(TAG, "Pull sinkronisasi selesai dengan sukses.")
             SyncResult.Success
         } catch (e: Exception) {
             Log.e(TAG, "Pull sinkronisasi gagal: ${e.message}", e)
             SyncResult.Error(e.message ?: "Error tidak terduga saat pull sinkronisasi.")
+        } finally {
+            if (pullMutex.isLocked) pullMutex.unlock()
         }
     }
 }

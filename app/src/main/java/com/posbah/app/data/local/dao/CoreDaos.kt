@@ -133,6 +133,10 @@ interface EmployeeDao {
     @Query("DELETE FROM employees WHERE email = :email COLLATE NOCASE")
     suspend fun deleteByEmail(email: String)
 
+    /** Hapus karyawan berdasarkan ID (untuk cleanup data duplikat/owner). */
+    @Query("DELETE FROM employees WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
     /** Update gaji dan siklus pembayaran karyawan oleh Owner. */
     @Query("UPDATE employees SET salary = :salary, payPeriod = :payPeriod, updatedAt = :updatedAt WHERE id = :id")
     suspend fun updateSalaryAndPeriod(id: Long, salary: Double, payPeriod: String, updatedAt: Long = System.currentTimeMillis())

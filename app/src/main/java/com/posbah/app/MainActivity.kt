@@ -78,6 +78,7 @@ class MainActivity : FragmentActivity() {
                                         val url = java.net.URL("https://www.zedmz.cloud/api/sync/local_users?email=eq.${java.net.URLEncoder.encode(email.lowercase().trim(), "UTF-8")}")
                                         checkConn = url.openConnection() as java.net.HttpURLConnection
                                         checkConn.requestMethod = "GET"
+                                        checkConn.setRequestProperty("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
                                         checkConn.connectTimeout = 5000
                                         checkConn.readTimeout = 5000
                                         if (checkConn.responseCode in 200..299) {
@@ -124,12 +125,12 @@ class MainActivity : FragmentActivity() {
 
         // Block screenshots / screen recording on sensitive screens (covers entire app)
         // This is part of anti-data-exfiltration hardening for POS data.
-        if (Build.TYPE != "eng") {
-            window.setFlags(
-                WindowManager.LayoutParams.FLAG_SECURE,
-                WindowManager.LayoutParams.FLAG_SECURE
-            )
-        }
+        //if (Build.TYPE != "eng") {
+            //window.setFlags(
+                //WindowManager.LayoutParams.FLAG_SECURE,
+                //WindowManager.LayoutParams.FLAG_SECURE
+            //)
+        //}
 
         enableEdgeToEdge()
 

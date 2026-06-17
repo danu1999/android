@@ -106,6 +106,7 @@ data class BmpProductEntity(
     val currency: String = "Rp",
     val uniqueID: String? = null,
     val slug: String? = null,
+    val isSynced: Boolean = false,    // false = belum disinkronkan ke cloud
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
@@ -175,6 +176,7 @@ data class BmpSettingsEntity(
 data class BmpEmployeeEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val tenantId: String,
+    val outletId: Long? = null,
     val name: String,
     val position: String? = null,
     val salaryAmount: Double,

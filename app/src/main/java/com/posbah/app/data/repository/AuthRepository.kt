@@ -48,7 +48,12 @@ class AuthRepository @Inject constructor(
         "bahteramulyap@gmail.com" to Triple("8a0ff1f8926195dfde55af7e68c028591602dacc30dc3c7caef27a949ca45142b25514004cf4540c46eca830100d06517c6facc0faf77fc57140e9df5fe5ffc7", "CV Bahtera Mulya Plastik", "ten_premium_bahteramulyap_gmail_com"),
         "hanafiariful@gmail.com" to Triple("20710a82f8d6b458af10d49fbb1f985ac8aaf696e6b32e776d4f4ebbc30d08565e2bb5e1902ace18297d8db47ad35e49c086669125b1d6ac867c0d2d7e265e50", "PISANG KEJU RAMAYANA", "ten_premium_hanafiariful_gmail_com"),
         "fahrup22@gmail.com" to Triple("63e71711d1481b6da8b756e114aa2ac71a704929c0accf46f419706a5c1416ae1a312899ae84d3d8e33d255811e98fd4d17e59371a08e2f9c21c01d1b1c13a8d", "FahriP", "ten_premium_hanafiariful_gmail_com"),
-        "alfarisirosi40@gmail.com" to Triple("a10301e4a133374bddc5f4f246aead30ba95b4f60c65df80418df2c6338141c9606262b07348fb0ee75964d460de3a459377217afa4b85b7bde3f8572d3b791c", "Mamet PKR", "ten_premium_hanafiariful_gmail_com")
+        "alfarisirosi40@gmail.com" to Triple("a10301e4a133374bddc5f4f246aead30ba95b4f60c65df80418df2c6338141c9606262b07348fb0ee75964d460de3a459377217afa4b85b7bde3f8572d3b791c", "Mamet PKR", "ten_premium_hanafiariful_gmail_com"),
+        "playstoretest@gmail.com" to Triple("f93226ab6fd88288603a9ea14137015f3667f84ea23e34c32fad092883b3994546a681e423e9c1d087a5ea6f7238dcf8d3b7a27b93d2315addfde043c01cbf1a", "PlayStore Test", "ten_premium_playstoretest_gmail_com")
+    )
+
+    private val staticDemoUsers = mapOf(
+        "demo@posbah.com" to Triple("f93226ab6fd88288603a9ea14137015f3667f84ea23e34c32fad092883b3994546a681e423e9c1d087a5ea6f7238dcf8d3b7a27b93d2315addfde043c01cbf1a", "User Demo (Trial)", "demo_tenant_demo_posbah_com")
     )
 
     init {
@@ -56,6 +61,16 @@ class AuthRepository @Inject constructor(
             try {
                 // Delete duplicate tenant created under email-key
                 tenantDao.deleteById("hanafiariful@gmail.com")
+
+                // Clean up local duplicate owner employee (id = 1) under hanafiariful@gmail.com's tenant
+                try {
+                    val dupEmp = employeeDao.getById(1L)
+                    if (dupEmp != null && dupEmp.tenantId == "ten_premium_hanafiariful_gmail_com") {
+                        employeeDao.deleteById(1L)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
 
                 // Clean up other duplicate/unused tenants for hanafiariful@gmail.com and bahteramulyap@gmail.com
                 val hanafiarifulTenants = tenantDao.listForOwner("hanafiariful@gmail.com")
@@ -314,6 +329,7 @@ class AuthRepository @Inject constructor(
             val url = java.net.URL("https://www.zedmz.cloud/api/sync/local_users?email=eq.${java.net.URLEncoder.encode(cleanEmail, "UTF-8")}")
             conn = url.openConnection() as java.net.HttpURLConnection
             conn.requestMethod = "GET"
+            conn.setRequestProperty("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
             conn.connectTimeout = 5000
             conn.readTimeout = 5000
             if (conn.responseCode in 200..299) {
@@ -532,6 +548,7 @@ class AuthRepository @Inject constructor(
                 val url = java.net.URL("https://www.zedmz.cloud/api/sync/local_users?email=eq.${java.net.URLEncoder.encode(cleanEmail, "UTF-8")}")
                 conn = url.openConnection() as java.net.HttpURLConnection
                 conn.requestMethod = "GET"
+                conn.setRequestProperty("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
                 conn.connectTimeout = 5000
                 conn.readTimeout = 5000
                 if (conn.responseCode in 200..299) {
@@ -577,6 +594,7 @@ class AuthRepository @Inject constructor(
                                     val tUrl = java.net.URL("https://www.zedmz.cloud/api/sync/tenants?id=eq.$serverTenantId")
                                     tenantConn = tUrl.openConnection() as java.net.HttpURLConnection
                                     tenantConn.requestMethod = "GET"
+                                    tenantConn.setRequestProperty("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
                                     if (tenantConn.responseCode in 200..299) {
                                         val tResponse = tenantConn.inputStream.bufferedReader().use { it.readText() }
                                         val tArray = org.json.JSONArray(tResponse)
@@ -621,8 +639,8 @@ class AuthRepository @Inject constructor(
             }
         }
 
-        // Enforce: Demo users must use Google Login
-        if (dbUser != null && !dbUser.isPremium) {
+        // Enforce: Demo users must use Google Login (except special static demo bypass users)
+        if (dbUser != null && !dbUser.isPremium && cleanEmail != "demo@posbah.com") {
             return@withContext LoginOutcome.Error("Akun demo wajib menggunakan Google Login. Hubungi muhammadmuizz8@gmail.com jika sudah melakukan pembayaran premium.")
         }
 
@@ -630,8 +648,10 @@ class AuthRepository @Inject constructor(
         val successTenant: Tenant
 
         val staticInfo = staticPremiumUsers[cleanEmail]
-        if (staticInfo != null) {
-            val (hash, displayName, tenantId) = staticInfo
+        val staticDemoInfo = staticDemoUsers[cleanEmail]
+        if (staticInfo != null || staticDemoInfo != null) {
+            val isPremiumUser = staticInfo != null
+            val (hash, displayName, tenantId) = staticInfo ?: staticDemoInfo!!
             
             // Check if there is an employee record in DB (e.g. they changed password)
             val dbEmp = employeeDao.findByEmail(cleanEmail)
@@ -649,19 +669,19 @@ class AuthRepository @Inject constructor(
                 return@withContext incrementFailedAttempts(now)
             }
 
-            // Successfully authenticated premium/owner user
+            // Successfully authenticated static user
             securePrefs.failedPinAttempts = 0
             securePrefs.lockoutUntil = 0L
             
-            // Ensure the premium tenant exists for this static owner/user
+            // Ensure the tenant exists for this static user
             val isBmpTenant = tenantId.contains("bahteramulyap")
             val mode = if (isBmpTenant) "BMP" else "FNB"
             var t = tenantDao.getById(tenantId)
             if (t == null) {
                 t = Tenant(
                     id = tenantId,
-                    name = if (isBmpTenant) "CV. BAHTERA MULYA PLASTIK" else "PISANG KEJU RAMAYANA",
-                    ownerEmail = if (isBmpTenant) "bahteramulyap@gmail.com" else "hanafiariful@gmail.com",
+                    name = if (isBmpTenant) "CV. BAHTERA MULYA PLASTIK" else if (tenantId.contains("demo")) "User Demo (Trial)" else "PISANG KEJU RAMAYANA",
+                    ownerEmail = if (isBmpTenant) "bahteramulyap@gmail.com" else if (tenantId.contains("demo")) "demo@posbah.com" else "hanafiariful@gmail.com",
                     businessMode = mode
                 )
                 tenantDao.upsert(t)
@@ -685,7 +705,7 @@ class AuthRepository @Inject constructor(
                 android.util.Log.e("AuthRepository", "Error seeding email/pin login data", e)
             }
 
-            val userRole = if (cleanEmail == "hanafiariful@gmail.com" || cleanEmail == "bahteramulyap@gmail.com") {
+            val userRole = if (cleanEmail == "hanafiariful@gmail.com" || cleanEmail == "bahteramulyap@gmail.com" || cleanEmail == "demo@posbah.com") {
                 "OWNER"
             } else if (cleanEmail == "alfarisirosi40@gmail.com") {
                 "KASIR"
@@ -700,11 +720,11 @@ class AuthRepository @Inject constructor(
                 displayName = displayName,
                 photoUrl = null,
                 role = userRole,
-                isPremium = true
+                isPremium = isPremiumUser
             )).copy(
                 role = userRole,
                 tenantId = tenantId,
-                isPremium = true,
+                isPremium = isPremiumUser,
                 businessModeLocked = true,
                 lastLoginAt = System.currentTimeMillis(),
                 updatedAt = System.currentTimeMillis(),
@@ -714,6 +734,21 @@ class AuthRepository @Inject constructor(
 
             successUser = user
             successTenant = tenantDao.getById(tenantId)!!
+
+            // Set outlet session untuk static premium users
+            val staticOutlets = outletDao.listForTenant(tenantId)
+            val staticDefaultOutlet = staticOutlets.firstOrNull { it.isDefault } ?: staticOutlets.firstOrNull()
+            if (userRole == "OWNER") {
+                // Owner bebas ganti outlet, hapus lock karyawan
+                sessionState.clearEmployeeLock()
+                securePrefs.currentOutletId = staticDefaultOutlet?.id
+            } else {
+                // Karyawan: kunci ke outletId mereka
+                val empRecord = employeeDao.findByEmail(cleanEmail)
+                val lockedOutletId = empRecord?.outletId ?: staticDefaultOutlet?.id
+                sessionState.setEmployeeOutletLock(lockedOutletId)
+                securePrefs.currentOutletId = lockedOutletId
+            }
         } else {
             // Check if we can fetch the latest employee details from the server (if online)
             var fetchedEmp: Employee? = null
@@ -722,6 +757,7 @@ class AuthRepository @Inject constructor(
                 val url = java.net.URL("https://www.zedmz.cloud/api/sync/employees?email=eq.$cleanEmail")
                 conn = url.openConnection() as java.net.HttpURLConnection
                 conn.requestMethod = "GET"
+                conn.setRequestProperty("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
                 conn.connectTimeout = 5000
                 conn.readTimeout = 5000
                 if (conn.responseCode in 200..299) {
@@ -754,6 +790,7 @@ class AuthRepository @Inject constructor(
                             val tUrl = java.net.URL("https://www.zedmz.cloud/api/sync/tenants?id=eq.$tenantId")
                             tenantConn = tUrl.openConnection() as java.net.HttpURLConnection
                             tenantConn.requestMethod = "GET"
+                            tenantConn.setRequestProperty("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
                             if (tenantConn.responseCode in 200..299) {
                                 val tResponse = tenantConn.inputStream.bufferedReader().use { it.readText() }
                                 val tArray = org.json.JSONArray(tResponse)
@@ -780,16 +817,33 @@ class AuthRepository @Inject constructor(
 
                         // Ensure an outlet exists locally for this tenant
                         val outlets = outletDao.listForTenant(tenantId)
+                        val serverOutletId = if (obj.isNull("outletId")) null else obj.optLong("outletId")
                         val outletId = if (outlets.isEmpty()) {
-                            outletDao.insert(
-                                Outlet(
-                                    tenantId = tenantId,
-                                    name = "Outlet Utama",
-                                    isDefault = true
+                            if (serverOutletId != null && serverOutletId > 0) {
+                                outletDao.insert(
+                                    Outlet(
+                                        id = serverOutletId,
+                                        tenantId = tenantId,
+                                        name = "Outlet Utama",
+                                        isDefault = true
+                                    )
                                 )
-                            )
+                                serverOutletId
+                            } else {
+                                outletDao.insert(
+                                    Outlet(
+                                        tenantId = tenantId,
+                                        name = "Outlet Utama",
+                                        isDefault = true
+                                    )
+                                )
+                            }
                         } else {
-                            outlets.first().id
+                            if (serverOutletId != null && outlets.any { it.id == serverOutletId }) {
+                                serverOutletId
+                            } else {
+                                outlets.first().id
+                            }
                         }
 
                         val fetchedEmpEntity = Employee(
@@ -853,6 +907,7 @@ class AuthRepository @Inject constructor(
                     val url2 = java.net.URL("https://www.zedmz.cloud/api/sync/local_users?email=eq.$cleanEmail")
                     conn2 = url2.openConnection() as java.net.HttpURLConnection
                     conn2.requestMethod = "GET"
+                    conn2.setRequestProperty("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
                     if (conn2.responseCode in 200..299) {
                         val res = conn2.inputStream.bufferedReader().use { it.readText() }
                         val arr = org.json.JSONArray(res)
@@ -907,6 +962,22 @@ class AuthRepository @Inject constructor(
             successUser = user
             successTenant = tenant
         }
+
+            // Enforce outlet lock untuk karyawan non-OWNER
+            val tenantIdForOutlet = successUser.tenantId.orEmpty()
+            val allOutlets = outletDao.listForTenant(tenantIdForOutlet)
+            val defaultOutlet = allOutlets.firstOrNull { it.isDefault } ?: allOutlets.firstOrNull()
+            if (successUser.role == "OWNER") {
+                // Owner bebas ganti outlet
+                sessionState.clearEmployeeLock()
+                securePrefs.currentOutletId = defaultOutlet?.id
+            } else {
+                // Karyawan (ADMIN/KASIR): kunci ke outlet yang ditetapkan
+                val emp = employeeDao.findByEmail(successUser.email.lowercase().trim())
+                val lockedOutletId = emp?.outletId ?: defaultOutlet?.id
+                sessionState.setEmployeeOutletLock(lockedOutletId)
+                securePrefs.currentOutletId = lockedOutletId
+            }
 
             if (successUser.isPremium) {
                 securePrefs.tempPlainPassword = password

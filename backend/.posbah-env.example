@@ -1,0 +1,33 @@
+# ============================================================
+# POSBah Backend — Environment Variables Template
+# ============================================================
+# CARA PAKAI DI VPS:
+#   1. cp .posbah-env.example /home/muizz9900/.posbah-env
+#   2. nano /home/muizz9900/.posbah-env  (isi nilai yang benar)
+#   3. chmod 600 /home/muizz9900/.posbah-env
+#   4. sudo systemctl daemon-reload
+#   5. sudo systemctl restart posbah-backend
+#
+# FILE INI ADALAH TEMPLATE — JANGAN ISI NILAI NYATA DI SINI
+# File aktual (.posbah-env) ada di VPS dan TIDAK di-commit ke git
+# ============================================================
+
+# === WAJIB: Server & Database ===
+# Token rahasia untuk akses Admin Panel dari backend
+# Generate: openssl rand -hex 32 | xargs -I{} echo "Bearer {}"
+ADMIN_AUTH_TOKEN=Bearer GANTI_DENGAN_TOKEN_RAHASIA
+
+# URL koneksi PostgreSQL di VPS
+DATABASE_URL=postgres://postgres:PASSWORD_DATABASE@localhost:5432/posbah?sslmode=disable
+
+# === WAJIB: Email (Gmail SMTP) ===
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=muhammadmuizz8@gmail.com
+# Gunakan Google App Password (bukan password Gmail biasa)
+# Buat di: https://myaccount.google.com/apppasswords
+SMTP_PASS=GANTI_DENGAN_APP_PASSWORD_GMAIL
+SMTP_SENDER=muhammadmuizz8@gmail.com
+
+# === OPSIONAL: Port ===
+PORT=3000

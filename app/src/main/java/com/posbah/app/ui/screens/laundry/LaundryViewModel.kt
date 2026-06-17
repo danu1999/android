@@ -79,6 +79,11 @@ class LaundryViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     fun selectOutlet(id: Long?) {
+        val owner = isOwner.value
+        if (!owner) {
+            android.util.Log.w("LaundryViewModel", "selectOutlet() ditolak: hanya OWNER yang bisa ganti outlet.")
+            return
+        }
         sessionState.setOutlet(id)
     }
 
@@ -113,7 +118,7 @@ class LaundryViewModel @Inject constructor(
 
     val canViewMargin = flow {
         val user = authRepository.getActiveUser()
-        emit(user?.role == "OWNER" || user?.role == "ADMIN")
+        emit(user?.role == "OWNER")
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val activityLogs = activityLogDao.observeLogs(tenantId, "LAUNDRY")

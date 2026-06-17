@@ -15,8 +15,8 @@ android {
         applicationId = "com.posbah.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 25
-        versionName = "2.5.0"
+        versionCode = 37
+        versionName = "2.16.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -27,9 +27,6 @@ android {
             "GOOGLE_WEB_CLIENT_ID",
             "\"119416648055-hil4u0bmuqffcn2u1f6se66h1lhdiugr.apps.googleusercontent.com\""
         )
-        // Inject Admin Auth Token at build time, allowing local overrides in local.properties
-        val localToken = project.findProperty("adminAuthToken") as? String ?: "Bearer BahteraMigrate123!"
-        buildConfigField("String", "ADMIN_AUTH_TOKEN", "\"$localToken\"")
         buildConfigField("boolean", "ENFORCE_INTEGRITY", "true")
         ndk {
             // Limit native ABIs to reduce APK size (SQLCipher native libs)
@@ -68,7 +65,12 @@ android {
                 "proguard-rules.pro"
             )
             // Use release keystore if present, otherwise debug (for testing).
-            signingConfig = signingConfigs.findByName("release")
+            val keystoreFile = file("${rootProject.projectDir}/keystore/release.jks")
+            signingConfig = if (keystoreFile.exists()) {
+                signingConfigs.findByName("release")
+            } else {
+                signingConfigs.findByName("debug")
+            }
         }
     }
 
@@ -100,6 +102,23 @@ android {
         jniLibs {
             useLegacyPackaging = false
         }
+    }
+
+    // === Auto-naming APK output ===
+    // Release: posbah-v2.16.0.apk
+    // Debug:   posbah-v2.16.0-debug.apk
+    applicationVariants.all {
+        val variant = this
+        val versionName = variant.versionName
+        outputs
+            .map { it as com.android.build.gradle.internal.api.BaseVariantOutputImpl }
+            .forEach { output ->
+                output.outputFileName = if (variant.buildType.isDebuggable) {
+                    "posbah-v$versionName-debug.apk"
+                } else {
+                    "posbah-v$versionName.apk"
+                }
+            }
     }
 }
 

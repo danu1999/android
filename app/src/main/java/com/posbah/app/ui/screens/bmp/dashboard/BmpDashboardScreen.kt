@@ -328,11 +328,11 @@ fun BmpDashboardScreen(
         val context = androidx.compose.ui.platform.LocalContext.current
         AlertDialog(
             onDismissRequest = { if (!isUpgrading) showUpgradeDialog = false },
-            title = { Text("Simulasi Aktivasi Premium") },
+            title = { Text("Aktivasi Akun Premium") },
             text = {
                 Column {
                     Text(
-                        "Masukkan detail email premium baru Anda. Sistem akan membuat database baru khusus untuk akun premium Anda secara offline.",
+                        "Masukkan email dan password akun premium Anda. Sistem akan membuat database mandiri khusus untuk akun premium Anda.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -383,7 +383,7 @@ fun BmpDashboardScreen(
                             showUpgradeDialog = false
                             android.widget.Toast.makeText(
                                 context,
-                                "Simulasi Pembayaran Sukses! Database premium baru berhasil dibuat.",
+                                "Aktivasi Premium Berhasil! Silakan login kembali dengan akun premium Anda.",
                                 android.widget.Toast.LENGTH_LONG
                             ).show()
                             onLogout()
@@ -483,7 +483,7 @@ private fun UpgradeDemoCard(onUpgradeClick: () -> Unit) {
             )
             Spacer(Modifier.height(12.dp))
             com.posbah.app.ui.components.PrimaryButton(
-                label = "Upgrade ke Premium (Simulasi)",
+                label = "Upgrade ke Premium",
                 onClick = onUpgradeClick,
                 modifier = Modifier.fillMaxWidth().testTag("btn-upgrade-demo")
             )

@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.ShowChart
 import androidx.compose.material.icons.outlined.Storefront
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -89,10 +90,13 @@ fun OutletControlScreen(
     var outletPhone by remember { mutableStateOf("") }
     var outletEmployee by remember { mutableStateOf("") }
     var showEmployeeListDialog by remember { mutableStateOf(false) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var outletToDelete by remember { mutableStateOf<Outlet?>(null) }
 
     LaunchedEffect(state.error) {
         state.error?.let { err ->
             Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+            viewModel.dismissError()
         }
     }
 
@@ -160,6 +164,10 @@ fun OutletControlScreen(
                             outletPhone = summary.outlet.phone.orEmpty()
                             outletEmployee = summary.activeEmployeeName.takeIf { it != "-" }.orEmpty()
                             showOutletDialog = true
+                        },
+                        onDeleteClick = {
+                            outletToDelete = summary.outlet
+                            showDeleteConfirmDialog = true
                         }
                     )
                 }
@@ -392,6 +400,14 @@ fun OutletControlScreen(
             confirmButton = {
                 Button(
                     onClick = {
+                        if (outletName.isBlank()) {
+                            Toast.makeText(context, "Nama outlet tidak boleh kosong.", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        if (editingOutlet == null && outletEmployee.isBlank()) {
+                            Toast.makeText(context, "Silakan pilih karyawan untuk outlet baru.", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
                         val currentEditing = editingOutlet
                         if (currentEditing == null) {
                             viewModel.createOutlet(outletName, outletAddress, outletPhone, outletEmployee)
@@ -468,6 +484,34 @@ fun OutletControlScreen(
             }
         )
     }
+
+    if (showDeleteConfirmDialog && outletToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmDialog = false },
+            title = { Text("Hapus Outlet") },
+            text = {
+                Text("Apakah Anda yakin ingin menghapus outlet ${outletToDelete?.name}? Karyawan yang ditugaskan ke outlet ini akan dipindahkan ke penempatan 'Seluruh Outlet'.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        outletToDelete?.let { viewModel.deleteOutlet(it.id) }
+                        showDeleteConfirmDialog = false
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Hapus", color = MaterialTheme.colorScheme.onError)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -476,7 +520,8 @@ fun OutletCard(
     allEmployees: List<Employee>,
     onToggleStatus: () -> Unit,
     onAssignEmployee: (String) -> Unit,
-    onEditClick: () -> Unit
+    onEditClick: () -> Unit,
+    onDeleteClick: () -> Unit
 ) {
     var employeeMenuExpanded by remember { mutableStateOf(false) }
 
@@ -535,6 +580,18 @@ fun OutletCard(
                             imageVector = Icons.Outlined.Edit,
                             contentDescription = "Edit Detail",
                             tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    IconButton(
+                        onClick = onDeleteClick,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Delete,
+                            contentDescription = "Hapus Outlet",
+                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
                             modifier = Modifier.size(16.dp)
                         )
                     }

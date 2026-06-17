@@ -51,11 +51,11 @@ func initSchema() error {
 			"isActive" BOOLEAN DEFAULT TRUE,
 			"demoEmailSent" BOOLEAN DEFAULT FALSE,
 			"demoDay2Notified" BOOLEAN DEFAULT FALSE,
-			"apkVersion" VARCHAR(50) DEFAULT '2.4.0'
+			"apkVersion" VARCHAR(50) DEFAULT '2.5.0'
 		);`,
 		`ALTER TABLE "local_users" ADD COLUMN IF NOT EXISTS "demoEmailSent" BOOLEAN DEFAULT FALSE;`,
 		`ALTER TABLE "local_users" ADD COLUMN IF NOT EXISTS "demoDay2Notified" BOOLEAN DEFAULT FALSE;`,
-		`ALTER TABLE "local_users" ADD COLUMN IF NOT EXISTS "apkVersion" VARCHAR(50) DEFAULT '2.4.0';`,
+		`ALTER TABLE "local_users" ADD COLUMN IF NOT EXISTS "apkVersion" VARCHAR(50) DEFAULT '2.5.0';`,
 		`CREATE TABLE IF NOT EXISTS "tenants" (
 			"id" VARCHAR(100) PRIMARY KEY,
 			"name" VARCHAR(255) NOT NULL,
@@ -476,6 +476,19 @@ func initSchema() error {
 		VALUES (20001, 'ten_premium_bahteramulyap_gmail_com', 'CV. BAHTERA MULYA PLASTIK', 'bahteramulyap@gmail.com', 'OWNER', '8a0ff1f8926195dfde55af7e68c028591602dacc30dc3c7caef27a949ca45142b25514004cf4540c46eca830100d06517c6facc0faf77fc57140e9df5fe5ffc7', true, 1685642632000, 1685642632000)
 		ON CONFLICT ("id", "tenantId") DO UPDATE SET "role" = EXCLUDED."role", "pinHash" = EXCLUDED."pinHash";`,
 
+		// PlayStore Review Premium Account Insertion
+		`INSERT INTO "tenants" ("id", "name", "ownerEmail", "businessMode", "isActive", "createdAt", "updatedAt")
+		VALUES ('ten_premium_playstoretest_gmail_com', 'PlayStore Review (Premium)', 'playstoretest@gmail.com', 'FNB', true, 1685642632000, 1685642632000)
+		ON CONFLICT ("id") DO UPDATE SET "ownerEmail" = EXCLUDED."ownerEmail", "businessMode" = EXCLUDED."businessMode";`,
+
+		`INSERT INTO "local_users" ("googleSub", "email", "displayName", "role", "tenantId", "isPremium", "isActive", "registeredAt", "updatedAt")
+		VALUES ('playstoretest@gmail.com', 'playstoretest@gmail.com', 'PlayStore Test', 'OWNER', 'ten_premium_playstoretest_gmail_com', true, true, 1685642632000, 1685642632000)
+		ON CONFLICT ("googleSub") DO UPDATE SET "tenantId" = EXCLUDED."tenantId", "isPremium" = EXCLUDED."isPremium", "isActive" = EXCLUDED."isActive";`,
+
+		`INSERT INTO "employees" ("id", "tenantId", "name", "email", "role", "pinHash", "isActive", "createdAt", "updatedAt")
+		VALUES (10005, 'ten_premium_playstoretest_gmail_com', 'PlayStore Reviewer', 'playstoretest@gmail.com', 'OWNER', 'f93226ab6fd88288603a9ea14137015f3667f84ea23e34c32fad092883b3994546a681e423e9c1d087a5ea6f7238dcf8d3b7a27b93d2315addfde043c01cbf1a', true, 1685642632000, 1685642632000)
+		ON CONFLICT ("id", "tenantId") DO UPDATE SET "role" = EXCLUDED."role", "pinHash" = EXCLUDED."pinHash";`,
+
 		`UPDATE "bmp_payrolls" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
 		`UPDATE "bmp_clients" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
 		`UPDATE "bmp_invoices" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
@@ -602,10 +615,15 @@ func initSchema() error {
 	_, _ = db.Exec(`INSERT INTO "system_admins" ("email", "passwordHash", "createdAt")
 		VALUES ('muhammadmuizz8@gmail.com', $1, $2)
 		ON CONFLICT ("email") DO UPDATE SET "passwordHash" = EXCLUDED."passwordHash";`, defaultAdminHash, time.Now().UnixNano()/int64(time.Millisecond))
-	// Seed default apk_config — v2.4.0
+	// Seed default apk_config — v2.5.0
 	_, _ = db.Exec(`INSERT INTO "apk_config" ("id", "version", "description", "downloadUrl", "updatedAt")
-		VALUES (1, '2.4.0', 'Pembaruan wajib untuk kelancaran sinkronisasi data transaksi dan peningkatan keamanan sistem POSBah Anda. Silakan unduh versi terbaru untuk melanjutkan.', '/api/download-apk', $1)
-		ON CONFLICT ("id") DO UPDATE SET "version" = EXCLUDED."version", "description" = EXCLUDED."description", "updatedAt" = EXCLUDED."updatedAt";`, time.Now().UnixNano()/int64(time.Millisecond))
+		VALUES (1, '2.5.0', 'Pembaruan wajib untuk kelancaran sinkronisasi data transaksi dan peningkatan keamanan sistem POSBah Anda. Silakan unduh versi terbaru untuk melanjutkan.', '/api/download-apk', $1)
+		ON CONFLICT ("id") DO NOTHING;`, time.Now().UnixNano()/int64(time.Millisecond))
+	// Protect syerlirahma7@gmail.com: mark as ACTIVE in deleted_users so she is never purged again
+	_, _ = db.Exec(`INSERT INTO "deleted_users" ("email", "status", "updatedAt")
+		VALUES ('syerlirahma7@gmail.com', 'ACTIVE', $1)
+		ON CONFLICT ("email") DO UPDATE SET "status" = 'ACTIVE', "updatedAt" = EXCLUDED."updatedAt";`,
+		time.Now().UnixNano()/int64(time.Millisecond))
 	log.Println("Database schemas verified / migrated successfully.")
 	return nil
 }

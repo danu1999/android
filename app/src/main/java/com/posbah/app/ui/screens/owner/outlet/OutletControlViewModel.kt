@@ -39,7 +39,8 @@ data class OutletControlUiState(
     val employees: List<Employee> = emptyList(),
     val marginHistory: List<MarginDataPoint> = emptyList(),
     val isLoading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val isOwner: Boolean = false
 )
 
 @HiltViewModel
@@ -190,12 +191,14 @@ class OutletControlViewModel @Inject constructor(
                     )
                 }
 
+                val isOwner = authRepository.getActiveUser()?.role == "OWNER"
                 _uiState.update { 
                     it.copy(
                         outlets = summaries,
                         employees = allEmployees,
                         marginHistory = history,
-                        isLoading = false
+                        isLoading = false,
+                        isOwner = isOwner
                     ) 
                 }
             } catch (e: Exception) {
@@ -220,11 +223,83 @@ class OutletControlViewModel @Inject constructor(
         }
     }
 
+    fun dismissError() {
+        _uiState.update { it.copy(error = null) }
+    }
+
+    fun deleteOutlet(outletId: Long) {
+        viewModelScope.launch {
+            val user = authRepository.getActiveUser()
+            if (user?.role != "OWNER") {
+                _uiState.update { it.copy(error = "Akses ditolak: Hanya OWNER yang dapat menghapus outlet.") }
+                return@launch
+            }
+            val outlet = db.outletDao().getById(outletId) ?: return@launch
+
+            // Safe sync unlink: set outletId to null for all employees in this outlet
+            val employees = db.employeeDao().getAll().filter { it.outletId == outletId }
+            employees.forEach { emp ->
+                db.employeeDao().update(emp.copy(outletId = null, updatedAt = System.currentTimeMillis()))
+            }
+
+            db.outletDao().delete(outletId)
+            loadData()
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    com.posbah.app.data.remote.SupabaseSyncManager.deleteRow(context, "outlets", outletId, tenantId)
+                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
     fun assignEmployee(outletId: Long, employeeName: String) {
         viewModelScope.launch {
-            val outlet = db.outletDao().getById(outletId) ?: return@launch
-            val updated = outlet.copy(currentEmployee = employeeName.ifBlank { null }, updatedAt = System.currentTimeMillis())
-            db.outletDao().update(updated)
+            val ownerEmail = authRepository.activeUserEmail()?.lowercase()?.trim()
+            val activeEmployees = db.employeeDao().getAll().filter { emp ->
+                emp.tenantId == tenantId &&
+                emp.isActive &&
+                emp.role != "OWNER" &&
+                emp.email?.lowercase()?.trim() != ownerEmail
+            }
+
+            if (employeeName.isBlank()) {
+                val employeesOfThisOutlet = activeEmployees.filter { it.outletId == outletId }
+                if (employeesOfThisOutlet.size <= 1) {
+                    _uiState.update { it.copy(error = "Gagal: Outlet harus memiliki minimal 1 karyawan.") }
+                    return@launch
+                }
+                val outlet = db.outletDao().getById(outletId) ?: return@launch
+                val updated = outlet.copy(currentEmployee = null, updatedAt = System.currentTimeMillis())
+                db.outletDao().update(updated)
+            } else {
+                val emp = activeEmployees.firstOrNull { it.name == employeeName }
+                if (emp == null) {
+                    _uiState.update { it.copy(error = "Karyawan tidak ditemukan.") }
+                    return@launch
+                }
+                if (emp.outletId != outletId) {
+                    if (emp.outletId != null) {
+                        val oldOutletCount = activeEmployees.count { it.outletId == emp.outletId }
+                        if (oldOutletCount <= 1) {
+                            val oldOutletName = db.outletDao().getById(emp.outletId)?.name ?: "Outlet Lain"
+                            _uiState.update { it.copy(error = "Gagal: ${emp.name} adalah karyawan terakhir di $oldOutletName.") }
+                            return@launch
+                        }
+                    }
+                    val targetCount = activeEmployees.count { it.outletId == outletId }
+                    if (targetCount >= 10) {
+                        _uiState.update { it.copy(error = "Gagal: Outlet sudah mencapai batas maksimal 10 karyawan.") }
+                        return@launch
+                    }
+                    db.employeeDao().update(emp.copy(outletId = outletId, updatedAt = System.currentTimeMillis()))
+                }
+                val outlet = db.outletDao().getById(outletId) ?: return@launch
+                val updated = outlet.copy(currentEmployee = employeeName, updatedAt = System.currentTimeMillis())
+                db.outletDao().update(updated)
+            }
             loadData()
             viewModelScope.launch(Dispatchers.IO) {
                 try {
@@ -247,16 +322,47 @@ class OutletControlViewModel @Inject constructor(
                 _uiState.update { it.copy(error = "Nama outlet tidak boleh kosong.") }
                 return@launch
             }
+            if (currentEmployee.isNullOrBlank()) {
+                _uiState.update { it.copy(error = "Gagal: Outlet baru harus memiliki minimal 1 karyawan.") }
+                return@launch
+            }
 
+            val ownerEmail = authRepository.activeUserEmail()?.lowercase()?.trim()
+            val activeEmployees = db.employeeDao().getAll().filter { emp ->
+                emp.tenantId == tenantId &&
+                emp.isActive &&
+                emp.role != "OWNER" &&
+                emp.email?.lowercase()?.trim() != ownerEmail
+            }
+
+            val emp = activeEmployees.firstOrNull { it.name == currentEmployee }
+            if (emp == null) {
+                _uiState.update { it.copy(error = "Karyawan tidak ditemukan.") }
+                return@launch
+            }
+
+            if (emp.outletId != null) {
+                val oldOutletCount = activeEmployees.count { it.outletId == emp.outletId }
+                if (oldOutletCount <= 1) {
+                    val oldOutletName = db.outletDao().getById(emp.outletId)?.name ?: "Outlet Lain"
+                    _uiState.update { it.copy(error = "Gagal: ${emp.name} adalah karyawan terakhir di $oldOutletName.") }
+                    return@launch
+                }
+            }
+
+            val isDefault = existing.isEmpty()
             val newOutlet = Outlet(
                 tenantId = tenantId,
                 name = name,
                 address = address,
                 phone = phone,
-                currentEmployee = currentEmployee.takeIf { !it.isNullOrBlank() },
-                isOpen = true
+                currentEmployee = currentEmployee,
+                isOpen = true,
+                isDefault = isDefault
             )
-            db.outletDao().insert(newOutlet)
+            val newOutletId = db.outletDao().insert(newOutlet)
+            db.employeeDao().update(emp.copy(outletId = newOutletId, updatedAt = System.currentTimeMillis()))
+            
             loadData()
             viewModelScope.launch(Dispatchers.IO) {
                 try {
@@ -275,14 +381,63 @@ class OutletControlViewModel @Inject constructor(
                 return@launch
             }
             val existing = db.outletDao().getById(outletId) ?: return@launch
-            val updated = existing.copy(
-                name = name,
-                address = address,
-                phone = phone,
-                currentEmployee = currentEmployee.takeIf { !it.isNullOrBlank() },
-                updatedAt = System.currentTimeMillis()
-            )
-            db.outletDao().update(updated)
+
+            val ownerEmail = authRepository.activeUserEmail()?.lowercase()?.trim()
+            val activeEmployees = db.employeeDao().getAll().filter { emp ->
+                emp.tenantId == tenantId &&
+                emp.isActive &&
+                emp.role != "OWNER" &&
+                emp.email?.lowercase()?.trim() != ownerEmail
+            }
+
+            if (currentEmployee.isNullOrBlank()) {
+                val targetCount = activeEmployees.count { it.outletId == outletId }
+                if (targetCount <= 1) {
+                    _uiState.update { it.copy(error = "Gagal: Outlet harus memiliki minimal 1 karyawan.") }
+                    return@launch
+                }
+                val updated = existing.copy(
+                    name = name,
+                    address = address,
+                    phone = phone,
+                    currentEmployee = null,
+                    updatedAt = System.currentTimeMillis()
+                )
+                db.outletDao().update(updated)
+            } else {
+                val emp = activeEmployees.firstOrNull { it.name == currentEmployee }
+                if (emp == null) {
+                    _uiState.update { it.copy(error = "Karyawan tidak ditemukan.") }
+                    return@launch
+                }
+
+                if (emp.outletId != outletId) {
+                    if (emp.outletId != null) {
+                        val oldOutletCount = activeEmployees.count { it.outletId == emp.outletId }
+                        if (oldOutletCount <= 1) {
+                            val oldOutletName = db.outletDao().getById(emp.outletId)?.name ?: "Outlet Lain"
+                            _uiState.update { it.copy(error = "Gagal: ${emp.name} adalah karyawan terakhir di $oldOutletName.") }
+                            return@launch
+                        }
+                    }
+                    val targetCount = activeEmployees.count { it.outletId == outletId }
+                    if (targetCount >= 10) {
+                        _uiState.update { it.copy(error = "Gagal: Outlet sudah mencapai batas maksimal 10 karyawan.") }
+                        return@launch
+                    }
+                    db.employeeDao().update(emp.copy(outletId = outletId, updatedAt = System.currentTimeMillis()))
+                }
+
+                val updated = existing.copy(
+                    name = name,
+                    address = address,
+                    phone = phone,
+                    currentEmployee = currentEmployee,
+                    updatedAt = System.currentTimeMillis()
+                )
+                db.outletDao().update(updated)
+            }
+
             loadData()
             viewModelScope.launch(Dispatchers.IO) {
                 try {

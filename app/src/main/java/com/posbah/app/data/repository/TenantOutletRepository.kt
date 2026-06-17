@@ -41,8 +41,10 @@ class OutletRepository @Inject constructor(
     suspend fun list(tenantId: String) = outletDao.listForTenant(tenantId)
     suspend fun getById(id: Long) = outletDao.getById(id)
     suspend fun create(tenantId: String, name: String, address: String? = null, phone: String? = null): Long {
+        val existing = outletDao.listForTenant(tenantId)
+        val isDefault = existing.isEmpty()
         return outletDao.insert(
-            Outlet(tenantId = tenantId, name = name, address = address, phone = phone)
+            Outlet(tenantId = tenantId, name = name, address = address, phone = phone, isDefault = isDefault)
         )
     }
     suspend fun update(outlet: Outlet) = outletDao.update(outlet.copy(updatedAt = System.currentTimeMillis()))

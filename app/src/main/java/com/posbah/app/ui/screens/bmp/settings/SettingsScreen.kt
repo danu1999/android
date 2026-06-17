@@ -46,6 +46,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.material3.IconButton
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -89,6 +91,9 @@ class SettingsViewModel @Inject constructor(
     val outlets = outletRepo.observe(tenantId)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    val bmpEmployees = db.bmpEmployeeDao().observe(tenantId)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     init {
         viewModelScope.launch {
             val existing = settingsRepo.get(tenantId)
@@ -116,8 +121,36 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun addOutlet(name: String, address: String?, phone: String?) = viewModelScope.launch {
-        outletRepo.create(tenantId, name, address, phone)
+    fun addOutlet(name: String, address: String?, phone: String?, employeeId: Long) = viewModelScope.launch {
+        if (name.isBlank()) {
+            _syncStatus.value = "Nama outlet tidak boleh kosong."
+            return@launch
+        }
+        val activeEmployees = db.bmpEmployeeDao().getAll().filter { it.tenantId == tenantId && it.isActive }
+        val emp = activeEmployees.firstOrNull { it.id == employeeId }
+        if (emp == null) {
+            _syncStatus.value = "Karyawan tidak ditemukan."
+            return@launch
+        }
+
+        // Check if moving emp leaves old outlet with 0 staff
+        if (emp.outletId != null) {
+            val oldOutletCount = activeEmployees.count { it.outletId == emp.outletId }
+            if (oldOutletCount <= 1) {
+                val oldOutletName = db.outletDao().getById(emp.outletId)?.name ?: "Outlet Lain"
+                _syncStatus.value = "Gagal: ${emp.name} adalah karyawan terakhir di $oldOutletName."
+                return@launch
+            }
+        }
+
+        val newOutletId = outletRepo.create(tenantId, name, address, phone)
+        db.bmpEmployeeDao().update(emp.copy(outletId = newOutletId, updatedAt = System.currentTimeMillis()))
+        val outlet = db.outletDao().getById(newOutletId)
+        if (outlet != null) {
+            db.outletDao().update(outlet.copy(currentEmployee = emp.name, updatedAt = System.currentTimeMillis()))
+        }
+
+        _syncStatus.value = "Outlet berhasil ditambahkan."
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
@@ -126,6 +159,7 @@ class SettingsViewModel @Inject constructor(
             }
         }
     }
+
     fun updateOutlet(o: Outlet) = viewModelScope.launch {
         outletRepo.update(o)
         viewModelScope.launch(Dispatchers.IO) {
@@ -136,10 +170,21 @@ class SettingsViewModel @Inject constructor(
             }
         }
     }
+
     fun deleteOutlet(id: Long) = viewModelScope.launch {
+        val outlet = db.outletDao().getById(id) ?: return@launch
+
+        // Safe unlink for BMP employees
+        val employees = db.bmpEmployeeDao().getAll().filter { it.outletId == id }
+        employees.forEach { emp ->
+            db.bmpEmployeeDao().update(emp.copy(outletId = null, updatedAt = System.currentTimeMillis()))
+        }
+
         outletRepo.delete(id)
+        _syncStatus.value = "Outlet berhasil dihapus."
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                com.posbah.app.data.remote.SupabaseSyncManager.deleteRow(context, "outlets", id, tenantId)
                 com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
             } catch (ex: Exception) {
                 ex.printStackTrace()
@@ -179,6 +224,14 @@ fun SettingsScreen(
     var outletName by remember { mutableStateOf("") }
     var outletAddress by remember { mutableStateOf("") }
     var outletPhone by remember { mutableStateOf("") }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val bmpEmployees by viewModel.bmpEmployees.collectAsState()
+    var selectedEmployeeId by remember { mutableStateOf<Long?>(null) }
+    var selectedEmployeeName by remember { mutableStateOf("") }
+    var employeeDropdownExpanded by remember { mutableStateOf(false) }
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var outletToDelete by remember { mutableStateOf<Outlet?>(null) }
+
 
     var showChangePassword by remember { mutableStateOf(false) }
     var oldPassword by remember { mutableStateOf("") }
@@ -462,7 +515,7 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f))
                     TextButton(
-                        onClick = { showOutletForm = true; outletName = ""; outletAddress = ""; outletPhone = "" },
+                        onClick = { showOutletForm = true; outletName = ""; outletAddress = ""; outletPhone = ""; selectedEmployeeId = null; selectedEmployeeName = "" },
                         modifier = Modifier.testTag("btn-add-outlet")
                     ) {
                         Icon(Icons.Outlined.Add, contentDescription = null)
@@ -499,10 +552,11 @@ fun SettingsScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        if (!o.isDefault) {
-                            TextButton(onClick = { viewModel.deleteOutlet(o.id) }) {
-                                Text("Hapus", color = MaterialTheme.colorScheme.error)
-                            }
+                        TextButton(onClick = {
+                            outletToDelete = o
+                            showDeleteConfirmDialog = true
+                        }) {
+                            Text("Hapus", color = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
@@ -516,6 +570,28 @@ fun SettingsScreen(
             title = { Text("Outlet Baru") },
             text = {
                 Column {
+                    // Employee warning banner if empty
+                    if (bmpEmployees.isEmpty()) {
+                        androidx.compose.material3.Card(
+                            colors = androidx.compose.material3.CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer
+                            ),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Tambahkan karyawan BMP terlebih dahulu sebelum membuat outlet.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+
                     OutlinedTextField(value = outletName, onValueChange = { outletName = it },
                         label = { Text("Nama outlet") }, singleLine = true,
                         modifier = Modifier.fillMaxWidth().testTag("outlet-name"))
@@ -527,14 +603,49 @@ fun SettingsScreen(
                         label = { Text("Telepon") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                         modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.size(8.dp))
+                    
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = if (selectedEmployeeName.isBlank()) "- Pilih Karyawan -" else selectedEmployeeName,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Karyawan Utama Outlet") },
+                            trailingIcon = {
+                                IconButton(onClick = { employeeDropdownExpanded = true }) {
+                                    Text("▾", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { employeeDropdownExpanded = true }
+                        )
+                        androidx.compose.material3.DropdownMenu(
+                            expanded = employeeDropdownExpanded,
+                            onDismissRequest = { employeeDropdownExpanded = false }
+                        ) {
+                            bmpEmployees.forEach { emp ->
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text(emp.name) },
+                                    onClick = {
+                                        selectedEmployeeId = emp.id
+                                        selectedEmployeeName = emp.name
+                                        employeeDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
             },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        if (outletName.isNotBlank()) {
-                            viewModel.addOutlet(outletName, outletAddress.ifBlank { null }, outletPhone.ifBlank { null })
+                        if (outletName.isNotBlank() && selectedEmployeeId != null) {
+                            viewModel.addOutlet(outletName, outletAddress.ifBlank { null }, outletPhone.ifBlank { null }, selectedEmployeeId!!)
                             showOutletForm = false
+                        } else {
+                            android.widget.Toast.makeText(context, "Nama outlet dan karyawan utama wajib diisi.", android.widget.Toast.LENGTH_SHORT).show()
                         }
                     }, modifier = Modifier.testTag("btn-save-outlet")
                 ) { Text("Simpan") }
@@ -652,6 +763,31 @@ fun SettingsScreen(
                         changePasswordError = null
                     }
                 ) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    if (showDeleteConfirmDialog && outletToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmDialog = false },
+            title = { Text("Hapus Outlet") },
+            text = {
+                Text("Apakah Anda yakin ingin menghapus outlet ${outletToDelete?.name}? Karyawan yang ditugaskan ke outlet ini akan dipindahkan ke penempatan 'Seluruh Outlet'.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        outletToDelete?.let { viewModel.deleteOutlet(it.id) }
+                        showDeleteConfirmDialog = false
+                    }
+                ) {
+                    Text("Hapus", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmDialog = false }) {
                     Text("Batal")
                 }
             }

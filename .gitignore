@@ -105,3 +105,7 @@ backend/posbah-backend*
 backend/*.exe
 backend/test_bin*
 query.sql
+
+# Environment secrets (jangan commit!)
+.posbah-env
+backend/.posbah-env

@@ -50,15 +50,52 @@ class MarginAnalysisViewModel @Inject constructor(
     private val productRepository: ProductRepository,
     private val transactionRepository: TransactionRepository,
     private val db: com.posbah.app.data.local.PosBahDatabase,
+    private val sessionState: com.posbah.app.data.repository.SessionState,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context
 ) : ViewModel() {
 
     val tenantId = authRepository.activeTenantId().orEmpty()
 
-    val transactions = transactionRepository.observe(tenantId)
+    /** Outlet yang tersedia untuk filter (Owner melihat semua). */
+    val availableOutlets = db.outletDao().observeForTenant(tenantId)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val products = productRepository.observe(tenantId)
+    /**
+     * Outlet yang dipilih sebagai filter.
+     * null = semua outlet (hanya OWNER yang bisa null).
+     */
+    private val _selectedOutletId = MutableStateFlow<Long?>(sessionState.lockedEmployeeOutletId.value)
+    val selectedOutletId = _selectedOutletId.asStateFlow()
+
+    /** Ganti filter outlet — hanya OWNER yang bisa memilih null atau outlet lain. */
+    fun selectOutletFilter(outletId: Long?) {
+        viewModelScope.launch {
+            val role = authRepository.getActiveUser()?.role ?: "KASIR"
+            if (role == "OWNER") {
+                _selectedOutletId.value = outletId
+            }
+            // Non-OWNER: diabaikan, locked ke outlet mereka
+        }
+    }
+
+    val transactions = _selectedOutletId
+        .flatMapLatest { outletId ->
+            if (outletId != null) {
+                transactionRepository.observeForOutlet(tenantId, outletId)
+            } else {
+                transactionRepository.observe(tenantId) // owner sees all
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val products = _selectedOutletId
+        .flatMapLatest { outletId ->
+            if (outletId != null) {
+                productRepository.observeForOutlet(tenantId, outletId)
+            } else {
+                productRepository.observe(tenantId)
+            }
+        }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val userRole = flow {
@@ -69,6 +106,14 @@ class MarginAnalysisViewModel @Inject constructor(
     val transactionItems = _transactionItems.asStateFlow()
 
     init {
+        // For non-OWNER: lock filter to their outlet
+        viewModelScope.launch {
+            val user = authRepository.getActiveUser()
+            if (user?.role != "OWNER") {
+                val lockedOutlet = sessionState.lockedEmployeeOutletId.value
+                _selectedOutletId.value = lockedOutlet
+            }
+        }
         refreshItems()
         // Auto-refresh when transactions update
         viewModelScope.launch {
@@ -125,7 +170,7 @@ fun MarginAnalysisScreen(
     val context = LocalContext.current
     val userRole by viewModel.userRole.collectAsState()
 
-    if (userRole == "KASIR") {
+    if (userRole != "OWNER") {
         Box(
             modifier = Modifier.fillMaxSize().padding(24.dp),
             contentAlignment = Alignment.Center
@@ -141,7 +186,7 @@ fun MarginAnalysisScreen(
                     color = MaterialTheme.colorScheme.error
                 )
                 Text(
-                    text = "Hanya Owner dan Admin yang dapat melihat analisis margin & keuntungan.",
+                    text = "Hanya Owner yang dapat melihat analisis margin & keuntungan.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
@@ -158,6 +203,8 @@ fun MarginAnalysisScreen(
     val transactions by viewModel.transactions.collectAsState()
     val products by viewModel.products.collectAsState()
     val transactionItems by viewModel.transactionItems.collectAsState()
+    val availableOutlets by viewModel.availableOutlets.collectAsState()
+    val selectedOutletId by viewModel.selectedOutletId.collectAsState()
 
     // Filters state
     var posMode by remember { mutableStateOf("SEMUA") } // SEMUA, FNB, RENTAL, LAUNDRY
@@ -497,6 +544,62 @@ fun MarginAnalysisScreen(
                                 )
                             }
                         }
+                    }
+                }
+            }
+
+            // Outlet Filter Row (hanya tampil untuk OWNER dengan 2+ outlet, atau info outlet untuk karyawan)
+            if (userRole == "OWNER" && availableOutlets.size > 1) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text("Filter Outlet:", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.tertiary)
+                        Spacer(Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            // "Semua Outlet" chip
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (selectedOutletId == null) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (selectedOutletId == null) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.clickable { viewModel.selectOutletFilter(null) }
+                            ) {
+                                Text("Semua", fontWeight = FontWeight.Bold, fontSize = 10.sp,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp))
+                            }
+                            availableOutlets.forEach { outlet ->
+                                val isActive = selectedOutletId == outlet.id
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isActive) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (isActive) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.clickable { viewModel.selectOutletFilter(outlet.id) }
+                                ) {
+                                    Text(outlet.name, fontWeight = FontWeight.Bold, fontSize = 10.sp,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if (userRole != "OWNER") {
+                // Karyawan: tampilkan outlet mereka sebagai info (read-only)
+                val myOutlet = availableOutlets.firstOrNull { it.id == selectedOutletId }
+                if (myOutlet != null) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f)
+                    ) {
+                        Text(
+                            text = "📍 Outlet: ${myOutlet.name}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                        )
                     }
                 }
             }

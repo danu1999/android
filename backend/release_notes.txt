@@ -1,3 +1,50 @@
+POSBah v2.16.0 - Keamanan & Pembaruan Sistem
+
+Halo Kak! POSBah v2.16.0 hadir dengan peningkatan keamanan, stabilitas sistem, dan aktivasi semua modul POS:
+1. Keamanan Akun: Proses aktivasi premium kini lebih aman dan jelas. Tombol dan dialog terkait status akun telah diperbarui.
+2. Modul FNB, Rental, dan Laundry: Semua sistem POS kini aktif sepenuhnya. Pilih satu sistem saat pertama kali masuk, dan sistem tersebut akan terkunci permanen untuk keamanan data Anda.
+3. Perbaikan Integritas Data: Sinkronisasi data antar modul (Invoice, Kas, Pembayaran, Bahan Baku) lebih konsisten.
+4. Pembaruan Server: Backend diperbarui dengan sistem keamanan yang lebih ketat dan pengelolaan file yang lebih efisien.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
+POSBah v2.15.1 - Akun Demo Offline & Pengujian Google Play
+
+Halo Kak! POSBah v2.15.1 hadir dengan pembaruan khusus:
+1. Akun Uji Coba Offline (Demo Bypass): Akses mode uji coba (demo/trial) offline kini dapat diakses dengan mudah tanpa membutuhkan Google Sign-In lewat tab login email dengan kredensial: demo@posbah.com (password: posbah123).
+2. Akun Peninjauan Google Play: Pembaruan kredensial bypass premium untuk mempercepat persetujuan aplikasi oleh tim peninjau Google Play Store.
+3. Kepatuhan Kebijakan Data Safety: Pembaruan opsi persetujuan privasi dan penyediaan URL penghapusan akun mandiri untuk keamanan data pengguna.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
+POSBah v2.15.0 - Keamanan Pembayaran & Perbaikan Sinkronisasi
+
+Halo Kak! POSBah v2.15.0 hadir dengan peningkatan keamanan dan perbaikan sinkronisasi data:
+1. Keamanan Token Konfirmasi Pembayaran: Setiap permintaan konfirmasi pembayaran kini menggunakan token sekali pakai (one-time token), sehingga replay attack dan double-confirm tidak mungkin terjadi.
+2. Sinkronisasi Produk Invoice Lebih Efisien: Hanya produk yang belum disinkronkan yang dikirim ke server, mengurangi bandwidth dan risiko data duplikat.
+3. Perbaikan Sinkronisasi Bahan Baku: Data bahan baku kini menggunakan upsert saat tarik dari server, mencegah duplikasi jika sinkronisasi dilakukan lebih dari sekali.
+4. Riwayat Transaksi 30 Hari: Ketika ganti HP, item transaksi FNB & BMP dari 30 hari terakhir otomatis ditarik ke HP baru.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
+POSBah v2.11.0 - Pengelolaan Outlet & Pembatasan Karyawan (Min 1, Max 10)
+
+Halo Kak! POSBah v2.11.0 hadir dengan fitur baru dan peningkatan keamanan data outlet:
+1. Hak Hapus Outlet Khusus Owner: Hanya Owner yang dapat menghapus outlet.
+2. Batas Karyawan per Outlet (Min 1, Max 10): Setiap outlet wajib memiliki minimal 1 karyawan dan maksimal 10 karyawan untuk semua modul POS (F&B, Rental, Laundry) dan Invoice & Manufaktur (BMP).
+3. Sinkronisasi Data Otomatis: Hubungan database karyawan (baik POS maupun BMP) dengan outlet tersinkronisasi dengan baik.
+4. Clean Unlinking Karyawan: Saat outlet dihapus, semua karyawan di outlet tersebut secara otomatis di-unlink agar data tidak error.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.5.0 - Perbaikan Tampilan Angka Pembayaran
 
 Halo Kak! Kami telah memperbaiki bug tampilan angka pada halaman pembayaran Invoice dan Manufaktur. Silakan perbarui ke versi 2.5.0 agar jumlah pembayaran tidak lagi tampil dalam format seperti "1.408E7" melainkan "14080000".

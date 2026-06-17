@@ -114,6 +114,23 @@ class EmployeeViewModel @Inject constructor(
 
         viewModelScope.launch {
             val cleanEmail = email.lowercase().trim()
+            
+            // Check max 10 employees for target outlet
+            if (outletId != null) {
+                val ownerEmail = authRepository.activeUserEmail()?.lowercase()?.trim()
+                val activeEmployees = db.employeeDao().getAll().filter { emp ->
+                    emp.tenantId == tenantId &&
+                    emp.isActive &&
+                    emp.role != "OWNER" &&
+                    emp.email?.lowercase()?.trim() != ownerEmail
+                }
+                val currentCount = activeEmployees.count { it.outletId == outletId }
+                if (currentCount >= 10) {
+                    _uiState.update { it.copy(error = "Gagal: Outlet tujuan sudah mencapai batas maksimal 10 karyawan.") }
+                    return@launch
+                }
+            }
+
             // Check if email already registered as employee
             val existing = db.employeeDao().findByEmail(cleanEmail)
             if (existing != null) {
@@ -355,6 +372,22 @@ class EmployeeViewModel @Inject constructor(
     fun deleteEmployee(employeeId: Long) {
         viewModelScope.launch {
             try {
+                val emp = db.employeeDao().getById(employeeId)
+                if (emp != null && emp.outletId != null) {
+                    val ownerEmail = authRepository.activeUserEmail()?.lowercase()?.trim()
+                    val activeEmployees = db.employeeDao().getAll().filter { e ->
+                        e.tenantId == tenantId &&
+                        e.isActive &&
+                        e.role != "OWNER" &&
+                        e.email?.lowercase()?.trim() != ownerEmail
+                    }
+                    val currentCount = activeEmployees.count { it.outletId == emp.outletId }
+                    if (currentCount <= 1) {
+                        val outletName = db.outletDao().getById(emp.outletId)?.name ?: "Outlet"
+                        _uiState.update { it.copy(error = "Gagal: $outletName harus memiliki minimal 1 karyawan.") }
+                        return@launch
+                    }
+                }
                 db.employeeDao().softDelete(employeeId)
                 checkPermissionAndLoad()
 
