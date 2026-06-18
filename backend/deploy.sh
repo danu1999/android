@@ -53,8 +53,8 @@ fi
 # ============================================================
 # COPY BINARY BARU DAN ASET STATIS
 # ============================================================
-log "Menyalin binary baru..."
-cp "$SCRIPT_DIR/posbah-backend" /home/muizz9900/posbah-backend
+log "Membangun binary baru (go build)..."
+cd "$SCRIPT_DIR" && go build -o /home/muizz9900/posbah-backend main.go db.go
 chmod +x /home/muizz9900/posbah-backend
 
 log "Menyalin admin.html..."
