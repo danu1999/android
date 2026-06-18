@@ -32,23 +32,44 @@ function checkAuthentication() {
     const email = localStorage.getItem("email");
 
     if (!tenantId || !email) {
-        showLoginOverlay();
+        showLandingPage();
     } else {
+        hideLandingPage();
         hideLoginOverlay();
         initializeDashboard();
     }
 }
 
+function showLandingPage() {
+    document.getElementById("landing-page").style.display = "block";
+    document.getElementById("login-overlay").style.display = "none";
+    document.getElementById("app-container").style.display = "none";
+}
+
+function hideLandingPage() {
+    const landing = document.getElementById("landing-page");
+    if (landing) landing.style.display = "none";
+}
+
 function showLoginOverlay() {
     document.getElementById("login-overlay").style.display = "flex";
-    document.getElementById("app-container").style.display = "none";
+    // We keep the landing page behind the modal overlay
     generateQRLogin();
 }
 
 function hideLoginOverlay() {
     document.getElementById("login-overlay").style.display = "none";
+    hideLandingPage();
     document.getElementById("app-container").style.display = "flex";
 }
+
+window.closeLoginOverlay = function() {
+    document.getElementById("login-overlay").style.display = "none";
+    if (qrPollInterval) {
+        clearInterval(qrPollInterval);
+        qrPollInterval = null;
+    }
+};
 
 // QR Code Authentication Logic
 async function generateQRLogin() {
@@ -832,7 +853,7 @@ function setupNavigation() {
     document.getElementById("logout-btn").addEventListener("click", () => {
         if (confirm("Apakah Anda yakin ingin logout dari POSBah Web?")) {
             localStorage.clear();
-            showLoginOverlay();
+            showLandingPage();
         }
     });
 }

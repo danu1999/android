@@ -17,9 +17,172 @@
     <!-- Print Container (Only visible to printer) -->
     <div id="print-area"></div>
 
+    <!-- Landing Page (Public Website) -->
+    <div id="landing-page">
+        <!-- Navigation Header -->
+        <nav class="landing-nav">
+            <span class="logo-text">POSBah</span>
+            <div class="nav-links">
+                <a href="#fitur">Fitur</a>
+                <a href="#harga">Harga</a>
+                <a href="#hubungi">Hubungi Kami</a>
+                <button class="btn btn-primary" onclick="showLoginOverlay()"><i class="fa-solid fa-right-to-bracket"></i> Buka Kasir Web</button>
+            </div>
+        </nav>
+
+        <!-- Hero Section -->
+        <section class="landing-hero">
+            <h1>Kelola Kasir POS & Manufaktur Bisnis Anda Secara Pintar</h1>
+            <p>POSBah adalah solusi sistem kasir terpadu (Point of Sale) untuk berbagai lini bisnis Anda. Terintegrasi langsung dengan modul invoice, absensi karyawan, hingga log manufaktur harian secara real-time.</p>
+            <div class="landing-cta-group">
+                <button class="btn-premium-cta" onclick="showLoginOverlay()"><i class="fa-solid fa-play"></i> Mulai Demo Kasir</button>
+                <a href="#hubungi" class="btn-secondary-cta"><i class="fa-solid fa-envelope"></i> Hubungi Sales</a>
+            </div>
+        </section>
+
+        <!-- Features Section -->
+        <section class="landing-section" id="fitur">
+            <div class="landing-section-title">
+                <h2>Fitur Utama POSBah</h2>
+                <p>Didesain khusus untuk mempercepat pertumbuhan bisnis ritel hingga manufaktur skala menengah.</p>
+            </div>
+            <div class="features-grid-landing">
+                <div class="feature-landing-card">
+                    <div class="feature-landing-icon"><i class="fa-solid fa-cash-register"></i></div>
+                    <h3>Kasir Pintar Real-Time</h3>
+                    <p>Proses transaksi penjualan kasir cepat dengan pencetakan struk termal otomatis (Groziie TD630) dan sinkronisasi multi-outlet instan.</p>
+                </div>
+                <div class="feature-landing-card">
+                    <div class="feature-landing-icon"><i class="fa-solid fa-boxes-stacked"></i></div>
+                    <h3>Manufaktur &amp; Stok</h3>
+                    <p>Pantau persediaan bahan mentah dan barang jadi. Mutasi stok terpotong otomatis saat ada penjualan atau log produksi baru terdaftar.</p>
+                </div>
+                <div class="feature-landing-card">
+                    <div class="feature-landing-icon"><i class="fa-solid fa-calculator"></i></div>
+                    <h3>Rumus HPP Dinamis</h3>
+                    <p>Kalkulasi nilai HPP produk jadi secara akurat dan dinamis mengikuti perubahan fluktuatif harga beli bahan baku mentah terakhir di pasaran.</p>
+                </div>
+                <div class="feature-landing-card">
+                    <div class="feature-landing-icon"><i class="fa-solid fa-fingerprint"></i></div>
+                    <h3>Absensi Karyawan AI</h3>
+                    <p>Integrasi langsung dengan mesin sidik jari ADMS eksternal dengan klasifikasi status kehadiran otomatis berbasis model kecerdasan buatan.</p>
+                </div>
+                <div class="feature-landing-card">
+                    <div class="feature-landing-icon"><i class="fa-solid fa-file-signature"></i></div>
+                    <h3>Invoice &amp; Tanda Tangan</h3>
+                    <p>Buat invoice B2B dengan pelacakan jatuh tempo piutang dan bukti tanda tangan digital penerima barang yang aman secara online.</p>
+                </div>
+                <div class="feature-landing-card">
+                    <div class="feature-landing-icon"><i class="fa-solid fa-chart-line"></i></div>
+                    <h3>Margin Laba Cabang</h3>
+                    <p>Ketahui cabang usaha yang paling menguntungkan melalui laporan real-time margin kontribusi keuntungan bersih per outlet.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Pricing Section -->
+        <section class="landing-section" id="harga" style="background: rgba(255, 255, 255, 0.01); border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color);">
+            <div class="landing-section-title">
+                <h2>Paket Langganan POSBah</h2>
+                <p>Harga transparan tanpa biaya tambahan tersembunyi. Aktifkan lisensi Anda sekarang.</p>
+            </div>
+            <div class="pricing-grid-landing">
+                <!-- POS Premium Card -->
+                <div class="pricing-landing-card">
+                    <div>
+                        <h3>POS Premium</h3>
+                        <p class="desc">Cocok untuk UMKM, ritel, warung, laundry, dan usaha persewaan.</p>
+                        <div class="price">Rp 40.000<span>/bulan</span></div>
+                        <p style="font-size: 12px; color: var(--text-muted); margin-top: -16px; margin-bottom: 24px;">Atau hemat dengan Rp 350.000 / tahun</p>
+                        <ul>
+                            <li><i class="fa-solid fa-circle-check"></i> Multi-Outlet &amp; Cabang Usaha</li>
+                            <li><i class="fa-solid fa-circle-check"></i> Kasir &amp; Print Struk Otomatis</li>
+                            <li><i class="fa-solid fa-circle-check"></i> Sinkronisasi Cloud Real-Time</li>
+                            <li><i class="fa-solid fa-circle-check"></i> Laporan Keuangan Standar</li>
+                        </ul>
+                    </div>
+                    <button class="btn-pricing-cta" onclick="showLoginOverlay()">Mulai Paket POS</button>
+                </div>
+                <!-- Invoice & Manufaktur Card -->
+                <div class="pricing-landing-card popular">
+                    <span class="pricing-tag-popular">Rekomendasi</span>
+                    <div>
+                        <h3>Invoice &amp; Manufaktur</h3>
+                        <p class="desc">Cocok untuk pabrik, manufaktur cetak plastik, dan grosir.</p>
+                        <div class="price">Rp 300.000<span>/bulan</span></div>
+                        <ul>
+                            <li><i class="fa-solid fa-circle-check"></i> Semua Fitur POS Premium</li>
+                            <li><i class="fa-solid fa-circle-check"></i> Kartu Stok &amp; Log Produksi Harian</li>
+                            <li><i class="fa-solid fa-circle-check"></i> Kalkulasi Rumus HPP Dinamis</li>
+                            <li><i class="fa-solid fa-circle-check"></i> Tanda Tangan Digital Penerima</li>
+                        </ul>
+                    </div>
+                    <button class="btn-pricing-cta" onclick="showLoginOverlay()">Mulai Paket Manufaktur</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Contact Section -->
+        <section class="landing-section" id="hubungi">
+            <div class="landing-section-title">
+                <h2>Hubungi Tim Kami</h2>
+                <p>Kami siap membantu kelancaran sistem operasional dan digitalisasi bisnis Anda.</p>
+            </div>
+            <div class="contact-grid">
+                <div class="contact-info-landing">
+                    <div class="contact-info-item">
+                        <i class="fa-solid fa-location-dot"></i>
+                        <div>
+                            <h4>Alamat Kantor Resmi</h4>
+                            <p>PT POSBah Teknologi Indonesia<br>Jl. Bahtera Mulya No. 42, Surabaya, Jawa Timur, Indonesia</p>
+                        </div>
+                    </div>
+                    <div class="contact-info-item">
+                        <i class="fa-solid fa-envelope"></i>
+                        <div>
+                            <h4>Hubungan Kemitraan &amp; Support</h4>
+                            <p>muhammadmuizz8@gmail.com</p>
+                        </div>
+                    </div>
+                    <div class="contact-info-item">
+                        <i class="fa-solid fa-phone"></i>
+                        <div>
+                            <h4>WhatsApp Bisnis (Sales)</h4>
+                            <p>+62 812-3456-7890</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Refund Policy Card -->
+                <div class="glass-card" style="padding: 32px; border-radius: 20px;">
+                    <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 12px; color: var(--warning); display: flex; align-items: center; gap: 8px;"><i class="fa-solid fa-shield-halved"></i> Garansi Kepuasan Pelanggan</h3>
+                    <p style="font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-bottom: 16px;">Kami memberikan garansi pengembalian uang 100% dalam waktu <strong>7 hari</strong> setelah tanggal berlangganan pertama Anda, apabila fitur-fitur POSBah tidak memenuhi kebutuhan operasional usaha Anda.</p>
+                    <p style="font-size: 13px; color: var(--text-main); font-weight: 500;">Silakan hubungi email dukungan kami untuk proses klaim pengembalian dana cepat tanpa potongan.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer Section -->
+        <footer class="landing-footer">
+            <div class="footer-content">
+                <span class="logo-text">POSBah</span>
+                <div class="footer-links">
+                    <a href="/privacy.html">Kebijakan Privasi</a>
+                    <a href="/terms.html">Syarat &amp; Ketentuan</a>
+                    <a href="#fitur">Fitur</a>
+                    <a href="#harga">Harga</a>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2026 POSBah. Seluruh Hak Cipta Dilindungi.</p>
+                <p>Powered by PT POSBah Teknologi Indonesia</p>
+            </div>
+        </footer>
+    </div>
+
     <!-- Login Screen Overlay -->
-    <div id="login-overlay" class="overlay">
-        <div class="glass-card login-card">
+    <div id="login-overlay" class="overlay" style="display: none;">
+        <div class="glass-card login-card" style="position: relative;">
+            <button onclick="closeLoginOverlay()" style="position: absolute; top: 20px; right: 20px; background: transparent; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; z-index: 10;"><i class="fa-solid fa-xmark"></i></button>
             <h1 class="logo-text">POSBah</h1>
             <p class="subtitle">Hubungkan dengan Aplikasi Android Anda</p>
             <div class="qr-container">
