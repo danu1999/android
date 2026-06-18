@@ -29,6 +29,7 @@ data class BmpClientEntity(
     val uniqueID: String? = null,
     val slug: String? = null,
     val isSynced: Boolean = false,    // false = belum disinkronkan ke cloud
+    val isDeleted: Boolean = false,   // soft-delete flag
     val receiverSignatureUrl: String? = null,
     val receiverNameActual: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
@@ -59,6 +60,7 @@ data class BmpInvoiceEntity(
     val uniqueID: String? = null,
     val slug: String,
     val isSynced: Boolean = false,    // false = belum disinkronkan ke cloud
+    val isDeleted: Boolean = false,   // soft-delete flag
     val receiverSignaturePath: String? = null,
     val receiverSignatureUrl: String? = null,
     val receiverNameActual: String? = null,
@@ -83,6 +85,7 @@ data class BmpMasterProductEntity(
     val rejectRate: Double = 0.0,
     val uniqueID: String? = null,
     val slug: String? = null,
+    val isDeleted: Boolean = false,   // soft-delete flag
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
@@ -107,6 +110,7 @@ data class BmpProductEntity(
     val uniqueID: String? = null,
     val slug: String? = null,
     val isSynced: Boolean = false,    // false = belum disinkronkan ke cloud
+    val isDeleted: Boolean = false,   // soft-delete flag
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
@@ -124,6 +128,7 @@ data class BmpInvoicePaymentEntity(
     val paymentMethod: String = "TRANSFER", // CASH, TRANSFER, QRIS
     val notes: String? = null,
     val isSynced: Boolean = false,    // false = belum disinkronkan ke cloud
+    val isDeleted: Boolean = false,   // soft-delete flag
     val createdAt: Long = System.currentTimeMillis()
 )
 
@@ -140,6 +145,7 @@ data class BmpCashFlowEntity(
     val amount: Double = 0.0,
     val paymentRefId: Long? = null,
     val isSynced: Boolean = false,    // false = belum disinkronkan ke cloud
+    val isDeleted: Boolean = false,   // soft-delete flag
     val createdAt: Long = System.currentTimeMillis()
 )
 
@@ -222,6 +228,7 @@ data class BmpBahanBakuEntity(
     val notaFotoPath: String? = null,           // Path lokal foto nota (JPEG ≤100 KB, sebelum upload)
     val notaFotoUrl: String? = null,            // URL Cloudinary setelah berhasil diupload
     val isSynced: Boolean = false,    // false = belum disinkronkan ke cloud
+    val isDeleted: Boolean = false,   // soft-delete flag
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
@@ -243,6 +250,7 @@ data class BmpBahanBakuItemEntity(
     val unit: String = "Kg",
     val rate: Double = 0.0,                     // Harga beli per Kg (acuan HPP)
     val isSynced: Boolean = false,              // false = belum disinkronkan ke cloud
+    val isDeleted: Boolean = false,             // soft-delete flag
     val createdAt: Long = System.currentTimeMillis()
 )
 

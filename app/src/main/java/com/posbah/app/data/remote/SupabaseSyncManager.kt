@@ -182,6 +182,11 @@ object SupabaseSyncManager {
         try {
             Log.d(TAG, "Memulai sinkronisasi ke VPS...")
 
+            // PHASE 0: Push deletes ke server SEBELUM upload data baru
+            // Penting: data yang dihapus harus dikonfirmasi server terlebih dahulu
+            // agar pullAll tidak me-restore kembali data yang sudah dihapus.
+            pushDeletedRecordsToServer(context, db, activeTenantId)
+
             // 1. local_users (Metadata - upload all)
             val users = db.localUserDao().getAll().filter { it.tenantId == activeTenantId }
             if (users.isNotEmpty()) {
@@ -612,8 +617,8 @@ object SupabaseSyncManager {
                 uploadTable(context, "print_settings", array)
             }
  
-            // 17. products (Metadata - upload all)
-            val productsList = db.productDao().getAll().filter { it.tenantId == activeTenantId }
+            // 17. products (Metadata - upload all NON-DELETED)
+            val productsList = db.productDao().getAll().filter { it.tenantId == activeTenantId && !it.isDeleted }
             if (productsList.isNotEmpty()) {
                 val array = JSONArray()
                 productsList.forEach { p ->
@@ -657,8 +662,8 @@ object SupabaseSyncManager {
                 uploadTable(context, "customers", array)
             }
  
-            // 19. transactions (Operational / POS Transactions - upload all)
-            val transactionsList = db.transactionDao().getAll().filter { it.tenantId == activeTenantId }
+            // 19. transactions (Operational / POS Transactions - upload all NON-DELETED)
+            val transactionsList = db.transactionDao().getAll().filter { it.tenantId == activeTenantId && !it.isDeleted }
             if (transactionsList.isNotEmpty()) {
                 val array = JSONArray()
                 transactionsList.forEach { t ->
@@ -739,6 +744,125 @@ object SupabaseSyncManager {
         } catch (e: Exception) {
             Log.e(TAG, "Sinkronisasi gagal: ${e.message}", e)
             SyncResult.Error(e.message ?: "Error tidak terduga saat sinkronisasi.")
+        }
+    }
+
+    /**
+     * Kirim semua record yang sudah soft-deleted ke server untuk hard-delete.
+     * Setelah server mengkonfirmasi delete (HTTP 200), hard-delete dari Room lokal.
+     *
+     * Urutan hapus sangat penting (child dulu, baru parent) untuk menghindari
+     * foreign key constraint error di server.
+     */
+    private suspend fun pushDeletedRecordsToServer(
+        context: Context,
+        db: PosBahDatabase,
+        tenantId: String
+    ) {
+        if (!isNetworkAvailable(context)) return
+
+        try {
+            // ── BMP: urutan child → parent ──────────────────────────────────
+
+            // 1. bmp_products (child invoice)
+            val deletedProductIds = db.bmpProductDao().getDeletedIds()
+            for (id in deletedProductIds) {
+                if (deleteRow(context, "bmp_products", id, tenantId)) {
+                    db.bmpProductDao().hardDelete(id)
+                } else {
+                    Log.w(TAG, "[DeletePush] Gagal delete bmp_products id=$id dari server, akan dicoba lagi nanti")
+                }
+            }
+
+            // 2. bmp_cashflow (child payment)
+            val deletedCashFlowIds = db.bmpCashFlowDao().getDeletedIds(tenantId)
+            for (id in deletedCashFlowIds) {
+                if (deleteRow(context, "bmp_cashflow", id, tenantId)) {
+                    db.bmpCashFlowDao().hardDelete(id)
+                }
+            }
+
+            // 3. bmp_invoice_payments (child invoice)
+            val deletedPaymentIds = db.bmpPaymentDao().getDeletedIds(tenantId)
+            for (id in deletedPaymentIds) {
+                if (deleteRow(context, "bmp_invoice_payments", id, tenantId)) {
+                    db.bmpPaymentDao().hardDelete(id)
+                }
+            }
+
+            // 4. bmp_invoices
+            val deletedInvoiceIds = db.bmpInvoiceDao().getDeletedIds(tenantId)
+            for (id in deletedInvoiceIds) {
+                if (deleteRow(context, "bmp_invoices", id, tenantId)) {
+                    db.bmpInvoiceDao().hardDelete(id)
+                }
+            }
+
+            // 5. bmp_clients
+            val deletedClientIds = db.bmpClientDao().getDeletedIds(tenantId)
+            for (id in deletedClientIds) {
+                if (deleteRow(context, "bmp_clients", id, tenantId)) {
+                    db.bmpClientDao().hardDelete(id)
+                }
+            }
+
+            // 6. bmp_bahan_baku_item (child header)
+            val deletedBahanBakuItemIds = db.bmpBahanBakuItemDao().getDeletedIds()
+            for (id in deletedBahanBakuItemIds) {
+                if (deleteRow(context, "bmp_bahan_baku_item", id, tenantId)) {
+                    db.bmpBahanBakuItemDao().hardDelete(id)
+                }
+            }
+
+            // 7. bmp_bahan_baku
+            val deletedBahanBakuIds = db.bmpBahanBakuDao().getDeletedIds(tenantId)
+            for (id in deletedBahanBakuIds) {
+                if (deleteRow(context, "bmp_bahan_baku", id, tenantId)) {
+                    db.bmpBahanBakuDao().hardDelete(id)
+                }
+            }
+
+            // 8. bmp_master_products
+            val deletedMasterProductIds = db.bmpMasterProductDao().getDeletedIds(tenantId)
+            for (id in deletedMasterProductIds) {
+                if (deleteRow(context, "bmp_master_products", id, tenantId)) {
+                    db.bmpMasterProductDao().hardDelete(id)
+                }
+            }
+
+            // ── POS: transactions ──────────────────────────────────────────
+
+            // 9. POS products (catalog) yang di-soft-delete
+            val deletedPosProductIds = db.productDao().getDeletedIds(tenantId)
+            for (id in deletedPosProductIds) {
+                if (deleteRow(context, "products", id, tenantId)) {
+                    db.productDao().hardDelete(id)
+                }
+            }
+
+            // 10. transaction_items (child transactions — hapus items dulu)
+            val deletedTxIds = db.transactionDao().getDeletedIds(tenantId)
+            for (txId in deletedTxIds) {
+                // Hapus semua items di server untuk transaksi ini
+                val items = db.transactionItemDao().listForTransaction(txId)
+                for (item in items) {
+                    deleteRow(context, "transaction_items", item.id, tenantId)
+                }
+                // Hapus items lokal
+                db.transactionItemDao().deleteForTransaction(txId)
+            }
+
+            // 10. transactions
+            for (txId in deletedTxIds) {
+                if (deleteRow(context, "transactions", txId, tenantId)) {
+                    db.transactionDao().delete(txId)
+                }
+            }
+
+            Log.d(TAG, "[DeletePush] Selesai push deletes ke server.")
+        } catch (e: Exception) {
+            Log.e(TAG, "[DeletePush] Error saat push deletes: ${e.message}", e)
+            // Non-fatal: lanjutkan syncAll meski delete gagal
         }
     }
  
@@ -893,6 +1017,9 @@ object SupabaseSyncManager {
                 return@withContext SyncResult.NoConnection
             }
             Log.d(TAG, "Memulai pull data master dari VPS...")
+
+            // Guard: push deletes dulu sebelum pull agar data yang dihapus tidak di-restore
+            pushDeletedRecordsToServer(context, db, activeTenantId)
 
             // 1. Pull outlets
             val outletsArray = pullTable(context, "outlets", activeTenantId)
@@ -1126,7 +1253,9 @@ object SupabaseSyncManager {
                     ))
                 }
                 if (list.isNotEmpty()) {
-                    list.forEach { db.bmpClientDao().upsert(it) }
+                    // Guard: jangan restore klien yang sudah di-soft-delete lokal
+                    val localDeletedIds = db.bmpClientDao().getDeletedIds(activeTenantId).toSet()
+                    list.filter { it.id !in localDeletedIds }.forEach { db.bmpClientDao().upsert(it) }
                 }
             }
 

@@ -42,7 +42,7 @@ class ProductRepository @Inject constructor(
     fun search(tenantId: String, query: String): Flow<List<ProductEntity>> = productDao.search(tenantId, query)
     suspend fun upsert(product: ProductEntity): Long = productDao.upsert(product)
     suspend fun updateStock(id: Long, newStock: Int) = productDao.updateStock(id, newStock)
-    suspend fun delete(id: Long) = productDao.delete(id)
+    suspend fun delete(id: Long) = productDao.softDelete(id)
 }
 
 @Singleton
@@ -172,6 +172,28 @@ class TransactionRepository @Inject constructor(
             val newStock = (product.stock - item.quantity).coerceAtLeast(0)
             productDao.updateStock(product.id, newStock)
         }
+    }
+
+    /**
+     * Soft-delete transaksi secara permanen beserta semua item-nya.
+     * Jika transaksi berstatus COMPLETED, kembalikan stok produk.
+     * Data di server akan dihapus saat syncAll berikutnya.
+     */
+    suspend fun deleteTransaction(id: Long) {
+        val tx = transactionDao.getById(id) ?: return
+
+        // Kembalikan stok jika transaksi COMPLETED dan bukan EXPENSE
+        if (tx.status == "COMPLETED" && tx.type != "EXPENSE") {
+            val items = transactionItemDao.listForTransaction(id)
+            for (item in items) {
+                val product = productDao.getById(item.productId) ?: continue
+                val newStock = product.stock + item.quantity
+                productDao.updateStock(product.id, newStock)
+            }
+        }
+
+        // Soft-delete transaksi (item akan di-hard-delete saat sync via pushDeletedRecordsToServer)
+        transactionDao.softDelete(id)
     }
 
     private suspend fun generateReceiptNumber(tenantId: String): String {

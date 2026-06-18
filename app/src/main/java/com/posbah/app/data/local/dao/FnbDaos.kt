@@ -14,10 +14,10 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface ProductDao {
     // ── Tenant-level queries (used by seeder, owner dashboard) ──────────────
-    @Query("SELECT * FROM products WHERE tenantId = :tenantId ORDER BY name ASC")
+    @Query("SELECT * FROM products WHERE tenantId = :tenantId AND isDeleted = 0 ORDER BY name ASC")
     fun observe(tenantId: String): Flow<List<ProductEntity>>
 
-    @Query("SELECT * FROM products WHERE tenantId = :tenantId ORDER BY name ASC")
+    @Query("SELECT * FROM products WHERE tenantId = :tenantId AND isDeleted = 0 ORDER BY name ASC")
     suspend fun list(tenantId: String): List<ProductEntity>
 
     // ── Outlet-level queries (strict isolation per outlet) ───────────────────
@@ -29,6 +29,7 @@ interface ProductDao {
         SELECT * FROM products
         WHERE tenantId = :tenantId
           AND (outletId = :outletId OR outletId IS NULL)
+          AND isDeleted = 0
         ORDER BY name ASC
     """)
     fun observeForOutlet(tenantId: String, outletId: Long): Flow<List<ProductEntity>>
@@ -37,17 +38,18 @@ interface ProductDao {
         SELECT * FROM products
         WHERE tenantId = :tenantId
           AND outletId = :outletId
+          AND isDeleted = 0
         ORDER BY name ASC
     """)
     suspend fun listForOutlet(tenantId: String, outletId: Long): List<ProductEntity>
 
-    @Query("SELECT * FROM products WHERE id = :id LIMIT 1")
+    @Query("SELECT * FROM products WHERE id = :id AND isDeleted = 0 LIMIT 1")
     suspend fun getById(id: Long): ProductEntity?
 
     @Query("SELECT * FROM products WHERE tenantId = :tenantId AND barcode = :barcode LIMIT 1")
     suspend fun getByBarcode(tenantId: String, barcode: String): ProductEntity?
 
-    @Query("SELECT * FROM products WHERE tenantId = :tenantId AND name LIKE '%' || :query || '%' ORDER BY name ASC")
+    @Query("SELECT * FROM products WHERE tenantId = :tenantId AND name LIKE '%' || :query || '%' AND isDeleted = 0 ORDER BY name ASC")
     fun search(tenantId: String, query: String): Flow<List<ProductEntity>>
 
     @Query("""
@@ -55,6 +57,7 @@ interface ProductDao {
         WHERE tenantId = :tenantId
           AND (outletId = :outletId OR outletId IS NULL)
           AND name LIKE '%' || :query || '%'
+          AND isDeleted = 0
         ORDER BY name ASC
     """)
     fun searchForOutlet(tenantId: String, outletId: Long, query: String): Flow<List<ProductEntity>>
@@ -72,6 +75,17 @@ interface ProductDao {
 
     @Query("DELETE FROM products WHERE id = :id")
     suspend fun delete(id: Long)
+
+    /** Soft-delete produk POS */
+    @Query("UPDATE products SET isDeleted = 1, updatedAt = :ts WHERE id = :id")
+    suspend fun softDelete(id: Long, ts: Long = System.currentTimeMillis())
+
+    /** Ambil ID yang sudah deleted untuk dikirim DELETE ke server */
+    @Query("SELECT id FROM products WHERE tenantId = :tenantId AND isDeleted = 1")
+    suspend fun getDeletedIds(tenantId: String): List<Long>
+
+    @Query("DELETE FROM products WHERE id = :id")
+    suspend fun hardDelete(id: Long)
 
     @Query("SELECT * FROM products")
     suspend fun getAll(): List<ProductEntity>
@@ -125,10 +139,10 @@ interface CustomerDao {
 @Dao
 interface TransactionDao {
     // ── Tenant-level (owner sees all) ────────────────────────────────────────
-    @Query("SELECT * FROM transactions WHERE tenantId = :tenantId ORDER BY date DESC")
+    @Query("SELECT * FROM transactions WHERE tenantId = :tenantId AND isDeleted = 0 ORDER BY date DESC")
     fun observe(tenantId: String): Flow<List<TransactionEntity>>
 
-    @Query("SELECT * FROM transactions WHERE tenantId = :tenantId AND status = 'PENDING' ORDER BY date DESC")
+    @Query("SELECT * FROM transactions WHERE tenantId = :tenantId AND status = 'PENDING' AND isDeleted = 0 ORDER BY date DESC")
     fun observePendingQueues(tenantId: String): Flow<List<TransactionEntity>>
 
     // ── Outlet-level (strict isolation) ──────────────────────────────────────
@@ -136,6 +150,7 @@ interface TransactionDao {
         SELECT * FROM transactions
         WHERE tenantId = :tenantId
           AND (outletId = :outletId OR outletId IS NULL)
+          AND isDeleted = 0
         ORDER BY date DESC
     """)
     fun observeForOutlet(tenantId: String, outletId: Long): Flow<List<TransactionEntity>>
@@ -145,11 +160,12 @@ interface TransactionDao {
         WHERE tenantId = :tenantId
           AND (outletId = :outletId OR outletId IS NULL)
           AND status = 'PENDING'
+          AND isDeleted = 0
         ORDER BY date DESC
     """)
     fun observePendingQueuesForOutlet(tenantId: String, outletId: Long): Flow<List<TransactionEntity>>
 
-    @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
+    @Query("SELECT * FROM transactions WHERE id = :id AND isDeleted = 0 LIMIT 1")
     suspend fun getById(id: Long): TransactionEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -170,7 +186,7 @@ interface TransactionDao {
     @Query("UPDATE transactions SET status = 'CANCELLED', updatedAt = :ts WHERE id = :id")
     suspend fun cancelTransaction(id: Long, ts: Long = System.currentTimeMillis())
 
-    @Query("SELECT receiptNumber FROM transactions WHERE tenantId = :tenantId ORDER BY id DESC LIMIT 1")
+    @Query("SELECT receiptNumber FROM transactions WHERE tenantId = :tenantId AND isDeleted = 0 ORDER BY id DESC LIMIT 1")
     suspend fun getLastReceiptNumber(tenantId: String): String?
 
     /** Forcefully corrects a stale date for an existing transaction identified by receipt number. */
@@ -180,8 +196,17 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions")
     suspend fun getAll(): List<TransactionEntity>
 
+    /** Soft-delete: tandai isDeleted=1, cascade ke server via SyncManager */
+    @Query("UPDATE transactions SET isDeleted = 1, updatedAt = :ts WHERE id = :id")
+    suspend fun softDelete(id: Long, ts: Long = System.currentTimeMillis())
+
+    /** Hard-delete setelah server berhasil delete */
     @Query("DELETE FROM transactions WHERE id = :id")
     suspend fun delete(id: Long)
+
+    /** Ambil ID yang sudah soft-deleted untuk dikirim DELETE ke server */
+    @Query("SELECT id FROM transactions WHERE tenantId = :tenantId AND isDeleted = 1")
+    suspend fun getDeletedIds(tenantId: String): List<Long>
 }
 
 @Dao

@@ -248,6 +248,28 @@ class LaundryViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Hapus riwayat order laundry secara permanen.
+     * Soft-delete lokal + push DELETE ke server saat syncAll.
+     */
+    fun deleteOrder(orderId: String, onDone: () -> Unit) {
+        viewModelScope.launch {
+            val tx = transactions.value.find { it.receiptNumber == orderId }
+            if (tx != null) {
+                transactionRepository.deleteTransaction(tx.id)
+                logActivity("HAPUS ORDER LAUNDRY", "Menghapus order laundry ${tx.receiptNumber} pelanggan ${tx.customerName}")
+            }
+            onDone()
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
     fun checkout(customerName: String, phone: String, rentDate: Long?, onDone: (LaundryOrder) -> Unit) {
         viewModelScope.launch {
             val c = com.posbah.app.data.local.entities.CustomerEntity(

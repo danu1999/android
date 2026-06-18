@@ -692,6 +692,26 @@ class PosViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Hapus riwayat transaksi secara permanen.
+     * Soft-delete lokal + push delete ke server saat syncAll berikutnya.
+     * Jika transaksi COMPLETED, stok produk dikembalikan.
+     */
+    fun deleteTransaction(transactionId: Long) {
+        viewModelScope.launch {
+            val tx = transactionRepository.getById(transactionId) ?: return@launch
+            transactionRepository.deleteTransaction(transactionId)
+            logActivity("HAPUS TRANSAKSI", "Menghapus transaksi ${tx.receiptNumber} (${tx.paymentMethod}) senilai Rp ${tx.total}")
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
     fun logActivity(action: String, description: String) {
         viewModelScope.launch {
             val user = authRepository.getActiveUser()

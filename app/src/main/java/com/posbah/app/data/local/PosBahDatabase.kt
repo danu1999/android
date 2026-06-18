@@ -74,7 +74,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
         TransactionItemEntity::class,
         ActivityLogEntity::class
     ],
-    version = 24,
+    version = 25,
     exportSchema = true
 )
 abstract class PosBahDatabase : RoomDatabase() {
@@ -399,6 +399,45 @@ abstract class PosBahDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Migration v24 → v25: Soft-delete support untuk semua tabel operasional BMP.
+         *
+         * Menambah kolom `isDeleted` INTEGER NOT NULL DEFAULT 0 ke semua tabel yang
+         * memerlukan mekanisme soft-delete agar data yang dihapus tidak muncul kembali
+         * saat pullAll() dari server.
+         *
+         * Tabel yang mendapat kolom isDeleted:
+         * - bmp_clients       (klien/customer BMP)
+         * - bmp_invoices      (invoice/faktur)
+         * - bmp_master_products (produk master)
+         * - bmp_products      (item produk per invoice)
+         * - bmp_invoice_payments (pembayaran invoice)
+         * - bmp_cashflow      (arus kas)
+         * - bmp_bahan_baku    (tagihan bahan baku)
+         * - bmp_bahan_baku_item (item bahan baku)
+         */
+        val MIGRATION_24_25 = object : Migration(24, 25) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val tables = listOf(
+                    "bmp_clients",
+                    "bmp_invoices",
+                    "bmp_master_products",
+                    "bmp_products",
+                    "bmp_invoice_payments",
+                    "bmp_cashflow",
+                    "bmp_bahan_baku",
+                    "bmp_bahan_baku_item",
+                    "transactions",  // POS - FnB/Laundry/Rental
+                    "products"       // POS catalog products (F&B, Laundry, Rental)
+                )
+                for (table in tables) {
+                    db.execSQL(
+                        "ALTER TABLE `$table` ADD COLUMN `isDeleted` INTEGER NOT NULL DEFAULT 0"
+                    )
+                }
+            }
+        }
+
         fun build(context: Context, passphrase: ByteArray): PosBahDatabase {
             // Load SQLCipher native library
             System.loadLibrary("sqlcipher")
@@ -416,7 +455,7 @@ abstract class PosBahDatabase : RoomDatabase() {
                     MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
                     MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
                     MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22,
-                    MIGRATION_22_23, MIGRATION_23_24
+                    MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25
                 ) // ← Data AMAN, tidak terhapus
                 .fallbackToDestructiveMigration()      // ← Fallback jika dari versi < 5 (install baru)
                 .addCallback(object : Callback() {

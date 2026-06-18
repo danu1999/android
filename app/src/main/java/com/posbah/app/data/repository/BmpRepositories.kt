@@ -28,7 +28,12 @@ import com.posbah.app.data.local.entities.PrintSettingsEntity
 
 @Singleton
 class BmpClientRepository @Inject constructor(
-    private val dao: BmpClientDao
+    private val dao: BmpClientDao,
+    private val invoiceDao: BmpInvoiceDao,
+    private val paymentDao: BmpPaymentDao,
+    private val cashFlowDao: BmpCashFlowDao,
+    private val productDao: BmpProductDao,
+    private val db: com.posbah.app.data.local.PosBahDatabase
 ) {
     fun observe(tenantId: String): Flow<List<BmpClientEntity>> = dao.observe(tenantId)
     fun search(tenantId: String, q: String): Flow<List<BmpClientEntity>> = dao.search(tenantId, q)
@@ -40,7 +45,34 @@ class BmpClientRepository @Inject constructor(
             updatedAt = System.currentTimeMillis()
         )
     )
-    suspend fun delete(id: Long) = dao.delete(id)
+
+    /**
+     * Cascade-delete klien beserta SEMUA invoice, produk, pembayaran, dan cashflow terkait.
+     * Soft-delete di lokal (isDeleted=1), hard-delete di server dilakukan oleh SyncManager.
+     */
+    suspend fun delete(id: Long) {
+        db.withTransaction {
+            // 1. Dapatkan semua invoice milik klien ini
+            val invoices = invoiceDao.getByClientId(id)
+            for (invoice in invoices) {
+                // Soft-delete semua pembayaran invoice
+                val payments = paymentDao.listAllForInvoice(invoice.id)
+                for (payment in payments) {
+                    cashFlowDao.softDeleteByPaymentRefId(payment.id)
+                }
+                paymentDao.softDeleteByInvoice(invoice.id)
+                // Soft-delete produk invoice
+                productDao.softDeleteByInvoice(invoice.id)
+                // Soft-delete cashflow keluar (barang khusus invoice)
+                cashFlowDao.deleteExitsForInvoice(invoice.number)
+            }
+            // 2. Soft-delete semua invoice klien
+            invoiceDao.softDeleteByClientId(id)
+            // 3. Soft-delete klien
+            dao.softDelete(id)
+        }
+    }
+
     fun count(tenantId: String) = dao.count(tenantId)
 
     private fun String.toSlug(): String = lowercase()
@@ -180,26 +212,34 @@ class BmpInvoiceRepository @Inject constructor(
         }
     }
 
+    /**
+     * Cascade-delete invoice beserta semua produk, pembayaran, dan cashflow terkait.
+     * Operasi ini menggunakan soft-delete (isDeleted=1) sehingga SyncManager dapat
+     * mengirim DELETE ke server sebelum hard-delete lokal.
+     */
     suspend fun deleteInvoice(id: Long) {
         db.withTransaction {
             val invoice = invoiceDao.getById(id)
+                ?: invoiceDao.getAllForTenant("").find { it.id == id } // cek termasuk yg deleted
             if (invoice != null) {
-                // Delete cash flow exits for special items (isKhusus)
+                // 1. Soft-delete cashflow keluar untuk barang khusus
                 cashFlowDao.deleteExitsForInvoice(invoice.number)
             }
-            
-            // Delete payments and their associated cashflow entries
-            val payments = paymentDao.listForInvoice(id)
+
+            // 2. Ambil semua pembayaran (termasuk yg sudah deleted)
+            val payments = paymentDao.listAllForInvoice(id)
             for (payment in payments) {
-                cashFlowDao.deleteByPaymentRefId(payment.id)
+                // Soft-delete cashflow terkait pembayaran ini
+                cashFlowDao.softDeleteByPaymentRefId(payment.id)
             }
-            paymentDao.deleteByInvoice(id)
-            
-            // Delete product lines
-            productDao.deleteByInvoice(id)
-            
-            // Delete invoice
-            invoiceDao.delete(id)
+            // 3. Soft-delete semua pembayaran
+            paymentDao.softDeleteByInvoice(id)
+
+            // 4. Soft-delete semua produk invoice
+            productDao.softDeleteByInvoice(id)
+
+            // 5. Soft-delete invoice
+            invoiceDao.softDelete(id)
         }
     }
 
@@ -375,10 +415,12 @@ class BmpInvoiceRepository @Inject constructor(
         db.withTransaction {
             val payment = paymentDao.getById(paymentId) ?: return@withTransaction
             val invoiceId = payment.invoiceId
-            
-            cashFlowDao.deleteByPaymentRefId(paymentId)
-            paymentDao.delete(paymentId)
-            
+
+            // Soft-delete cashflow terkait
+            cashFlowDao.softDeleteByPaymentRefId(paymentId)
+            // Soft-delete payment
+            paymentDao.softDelete(paymentId)
+
             recalculateInvoiceStatus(invoiceId)
         }
     }
@@ -487,7 +529,7 @@ class BmpMasterProductRepository @Inject constructor(
     fun observe(tenantId: String) = dao.observe(tenantId)
     suspend fun getById(id: Long) = dao.getById(id)
     suspend fun upsert(p: BmpMasterProductEntity) = dao.upsert(p.copy(updatedAt = System.currentTimeMillis()))
-    suspend fun delete(id: Long) = dao.delete(id)
+    suspend fun delete(id: Long) = dao.softDelete(id)
 }
 
 @Singleton
@@ -498,7 +540,7 @@ class BmpCashFlowRepository @Inject constructor(
     fun totalIn(tenantId: String) = dao.totalIn(tenantId)
     fun totalOut(tenantId: String) = dao.totalOut(tenantId)
     suspend fun insert(e: BmpCashFlowEntity) = dao.insert(e)
-    suspend fun delete(id: Long) = dao.delete(id)
+    suspend fun delete(id: Long) = dao.softDelete(id)
 }
 
 @Singleton
@@ -667,12 +709,15 @@ class BmpBahanBakuRepository @Inject constructor(
         }
     }
 
-    /** Hapus transaksi beserta semua item dan entri kas terkait. */
+    /** Soft-delete transaksi beserta semua item dan entri kas terkait. */
     suspend fun delete(id: Long) {
         db.withTransaction {
-            itemDao.deleteByBahanBaku(id)
-            cashFlowDao.deleteByPaymentRefId(id)
-            bahanBakuDao.delete(id)
+            // 1. Soft-delete cashflow terkait (via paymentRefId = bahanBakuId)
+            cashFlowDao.softDeleteByPaymentRefId(id)
+            // 2. Soft-delete semua item bahan baku
+            itemDao.softDeleteByBahanBaku(id)
+            // 3. Soft-delete header bahan baku
+            bahanBakuDao.softDelete(id)
         }
     }
 }

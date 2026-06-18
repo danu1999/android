@@ -32,7 +32,8 @@ data class ProductEntity(
     val variants: String? = null, // JSON String representation of variants
     val image: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDeleted: Boolean = false  // soft-delete flag
 )
 
 /**
@@ -97,7 +98,8 @@ data class TransactionEntity(
     val queueNumber: Int? = null,
     val notes: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDeleted: Boolean = false  // soft-delete flag
 )
 
 /**

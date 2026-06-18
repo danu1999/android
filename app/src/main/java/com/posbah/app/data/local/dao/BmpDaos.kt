@@ -18,13 +18,13 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface BmpClientDao {
-    @Query("SELECT * FROM bmp_clients WHERE tenantId = :tenantId ORDER BY clientName ASC")
+    @Query("SELECT * FROM bmp_clients WHERE tenantId = :tenantId AND isDeleted = 0 ORDER BY clientName ASC")
     fun observe(tenantId: String): Flow<List<BmpClientEntity>>
 
-    @Query("SELECT * FROM bmp_clients WHERE id = :id LIMIT 1")
+    @Query("SELECT * FROM bmp_clients WHERE id = :id AND isDeleted = 0 LIMIT 1")
     suspend fun getById(id: Long): BmpClientEntity?
 
-    @Query("SELECT * FROM bmp_clients WHERE tenantId = :tenantId AND clientName LIKE '%' || :query || '%' ORDER BY clientName ASC")
+    @Query("SELECT * FROM bmp_clients WHERE tenantId = :tenantId AND clientName LIKE '%' || :query || '%' AND isDeleted = 0 ORDER BY clientName ASC")
     fun search(tenantId: String, query: String): Flow<List<BmpClientEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -32,35 +32,49 @@ interface BmpClientDao {
 
     @Update suspend fun update(client: BmpClientEntity)
 
-    @Query("DELETE FROM bmp_clients WHERE id = :id")
-    suspend fun delete(id: Long)
+    /** Soft-delete: tandai isDeleted=1, data tidak dihapus dari DB lokal */
+    @Query("UPDATE bmp_clients SET isDeleted = 1, updatedAt = :ts WHERE id = :id")
+    suspend fun softDelete(id: Long, ts: Long = System.currentTimeMillis())
 
+    /** Untuk sync: ambil semua data (termasuk yang sudah dihapus) */
+    @Query("SELECT * FROM bmp_clients WHERE tenantId = :tenantId")
+    suspend fun getAll(tenantId: String): List<BmpClientEntity>
+
+    /** Untuk sync: ambil semua tanpa filter tenant (dipakai syncAll upload) */
     @Query("SELECT * FROM bmp_clients")
     suspend fun getAll(): List<BmpClientEntity>
 
     @Query("UPDATE bmp_clients SET isSynced = 1 WHERE id = :id")
     suspend fun markSynced(id: Long)
 
-    @Query("SELECT COUNT(*) FROM bmp_clients WHERE tenantId = :tenantId")
+    @Query("SELECT COUNT(*) FROM bmp_clients WHERE tenantId = :tenantId AND isDeleted = 0")
     fun count(tenantId: String): Flow<Int>
+
+    /** Ambil semua id yang isDeleted=1 untuk dikirim DELETE ke server */
+    @Query("SELECT id FROM bmp_clients WHERE tenantId = :tenantId AND isDeleted = 1")
+    suspend fun getDeletedIds(tenantId: String): List<Long>
+
+    /** Hard-delete lokal setelah berhasil delete di server */
+    @Query("DELETE FROM bmp_clients WHERE id = :id")
+    suspend fun hardDelete(id: Long)
 }
 
 @Dao
 interface BmpInvoiceDao {
     @Query("""
         SELECT * FROM bmp_invoices
-        WHERE tenantId = :tenantId
+        WHERE tenantId = :tenantId AND isDeleted = 0
         ORDER BY createdAt DESC
     """)
     fun observe(tenantId: String): Flow<List<BmpInvoiceEntity>>
 
-    @Query("SELECT * FROM bmp_invoices WHERE id = :id LIMIT 1")
+    @Query("SELECT * FROM bmp_invoices WHERE id = :id AND isDeleted = 0 LIMIT 1")
     suspend fun getById(id: Long): BmpInvoiceEntity?
 
-    @Query("SELECT * FROM bmp_invoices WHERE slug = :slug LIMIT 1")
+    @Query("SELECT * FROM bmp_invoices WHERE slug = :slug AND isDeleted = 0 LIMIT 1")
     suspend fun getBySlug(slug: String): BmpInvoiceEntity?
 
-    @Query("SELECT * FROM bmp_invoices WHERE tenantId = :tenantId AND status = :status ORDER BY createdAt DESC")
+    @Query("SELECT * FROM bmp_invoices WHERE tenantId = :tenantId AND status = :status AND isDeleted = 0 ORDER BY createdAt DESC")
     fun observeByStatus(tenantId: String, status: String): Flow<List<BmpInvoiceEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -78,8 +92,17 @@ interface BmpInvoiceDao {
     @Query("UPDATE bmp_invoices SET paidAmount = :paid, status = :status, updatedAt = :ts WHERE id = :id")
     suspend fun updatePaid(id: Long, paid: Double, status: String, ts: Long = System.currentTimeMillis())
 
-    @Query("DELETE FROM bmp_invoices WHERE id = :id")
-    suspend fun delete(id: Long)
+    /** Soft-delete invoice: set isDeleted=1 */
+    @Query("UPDATE bmp_invoices SET isDeleted = 1, updatedAt = :ts WHERE id = :id")
+    suspend fun softDelete(id: Long, ts: Long = System.currentTimeMillis())
+
+    /** Soft-delete semua invoice milik sebuah klien */
+    @Query("UPDATE bmp_invoices SET isDeleted = 1, updatedAt = :ts WHERE clientId = :clientId")
+    suspend fun softDeleteByClientId(clientId: Long, ts: Long = System.currentTimeMillis())
+
+    /** Untuk sync: ambil semua (termasuk deleted) */
+    @Query("SELECT * FROM bmp_invoices WHERE tenantId = :tenantId")
+    suspend fun getAllForTenant(tenantId: String): List<BmpInvoiceEntity>
 
     @Query("SELECT * FROM bmp_invoices")
     suspend fun getAll(): List<BmpInvoiceEntity>
@@ -90,28 +113,40 @@ interface BmpInvoiceDao {
     @Query("UPDATE bmp_invoices SET isSynced = 0 WHERE id = :id")
     suspend fun markUnsynced(id: Long)
 
-    @Query("SELECT COUNT(*) FROM bmp_invoices WHERE tenantId = :tenantId")
+    @Query("SELECT COUNT(*) FROM bmp_invoices WHERE tenantId = :tenantId AND isDeleted = 0")
     fun count(tenantId: String): Flow<Int>
 
-    @Query("SELECT IFNULL(SUM(totalAmount), 0) FROM bmp_invoices WHERE tenantId = :tenantId")
+    @Query("SELECT IFNULL(SUM(totalAmount), 0) FROM bmp_invoices WHERE tenantId = :tenantId AND isDeleted = 0")
     fun totalAmount(tenantId: String): Flow<Double>
 
-    @Query("SELECT IFNULL(SUM(paidAmount), 0) FROM bmp_invoices WHERE tenantId = :tenantId")
+    @Query("SELECT IFNULL(SUM(paidAmount), 0) FROM bmp_invoices WHERE tenantId = :tenantId AND isDeleted = 0")
     fun totalPaid(tenantId: String): Flow<Double>
 
-    @Query("SELECT IFNULL(SUM(totalAmount - paidAmount), 0) FROM bmp_invoices WHERE tenantId = :tenantId AND status != 'PAID'")
+    @Query("SELECT IFNULL(SUM(totalAmount - paidAmount), 0) FROM bmp_invoices WHERE tenantId = :tenantId AND status != 'PAID' AND isDeleted = 0")
     fun totalOutstanding(tenantId: String): Flow<Double>
 
-    @Query("SELECT * FROM bmp_invoices WHERE tenantId = :tenantId AND clientId = :clientId AND status != 'PAID' ORDER BY createdAt ASC")
+    @Query("SELECT * FROM bmp_invoices WHERE tenantId = :tenantId AND clientId = :clientId AND status != 'PAID' AND isDeleted = 0 ORDER BY createdAt ASC")
     suspend fun getUnpaidInvoicesForClient(tenantId: String, clientId: Long): List<BmpInvoiceEntity>
+
+    /** Ambil ID yang sudah soft-deleted untuk dikirim ke server */
+    @Query("SELECT id FROM bmp_invoices WHERE tenantId = :tenantId AND isDeleted = 1")
+    suspend fun getDeletedIds(tenantId: String): List<Long>
+
+    /** Hard-delete setelah server berhasil delete */
+    @Query("DELETE FROM bmp_invoices WHERE id = :id")
+    suspend fun hardDelete(id: Long)
+
+    /** Ambil semua invoice milik klien tertentu (termasuk yang belum deleted) */
+    @Query("SELECT * FROM bmp_invoices WHERE clientId = :clientId")
+    suspend fun getByClientId(clientId: Long): List<BmpInvoiceEntity>
 }
 
 @Dao
 interface BmpProductDao {
-    @Query("SELECT * FROM bmp_products WHERE invoiceId = :invoiceId ORDER BY id ASC")
+    @Query("SELECT * FROM bmp_products WHERE invoiceId = :invoiceId AND isDeleted = 0 ORDER BY id ASC")
     fun observeByInvoice(invoiceId: Long): Flow<List<BmpProductEntity>>
 
-    @Query("SELECT * FROM bmp_products WHERE invoiceId = :invoiceId ORDER BY id ASC")
+    @Query("SELECT * FROM bmp_products WHERE invoiceId = :invoiceId AND isDeleted = 0 ORDER BY id ASC")
     suspend fun listByInvoice(invoiceId: Long): List<BmpProductEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -122,8 +157,13 @@ interface BmpProductDao {
 
     @Update suspend fun update(product: BmpProductEntity)
 
-    @Query("DELETE FROM bmp_products WHERE id = :id")
-    suspend fun delete(id: Long)
+    /** Soft-delete item produk */
+    @Query("UPDATE bmp_products SET isDeleted = 1 WHERE id = :id")
+    suspend fun softDelete(id: Long)
+
+    /** Soft-delete semua produk milik sebuah invoice */
+    @Query("UPDATE bmp_products SET isDeleted = 1 WHERE invoiceId = :invoiceId")
+    suspend fun softDeleteByInvoice(invoiceId: Long)
 
     @Query("SELECT * FROM bmp_products")
     suspend fun getAll(): List<BmpProductEntity>
@@ -133,14 +173,21 @@ interface BmpProductDao {
 
     @Query("UPDATE bmp_products SET isSynced = 1 WHERE id = :id")
     suspend fun markSynced(id: Long)
+
+    /** Ambil ID yang sudah soft-deleted */
+    @Query("SELECT id FROM bmp_products WHERE isDeleted = 1")
+    suspend fun getDeletedIds(): List<Long>
+
+    @Query("DELETE FROM bmp_products WHERE id = :id")
+    suspend fun hardDelete(id: Long)
 }
 
 @Dao
 interface BmpMasterProductDao {
-    @Query("SELECT * FROM bmp_master_products WHERE tenantId = :tenantId ORDER BY title ASC")
+    @Query("SELECT * FROM bmp_master_products WHERE tenantId = :tenantId AND isDeleted = 0 ORDER BY title ASC")
     fun observe(tenantId: String): Flow<List<BmpMasterProductEntity>>
 
-    @Query("SELECT * FROM bmp_master_products WHERE id = :id LIMIT 1")
+    @Query("SELECT * FROM bmp_master_products WHERE id = :id AND isDeleted = 0 LIMIT 1")
     suspend fun getById(id: Long): BmpMasterProductEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -148,22 +195,29 @@ interface BmpMasterProductDao {
 
     @Update suspend fun update(product: BmpMasterProductEntity)
 
-    @Query("DELETE FROM bmp_master_products WHERE id = :id")
-    suspend fun delete(id: Long)
+    /** Soft-delete produk master */
+    @Query("UPDATE bmp_master_products SET isDeleted = 1, updatedAt = :ts WHERE id = :id")
+    suspend fun softDelete(id: Long, ts: Long = System.currentTimeMillis())
 
     @Query("SELECT * FROM bmp_master_products")
     suspend fun getAll(): List<BmpMasterProductEntity>
+
+    @Query("SELECT id FROM bmp_master_products WHERE tenantId = :tenantId AND isDeleted = 1")
+    suspend fun getDeletedIds(tenantId: String): List<Long>
+
+    @Query("DELETE FROM bmp_master_products WHERE id = :id")
+    suspend fun hardDelete(id: Long)
 }
 
 @Dao
 interface BmpPaymentDao {
-    @Query("SELECT * FROM bmp_invoice_payments WHERE invoiceId = :invoiceId ORDER BY paymentDate DESC")
+    @Query("SELECT * FROM bmp_invoice_payments WHERE invoiceId = :invoiceId AND isDeleted = 0 ORDER BY paymentDate DESC")
     fun observeForInvoice(invoiceId: Long): Flow<List<BmpInvoicePaymentEntity>>
 
-    @Query("SELECT * FROM bmp_invoice_payments WHERE tenantId = :tenantId ORDER BY paymentDate DESC")
+    @Query("SELECT * FROM bmp_invoice_payments WHERE tenantId = :tenantId AND isDeleted = 0 ORDER BY paymentDate DESC")
     fun observe(tenantId: String): Flow<List<BmpInvoicePaymentEntity>>
 
-    @Query("SELECT IFNULL(SUM(paymentAmount), 0) FROM bmp_invoice_payments WHERE invoiceId = :invoiceId")
+    @Query("SELECT IFNULL(SUM(paymentAmount), 0) FROM bmp_invoice_payments WHERE invoiceId = :invoiceId AND isDeleted = 0")
     suspend fun sumForInvoice(invoiceId: Long): Double
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -173,17 +227,26 @@ interface BmpPaymentDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(payment: BmpInvoicePaymentEntity): Long
 
-    @Query("SELECT * FROM bmp_invoice_payments WHERE id = :id LIMIT 1")
+    @Query("SELECT * FROM bmp_invoice_payments WHERE id = :id AND isDeleted = 0 LIMIT 1")
     suspend fun getById(id: Long): BmpInvoicePaymentEntity?
 
     @Update
     suspend fun update(payment: BmpInvoicePaymentEntity)
 
-    @Query("DELETE FROM bmp_invoice_payments WHERE id = :id")
-    suspend fun delete(id: Long)
+    /** Soft-delete pembayaran */
+    @Query("UPDATE bmp_invoice_payments SET isDeleted = 1 WHERE id = :id")
+    suspend fun softDelete(id: Long)
 
-    @Query("SELECT * FROM bmp_invoice_payments WHERE invoiceId = :invoiceId")
+    /** Soft-delete semua pembayaran milik sebuah invoice */
+    @Query("UPDATE bmp_invoice_payments SET isDeleted = 1 WHERE invoiceId = :invoiceId")
+    suspend fun softDeleteByInvoice(invoiceId: Long)
+
+    @Query("SELECT * FROM bmp_invoice_payments WHERE invoiceId = :invoiceId AND isDeleted = 0")
     suspend fun listForInvoice(invoiceId: Long): List<BmpInvoicePaymentEntity>
+
+    /** Untuk sync — termasuk yang deleted */
+    @Query("SELECT * FROM bmp_invoice_payments WHERE invoiceId = :invoiceId")
+    suspend fun listAllForInvoice(invoiceId: Long): List<BmpInvoicePaymentEntity>
 
     @Query("DELETE FROM bmp_invoice_payments WHERE invoiceId = :invoiceId")
     suspend fun deleteByInvoice(invoiceId: Long)
@@ -193,11 +256,17 @@ interface BmpPaymentDao {
 
     @Query("UPDATE bmp_invoice_payments SET isSynced = 1 WHERE id = :id")
     suspend fun markSynced(id: Long)
+
+    @Query("SELECT id FROM bmp_invoice_payments WHERE tenantId = :tenantId AND isDeleted = 1")
+    suspend fun getDeletedIds(tenantId: String): List<Long>
+
+    @Query("DELETE FROM bmp_invoice_payments WHERE id = :id")
+    suspend fun hardDelete(id: Long)
 }
 
 @Dao
 interface BmpCashFlowDao {
-    @Query("SELECT * FROM bmp_cashflow WHERE tenantId = :tenantId ORDER BY transactionDate DESC")
+    @Query("SELECT * FROM bmp_cashflow WHERE tenantId = :tenantId AND isDeleted = 0 ORDER BY transactionDate DESC")
     fun observe(tenantId: String): Flow<List<BmpCashFlowEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -207,8 +276,13 @@ interface BmpCashFlowDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entry: BmpCashFlowEntity): Long
 
-    @Query("DELETE FROM bmp_cashflow WHERE id = :id")
-    suspend fun delete(id: Long)
+    /** Soft-delete entri cashflow */
+    @Query("UPDATE bmp_cashflow SET isDeleted = 1 WHERE id = :id")
+    suspend fun softDelete(id: Long)
+
+    /** Soft-delete semua cashflow yang terkait dengan pembayaran tertentu */
+    @Query("UPDATE bmp_cashflow SET isDeleted = 1 WHERE paymentRefId = :paymentRefId")
+    suspend fun softDeleteByPaymentRefId(paymentRefId: Long)
 
     @Query("SELECT * FROM bmp_cashflow")
     suspend fun getAll(): List<BmpCashFlowEntity>
@@ -216,23 +290,29 @@ interface BmpCashFlowDao {
     @Query("UPDATE bmp_cashflow SET isSynced = 1 WHERE id = :id")
     suspend fun markSynced(id: Long)
 
-    @Query("DELETE FROM bmp_cashflow WHERE paymentRefId = :paymentRefId")
+    @Query("UPDATE bmp_cashflow SET isDeleted = 1 WHERE paymentRefId = :paymentRefId")
     suspend fun deleteByPaymentRefId(paymentRefId: Long)
 
-    @Query("DELETE FROM bmp_cashflow WHERE transactionType = 'KELUAR' AND description = 'Pembelian barang khusus untuk Faktur ' || :invoiceNumber")
+    @Query("UPDATE bmp_cashflow SET isDeleted = 1 WHERE transactionType = 'KELUAR' AND description = 'Pembelian barang khusus untuk Faktur ' || :invoiceNumber AND isDeleted = 0")
     suspend fun deleteExitsForInvoice(invoiceNumber: String)
 
-    @Query("SELECT * FROM bmp_cashflow WHERE paymentRefId = :paymentRefId LIMIT 1")
+    @Query("SELECT * FROM bmp_cashflow WHERE paymentRefId = :paymentRefId AND isDeleted = 0 LIMIT 1")
     suspend fun getByPaymentRefId(paymentRefId: Long): BmpCashFlowEntity?
 
     @Update
     suspend fun update(entry: BmpCashFlowEntity)
 
-    @Query("SELECT IFNULL(SUM(amount), 0) FROM bmp_cashflow WHERE tenantId = :tenantId AND transactionType = 'MASUK'")
+    @Query("SELECT IFNULL(SUM(amount), 0) FROM bmp_cashflow WHERE tenantId = :tenantId AND transactionType = 'MASUK' AND isDeleted = 0")
     fun totalIn(tenantId: String): Flow<Double>
 
-    @Query("SELECT IFNULL(SUM(amount), 0) FROM bmp_cashflow WHERE tenantId = :tenantId AND transactionType = 'KELUAR'")
+    @Query("SELECT IFNULL(SUM(amount), 0) FROM bmp_cashflow WHERE tenantId = :tenantId AND transactionType = 'KELUAR' AND isDeleted = 0")
     fun totalOut(tenantId: String): Flow<Double>
+
+    @Query("SELECT id FROM bmp_cashflow WHERE tenantId = :tenantId AND isDeleted = 1")
+    suspend fun getDeletedIds(tenantId: String): List<Long>
+
+    @Query("DELETE FROM bmp_cashflow WHERE id = :id")
+    suspend fun hardDelete(id: Long)
 }
 
 @Dao
@@ -307,10 +387,10 @@ interface BmpPayrollDao {
 
 @Dao
 interface BmpBahanBakuDao {
-    @Query("SELECT * FROM bmp_bahan_baku WHERE tenantId = :tenantId ORDER BY tanggal DESC")
+    @Query("SELECT * FROM bmp_bahan_baku WHERE tenantId = :tenantId AND isDeleted = 0 ORDER BY tanggal DESC")
     fun observe(tenantId: String): Flow<List<com.posbah.app.data.local.entities.BmpBahanBakuEntity>>
 
-    @Query("SELECT * FROM bmp_bahan_baku WHERE id = :id LIMIT 1")
+    @Query("SELECT * FROM bmp_bahan_baku WHERE id = :id AND isDeleted = 0 LIMIT 1")
     suspend fun getById(id: Long): com.posbah.app.data.local.entities.BmpBahanBakuEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -323,8 +403,9 @@ interface BmpBahanBakuDao {
     @Update
     suspend fun update(entry: com.posbah.app.data.local.entities.BmpBahanBakuEntity)
 
-    @Query("DELETE FROM bmp_bahan_baku WHERE id = :id")
-    suspend fun delete(id: Long)
+    /** Soft-delete bahan baku header */
+    @Query("UPDATE bmp_bahan_baku SET isDeleted = 1, updatedAt = :ts WHERE id = :id")
+    suspend fun softDelete(id: Long, ts: Long = System.currentTimeMillis())
 
     @Query("SELECT * FROM bmp_bahan_baku")
     suspend fun getAll(): List<com.posbah.app.data.local.entities.BmpBahanBakuEntity>
@@ -332,25 +413,35 @@ interface BmpBahanBakuDao {
     @Query("UPDATE bmp_bahan_baku SET isSynced = 1 WHERE id = :id")
     suspend fun markSynced(id: Long)
 
-    /** Untuk saldo simulasi: total semua nilai bahan baku yang pernah masuk */
-    @Query("SELECT IFNULL(SUM(totalHarga), 0) FROM bmp_bahan_baku WHERE tenantId = :tenantId")
+    /** Untuk saldo simulasi: total semua nilai bahan baku yang pernah masuk (tidak termasuk deleted) */
+    @Query("SELECT IFNULL(SUM(totalHarga), 0) FROM bmp_bahan_baku WHERE tenantId = :tenantId AND isDeleted = 0")
     fun totalHarga(tenantId: String): Flow<Double>
 
-    /** Untuk saldo kas riil: total kas yang sudah dibayarkan ke supplier */
-    @Query("SELECT IFNULL(SUM(nominal), 0) FROM bmp_bahan_baku WHERE tenantId = :tenantId")
+    /** Untuk saldo kas riil: total kas yang sudah dibayarkan ke supplier (tidak termasuk deleted) */
+    @Query("SELECT IFNULL(SUM(nominal), 0) FROM bmp_bahan_baku WHERE tenantId = :tenantId AND isDeleted = 0")
     fun totalNominal(tenantId: String): Flow<Double>
+
+    @Query("SELECT id FROM bmp_bahan_baku WHERE tenantId = :tenantId AND isDeleted = 1")
+    suspend fun getDeletedIds(tenantId: String): List<Long>
+
+    @Query("DELETE FROM bmp_bahan_baku WHERE id = :id")
+    suspend fun hardDelete(id: Long)
 }
 
 @Dao
 interface BmpBahanBakuItemDao {
-    @Query("SELECT * FROM bmp_bahan_baku_item WHERE bahanBakuId = :bahanBakuId ORDER BY id ASC")
+    @Query("SELECT * FROM bmp_bahan_baku_item WHERE bahanBakuId = :bahanBakuId AND isDeleted = 0 ORDER BY id ASC")
     fun observeByBahanBaku(bahanBakuId: Long): Flow<List<com.posbah.app.data.local.entities.BmpBahanBakuItemEntity>>
 
-    @Query("SELECT * FROM bmp_bahan_baku_item WHERE bahanBakuId = :bahanBakuId ORDER BY id ASC")
+    @Query("SELECT * FROM bmp_bahan_baku_item WHERE bahanBakuId = :bahanBakuId AND isDeleted = 0 ORDER BY id ASC")
     suspend fun listByBahanBaku(bahanBakuId: Long): List<com.posbah.app.data.local.entities.BmpBahanBakuItemEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(items: List<com.posbah.app.data.local.entities.BmpBahanBakuItemEntity>)
+
+    /** Soft-delete semua item milik bahan baku tertentu */
+    @Query("UPDATE bmp_bahan_baku_item SET isDeleted = 1 WHERE bahanBakuId = :bahanBakuId")
+    suspend fun softDeleteByBahanBaku(bahanBakuId: Long)
 
     @Query("DELETE FROM bmp_bahan_baku_item WHERE bahanBakuId = :bahanBakuId")
     suspend fun deleteByBahanBaku(bahanBakuId: Long)
@@ -362,8 +453,14 @@ interface BmpBahanBakuItemDao {
     suspend fun markSynced(id: Long)
 
     /** Ambil rate terbaru untuk jenis bahan tertentu — dipakai kalkulator HPP */
-    @Query("SELECT rate FROM bmp_bahan_baku_item WHERE tenantId = :tenantId AND jenisBahan = :jenisBahan ORDER BY createdAt DESC LIMIT 1")
+    @Query("SELECT rate FROM bmp_bahan_baku_item WHERE tenantId = :tenantId AND jenisBahan = :jenisBahan AND isDeleted = 0 ORDER BY createdAt DESC LIMIT 1")
     suspend fun getLatestRate(tenantId: String, jenisBahan: String): Double?
+
+    @Query("SELECT id FROM bmp_bahan_baku_item WHERE isDeleted = 1")
+    suspend fun getDeletedIds(): List<Long>
+
+    @Query("DELETE FROM bmp_bahan_baku_item WHERE id = :id")
+    suspend fun hardDelete(id: Long)
 }
 
 @Dao
