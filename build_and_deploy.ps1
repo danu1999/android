@@ -265,11 +265,14 @@ if (-not $SkipDeploy) {
 
             # Trigger deploy
             Write-Info "Mengirim perintah deploy..."
+            $headers = @{
+                "Authorization" = "Bearer $($loginResp.token)"
+            }
             $deployResp = Invoke-RestMethod `
                 -Uri "$AdminUrl/api/admin/deploy" `
                 -Method POST `
-                -ContentType "application/json" `
-                -WebSession $sess
+                -Headers $headers `
+                -ContentType "application/json"
 
             if ($deployResp.success) {
                 Write-OK "Deploy dipicu! Server sedang: git pull -> compile -> restart"
