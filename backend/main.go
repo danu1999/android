@@ -1728,7 +1728,7 @@ func handleDownloadApk(w http.ResponseWriter, r *http.Request) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Unduh Pembaruan POSBah v%s</title>
+    <title>Dapatkan POSBah v%s</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -1736,6 +1736,8 @@ func handleDownloadApk(w http.ResponseWriter, r *http.Request) {
             --bg-gradient: linear-gradient(135deg, #0f172a 0%%, #1e1b4b 100%%);
             --primary: #f59e0b;
             --primary-hover: #d97706;
+            --playstore: #10b981;
+            --playstore-hover: #059669;
             --card-bg: rgba(30, 41, 59, 0.7);
             --card-border: rgba(255, 255, 255, 0.08);
             --text-main: #f8fafc;
@@ -1781,21 +1783,21 @@ func handleDownloadApk(w http.ResponseWriter, r *http.Request) {
         }
         .version-badge {
             display: inline-block;
-            background: rgba(245, 158, 11, 0.15);
-            color: var(--primary);
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--playstore);
             padding: 6px 16px;
             border-radius: 99px;
             font-weight: 600;
             font-size: 14px;
             margin-bottom: 24px;
-            border: 1px solid rgba(245, 158, 11, 0.3);
+            border: 1px solid rgba(16, 185, 129, 0.3);
         }
-        .btn-download {
+        .btn-playstore {
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 12px;
-            background: var(--primary);
+            background: var(--playstore);
             color: #0f172a;
             text-decoration: none;
             padding: 16px 32px;
@@ -1803,18 +1805,28 @@ func handleDownloadApk(w http.ResponseWriter, r *http.Request) {
             font-size: 16px;
             font-weight: 700;
             transition: all 0.3s ease;
-            box-shadow: 0 4px 14px rgba(245, 158, 11, 0.3);
+            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+            margin-bottom: 16px;
+        }
+        .btn-playstore:hover {
+            background: var(--playstore-hover);
+            color: #ffffff;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+        }
+        .info-box {
+            background: rgba(245, 158, 11, 0.08);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+            border-radius: 16px;
+            padding: 16px;
+            text-align: left;
+            font-size: 13px;
+            color: #fbbf24;
+            line-height: 1.6;
             margin-bottom: 24px;
         }
-        .btn-download:hover {
-            background: var(--primary-hover);
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(245, 158, 11, 0.4);
-        }
-        .file-info {
-            font-size: 13px;
-            color: var(--text-muted);
-            margin-bottom: 30px;
+        .info-box i {
+            margin-right: 6px;
         }
         .release-notes-box {
             text-align: left;
@@ -1839,44 +1851,55 @@ func handleDownloadApk(w http.ResponseWriter, r *http.Request) {
             line-height: 1.6;
             white-space: pre-wrap;
         }
-        .instructions-list {
-            margin-top: 24px;
-            font-size: 12px;
+        .btn-legacy {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: transparent;
             color: var(--text-muted);
-            text-align: left;
-            padding-left: 20px;
-            line-height: 1.5;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: 1px dashed var(--card-border);
+            margin-top: 24px;
         }
-        .instructions-list li {
-            margin-bottom: 8px;
+        .btn-legacy:hover {
+            color: var(--primary);
+            border-color: var(--primary);
+            transform: translateY(-1px);
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="logo">POSBah</div>
-        <div class="subtitle">Unduh Pembaruan Aplikasi Android</div>
+        <div class="subtitle">Aplikasi Android POS & Invoice Native</div>
         
-        <div class="version-badge">Versi %s Terbaru</div>
+        <div class="version-badge">Distribusi Resmi Google Play</div>
         
-        <a href="/api/download-apk?direct=true" class="btn-download">
-            <i class="fa-solid fa-cloud-arrow-down"></i> Unduh APK Sekarang
+        <a href="https://play.google.com/apps/testing/com.posbah.app" target="_blank" class="btn-playstore">
+            <i class="fa-brands fa-google-play"></i> Gabung & Unduh di Play Store
         </a>
         
-        <div class="file-info">Format: APK • Kompatibel dengan Android 7.0+</div>
+        <div class="info-box">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <strong>Penting untuk Penguji:</strong> Agar dapat mengunduh aplikasi di Google Play Store, alamat email Anda wajib didaftarkan terlebih dahulu sebagai <strong>Penguji (Tester)</strong> pada Closed Testing Google Play Console oleh Admin.
+        </div>
         
         <div class="release-notes-box">
             <div class="release-notes-title">
-                <i class="fa-solid fa-list-check" style="color: var(--primary);"></i> Catatan Pembaruan:
+                <i class="fa-solid fa-list-check" style="color: var(--primary);"></i> Catatan Pembaruan v%s:
             </div>
             <div class="release-notes-content">%s</div>
         </div>
 
-        <ul class="instructions-list">
-            <li>Buka file APK yang telah diunduh di perangkat Android Anda.</li>
-            <li>Jika muncul peringatan keamanan, aktifkan "Izinkan instalasi dari sumber tidak dikenal" di pengaturan browser Anda.</li>
-            <li>Klik "Instal" atau "Perbarui" untuk menyelesaikan proses pembaruan.</li>
-        </ul>
+        <a href="/api/download-apk?direct=true" class="btn-legacy">
+            <i class="fa-solid fa-download"></i> Unduh APK Manual (Metode Lama)
+        </a>
     </div>
 </body>
 </html>`, version, version, description)

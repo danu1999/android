@@ -15,8 +15,8 @@ android {
         applicationId = "com.posbah.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 39
-        versionName = "2.17.1"
+        versionCode = 40
+        versionName = "2.17.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -73,6 +73,9 @@ android {
                 signingConfigs.findByName("release")
             } else {
                 signingConfigs.findByName("debug")
+            }
+            ndk {
+                debugSymbolLevel = "SYMBOL_TABLE"
             }
         }
     }
