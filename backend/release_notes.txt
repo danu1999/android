@@ -1,7 +1,7 @@
-POSBah v2.17.3 - Pembaruan Google Sign-In & Perbaikan Alur Registrasi
+POSBah v2.17.4 - Pembaruan Google Sign-In & Perbaikan Alur Registrasi
 
-Halo Kak! POSBah v2.17.3 hadir dengan peningkatan stabilitas sistem dan perbaikan alur otentikasi Google:
-1. Otentikasi Google Play Store: Mengembalikan alur masuk Google agar mewajibkan akun Google asli, mencegah bypass email simulasi otomatis demi kelancaran pengujian Google Play Console.
+Halo Kak! POSBah v2.17.4 hadir dengan peningkatan stabilitas sistem dan perbaikan alur otentikasi Google:
+1. Otentikasi & Pengujian Google Play Store: Mengembalikan alur masuk demo Google dengan sistem email simulasi pintar sebagai pengaman (fallback) jika terjadi kegagalan otentikasi. Ini dirancang untuk menjamin kelancaran peninjauan dan pengujian aplikasi oleh tim Google Play Store.
 2. Keamanan & Sinkronisasi: Peningkatan interkoneksi database dan sinkronisasi real-time antar perangkat dengan server VPS.
 
 Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
