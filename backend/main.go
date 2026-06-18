@@ -5710,6 +5710,7 @@ func syncDatabaseUsersAndTenants() {
 		WHERE NOT EXISTS (
 			SELECT 1 FROM "local_users" u WHERE u."tenantId" = t."id" OR u."email" = t."ownerEmail"
 		) AND t."ownerEmail" IS NOT NULL AND t."ownerEmail" <> ''
+		ON CONFLICT DO NOTHING
 	`)
 	if err != nil {
 		log.Printf("Sync error: failed to backfill local_users: %v", err)
@@ -5732,6 +5733,7 @@ func syncDatabaseUsersAndTenants() {
 		WHERE NOT EXISTS (
 			SELECT 1 FROM "tenants" t WHERE t."id" = u."tenantId" OR t."ownerEmail" = u."email"
 		) AND u."email" IS NOT NULL AND u."email" <> '' AND u."tenantId" IS NOT NULL AND u."tenantId" <> ''
+		ON CONFLICT ("id") DO NOTHING
 	`)
 	if err != nil {
 		log.Printf("Sync error: failed to backfill tenants: %v", err)
@@ -5777,6 +5779,7 @@ func syncDatabaseUsersAndTenants() {
 			SELECT 1 FROM "local_users" u WHERE LOWER(u."email") = LOWER(e."email")
 		) AND e."email" IS NOT NULL AND e."email" <> ''
 		ORDER BY LOWER(e."email"), e."id"
+		ON CONFLICT DO NOTHING
 	`)
 	if err != nil {
 		log.Printf("Sync error: failed to backfill local_users from employees: %v", err)
