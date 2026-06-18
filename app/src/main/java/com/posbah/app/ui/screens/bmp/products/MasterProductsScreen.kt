@@ -83,6 +83,23 @@ class MasterProductsViewModel @Inject constructor(
     val products = repo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val settings = settingsRepo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
+    private val _latestRates = MutableStateFlow<Map<String, Double>>(emptyMap())
+    val latestRates = _latestRates.asStateFlow()
+
+    private val _distinctMaterials = MutableStateFlow<List<String>>(emptyList())
+    val distinctMaterials = _distinctMaterials.asStateFlow()
+
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            val materials = db.bmpBahanBakuItemDao().getDistinctBahanBaku(tenantId)
+            val ratesMap = materials.associateWith { material ->
+                db.bmpBahanBakuItemDao().getLatestRate(tenantId, material) ?: 0.0
+            }
+            _distinctMaterials.value = materials
+            _latestRates.value = ratesMap
+        }
+    }
+
     data class FormState(
         val editing: BmpMasterProductEntity? = null,
         val show: Boolean = false
@@ -211,14 +228,22 @@ fun MasterProductsScreen(
         val settings by viewModel.settings.collectAsState()
         var simHargaJual by remember { mutableStateOf("") }
 
-        val hppRes = remember(e, settings) {
+        val latestRates by viewModel.latestRates.collectAsState()
+        val hppRes = remember(e, settings, latestRates) {
             settings?.let { s ->
                 val totalGaji = s.jumlahKaryawan * s.gajiHarian * s.hariKerjaSebulan
                 val overheadBulanan = s.listrikBulanan + totalGaji
                 val totalDetikSebulan = s.jumlahMesin * s.hariKerjaSebulan * s.hoursPerDay * 3600.0
                 val biayaPerDetik = if (totalDetikSebulan > 0) overheadBulanan / totalDetikSebulan else 0.0
                 val biayaMesin = e.cycleTime * biayaPerDetik
-                val hppSatuan = (e.beratGram * (e.price / 1000.0) + biayaMesin) * (1.0 + (e.rejectRate / 100.0))
+                
+                val bahanRate = if (e.jenisBahanBaku.isNotEmpty()) {
+                    latestRates[e.jenisBahanBaku] ?: e.price
+                } else {
+                    e.price
+                }
+
+                val hppSatuan = (e.beratGram * (bahanRate / 1000.0) + biayaMesin) * (1.0 + (e.rejectRate / 100.0))
                 val biayaKemasanPcs = s.biayaKarungPer1000 / 1000.0
                 val hppTotalPcs = hppSatuan + biayaKemasanPcs
                 val hppLusin = hppTotalPcs * 12.0
@@ -243,6 +268,7 @@ fun MasterProductsScreen(
             onDismissRequest = viewModel::closeForm,
             title = { Text(if (e.id == 0L) "Produk Baru" else "Edit Produk") },
             text = {
+                val materials by viewModel.distinctMaterials.collectAsState()
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     OutlinedTextField(
                         value = e.title,
@@ -251,6 +277,34 @@ fun MasterProductsScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth().testTag("input-product-name")
                     )
+                    Spacer(Modifier.size(8.dp))
+                    OutlinedTextField(
+                        value = e.jenisBahanBaku,
+                        onValueChange = { v -> viewModel.updateField { it.copy(jenisBahanBaku = v) } },
+                        label = { Text("Jenis Bahan Baku (contoh: PP, HDPE)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (materials.isNotEmpty()) {
+                        Spacer(Modifier.size(4.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            materials.take(5).forEach { mat ->
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                    modifier = Modifier.clickable {
+                                        viewModel.updateField { it.copy(jenisBahanBaku = mat) }
+                                    }
+                                ) {
+                                    Text(
+                                        mat,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
+                        }
+                    }
                     Spacer(Modifier.size(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(
@@ -270,6 +324,20 @@ fun MasterProductsScreen(
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.weight(1.4f)
+                        )
+                    }
+                    val bahanRate = if (e.jenisBahanBaku.isNotEmpty()) {
+                        latestRates[e.jenisBahanBaku] ?: e.price
+                    } else {
+                        e.price
+                    }
+                    val isDynamic = e.jenisBahanBaku.isNotEmpty() && latestRates.containsKey(e.jenisBahanBaku)
+                    if (isDynamic) {
+                        Text(
+                            "Menggunakan harga beli terakhir untuk '${e.jenisBahanBaku}': Rp ${Formatters.number(bahanRate)}/Kg",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 4.dp)
                         )
                     }
                     Spacer(Modifier.size(8.dp))

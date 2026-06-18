@@ -456,6 +456,12 @@ interface BmpBahanBakuItemDao {
     @Query("SELECT rate FROM bmp_bahan_baku_item WHERE tenantId = :tenantId AND jenisBahan = :jenisBahan AND isDeleted = 0 ORDER BY createdAt DESC LIMIT 1")
     suspend fun getLatestRate(tenantId: String, jenisBahan: String): Double?
 
+    @Query("SELECT DISTINCT jenisBahan FROM bmp_bahan_baku_item WHERE tenantId = :tenantId AND isDeleted = 0 ORDER BY jenisBahan ASC")
+    suspend fun getDistinctBahanBaku(tenantId: String): List<String>
+
+    @Query("SELECT IFNULL(SUM(kuantitas), 0.0) FROM bmp_bahan_baku_item WHERE tenantId = :tenantId AND jenisBahan = :jenisBahan AND isDeleted = 0")
+    suspend fun sumPurchasedBahanBaku(tenantId: String, jenisBahan: String): Double
+
     @Query("SELECT id FROM bmp_bahan_baku_item WHERE isDeleted = 1")
     suspend fun getDeletedIds(): List<Long>
 
@@ -482,4 +488,90 @@ interface PrintSettingsDao {
 
     @Query("DELETE FROM print_settings WHERE tenantId = :tenantId AND moduleKey = :moduleKey")
     suspend fun deleteByTenantIdAndModule(tenantId: String, moduleKey: String)
+}
+
+@Dao
+interface BmpProductStockDao {
+    @Query("SELECT * FROM bmp_product_stocks WHERE tenantId = :tenantId AND isDeleted = 0")
+    fun observeAll(tenantId: String): Flow<List<com.posbah.app.data.local.entities.BmpProductStockEntity>>
+
+    @Query("SELECT * FROM bmp_product_stocks WHERE tenantId = :tenantId AND masterProductId = :productId AND isDeleted = 0 LIMIT 1")
+    suspend fun getByProductId(tenantId: String, productId: Long): com.posbah.app.data.local.entities.BmpProductStockEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(stock: com.posbah.app.data.local.entities.BmpProductStockEntity): Long
+
+    @Query("UPDATE bmp_product_stocks SET quantity = :quantity, updatedAt = :ts WHERE masterProductId = :productId AND tenantId = :tenantId")
+    suspend fun updateQuantity(tenantId: String, productId: Long, quantity: Double, ts: Long = System.currentTimeMillis())
+
+    @Query("SELECT * FROM bmp_product_stocks")
+    suspend fun getAll(): List<com.posbah.app.data.local.entities.BmpProductStockEntity>
+
+    @Query("UPDATE bmp_product_stocks SET isSynced = 1 WHERE id = :id")
+    suspend fun markSynced(id: Long)
+
+    @Query("SELECT id FROM bmp_product_stocks WHERE tenantId = :tenantId AND isDeleted = 1")
+    suspend fun getDeletedIds(tenantId: String): List<Long>
+
+    @Query("DELETE FROM bmp_product_stocks WHERE id = :id")
+    suspend fun hardDelete(id: Long)
+}
+
+@Dao
+interface BmpStockLedgerDao {
+    @Query("SELECT * FROM bmp_stock_ledger WHERE tenantId = :tenantId AND masterProductId = :productId AND isDeleted = 0 ORDER BY createdAt DESC")
+    fun observeByProduct(tenantId: String, productId: Long): Flow<List<com.posbah.app.data.local.entities.BmpStockLedgerEntity>>
+
+    @Query("SELECT * FROM bmp_stock_ledger WHERE tenantId = :tenantId AND isDeleted = 0 ORDER BY createdAt DESC")
+    fun observeAll(tenantId: String): Flow<List<com.posbah.app.data.local.entities.BmpStockLedgerEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(ledger: com.posbah.app.data.local.entities.BmpStockLedgerEntity): Long
+
+    @Query("SELECT * FROM bmp_stock_ledger")
+    suspend fun getAll(): List<com.posbah.app.data.local.entities.BmpStockLedgerEntity>
+
+    @Query("UPDATE bmp_stock_ledger SET isSynced = 1 WHERE id = :id")
+    suspend fun markSynced(id: Long)
+
+    @Query("SELECT id FROM bmp_stock_ledger WHERE tenantId = :tenantId AND isDeleted = 1")
+    suspend fun getDeletedIds(tenantId: String): List<Long>
+
+    @Query("DELETE FROM bmp_stock_ledger WHERE id = :id")
+    suspend fun hardDelete(id: Long)
+}
+
+@Dao
+interface BmpProductionLogDao {
+    @Query("SELECT * FROM bmp_production_logs WHERE tenantId = :tenantId AND isDeleted = 0 ORDER BY productionDate DESC")
+    fun observeAll(tenantId: String): Flow<List<com.posbah.app.data.local.entities.BmpProductionLogEntity>>
+
+    @Query("SELECT * FROM bmp_production_logs WHERE id = :id AND isDeleted = 0 LIMIT 1")
+    suspend fun getById(id: Long): com.posbah.app.data.local.entities.BmpProductionLogEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(log: com.posbah.app.data.local.entities.BmpProductionLogEntity): Long
+
+    @Query("UPDATE bmp_production_logs SET isDeleted = 1 WHERE id = :id")
+    suspend fun softDelete(id: Long)
+
+    @Query("""
+        SELECT IFNULL(SUM(rawMaterialUsedKg), 0.0) FROM bmp_production_logs 
+        WHERE tenantId = :tenantId AND isDeleted = 0 AND masterProductId IN (
+            SELECT id FROM bmp_master_products WHERE jenisBahanBaku = :jenisBahan
+        )
+    """)
+    suspend fun sumUsedBahanBaku(tenantId: String, jenisBahan: String): Double
+
+    @Query("SELECT * FROM bmp_production_logs")
+    suspend fun getAll(): List<com.posbah.app.data.local.entities.BmpProductionLogEntity>
+
+    @Query("UPDATE bmp_production_logs SET isSynced = 1 WHERE id = :id")
+    suspend fun markSynced(id: Long)
+
+    @Query("SELECT id FROM bmp_production_logs WHERE tenantId = :tenantId AND isDeleted = 1")
+    suspend fun getDeletedIds(tenantId: String): List<Long>
+
+    @Query("DELETE FROM bmp_production_logs WHERE id = :id")
+    suspend fun hardDelete(id: Long)
 }

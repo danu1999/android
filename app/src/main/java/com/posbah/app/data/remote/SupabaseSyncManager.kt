@@ -393,6 +393,7 @@ object SupabaseSyncManager {
                         put("rejectRate", mp.rejectRate)
                         put("uniqueID", mp.uniqueID ?: JSONObject.NULL)
                         put("slug", mp.slug ?: JSONObject.NULL)
+                        put("jenisBahanBaku", mp.jenisBahanBaku)
                         put("createdAt", mp.createdAt)
                         put("updatedAt", mp.updatedAt)
                     })
@@ -738,6 +739,75 @@ object SupabaseSyncManager {
                 }
                 uploadTable(context, "activity_logs", array)
             }
+
+            // 22. bmp_product_stocks (Operational - filter unsynced)
+            val bmpProductStocks = db.bmpProductStockDao().getAll().filter { it.tenantId == activeTenantId }
+            val unsyncedBmpProductStocks = bmpProductStocks.filter { !it.isSynced }
+            if (unsyncedBmpProductStocks.isNotEmpty()) {
+                val array = JSONArray()
+                unsyncedBmpProductStocks.forEach { s ->
+                    array.put(JSONObject().apply {
+                        put("id", s.id)
+                        put("tenantId", s.tenantId)
+                        put("masterProductId", s.masterProductId)
+                        put("quantity", s.quantity)
+                        put("minStockAlert", s.minStockAlert)
+                        put("isSynced", true)
+                        put("updatedAt", s.updatedAt)
+                    })
+                }
+                if (uploadTable(context, "bmp_product_stocks", array)) {
+                    unsyncedBmpProductStocks.forEach { db.bmpProductStockDao().markSynced(it.id) }
+                }
+            }
+
+            // 23. bmp_stock_ledger (Operational - filter unsynced)
+            val bmpStockLedger = db.bmpStockLedgerDao().getAll().filter { it.tenantId == activeTenantId }
+            val unsyncedBmpStockLedger = bmpStockLedger.filter { !it.isSynced }
+            if (unsyncedBmpStockLedger.isNotEmpty()) {
+                val array = JSONArray()
+                unsyncedBmpStockLedger.forEach { l ->
+                    array.put(JSONObject().apply {
+                        put("id", l.id)
+                        put("tenantId", l.tenantId)
+                        put("masterProductId", l.masterProductId)
+                        put("referenceId", l.referenceId)
+                        put("mutationType", l.mutationType)
+                        put("quantityChange", l.quantityChange)
+                        put("finalStock", l.finalStock)
+                        put("notes", l.notes ?: JSONObject.NULL)
+                        put("isSynced", true)
+                        put("createdAt", l.createdAt)
+                    })
+                }
+                if (uploadTable(context, "bmp_stock_ledger", array)) {
+                    unsyncedBmpStockLedger.forEach { db.bmpStockLedgerDao().markSynced(it.id) }
+                }
+            }
+
+            // 24. bmp_production_logs (Operational - filter unsynced)
+            val bmpProductionLogs = db.bmpProductionLogDao().getAll().filter { it.tenantId == activeTenantId }
+            val unsyncedBmpProductionLogs = bmpProductionLogs.filter { !it.isSynced }
+            if (unsyncedBmpProductionLogs.isNotEmpty()) {
+                val array = JSONArray()
+                unsyncedBmpProductionLogs.forEach { log ->
+                    array.put(JSONObject().apply {
+                        put("id", log.id)
+                        put("tenantId", log.tenantId)
+                        put("masterProductId", log.masterProductId)
+                        put("quantityProduced", log.quantityProduced)
+                        put("quantityRejected", log.quantityRejected)
+                        put("rawMaterialUsedKg", log.rawMaterialUsedKg)
+                        put("operatorName", log.operatorName ?: JSONObject.NULL)
+                        put("productionDate", log.productionDate)
+                        put("isSynced", true)
+                        put("createdAt", log.createdAt)
+                    })
+                }
+                if (uploadTable(context, "bmp_production_logs", array)) {
+                    unsyncedBmpProductionLogs.forEach { db.bmpProductionLogDao().markSynced(it.id) }
+                }
+            }
  
             Log.d(TAG, "Sinkronisasi selesai dengan sukses.")
             SyncResult.Success
@@ -827,6 +897,30 @@ object SupabaseSyncManager {
             for (id in deletedMasterProductIds) {
                 if (deleteRow(context, "bmp_master_products", id, tenantId)) {
                     db.bmpMasterProductDao().hardDelete(id)
+                }
+            }
+
+            // 8a. bmp_product_stocks
+            val deletedProductStockIds = db.bmpProductStockDao().getDeletedIds(tenantId)
+            for (id in deletedProductStockIds) {
+                if (deleteRow(context, "bmp_product_stocks", id, tenantId)) {
+                    db.bmpProductStockDao().hardDelete(id)
+                }
+            }
+
+            // 8b. bmp_stock_ledger
+            val deletedStockLedgerIds = db.bmpStockLedgerDao().getDeletedIds(tenantId)
+            for (id in deletedStockLedgerIds) {
+                if (deleteRow(context, "bmp_stock_ledger", id, tenantId)) {
+                    db.bmpStockLedgerDao().hardDelete(id)
+                }
+            }
+
+            // 8c. bmp_production_logs
+            val deletedProductionLogIds = db.bmpProductionLogDao().getDeletedIds(tenantId)
+            for (id in deletedProductionLogIds) {
+                if (deleteRow(context, "bmp_production_logs", id, tenantId)) {
+                    db.bmpProductionLogDao().hardDelete(id)
                 }
             }
 
@@ -1342,6 +1436,7 @@ object SupabaseSyncManager {
                         rejectRate = obj.optDouble("rejectRate", 0.0),
                         uniqueID = if (obj.isNull("uniqueID")) null else obj.optString("uniqueID"),
                         slug = if (obj.isNull("slug")) null else obj.optString("slug"),
+                        jenisBahanBaku = obj.optString("jenisBahanBaku", ""),
                         createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
                         updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
                     ))
@@ -1523,6 +1618,78 @@ object SupabaseSyncManager {
                 }
                 if (list.isNotEmpty()) {
                     db.bmpBahanBakuItemDao().insertAll(list)
+                }
+            }
+
+            // 17a. Pull bmp_product_stocks
+            val bmpProductStocksArray = pullTable(context, "bmp_product_stocks", activeTenantId)
+            if (bmpProductStocksArray != null) {
+                val list = mutableListOf<BmpProductStockEntity>()
+                for (i in 0 until bmpProductStocksArray.length()) {
+                    val obj = bmpProductStocksArray.getJSONObject(i)
+                    list.add(BmpProductStockEntity(
+                        id = obj.optLong("id", 0L),
+                        tenantId = obj.optString("tenantId", activeTenantId),
+                        masterProductId = obj.optLong("masterProductId"),
+                        quantity = obj.optDouble("quantity", 0.0),
+                        minStockAlert = obj.optDouble("minStockAlert", 0.0),
+                        isSynced = true,
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                    ))
+                }
+                if (list.isNotEmpty()) {
+                    val localDeletedIds = db.bmpProductStockDao().getDeletedIds(activeTenantId).toSet()
+                    list.filter { it.id !in localDeletedIds }.forEach { db.bmpProductStockDao().upsert(it) }
+                }
+            }
+
+            // 17b. Pull bmp_stock_ledger
+            val bmpStockLedgerArray = pullTable(context, "bmp_stock_ledger", activeTenantId)
+            if (bmpStockLedgerArray != null) {
+                val list = mutableListOf<BmpStockLedgerEntity>()
+                for (i in 0 until bmpStockLedgerArray.length()) {
+                    val obj = bmpStockLedgerArray.getJSONObject(i)
+                    list.add(BmpStockLedgerEntity(
+                        id = obj.optLong("id", 0L),
+                        tenantId = obj.optString("tenantId", activeTenantId),
+                        masterProductId = obj.optLong("masterProductId"),
+                        referenceId = obj.optLong("referenceId"),
+                        mutationType = obj.optString("mutationType"),
+                        quantityChange = obj.optDouble("quantityChange", 0.0),
+                        finalStock = obj.optDouble("finalStock", 0.0),
+                        notes = if (obj.isNull("notes")) null else obj.optString("notes"),
+                        isSynced = true,
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis())
+                    ))
+                }
+                if (list.isNotEmpty()) {
+                    val localDeletedIds = db.bmpStockLedgerDao().getDeletedIds(activeTenantId).toSet()
+                    list.filter { it.id !in localDeletedIds }.forEach { db.bmpStockLedgerDao().insert(it) }
+                }
+            }
+
+            // 17c. Pull bmp_production_logs
+            val bmpProductionLogsArray = pullTable(context, "bmp_production_logs", activeTenantId)
+            if (bmpProductionLogsArray != null) {
+                val list = mutableListOf<BmpProductionLogEntity>()
+                for (i in 0 until bmpProductionLogsArray.length()) {
+                    val obj = bmpProductionLogsArray.getJSONObject(i)
+                    list.add(BmpProductionLogEntity(
+                        id = obj.optLong("id", 0L),
+                        tenantId = obj.optString("tenantId", activeTenantId),
+                        masterProductId = obj.optLong("masterProductId"),
+                        quantityProduced = obj.optDouble("quantityProduced", 0.0),
+                        quantityRejected = obj.optDouble("quantityRejected", 0.0),
+                        rawMaterialUsedKg = obj.optDouble("rawMaterialUsedKg", 0.0),
+                        operatorName = if (obj.isNull("operatorName")) null else obj.optString("operatorName"),
+                        productionDate = obj.optLong("productionDate", System.currentTimeMillis()),
+                        isSynced = true,
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis())
+                    ))
+                }
+                if (list.isNotEmpty()) {
+                    val localDeletedIds = db.bmpProductionLogDao().getDeletedIds(activeTenantId).toSet()
+                    list.filter { it.id !in localDeletedIds }.forEach { db.bmpProductionLogDao().upsert(it) }
                 }
             }
 

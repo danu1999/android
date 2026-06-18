@@ -46,6 +46,8 @@ sealed class Screen(val route: String) {
     object BmpBahanBakuForm : Screen("bmp/bahanbaku/form?id={id}") {
         fun build(id: Long? = null) = "bmp/bahanbaku/form?id=${id ?: -1}"
     }
+    object BmpStock : Screen("bmp/stock")
+    object BmpProductionLog : Screen("bmp/production")
     object AdminPanel : Screen("admin/panel")
 
     object OutletControl : Screen("owner/outlet_control")

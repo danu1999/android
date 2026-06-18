@@ -27,6 +27,9 @@ import com.posbah.app.data.local.dao.CustomerDao
 import com.posbah.app.data.local.dao.TransactionDao
 import com.posbah.app.data.local.dao.TransactionItemDao
 import com.posbah.app.data.local.dao.ActivityLogDao
+import com.posbah.app.data.local.dao.BmpProductStockDao
+import com.posbah.app.data.local.dao.BmpStockLedgerDao
+import com.posbah.app.data.local.dao.BmpProductionLogDao
 import com.posbah.app.data.local.entities.BmpBahanBakuEntity
 import com.posbah.app.data.local.entities.ActivityLogEntity
 import com.posbah.app.data.local.entities.BmpBahanBakuItemEntity
@@ -48,6 +51,9 @@ import com.posbah.app.data.local.entities.ProductEntity
 import com.posbah.app.data.local.entities.CustomerEntity
 import com.posbah.app.data.local.entities.TransactionEntity
 import com.posbah.app.data.local.entities.TransactionItemEntity
+import com.posbah.app.data.local.entities.BmpProductStockEntity
+import com.posbah.app.data.local.entities.BmpStockLedgerEntity
+import com.posbah.app.data.local.entities.BmpProductionLogEntity
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 
 @Database(
@@ -72,9 +78,12 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
         CustomerEntity::class,
         TransactionEntity::class,
         TransactionItemEntity::class,
-        ActivityLogEntity::class
+        ActivityLogEntity::class,
+        BmpProductStockEntity::class,
+        BmpStockLedgerEntity::class,
+        BmpProductionLogEntity::class
     ],
-    version = 25,
+    version = 26,
     exportSchema = true
 )
 abstract class PosBahDatabase : RoomDatabase() {
@@ -96,6 +105,9 @@ abstract class PosBahDatabase : RoomDatabase() {
     abstract fun bmpBahanBakuDao(): BmpBahanBakuDao
     abstract fun bmpBahanBakuItemDao(): BmpBahanBakuItemDao
     abstract fun printSettingsDao(): PrintSettingsDao
+    abstract fun bmpProductStockDao(): BmpProductStockDao
+    abstract fun bmpStockLedgerDao(): BmpStockLedgerDao
+    abstract fun bmpProductionLogDao(): BmpProductionLogDao
 
     abstract fun productDao(): ProductDao
     abstract fun customerDao(): CustomerDao
@@ -438,6 +450,67 @@ abstract class PosBahDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_25_26 = object : Migration(25, 26) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // 1. Tambah kolom jenisBahanBaku ke bmp_master_products
+                db.execSQL("ALTER TABLE `bmp_master_products` ADD COLUMN `jenisBahanBaku` TEXT NOT NULL DEFAULT ''")
+
+                // 2. Buat tabel bmp_product_stocks
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `bmp_product_stocks` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `tenantId` TEXT NOT NULL,
+                        `masterProductId` INTEGER NOT NULL,
+                        `quantity` REAL NOT NULL DEFAULT 0.0,
+                        `minStockAlert` REAL NOT NULL DEFAULT 0.0,
+                        `isSynced` INTEGER NOT NULL DEFAULT 0,
+                        `isDeleted` INTEGER NOT NULL DEFAULT 0,
+                        `updatedAt` INTEGER NOT NULL
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_bmp_product_stocks_tenantId` ON `bmp_product_stocks` (`tenantId`)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_bmp_product_stocks_masterProductId_tenantId` ON `bmp_product_stocks` (`masterProductId`, `tenantId`)")
+
+                // 3. Buat tabel bmp_stock_ledger
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `bmp_stock_ledger` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `tenantId` TEXT NOT NULL,
+                        `masterProductId` INTEGER NOT NULL,
+                        `referenceId` INTEGER NOT NULL,
+                        `mutationType` TEXT NOT NULL,
+                        `quantityChange` REAL NOT NULL,
+                        `finalStock` REAL NOT NULL,
+                        `notes` TEXT,
+                        `isSynced` INTEGER NOT NULL DEFAULT 0,
+                        `isDeleted` INTEGER NOT NULL DEFAULT 0,
+                        `createdAt` INTEGER NOT NULL
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_bmp_stock_ledger_tenantId` ON `bmp_stock_ledger` (`tenantId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_bmp_stock_ledger_masterProductId` ON `bmp_stock_ledger` (`masterProductId`)")
+
+                // 4. Buat tabel bmp_production_logs
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `bmp_production_logs` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `tenantId` TEXT NOT NULL,
+                        `masterProductId` INTEGER NOT NULL,
+                        `quantityProduced` REAL NOT NULL,
+                        `quantityRejected` REAL NOT NULL,
+                        `rawMaterialUsedKg` REAL NOT NULL,
+                        `operatorName` TEXT,
+                        `productionDate` INTEGER NOT NULL,
+                        `isSynced` INTEGER NOT NULL DEFAULT 0,
+                        `isDeleted` INTEGER NOT NULL DEFAULT 0,
+                        `createdAt` INTEGER NOT NULL
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_bmp_production_logs_tenantId` ON `bmp_production_logs` (`tenantId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_bmp_production_logs_masterProductId` ON `bmp_production_logs` (`masterProductId`)")
+            }
+        }
+
         fun build(context: Context, passphrase: ByteArray): PosBahDatabase {
             // Load SQLCipher native library
             System.loadLibrary("sqlcipher")
@@ -455,7 +528,7 @@ abstract class PosBahDatabase : RoomDatabase() {
                     MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
                     MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
                     MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22,
-                    MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25
+                    MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26
                 ) // ← Data AMAN, tidak terhapus
                 .fallbackToDestructiveMigration()      // ← Fallback jika dari versi < 5 (install baru)
                 .addCallback(object : Callback() {

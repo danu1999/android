@@ -86,6 +86,7 @@ data class BmpMasterProductEntity(
     val uniqueID: String? = null,
     val slug: String? = null,
     val isDeleted: Boolean = false,   // soft-delete flag
+    val jenisBahanBaku: String = "",   // Pemetaan ke jenis bijih plastik (misal: PP, HDPE)
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
@@ -356,5 +357,56 @@ data class PrintSettingsEntity(
 
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(
+    tableName = "bmp_product_stocks",
+    indices = [Index(value = ["tenantId"]), Index(value = ["masterProductId", "tenantId"], unique = true)]
+)
+data class BmpProductStockEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val tenantId: String,
+    val masterProductId: Long,
+    val quantity: Double = 0.0,
+    val minStockAlert: Double = 0.0,
+    val isSynced: Boolean = false,
+    val isDeleted: Boolean = false,
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(
+    tableName = "bmp_stock_ledger",
+    indices = [Index(value = ["tenantId"]), Index(value = ["masterProductId"])]
+)
+data class BmpStockLedgerEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val tenantId: String,
+    val masterProductId: Long,
+    val referenceId: Long,
+    val mutationType: String, // "PRODUKSI" | "PENJUALAN" | "PENYESUAIAN"
+    val quantityChange: Double,
+    val finalStock: Double,
+    val notes: String? = null,
+    val isSynced: Boolean = false,
+    val isDeleted: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(
+    tableName = "bmp_production_logs",
+    indices = [Index(value = ["tenantId"]), Index(value = ["masterProductId"])]
+)
+data class BmpProductionLogEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val tenantId: String,
+    val masterProductId: Long,
+    val quantityProduced: Double,
+    val quantityRejected: Double,
+    val rawMaterialUsedKg: Double,
+    val operatorName: String? = null,
+    val productionDate: Long = System.currentTimeMillis(),
+    val isSynced: Boolean = false,
+    val isDeleted: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis()
 )
 

@@ -37,6 +37,8 @@ import com.posbah.app.ui.screens.laundry.LaundryScreen
 import com.posbah.app.ui.screens.tenant.SystemSelectionScreen
 import com.posbah.app.ui.screens.admin.AdminPanelScreen
 import com.posbah.app.ui.screens.bmp.qr.QrScannerScreen
+import com.posbah.app.ui.screens.bmp.stock.BmpStockScreen
+import com.posbah.app.ui.screens.bmp.production.BmpProductionLogScreen
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -313,6 +315,14 @@ fun PosBahRoot(
             arguments = listOf(navArgument("id") { type = NavType.StringType; defaultValue = "-1" })
         ) {
             BahanBakuFormScreen(onDone = { nav.popBackStack() })
+        }
+
+        composable(Screen.BmpStock.route) {
+            BmpStockScreen(onBack = { nav.popBackStack() })
+        }
+
+        composable(Screen.BmpProductionLog.route) {
+            BmpProductionLogScreen(onBack = { nav.popBackStack() })
         }
 
         composable(Screen.AdminPanel.route) {

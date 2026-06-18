@@ -156,7 +156,7 @@ func initSchema() error {
 			"updatedAt" BIGINT
 		);`,
 		`CREATE TABLE IF NOT EXISTS "bmp_master_products" (
-			"id" INT PRIMARY KEY,
+			"id" INT,
 			"tenantId" VARCHAR(100) NOT NULL,
 			"title" VARCHAR(255) NOT NULL,
 			"description" TEXT,
@@ -168,8 +168,10 @@ func initSchema() error {
 			"rejectRate" DOUBLE PRECISION DEFAULT 0,
 			"uniqueID" VARCHAR(100),
 			"slug" VARCHAR(255),
+			"jenisBahanBaku" VARCHAR(100) DEFAULT '',
 			"createdAt" BIGINT,
-			"updatedAt" BIGINT
+			"updatedAt" BIGINT,
+			PRIMARY KEY ("id", "tenantId")
 		);`,
 		`CREATE TABLE IF NOT EXISTS "bmp_invoice_payments" (
 			"id" INT PRIMARY KEY,
@@ -413,6 +415,46 @@ func initSchema() error {
 			"downloadUrl" TEXT,
 			"updatedAt" BIGINT
 		);`,
+		`CREATE TABLE IF NOT EXISTS "bmp_product_stocks" (
+			"id" INT,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"masterProductId" INT NOT NULL,
+			"quantity" DOUBLE PRECISION DEFAULT 0,
+			"minStockAlert" DOUBLE PRECISION DEFAULT 0,
+			"isSynced" BOOLEAN DEFAULT TRUE,
+			"isDeleted" BOOLEAN DEFAULT FALSE,
+			"updatedAt" BIGINT,
+			PRIMARY KEY ("id", "tenantId"),
+			CONSTRAINT "bmp_product_stocks_masterProductId_tenantId_key" UNIQUE ("masterProductId", "tenantId")
+		);`,
+		`CREATE TABLE IF NOT EXISTS "bmp_stock_ledger" (
+			"id" INT,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"masterProductId" INT NOT NULL,
+			"referenceId" INT NOT NULL,
+			"mutationType" VARCHAR(50) NOT NULL,
+			"quantityChange" DOUBLE PRECISION NOT NULL,
+			"finalStock" DOUBLE PRECISION NOT NULL,
+			"notes" TEXT,
+			"isSynced" BOOLEAN DEFAULT TRUE,
+			"isDeleted" BOOLEAN DEFAULT FALSE,
+			"createdAt" BIGINT,
+			PRIMARY KEY ("id", "tenantId")
+		);`,
+		`CREATE TABLE IF NOT EXISTS "bmp_production_logs" (
+			"id" INT,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"masterProductId" INT NOT NULL,
+			"quantityProduced" DOUBLE PRECISION NOT NULL,
+			"quantityRejected" DOUBLE PRECISION NOT NULL,
+			"rawMaterialUsedKg" DOUBLE PRECISION NOT NULL,
+			"operatorName" VARCHAR(255),
+			"productionDate" BIGINT,
+			"isSynced" BOOLEAN DEFAULT TRUE,
+			"isDeleted" BOOLEAN DEFAULT FALSE,
+			"createdAt" BIGINT,
+			PRIMARY KEY ("id", "tenantId")
+		);`,
 	}
 
 	for _, q := range queries {
@@ -604,6 +646,10 @@ func initSchema() error {
 		// v2.3.0: Tambah index outletId pada transactions untuk query margin per outlet lebih cepat
 		`CREATE INDEX IF NOT EXISTS "idx_transactions_outlet" ON "transactions" ("outletId", "tenantId");`,
 		`CREATE INDEX IF NOT EXISTS "idx_transaction_items_tx" ON "transaction_items" ("transactionId");`,
+		// v2.17.3: Tambah kolom jenisBahanBaku pada master produk & composite PK master products jika belum
+		`ALTER TABLE "bmp_master_products" ADD COLUMN IF NOT EXISTS "jenisBahanBaku" VARCHAR(100) DEFAULT '';`,
+		`ALTER TABLE "bmp_master_products" DROP CONSTRAINT IF EXISTS "bmp_master_products_pkey";`,
+		`ALTER TABLE "bmp_master_products" ADD PRIMARY KEY ("id", "tenantId") ON CONFLICT DO NOTHING;`,
 	}
 
 	for _, q := range migrationQueries {
@@ -633,7 +679,8 @@ func hasTenantIdColumn(tableName string) bool {
 	case "outlets", "employees", "bmp_clients", "bmp_invoices", "bmp_products",
 		"bmp_master_products", "bmp_invoice_payments", "bmp_cashflow", "bmp_settings",
 		"bmp_employees", "bmp_payrolls", "bmp_bahan_baku", "bmp_bahan_baku_item",
-		"products", "customers", "transactions":
+		"products", "customers", "transactions", "bmp_product_stocks", "bmp_stock_ledger",
+		"bmp_production_logs":
 		return true
 	}
 	return false

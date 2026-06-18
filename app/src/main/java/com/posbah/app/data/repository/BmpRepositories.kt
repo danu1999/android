@@ -1,6 +1,12 @@
 package com.posbah.app.data.repository
 
 import com.posbah.app.data.local.dao.BmpCashFlowDao
+import com.posbah.app.data.local.dao.BmpProductStockDao
+import com.posbah.app.data.local.dao.BmpStockLedgerDao
+import com.posbah.app.data.local.dao.BmpProductionLogDao
+import com.posbah.app.data.local.entities.BmpProductStockEntity
+import com.posbah.app.data.local.entities.BmpStockLedgerEntity
+import com.posbah.app.data.local.entities.BmpProductionLogEntity
 import com.posbah.app.data.local.dao.BmpClientDao
 import com.posbah.app.data.local.dao.BmpEmployeeDao
 import com.posbah.app.data.local.dao.BmpInvoiceDao
@@ -89,7 +95,8 @@ class BmpInvoiceRepository @Inject constructor(
     private val paymentDao: BmpPaymentDao,
     private val cashFlowDao: BmpCashFlowDao,
     private val clientDao: BmpClientDao,
-    private val aggregate: BmpAggregateDaoImpl
+    private val aggregate: BmpAggregateDaoImpl,
+    private val stockRepo: BmpStockRepository
 ) {
     fun observe(tenantId: String): Flow<List<BmpInvoiceEntity>> = invoiceDao.observe(tenantId)
     fun observeByStatus(tenantId: String, status: String) = invoiceDao.observeByStatus(tenantId, status)
@@ -124,6 +131,20 @@ class BmpInvoiceRepository @Inject constructor(
             val id = invoiceDao.insert(final)
             val mappedProducts = products.map { it.copy(invoiceId = id) }
             productDao.insertAll(mappedProducts)
+
+            // Deduct finished goods stock
+            for (prod in mappedProducts) {
+                if (prod.masterItemID != null) {
+                    stockRepo.adjustStock(
+                        tenantId = invoice.tenantId,
+                        productId = prod.masterItemID,
+                        change = -(prod.quantity * prod.jumlahLusin),
+                        mutationType = "PENJUALAN",
+                        referenceId = id,
+                        notes = "Penjualan Invoice #${final.number}"
+                    )
+                }
+            }
 
             if (totalPaid > 0) {
                 val paymentId = paymentDao.insert(
@@ -168,6 +189,21 @@ class BmpInvoiceRepository @Inject constructor(
 
     suspend fun updateInvoice(invoice: BmpInvoiceEntity, products: List<BmpProductEntity>) {
         db.withTransaction {
+            // Restore stock of old products before deleting them
+            val oldProducts = productDao.listByInvoice(invoice.id)
+            for (prod in oldProducts) {
+                if (prod.masterItemID != null) {
+                    stockRepo.adjustStock(
+                        tenantId = invoice.tenantId,
+                        productId = prod.masterItemID,
+                        change = prod.quantity * prod.jumlahLusin,
+                        mutationType = "PENJUALAN",
+                        referenceId = invoice.id,
+                        notes = "Koreksi Invoice #${invoice.number} (Kembalikan)"
+                    )
+                }
+            }
+
             productDao.deleteByInvoice(invoice.id)
             val total = products.sumOf { it.price * it.quantity * it.jumlahLusin }
             
@@ -193,6 +229,20 @@ class BmpInvoiceRepository @Inject constructor(
             
             val mappedProducts = products.map { it.copy(invoiceId = invoice.id) }
             productDao.insertAll(mappedProducts)
+
+            // Deduct stock of new products
+            for (prod in mappedProducts) {
+                if (prod.masterItemID != null) {
+                    stockRepo.adjustStock(
+                        tenantId = invoice.tenantId,
+                        productId = prod.masterItemID,
+                        change = -(prod.quantity * prod.jumlahLusin),
+                        mutationType = "PENJUALAN",
+                        referenceId = invoice.id,
+                        notes = "Koreksi Invoice #${invoice.number} (Kurangi)"
+                    )
+                }
+            }
             
             // Re-sync cash flow exits for this invoice
             cashFlowDao.deleteExitsForInvoice(invoice.number)
@@ -224,6 +274,21 @@ class BmpInvoiceRepository @Inject constructor(
             if (invoice != null) {
                 // 1. Soft-delete cashflow keluar untuk barang khusus
                 cashFlowDao.deleteExitsForInvoice(invoice.number)
+
+                // Restore stock of invoice products
+                val products = productDao.listByInvoice(id)
+                for (prod in products) {
+                    if (prod.masterItemID != null) {
+                        stockRepo.adjustStock(
+                            tenantId = invoice.tenantId,
+                            productId = prod.masterItemID,
+                            change = prod.quantity * prod.jumlahLusin,
+                            mutationType = "PENJUALAN",
+                            referenceId = id,
+                            notes = "Pembatalan Invoice #${invoice.number} (Kembalikan)"
+                        )
+                    }
+                }
             }
 
             // 2. Ambil semua pembayaran (termasuk yg sudah deleted)
@@ -733,4 +798,109 @@ class PrintSettingsRepository @Inject constructor(
         dao.get(tenantId, moduleKey)
 
     suspend fun upsert(settings: PrintSettingsEntity) = dao.upsert(settings)
+}
+
+@Singleton
+class BmpStockRepository @Inject constructor(
+    private val db: com.posbah.app.data.local.PosBahDatabase,
+    private val stockDao: BmpProductStockDao,
+    private val ledgerDao: BmpStockLedgerDao,
+    private val itemDao: com.posbah.app.data.local.dao.BmpBahanBakuItemDao,
+    private val productionLogDao: BmpProductionLogDao
+) {
+    fun observeStocks(tenantId: String): Flow<List<BmpProductStockEntity>> = stockDao.observeAll(tenantId)
+    
+    fun observeLedger(tenantId: String, productId: Long): Flow<List<BmpStockLedgerEntity>> =
+        ledgerDao.observeByProduct(tenantId, productId)
+
+    fun observeAllLedger(tenantId: String): Flow<List<BmpStockLedgerEntity>> =
+        ledgerDao.observeAll(tenantId)
+
+    suspend fun getStockByProductId(tenantId: String, productId: Long): BmpProductStockEntity? =
+        stockDao.getByProductId(tenantId, productId)
+
+    suspend fun getRawMaterialStock(tenantId: String, jenisBahan: String): Double {
+        val purchased = itemDao.sumPurchasedBahanBaku(tenantId, jenisBahan)
+        val used = productionLogDao.sumUsedBahanBaku(tenantId, jenisBahan)
+        return (purchased - used).coerceAtLeast(0.0)
+    }
+
+    suspend fun adjustStock(
+        tenantId: String,
+        productId: Long,
+        change: Double,
+        mutationType: String,
+        referenceId: Long,
+        notes: String? = null
+    ) {
+        db.withTransaction {
+            val existing = stockDao.getByProductId(tenantId, productId)
+            val newQty = (existing?.quantity ?: 0.0) + change
+            if (existing == null) {
+                stockDao.upsert(
+                    BmpProductStockEntity(
+                        tenantId = tenantId,
+                        masterProductId = productId,
+                        quantity = newQty,
+                        minStockAlert = 0.0,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                )
+            } else {
+                stockDao.updateQuantity(tenantId, productId, newQty)
+            }
+
+            ledgerDao.insert(
+                BmpStockLedgerEntity(
+                    tenantId = tenantId,
+                    masterProductId = productId,
+                    referenceId = referenceId,
+                    mutationType = mutationType,
+                    quantityChange = change,
+                    finalStock = newQty,
+                    notes = notes,
+                    createdAt = System.currentTimeMillis()
+                )
+            )
+        }
+    }
+}
+
+@Singleton
+class BmpProductionLogRepository @Inject constructor(
+    private val db: com.posbah.app.data.local.PosBahDatabase,
+    private val logDao: BmpProductionLogDao,
+    private val stockRepo: BmpStockRepository
+) {
+    fun observeAll(tenantId: String): Flow<List<BmpProductionLogEntity>> = logDao.observeAll(tenantId)
+
+    suspend fun getById(id: Long) = logDao.getById(id)
+
+    suspend fun addProductionLog(log: BmpProductionLogEntity) {
+        db.withTransaction {
+            val insertedId = logDao.upsert(log)
+            stockRepo.adjustStock(
+                tenantId = log.tenantId,
+                productId = log.masterProductId,
+                change = log.quantityProduced,
+                mutationType = "PRODUKSI",
+                referenceId = insertedId,
+                notes = "Hasil Produksi Harian"
+            )
+        }
+    }
+
+    suspend fun deleteProductionLog(log: BmpProductionLogEntity) {
+        db.withTransaction {
+            logDao.softDelete(log.id)
+            stockRepo.adjustStock(
+                tenantId = log.tenantId,
+                productId = log.masterProductId,
+                change = -log.quantityProduced,
+                mutationType = "PRODUKSI",
+                referenceId = log.id,
+                notes = "Pembatalan/Penghapusan Produksi"
+            )
+        }
+    }
 }

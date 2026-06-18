@@ -14,6 +14,9 @@ import com.posbah.app.data.local.dao.BmpPayrollDao
 import com.posbah.app.data.local.dao.BmpProductDao
 import com.posbah.app.data.local.dao.BmpSettingsDao
 import com.posbah.app.data.local.dao.PrintSettingsDao
+import com.posbah.app.data.local.dao.BmpProductStockDao
+import com.posbah.app.data.local.dao.BmpStockLedgerDao
+import com.posbah.app.data.local.dao.BmpProductionLogDao
 import com.posbah.app.data.local.dao.EmployeeDao
 import com.posbah.app.data.local.dao.LocalUserDao
 import com.posbah.app.data.local.dao.OutletDao
@@ -62,6 +65,9 @@ object DatabaseModule {
     @Provides fun bmpBahanBakuDao(db: PosBahDatabase): BmpBahanBakuDao = db.bmpBahanBakuDao()
     @Provides fun bmpBahanBakuItemDao(db: PosBahDatabase): BmpBahanBakuItemDao = db.bmpBahanBakuItemDao()
     @Provides fun printSettingsDao(db: PosBahDatabase): PrintSettingsDao = db.printSettingsDao()
+    @Provides fun bmpProductStockDao(db: PosBahDatabase): BmpProductStockDao = db.bmpProductStockDao()
+    @Provides fun bmpStockLedgerDao(db: PosBahDatabase): BmpStockLedgerDao = db.bmpStockLedgerDao()
+    @Provides fun bmpProductionLogDao(db: PosBahDatabase): BmpProductionLogDao = db.bmpProductionLogDao()
 
     @Provides fun productDao(db: PosBahDatabase): ProductDao = db.productDao()
     @Provides fun customerDao(db: PosBahDatabase): CustomerDao = db.customerDao()

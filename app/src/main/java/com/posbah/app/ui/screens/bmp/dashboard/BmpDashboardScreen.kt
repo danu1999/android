@@ -28,6 +28,8 @@ import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.PriceChange
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.Science
+import androidx.compose.material.icons.outlined.Inventory
+import androidx.compose.material.icons.outlined.PrecisionManufacturing
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -99,6 +101,8 @@ fun BmpDashboardScreen(
             BmpMenuItem("Invoice", "Buat & kelola tagihan", Icons.Outlined.Description, "bmp/invoices", "menu-invoices"),
             BmpMenuItem("Bahan Baku", "Pembelian bahan & HPP", Icons.Outlined.Science, "bmp/bahanbaku", "menu-bahanbaku"),
             BmpMenuItem("Produk", "Master produk & harga", Icons.Outlined.Inventory2, "bmp/products", "menu-products"),
+            BmpMenuItem("Stok", "Stok gudang & ledger", Icons.Outlined.Inventory, "bmp/stock", "menu-stock"),
+            BmpMenuItem("Produksi", "Catatan produksi harian", Icons.Outlined.PrecisionManufacturing, "bmp/production", "menu-production"),
             BmpMenuItem("Pembayaran", "Catat & lihat penerimaan", Icons.Outlined.Payments, "bmp/payments", "menu-payments"),
             BmpMenuItem("Arus Kas", "Cashflow masuk/keluar", Icons.Outlined.AccountBalance, "bmp/cashflow", "menu-cashflow"),
             BmpMenuItem("Karyawan", "Data & kontrol staf", Icons.Outlined.Badge, "bmp/employees", "menu-employees"),
