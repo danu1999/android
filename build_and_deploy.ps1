@@ -74,6 +74,7 @@ param(
     [string]$VpsPemKey  = "C:\Users\danus\Documents\muizz.pem",
     [string]$VpsApkDir  = "/home/muizz9900",
     [string]$AdminUrl   = "https://www.zedmz.cloud",
+    [string]$AdminEmail = "muhammadmuizz8@gmail.com",
     [string]$AdminPassword = ""
 )
 
@@ -252,7 +253,7 @@ if (-not $SkipDeploy) {
         $loginResp = Invoke-RestMethod `
             -Uri "$AdminUrl/api/admin/login" `
             -Method POST `
-            -Body (@{ password = $AdminPassword } | ConvertTo-Json) `
+            -Body (@{ email = $AdminEmail; password = $AdminPassword } | ConvertTo-Json) `
             -ContentType "application/json" `
             -SessionVariable "sess"
 

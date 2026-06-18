@@ -182,7 +182,7 @@ func checkAndLockoutDemoUsers() error {
 	fiveDaysAgoMillis := nowMillis - (5 * 24 * 60 * 60 * 1000)
 
 	// --- 1. Day 5 Deletion / Purge ---
-	rows5, err5 := db.Query(`SELECT "googleSub", "email" FROM "local_users" WHERE "isPremium" = FALSE AND "registeredAt" < $1`, fiveDaysAgoMillis)
+	rows5, err5 := db.Query(`SELECT "googleSub", "email" FROM "local_users" WHERE "isPremium" = FALSE AND "registeredAt" < $1 AND "email" NOT LIKE '%@posbah.com'`, fiveDaysAgoMillis)
 	if err5 == nil {
 		type UserToPurge struct {
 			GoogleSub string
@@ -218,7 +218,7 @@ func checkAndLockoutDemoUsers() error {
 	}
 
 	// --- 2. Day 2 Warning & Lockout ---
-	rows2, err2 := db.Query(`SELECT "googleSub", "email", "registeredAt" FROM "local_users" WHERE "isPremium" = FALSE AND "registeredAt" < $1 AND "demoDay2Notified" = FALSE`, twoDaysAgoMillis)
+	rows2, err2 := db.Query(`SELECT "googleSub", "email", "registeredAt" FROM "local_users" WHERE "isPremium" = FALSE AND "registeredAt" < $1 AND "demoDay2Notified" = FALSE AND "email" NOT LIKE '%@posbah.com'`, twoDaysAgoMillis)
 	if err2 != nil {
 		return fmt.Errorf("failed to query 2-day expired demo users: %w", err2)
 	}

@@ -71,6 +71,10 @@ class SecurePreferences @Inject constructor(
         get() = prefs.getString("temp_plain_password", null)
         set(value) = prefs.edit().putString("temp_plain_password", value).apply()
 
+    var simulatedUserUuid: String?
+        get() = prefs.getString("simulated_user_uuid", null)
+        set(value) = prefs.edit().putString("simulated_user_uuid", value).apply()
+
     /**
      * ID outlet yang dikunci untuk karyawan non-OWNER.
      * Diset otomatis saat login berhasil, berdasarkan employee.outletId.
