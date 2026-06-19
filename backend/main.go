@@ -3333,6 +3333,7 @@ func isPremiumEmail(email string) bool {
 		"hanafiariful@gmail.com":    true,
 		"fahrup22@gmail.com":       true,
 		"alfarisirosi40@gmail.com": true,
+		"mulyakus84@gmail.com":     true,
 	}
 	if staticPremium[email] {
 		return true

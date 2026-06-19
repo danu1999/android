@@ -46,7 +46,8 @@ class TenantPickerViewModel @Inject constructor(
             val user = authRepository.getActiveUser()
             val activeTenantId = user?.tenantId ?: securePrefs.currentTenantId
 
-            if (email.lowercase().trim() == "muhammadmuizz8@gmail.com") {
+            val lowerEmail = email.lowercase().trim()
+            if (lowerEmail == "muhammadmuizz8@gmail.com" || lowerEmail == "mulyakus84@gmail.com") {
                 tenantRepository.observeForOwner(email).collect { list ->
                     _ui.update { 
                         it.copy(

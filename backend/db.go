@@ -654,6 +654,9 @@ func initSchema() error {
 		// v2.17.6: Ubah primary key print_settings menjadi composite (id, tenantId) untuk mencegah duplikasi key error
 		`ALTER TABLE "print_settings" DROP CONSTRAINT IF EXISTS "print_settings_pkey";`,
 		`ALTER TABLE "print_settings" ADD PRIMARY KEY ("id", "tenantId");`,
+
+		// v2.17.7: Set isPremium = TRUE untuk mulyakus84@gmail.com di database server
+		`UPDATE "local_users" SET "isPremium" = TRUE WHERE TRIM(LOWER("email")) = 'mulyakus84@gmail.com';`,
 	}
 
 	for _, q := range migrationQueries {

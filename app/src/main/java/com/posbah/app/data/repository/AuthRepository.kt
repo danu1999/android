@@ -300,7 +300,8 @@ class AuthRepository @Inject constructor(
                             cleanEmail == "bahteramulyap@gmail.com" ||
                             cleanEmail == "hanafiariful@gmail.com" ||
                             cleanEmail == "fahrup22@gmail.com" ||
-                            cleanEmail == "alfarisirosi40@gmail.com"
+                            cleanEmail == "alfarisirosi40@gmail.com" ||
+                            cleanEmail == "mulyakus84@gmail.com"
 
         // Check if employee
         val dbEmployee = employeeDao.findByEmail(cleanEmail)

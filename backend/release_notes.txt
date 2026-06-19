@@ -1,3 +1,14 @@
+POSBah v2.17.7 - Dukungan Multi-Sistem Usaha Premium
+
+Halo Kak! POSBah v2.17.7 hadir dengan pembaruan khusus untuk mendukung bisnis Anda:
+1. Multi-Sistem Usaha Premium: Memberikan hak akses premium untuk akun pengguna tertentu agar dapat mengelola beberapa sistem usaha sekaligus (seperti FnB dan Laundry).
+2. Isolasi Database Aman: Semua data transaksi, produk, dan outlet disimpan dalam database/tabel terpisah untuk masing-masing sistem usaha agar tidak tercampur.
+3. Switch Sistem Fleksibel: Pengguna kini dapat dengan mudah berpindah antar sistem usaha melalui layar Pilih Tenant.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.6 - Perbaikan Otentikasi Google & Sinkronisasi Database
 
 Halo Kak! POSBah v2.17.6 hadir dengan perbaikan alur otentikasi Google dan sinkronisasi data:
