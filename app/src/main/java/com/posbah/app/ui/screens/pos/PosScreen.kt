@@ -904,7 +904,14 @@ fun PosScreen(
                             Icon(Icons.Outlined.Print, "Print System")
                         }
                         Spacer(Modifier.width(4.dp))
-                        IconButton(onClick = { showBluetoothPrint() }) {
+                        IconButton(
+                            onClick = {
+                                val html = com.posbah.app.ui.print.ReceiptPrinter.generateReceiptHtml(
+                                    context, r, rItems, viewModel.products.value, ui.printConfig
+                                )
+                                com.posbah.app.ui.print.ReceiptPrinter.print(context, html)
+                            }
+                        ) {
                             Icon(Icons.Outlined.Storefront, "Print Bluetooth")
                         }
                     }

@@ -1,3 +1,14 @@
+POSBah v2.17.10 - Cetak Nota POS Bluetooth RawBT (Semua Sistem)
+
+Halo Kak! POSBah v2.17.10 hadir dengan pembaruan dan integrasi sistem cetak:
+1. Cetak Nota POS Bluetooth RawBT: Memperbaiki kendala cetak nota di ketiga jenis usaha POS (FnB, Rental, dan Laundry). Sekarang Anda bisa mencetak nota fisik struk belanja langsung ke printer kasir Bluetooth thermal (seperti EPPOS) menggunakan integrasi RawBT.
+2. Fallback Sistem Cetak Native: Jika aplikasi RawBT tidak terinstal, aplikasi secara otomatis mengalihkan proses cetak menggunakan dialog cetak native bawaan Android (WebView + PrintManager).
+3. Integrasi & Sinkronisasi Cetak: Menyelaraskan data PrintConfig (lebar kertas, logo, footer, dll.) pada masing-masing jenis POS agar struk tercetak dengan rapi dan sesuai dengan konfigurasi cetak Anda.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.9 - Perbaikan Sinkronisasi & Penghapusan Data Permanen (Semua Sistem)
 
 Halo Kak! POSBah v2.17.9 hadir dengan perbaikan kritis untuk sinkronisasi penghapusan data:

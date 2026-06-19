@@ -4,6 +4,17 @@ import android.content.Context
 import com.posbah.app.data.local.entities.TransactionEntity
 import com.posbah.app.data.local.entities.TransactionItemEntity
 import com.posbah.app.data.local.entities.ProductEntity
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.print.PrintManager
+import android.print.PrintAttributes
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import java.util.Locale
+import com.posbah.app.ui.screens.rental.RentalOrder
+import com.posbah.app.ui.screens.laundry.LaundryOrder
+import com.posbah.app.ui.screens.laundry.CartItem
 
 object ReceiptPrinter {
 
@@ -198,5 +209,231 @@ object ReceiptPrinter {
 
     private fun formatRupiahValue(number: Number): String {
         return String.format("%,d", number.toLong()).replace(",", ".")
+    }
+
+    fun print(context: Context, html: String) {
+        val base64Html = android.util.Base64.encodeToString(html.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
+        val intentUri = Uri.parse("rawbt:data:text/html;base64,$base64Html")
+        val rawbtIntent = Intent(Intent.ACTION_VIEW, intentUri).apply {
+            setPackage("ru.a402d.rawbtprinter")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+
+        try {
+            context.startActivity(rawbtIntent)
+            Toast.makeText(context, "Mengirim nota ke printer RawBT...", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            // Fallback to standard system print service
+            val webView = WebView(context)
+            webView.webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
+                    val printAdapter = webView.createPrintDocumentAdapter("POS_Receipt_${System.currentTimeMillis()}")
+                    printManager.print("POS Receipt", printAdapter, PrintAttributes.Builder().build())
+                }
+            }
+            webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+            Toast.makeText(context, "Membuka dialog cetak sistem...", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun generateRentalReceiptHtml(
+        context: Context,
+        r: RentalOrder,
+        printConfig: PrintConfig
+    ): String {
+        val storeName = "POSBAH CAR & MOTOR RENTAL"
+        val subheader = "Struk Penyewaan Resmi"
+        val is58 = printConfig.receiptPaperWidth == PaperWidth.MM58
+        val paperWidthCss = if (is58) "58mm" else "80mm"
+        val fontSizeCss = if (is58) "11px" else "13px"
+        val paddingCss = if (is58) "0.3cm" else "0.6cm"
+        val themeColor = if (printConfig.receiptIsColor) "#1E3A8A" else "#000000"
+        val logoBase64 = if (printConfig.receiptUseLogo) getUriOrAssetBase64(context, printConfig.logoPath, "logo.jpg") else ""
+
+        val headerHtml = if (logoBase64.isNotEmpty()) {
+            """
+            <div class="c" style="margin-bottom: 8px;">
+                <img src="$logoBase64" style="width: 50px; height: auto;" /><br>
+                <span class="store-title b" style="color: $themeColor;">$storeName</span><br>
+                <span>$subheader</span>
+            </div>
+            """
+        } else {
+            val alignClass = if (printConfig.receiptHeaderAlign == HeaderAlign.LEFT) "l" else "c"
+            """
+            <div class="$alignClass" style="margin-bottom: 8px;">
+                <span class="store-title b" style="color: $themeColor;">$storeName</span><br>
+                <span>$subheader</span>
+            </div>
+            """
+        }
+
+        val unpaidAmt = if (r.total - r.paid > 0) r.total - r.paid else 0.0
+
+        return """
+            <html>
+            <head>
+                <style>
+                    @page { margin: 0; }
+                    body {
+                        font-family: 'Courier New', Courier, monospace;
+                        width: $paperWidthCss;
+                        margin: 0 auto;
+                        padding: $paddingCss;
+                        font-size: $fontSizeCss;
+                        color: #000;
+                        background-color: #fff;
+                    }
+                    .c { text-align: center; }
+                    .l { text-align: left; }
+                    .b { font-weight: bold; }
+                    .r { text-align: right; }
+                    hr { border-top: 1px dashed #000; border-bottom: none; border-left: none; border-right: none; margin: 8px 0; }
+                    table { width: 100%; border-collapse: collapse; }
+                    td { vertical-align: top; padding: 2px 0; }
+                    .store-title { font-size: 15px; }
+                </style>
+            </head>
+            <body>
+                $headerHtml
+                <hr>
+                <div>No Transaksi: ${r.id}</div>
+                <div>Penyewa: ${r.customerName}</div>
+                <div>WhatsApp: ${r.whatsapp}</div>
+                <div>Tanggal Sewa: ${com.posbah.app.util.Formatters.dateLong(r.rentDate)}</div>
+                <hr>
+                <table>
+                    <tr>
+                        <td class="b">${r.vehicleName}</td>
+                        <td class="r b">@ ${r.days} Hari</td>
+                    </tr>
+                    <tr>
+                        <td colspan="2" class="r">Rp${formatRupiahValue(r.total)}</td>
+                    </tr>
+                </table>
+                <hr>
+                <table>
+                    <tr>
+                        <td class="b">TOTAL BIAYA</td>
+                        <td class="r b" style="font-size: 110%;">Rp${formatRupiahValue(r.total)}</td>
+                    </tr>
+                    <tr>
+                        <td>Uang Muka/Cash</td>
+                        <td class="r">Rp${formatRupiahValue(r.paid)}</td>
+                    </tr>
+                    <tr>
+                        <td>Sisa Pembayaran</td>
+                        <td class="r">Rp${formatRupiahValue(unpaidAmt)}</td>
+                    </tr>
+                </table>
+                <hr>
+                <div class="c b">Terima kasih atas kepercayaan Anda! 🙏</div>
+                <div class="c" style="font-size: 90%; color: #444; margin-top: 4px;">Harap kembalikan armada tepat waktu.</div>
+            </body>
+            </html>
+        """.trimIndent()
+    }
+
+    fun generateLaundryReceiptHtml(
+        context: Context,
+        r: LaundryOrder,
+        items: List<CartItem>,
+        printConfig: PrintConfig
+    ): String {
+        val storeName = "POSBAH LAUNDRY & CLEANING"
+        val subheader = "Nota Jasa Laundry"
+        val is58 = printConfig.receiptPaperWidth == PaperWidth.MM58
+        val paperWidthCss = if (is58) "58mm" else "80mm"
+        val fontSizeCss = if (is58) "11px" else "13px"
+        val paddingCss = if (is58) "0.3cm" else "0.6cm"
+        val themeColor = if (printConfig.receiptIsColor) "#1E3A8A" else "#000000"
+        val logoBase64 = if (printConfig.receiptUseLogo) getUriOrAssetBase64(context, printConfig.logoPath, "logo.jpg") else ""
+
+        val headerHtml = if (logoBase64.isNotEmpty()) {
+            """
+            <div class="c" style="margin-bottom: 8px;">
+                <img src="$logoBase64" style="width: 50px; height: auto;" /><br>
+                <span class="store-title b" style="color: $themeColor;">$storeName</span><br>
+                <span>$subheader</span>
+            </div>
+            """
+        } else {
+            val alignClass = if (printConfig.receiptHeaderAlign == HeaderAlign.LEFT) "l" else "c"
+            """
+            <div class="$alignClass" style="margin-bottom: 8px;">
+                <span class="store-title b" style="color: $themeColor;">$storeName</span><br>
+                <span>$subheader</span>
+            </div>
+            """
+        }
+
+        val itemsHtml = StringBuilder()
+        for (item in items) {
+            val qtyStr = if (item.service.unit == "Kg") String.format(Locale.US, "%.1f Kg", item.quantity) else String.format(Locale.US, "%d Pcs", item.quantity.toInt())
+            val lineTotal = item.service.price * item.quantity
+
+            itemsHtml.append("<tr><td colspan=\"2\" class=\"item-name\">${item.service.name}</td></tr>")
+            itemsHtml.append("""
+                <tr>
+                    <td class="item-qty">x$qtyStr</td>
+                    <td class="item-total r">Rp${formatRupiahValue(lineTotal)}</td>
+                </tr>
+            """.trimIndent())
+        }
+
+        return """
+            <html>
+            <head>
+                <style>
+                    @page { margin: 0; }
+                    body {
+                        font-family: 'Courier New', Courier, monospace;
+                        width: $paperWidthCss;
+                        margin: 0 auto;
+                        padding: $paddingCss;
+                        font-size: $fontSizeCss;
+                        color: #000;
+                        background-color: #fff;
+                    }
+                    .c { text-align: center; }
+                    .l { text-align: left; }
+                    .b { font-weight: bold; }
+                    .r { text-align: right; }
+                    hr { border-top: 1px dashed #000; border-bottom: none; border-left: none; border-right: none; margin: 8px 0; }
+                    table { width: 100%; border-collapse: collapse; }
+                    td { vertical-align: top; padding: 2px 0; }
+                    .store-title { font-size: 15px; }
+                    .item-name { font-weight: bold; word-break: break-all; }
+                    .item-qty { font-size: 90%; color: #333; }
+                </style>
+            </head>
+            <body>
+                $headerHtml
+                <hr>
+                <div>Order ID: ${r.id}</div>
+                <div>Pelanggan: ${r.customerName}</div>
+                <div>WhatsApp: ${r.phone}</div>
+                <div>Tanggal Masuk: ${com.posbah.app.util.Formatters.dateLong(r.dateIn)}</div>
+                <hr>
+                <table>
+                    $itemsHtml
+                </table>
+                <hr>
+                <table>
+                    <tr>
+                        <td class="b">TOTAL BIAYA</td>
+                        <td class="r b" style="font-size: 110%;">Rp${formatRupiahValue(r.total)}</td>
+                    </tr>
+                    <tr>
+                        <td>Status Bayar</td>
+                        <td class="r b" style="color: ${if (r.paymentStatus == "LUNAS") "#22C57E" else "#EF4444"};">${r.paymentStatus}</td>
+                    </tr>
+                </table>
+                <hr>
+                <div class="c b">Terima kasih atas order Anda! 🙏</div>
+            </body>
+            </html>
+        """.trimIndent()
     }
 }

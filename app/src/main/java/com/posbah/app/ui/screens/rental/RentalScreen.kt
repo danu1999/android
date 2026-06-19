@@ -79,6 +79,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import com.posbah.app.util.CameraUtils
+import com.posbah.app.ui.print.ReceiptPrinter
 
 data class Vehicle(
     val id: String,
@@ -124,6 +125,7 @@ fun RentalScreen(
     val activityLogsList by viewModel.activityLogs.collectAsState()
     val customerList by viewModel.customers.collectAsState(emptyList())
     val transactionList by viewModel.transactions.collectAsState(emptyList())
+    val printConfig by viewModel.printConfig.collectAsState()
 
     val outletList by viewModel.availableOutlets.collectAsState()
     val activeOutletId by viewModel.activeOutletId.collectAsState()
@@ -801,7 +803,10 @@ fun RentalScreen(
             dismissButton = {
                 TextButton(
                     onClick = {
-                        Toast.makeText(context, "Mencetak ke printer Bluetooth thermal...", Toast.LENGTH_SHORT).show()
+                        ReceiptPrinter.print(
+                            context,
+                            ReceiptPrinter.generateRentalReceiptHtml(context, r, printConfig)
+                        )
                     }
                 ) { Text("Cetak Struk") }
             }

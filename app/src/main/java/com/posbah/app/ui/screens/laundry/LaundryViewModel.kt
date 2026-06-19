@@ -25,6 +25,10 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 
+import com.posbah.app.data.repository.PrintSettingsRepository
+import com.posbah.app.ui.print.PrintConfig
+import kotlinx.coroutines.flow.map
+
 @Serializable
 data class LaundryTransactionMetadata(
     val phone: String,
@@ -45,6 +49,7 @@ class LaundryViewModel @Inject constructor(
     private val localDataSeeder: LocalDataSeeder,
     private val activityLogDao: ActivityLogDao,
     private val db: com.posbah.app.data.local.PosBahDatabase,
+    private val printSettingsRepository: PrintSettingsRepository,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context
 ) : ViewModel() {
 
@@ -55,6 +60,10 @@ class LaundryViewModel @Inject constructor(
         val t = db.tenantDao().getById(tenantId)
         emit(t?.name ?: "Laundry POS")
     }.stateIn(viewModelScope, SharingStarted.Eagerly, "Laundry POS")
+
+    val printConfig = printSettingsRepository.observe(tenantId, "LAUNDRY")
+        .map { PrintConfig.fromEntity(it) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, PrintConfig())
 
     init {
         viewModelScope.launch {
