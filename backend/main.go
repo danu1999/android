@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/sha1"
 	"crypto/sha512"
 	"database/sql"
@@ -112,6 +113,8 @@ func main() {
 	http.HandleFunc("/api/invoice/delete-signature", handleDeleteSignature)
 	http.HandleFunc("/sign/", handleSignPage)
 	http.HandleFunc("/api/sign/", handleSignPage)
+	http.HandleFunc("/store/", handleStorePage)
+	http.HandleFunc("/api/store/", handleStorePage)
 	http.HandleFunc("/api/ai/classify", handleAiClassify)
 
 	// APK download & version endpoints
@@ -2682,6 +2685,592 @@ const signatureHtmlPage = `<!DOCTYPE html>
 </body>
 </html>
 `
+
+type StoreProduct struct {
+	ID       string  `json:"id"`
+	Name     string  `json:"name"`
+	Category string  `json:"category"`
+	Price    float64 `json:"price"`
+	Stock    int     `json:"stock"`
+	Image    string  `json:"image"`
+}
+
+func handleStorePage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	path := r.URL.Path
+	var tokenEncoded string
+	if strings.HasPrefix(path, "/store/") {
+		tokenEncoded = strings.TrimPrefix(path, "/store/")
+	} else if strings.HasPrefix(path, "/api/store/") {
+		tokenEncoded = strings.TrimPrefix(path, "/api/store/")
+	}
+
+	tokenEncoded = strings.TrimSpace(tokenEncoded)
+	if tokenEncoded == "" {
+		http.Error(w, "Token required", http.StatusBadRequest)
+		return
+	}
+
+	tenantId, err := validateStoreToken(tokenEncoded)
+	if err != nil || tenantId == "" {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(renderStoreErrorPage("Link Toko Online Tidak Valid", "Link toko online ini tidak valid, salah format, atau telah kedaluwarsa.")))
+		return
+	}
+
+	products, err := loadTenantProducts(tenantId)
+	if err != nil {
+		log.Printf("Error loading products for tenant %s: %v", tenantId, err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	businessName := "Toko Online"
+	_ = db.QueryRow(`SELECT "name" FROM "tenants" WHERE "id" = $1`, tenantId).Scan(&businessName)
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Write([]byte(renderStoreCatalogPage(businessName, products)))
+}
+
+func validateStoreToken(tokenEncoded string) (string, error) {
+	decodedBytes, err := base64.RawURLEncoding.DecodeString(tokenEncoded)
+	if err != nil {
+		decodedBytes, err = base64.URLEncoding.DecodeString(tokenEncoded)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	tokenRaw := string(decodedBytes)
+	parts := strings.Split(tokenRaw, ":")
+	secretKey := "PosBahStoreSecretKey123!"
+
+	if len(parts) == 3 {
+		tenantId := parts[0]
+		expiryStr := parts[1]
+		signature := parts[2]
+
+		dataToSign := tenantId + ":" + expiryStr
+		expectedSig := computeStoreHmacSha256(dataToSign, secretKey)
+		if expectedSig == signature {
+			return tenantId, nil
+		}
+	} else if len(parts) == 2 {
+		tenantId := parts[0]
+		signature := parts[1]
+
+		expectedSig := computeStoreHmacSha256(tenantId, secretKey)
+		if expectedSig == signature {
+			return tenantId, nil
+		}
+	}
+
+	return "", fmt.Errorf("invalid token structure")
+}
+
+func computeStoreHmacSha256(data string, secret string) string {
+	h := hmac.New(sha256.New, []byte(secret))
+	h.Write([]byte(data))
+	return base64.RawURLEncoding.EncodeToString(h.Sum(nil))
+}
+
+func loadTenantProducts(tenantId string) ([]StoreProduct, error) {
+	rows, err := db.Query(`SELECT "id", "name", COALESCE("category", ''), COALESCE("price", 0), COALESCE("stock", 0), COALESCE("image", '') FROM "products" WHERE "tenantId" = $1 ORDER BY "name" ASC`, tenantId)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var products []StoreProduct
+	for rows.Next() {
+		var p StoreProduct
+		if err := rows.Scan(&p.ID, &p.Name, &p.Category, &p.Price, &p.Stock, &p.Image); err != nil {
+			return nil, err
+		}
+		products = append(products, p)
+	}
+	return products, nil
+}
+
+func renderStoreCatalogPage(businessName string, products []StoreProduct) string {
+	productsJSON, _ := json.Marshal(products)
+
+	return fmt.Sprintf(`<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Katalog Toko Online - %s</title>
+    <!-- Google Fonts Outfit & Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #3B82F6;
+            --primary-hover: #2563EB;
+            --bg-dark: #0F172A;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --border: rgba(255, 255, 255, 0.08);
+            --text-main: #F8FAFC;
+            --text-muted: #94A3B8;
+            --success: #10B981;
+            --error: #EF4444;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            background-image: radial-gradient(circle at top right, rgba(59, 130, 246, 0.08), transparent),
+                              radial-gradient(circle at bottom left, rgba(16, 185, 129, 0.03), transparent);
+            padding-bottom: 60px;
+        }
+
+        header {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            padding: 20px 16px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo-section h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 24px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #60A5FA, #3B82F6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo-section p {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .main-container {
+            max-width: 1000px;
+            margin: 30px auto;
+            padding: 0 16px;
+        }
+
+        .search-filter-section {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+
+        .search-bar-wrapper {
+            position: relative;
+            width: 100%%;
+        }
+
+        .search-bar-wrapper i {
+            position: absolute;
+            left: 16px;
+            top: 50%%;
+            transform: translateY(-50%%);
+            color: var(--text-muted);
+            font-size: 16px;
+        }
+
+        .search-input {
+            width: 100%%;
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px 16px 14px 48px;
+            color: var(--text-main);
+            font-size: 15px;
+            outline: none;
+            transition: all 0.3s;
+            font-family: inherit;
+        }
+
+        .search-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+            background: rgba(30, 41, 59, 0.8);
+        }
+
+        .categories-wrapper {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 4px;
+            scrollbar-width: none;
+        }
+        .categories-wrapper::-webkit-scrollbar {
+            display: none;
+        }
+
+        .category-chip {
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-muted);
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+
+        .category-chip.active, .category-chip:hover {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 20px;
+        }
+
+        .product-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .product-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+            border-color: rgba(59, 130, 246, 0.2);
+        }
+
+        .image-container {
+            width: 100%%;
+            height: 180px;
+            background: rgba(15, 23, 42, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .product-image {
+            width: 100%%;
+            height: 100%%;
+            object-fit: cover;
+        }
+
+        .image-placeholder {
+            font-size: 40px;
+            color: rgba(96, 165, 250, 0.2);
+            font-weight: bold;
+            font-family: 'Outfit', sans-serif;
+            text-transform: uppercase;
+        }
+
+        .product-info {
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+        }
+
+        .product-category {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+
+        .product-name {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 8px;
+            line-height: 1.4;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            height: 42px;
+        }
+
+        .product-footer {
+            margin-top: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .product-price {
+            font-family: 'Outfit', sans-serif;
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--primary);
+        }
+
+        .stock-badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 6px;
+            width: fit-content;
+        }
+
+        .stock-badge.in-stock {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+        }
+
+        .stock-badge.out-of-stock {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--error);
+        }
+
+        .empty-state {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-state i {
+            font-size: 48px;
+            color: rgba(255, 255, 255, 0.1);
+            margin-bottom: 16px;
+        }
+
+        .empty-state h3 {
+            font-size: 18px;
+            color: var(--text-main);
+            margin-bottom: 8px;
+        }
+
+        footer {
+            text-align: center;
+            padding: 40px 16px 20px;
+            color: var(--text-muted);
+            font-size: 12px;
+            border-top: 1px solid var(--border);
+            margin-top: 60px;
+        }
+
+        footer strong {
+            color: var(--text-main);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-container">
+            <div class="logo-section">
+                <h1>%s</h1>
+                <p><i class="fa-solid fa-store"></i> Katalog Produk Online Resmi</p>
+            </div>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <div class="search-filter-section">
+            <div class="search-bar-wrapper">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="search-input" class="search-input" placeholder="Cari nama produk...">
+            </div>
+            <div class="categories-wrapper" id="categories-container">
+                <div class="category-chip active" data-category="ALL">Semua Produk</div>
+            </div>
+        </div>
+
+        <div class="products-grid" id="products-grid">
+            <!-- Dynamic products will be rendered here -->
+        </div>
+    </div>
+
+    <footer>
+        <p>&copy; 2026 <strong>%s</strong>. Seluruh Hak Cipta Dilindungi.</p>
+        <p style="margin-top: 6px; opacity: 0.7;">Powered by POSBah Cashier System</p>
+    </footer>
+
+    <script>
+        const products = %s;
+        
+        // Extract unique categories
+        const categories = new Set();
+        products.forEach(p => {
+            if (p.category && p.category.trim() !== "") {
+                categories.add(p.category.trim());
+            }
+        });
+
+        // Render category chips
+        const categoriesContainer = document.getElementById("categories-container");
+        categories.forEach(cat => {
+            const chip = document.createElement("div");
+            chip.className = "category-chip";
+            chip.textContent = cat;
+            chip.setAttribute("data-category", cat);
+            categoriesContainer.appendChild(chip);
+        });
+
+        let activeCategory = "ALL";
+        let searchQuery = "";
+
+        function formatRupiah(value) {
+            return "Rp " + new Intl.NumberFormat("id-ID").format(value);
+        }
+
+        function renderProducts() {
+            const grid = document.getElementById("products-grid");
+            grid.innerHTML = "";
+
+            const filtered = products.filter(p => {
+                const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
+                const matchesCategory = activeCategory === "ALL" || p.category === activeCategory;
+                return matchesSearch && matchesCategory;
+            });
+
+            if (filtered.length === 0) {
+                grid.innerHTML = '<div class="empty-state"><i class="fa-solid fa-box-open"></i><h3>Produk Tidak Ditemukan</h3><p>Silakan coba kata kunci pencarian atau kategori lainnya.</p></div>';
+                return;
+            }
+
+            filtered.forEach(p => {
+                const card = document.createElement("div");
+                card.className = "product-card";
+
+                let imageHtml = "";
+                if (p.image && p.image.trim() !== "") {
+                    let imgSrc = p.image;
+                    if (!imgSrc.startsWith("data:")) {
+                        imgSrc = "data:image/png;base64," + imgSrc;
+                    }
+                    imageHtml = '<img src="' + imgSrc + '" class="product-image" alt="' + p.name + '" onerror="this.style.display=\'none\'; this.nextElementSibling.style.display=\'flex\';"><div class="image-placeholder" style="display:none;">' + p.name.substring(0, 1) + '</div>';
+                } else {
+                    imageHtml = '<div class="image-placeholder">' + p.name.substring(0, 1) + '</div>';
+                }
+
+                const stockClass = p.stock > 0 ? "in-stock" : "out-of-stock";
+                const stockText = p.stock > 0 ? "Stok Tersedia" : "Stok Habis";
+
+                card.innerHTML = '<div class="image-container">' + imageHtml + '</div><div class="product-info"><div class="product-category">' + (p.category || 'Lainnya') + '</div><div class="product-name">' + p.name + '</div><div class="product-footer"><div class="product-price">' + formatRupiah(p.price) + '</div><span class="stock-badge ' + stockClass + '">' + stockText + '</span></div></div>';
+                grid.appendChild(card);
+            });
+        }
+
+        // Setup search event
+        document.getElementById("search-input").addEventListener("input", (e) => {
+            searchQuery = e.target.value;
+            renderProducts();
+        });
+
+        // Setup category chips events
+        document.addEventListener("click", (e) => {
+            if (e.target.classList.contains("category-chip")) {
+                document.querySelectorAll(".category-chip").forEach(c => c.classList.remove("active"));
+                e.target.classList.add("active");
+                activeCategory = e.target.getAttribute("data-category");
+                renderProducts();
+            }
+        });
+
+        // Initial render
+        renderProducts();
+    </script>
+</body>
+</html>`, businessName, businessName, businessName, productsJSON)
+}
+
+func renderStoreErrorPage(title string, message string) string {
+	return fmt.Sprintf(`<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>%s - POSBah</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@600;800&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #0F172A;
+            color: #F8FAFC;
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 16px;
+            margin: 0;
+            background-image: radial-gradient(circle at top right, rgba(239, 68, 68, 0.08), transparent);
+        }
+        .container {
+            width: 100%%;
+            max-width: 400px;
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 32px;
+            text-align: center;
+        }
+        .icon {
+            font-size: 48px;
+            color: #EF4444;
+            margin-bottom: 20px;
+        }
+        h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 20px;
+            font-weight: 800;
+            margin-bottom: 12px;
+        }
+        p {
+            font-size: 14px;
+            color: #94A3B8;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+        <h1>%s</h1>
+        <p>%s</p>
+    </div>
+</body>
+</html>`, title, title, message)
+}
 
 // handleCData handles ADMS device initialization and attendance uploads
 func handleCData(w http.ResponseWriter, r *http.Request) {

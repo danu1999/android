@@ -33,7 +33,8 @@ data class ProductEntity(
     val image: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
-    val isDeleted: Boolean = false  // soft-delete flag
+    val isDeleted: Boolean = false,  // soft-delete flag
+    val isSynced: Boolean = false
 )
 
 /**
@@ -55,7 +56,8 @@ data class CustomerEntity(
     val phone: String? = null,
     val address: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isSynced: Boolean = false
 )
 
 /**

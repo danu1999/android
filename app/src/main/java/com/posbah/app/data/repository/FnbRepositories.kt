@@ -40,9 +40,9 @@ class ProductRepository @Inject constructor(
     suspend fun getById(id: Long): ProductEntity? = productDao.getById(id)
     suspend fun getByBarcode(tenantId: String, barcode: String): ProductEntity? = productDao.getByBarcode(tenantId, barcode)
     fun search(tenantId: String, query: String): Flow<List<ProductEntity>> = productDao.search(tenantId, query)
-    suspend fun upsert(product: ProductEntity): Long = productDao.upsert(product)
-    suspend fun updateStock(id: Long, newStock: Int) = productDao.updateStock(id, newStock)
-    suspend fun delete(id: Long) = productDao.softDelete(id)
+    suspend fun upsert(product: ProductEntity): Long = productDao.upsert(product.copy(isSynced = false, updatedAt = System.currentTimeMillis()))
+    suspend fun updateStock(id: Long, newStock: Int) = productDao.updateStock(id, newStock, System.currentTimeMillis())
+    suspend fun delete(id: Long) = productDao.softDelete(id, System.currentTimeMillis())
 }
 
 @Singleton
@@ -65,7 +65,7 @@ class CustomerRepository @Inject constructor(
         customerDao.listForOutlet(tenantId, outletId)
 
     suspend fun getById(id: Long): CustomerEntity? = customerDao.getById(id)
-    suspend fun upsert(customer: CustomerEntity): Long = customerDao.upsert(customer)
+    suspend fun upsert(customer: CustomerEntity): Long = customerDao.upsert(customer.copy(isSynced = false, updatedAt = System.currentTimeMillis()))
     suspend fun delete(id: Long) = customerDao.delete(id)
 }
 

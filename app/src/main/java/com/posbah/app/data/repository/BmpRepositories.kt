@@ -593,7 +593,7 @@ class BmpMasterProductRepository @Inject constructor(
 ) {
     fun observe(tenantId: String) = dao.observe(tenantId)
     suspend fun getById(id: Long) = dao.getById(id)
-    suspend fun upsert(p: BmpMasterProductEntity) = dao.upsert(p.copy(updatedAt = System.currentTimeMillis()))
+    suspend fun upsert(p: BmpMasterProductEntity) = dao.upsert(p.copy(isSynced = false, updatedAt = System.currentTimeMillis()))
     suspend fun delete(id: Long) = dao.softDelete(id)
 }
 
@@ -625,7 +625,7 @@ class BmpEmployeeRepository @Inject constructor(
     private val cashFlowDao: BmpCashFlowDao
 ) {
     fun observe(tenantId: String) = empDao.observe(tenantId)
-    suspend fun upsert(e: BmpEmployeeEntity) = empDao.upsert(e.copy(updatedAt = System.currentTimeMillis()))
+    suspend fun upsert(e: BmpEmployeeEntity) = empDao.upsert(e.copy(isSynced = false, updatedAt = System.currentTimeMillis()))
     suspend fun softDelete(id: Long) = empDao.softDelete(id)
 
     fun observePayrolls(tenantId: String) = payrollDao.observe(tenantId)

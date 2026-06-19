@@ -23,9 +23,9 @@ object ReceiptPrinter {
         t: TransactionEntity,
         items: List<TransactionItemEntity>,
         products: List<ProductEntity>,
-        printConfig: PrintConfig
+        printConfig: PrintConfig,
+        storeName: String = "PISANG KEJU RAMAYANA"
     ): String {
-        val storeName = "PISANG KEJU RAMAYANA"
         val subheader = "Struk Pembayaran POS"
 
         val qLine = t.queueNumber?.let {
@@ -236,9 +236,9 @@ object ReceiptPrinter {
     fun generateRentalReceiptHtml(
         context: Context,
         r: RentalOrder,
-        printConfig: PrintConfig
+        printConfig: PrintConfig,
+        storeName: String = "POSBAH CAR & MOTOR RENTAL"
     ): String {
-        val storeName = "POSBAH CAR & MOTOR RENTAL"
         val subheader = "Struk Penyewaan Resmi"
         val is58 = printConfig.receiptPaperWidth == PaperWidth.MM58
         val paperWidthCss = if (is58) "58mm" else "80mm"
@@ -335,9 +335,9 @@ object ReceiptPrinter {
         context: Context,
         r: LaundryOrder,
         items: List<CartItem>,
-        printConfig: PrintConfig
+        printConfig: PrintConfig,
+        storeName: String = "POSBAH LAUNDRY & CLEANING"
     ): String {
-        val storeName = "POSBAH LAUNDRY & CLEANING"
         val subheader = "Nota Jasa Laundry"
         val is58 = printConfig.receiptPaperWidth == PaperWidth.MM58
         val paperWidthCss = if (is58) "58mm" else "80mm"

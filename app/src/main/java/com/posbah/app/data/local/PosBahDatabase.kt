@@ -83,7 +83,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
         BmpStockLedgerEntity::class,
         BmpProductionLogEntity::class
     ],
-    version = 26,
+    version = 27,
     exportSchema = true
 )
 abstract class PosBahDatabase : RoomDatabase() {
@@ -511,6 +511,17 @@ abstract class PosBahDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_26_27 = object : Migration(26, 27) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `products` ADD COLUMN `isSynced` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `customers` ADD COLUMN `isSynced` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `bmp_master_products` ADD COLUMN `isSynced` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `bmp_employees` ADD COLUMN `isSynced` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `outlets` ADD COLUMN `isSynced` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `employees` ADD COLUMN `isSynced` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun build(context: Context, passphrase: ByteArray): PosBahDatabase {
             // Load SQLCipher native library
             System.loadLibrary("sqlcipher")
@@ -528,7 +539,7 @@ abstract class PosBahDatabase : RoomDatabase() {
                     MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13,
                     MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
                     MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22,
-                    MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26
+                    MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27
                 ) // ← Data AMAN, tidak terhapus
                 .fallbackToDestructiveMigration()      // ← Fallback jika dari versi < 5 (install baru)
                 .addCallback(object : Callback() {

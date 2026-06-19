@@ -88,7 +88,8 @@ data class BmpMasterProductEntity(
     val isDeleted: Boolean = false,   // soft-delete flag
     val jenisBahanBaku: String = "",   // Pemetaan ke jenis bijih plastik (misal: PP, HDPE)
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isSynced: Boolean = false
 )
 
 @Entity(
@@ -190,7 +191,8 @@ data class BmpEmployeeEntity(
     val isActive: Boolean = true,
     val fingerprintPIN: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isSynced: Boolean = false
 )
 
 @Entity(

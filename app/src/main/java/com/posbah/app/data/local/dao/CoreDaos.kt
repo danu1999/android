@@ -79,6 +79,9 @@ interface OutletDao {
 
     @Query("DELETE FROM outlets WHERE id = :id")
     suspend fun delete(id: Long)
+
+    @Query("UPDATE outlets SET isSynced = 1 WHERE id = :id")
+    suspend fun markSynced(id: Long)
 }
 
 @Dao
@@ -140,5 +143,8 @@ interface EmployeeDao {
     /** Update gaji dan siklus pembayaran karyawan oleh Owner. */
     @Query("UPDATE employees SET salary = :salary, payPeriod = :payPeriod, updatedAt = :updatedAt WHERE id = :id")
     suspend fun updateSalaryAndPeriod(id: Long, salary: Double, payPeriod: String, updatedAt: Long = System.currentTimeMillis())
+
+    @Query("UPDATE employees SET isSynced = 1 WHERE id = :id")
+    suspend fun markSynced(id: Long)
 }
 

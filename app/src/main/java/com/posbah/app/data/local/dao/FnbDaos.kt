@@ -92,6 +92,9 @@ interface ProductDao {
 
     @Query("DELETE FROM products WHERE tenantId = :tenantId")
     suspend fun clearTenantProducts(tenantId: String)
+
+    @Query("UPDATE products SET isSynced = 1 WHERE id = :id")
+    suspend fun markSynced(id: Long)
 }
 
 @Dao
@@ -134,6 +137,9 @@ interface CustomerDao {
 
     @Query("DELETE FROM customers WHERE id = :id")
     suspend fun delete(id: Long)
+
+    @Query("UPDATE customers SET isSynced = 1 WHERE id = :id")
+    suspend fun markSynced(id: Long)
 }
 
 @Dao

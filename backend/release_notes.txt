@@ -1,3 +1,15 @@
+POSBah v2.17.16 - Sinkronisasi Pengaturan Konsisten & Isolasi Tenant/Owner
+
+Halo Kak! POSBah v2.17.16 hadir dengan peningkatan stabilitas sinkronisasi dan manajemen data:
+1. Sinkronisasi Pengaturan Konsisten: Memperbaiki kendala logo atau pengaturan cetak yang tiba-tiba aktif kembali sendiri dengan menerapkan perbandingan timestamp (time-based merge).
+2. Pencegahan Produk Terhapus Muncul Kembali: Dengan sistem pelacakan status sinkronisasi (`isSynced`), produk atau layanan yang telah dihapus permanen di server tidak akan muncul kembali di perangkat lainnya.
+3. Isolasi Data Owner & Karyawan: Mengisolasi konfigurasi logo, struk, layanan, dan produk antar owner. Pengaturan cetak pada akun karyawan juga otomatis mengikuti pengaturan milik owner.
+4. Nama Struk POS Dinamis: Nama usaha di bagian atas struk belanja untuk sistem POS FnB, Rental, dan Laundry kini diambil secara dinamis dari nama tenant Anda, bukan lagi hardcoded.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.15 - Penyimpanan Permanen Logo Struk (Base64) & Pembaruan Cetak Dokumen
 
 Halo Kak! POSBah v2.17.15 hadir dengan pembaruan dan perbaikan penting:

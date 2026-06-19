@@ -87,6 +87,8 @@ import com.posbah.app.util.CameraUtils
 import com.posbah.app.ui.print.ReceiptPrinter
 
 import androidx.compose.material.icons.outlined.Print
+import androidx.compose.material.icons.outlined.Share
+import com.posbah.app.util.OnlineStoreLinkGenerator
 
 data class LaundryServiceItem(
     val id: String,
@@ -137,6 +139,9 @@ fun LaundryScreen(
     val canViewMargin by viewModel.canViewMargin.collectAsState()
     val activityLogsList by viewModel.activityLogs.collectAsState()
     var showLogsDialog by remember { mutableStateOf(false) }
+    var activeStoreToken by remember { mutableStateOf<String?>(null) }
+    var showStoreShareDialog by remember { mutableStateOf(false) }
+    var showStoreSimulationDialog by remember { mutableStateOf(false) }
 
     val outletList by viewModel.availableOutlets.collectAsState()
     val activeOutletId by viewModel.activeOutletId.collectAsState()
@@ -231,6 +236,12 @@ fun LaundryScreen(
                         }
                         IconButton(onClick = onNavigateToPrintSettings) {
                             Icon(Icons.Outlined.Print, contentDescription = "Pengaturan Struk")
+                        }
+                        IconButton(onClick = {
+                            activeStoreToken = OnlineStoreLinkGenerator.generateShareLink(viewModel.activeTenantId)
+                            showStoreShareDialog = true
+                        }) {
+                            Icon(Icons.Outlined.Share, contentDescription = "Toko Online")
                         }
                         IconButton(onClick = {
                             expenseName = ""
@@ -791,7 +802,7 @@ fun LaundryScreen(
                     onClick = {
                         ReceiptPrinter.print(
                             context,
-                            ReceiptPrinter.generateLaundryReceiptHtml(context, r, details, printConfig)
+                            ReceiptPrinter.generateLaundryReceiptHtml(context, r, details, printConfig, tenantName)
                         )
                     }
                 ) { Text("Cetak Nota") }
@@ -1056,6 +1067,157 @@ fun LaundryScreen(
             },
             confirmButton = {
                 TextButton(onClick = { showLogsDialog = false }) { Text("Tutup") }
+            }
+        )
+    }
+
+    // Dialog: Bagikan Toko Online
+    if (showStoreShareDialog && activeStoreToken != null) {
+        AlertDialog(
+            onDismissRequest = { showStoreShareDialog = false },
+            title = { Text("Bagikan Toko Online") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                    Text("Gunakan link di bawah ini untuk membagikan toko online Anda ke pelanggan agar pelanggan dapat melihat katalog produk terupdate.", fontSize = 12.sp)
+                    OutlinedTextField(
+                        value = activeStoreToken!!,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Link Toko Online") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Button(
+                        onClick = {
+                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            val clip = android.content.ClipData.newPlainText("Link Toko Online", activeStoreToken)
+                            clipboard.setPrimaryClip(clip)
+                            Toast.makeText(context, "Link disalin ke clipboard!", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Salin Link Toko")
+                    }
+                    Spacer(Modifier.height(1.dp).fillMaxWidth().background(MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)))
+                    Text("Uji coba alur toko online:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Button(
+                        onClick = {
+                            showStoreShareDialog = false
+                            showStoreSimulationDialog = true
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Buka Simulasi Toko Online")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showStoreShareDialog = false }) { Text("Batal") }
+            }
+        )
+    }
+
+    // Dialog: Simulasi Toko Online (Real-time Stock)
+    if (showStoreSimulationDialog && activeStoreToken != null) {
+        val tokenStr = activeStoreToken!!.removePrefix(OnlineStoreLinkGenerator.BASE_URL)
+        val validatedTenant = OnlineStoreLinkGenerator.validateToken(tokenStr)
+
+        AlertDialog(
+            onDismissRequest = { showStoreSimulationDialog = false },
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Browser: Toko Online")
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (validatedTenant != null) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else MaterialTheme.colorScheme.error.copy(alpha = 0.1f)
+                    ) {
+                        Text(
+                            text = if (validatedTenant != null) "Status: Aktif" else "Invalid",
+                            color = if (validatedTenant != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth().height(400.dp)
+                ) {
+                    if (validatedTenant == null) {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text("🚫 Link Toko Online Tidak Valid", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error, fontSize = 16.sp)
+                            Spacer(Modifier.height(8.dp))
+                            Text("Link toko online ini tidak valid atau salah format. Silakan hubungi kasir.", textAlign = TextAlign.Center, fontSize = 12.sp)
+                        }
+                    } else {
+                        Text("Selamat Datang di Katalog Online Kami!", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("Berikut adalah daftar layanan dan status saat ini:", fontSize = 11.sp)
+                        Spacer(Modifier.height(4.dp))
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f).fillMaxWidth()
+                        ) {
+                            items(services, key = { it.id }) { service ->
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                    border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(10.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(44.dp)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                if (!service.image.isNullOrBlank()) {
+                                                    coil.compose.AsyncImage(
+                                                        model = decodeBase64Image(service.image),
+                                                        contentDescription = service.name,
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                                    )
+                                                } else {
+                                                    Text(
+                                                        text = service.name.take(1).uppercase(),
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+                                            }
+                                            Column {
+                                                Text(service.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                                Text("Status: Aktif", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                                            }
+                                        }
+                                        Text("${Formatters.rupiah(service.price)} / ${service.unit}", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = { showStoreSimulationDialog = false }) { Text("Tutup Simulasi") }
             }
         )
     }
@@ -1801,4 +1963,17 @@ private fun TabPill(
             Text(label, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
     }
+}
+
+private fun decodeBase64Image(imageStr: String?): Any? {
+    if (imageStr.isNullOrBlank()) return null
+    if (imageStr.startsWith("data:image")) {
+        val base64Data = imageStr.substringAfter("base64,")
+        return try {
+            android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT)
+        } catch (e: Exception) {
+            imageStr
+        }
+    }
+    return imageStr
 }

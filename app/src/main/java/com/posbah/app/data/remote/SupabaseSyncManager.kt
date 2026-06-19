@@ -230,11 +230,12 @@ object SupabaseSyncManager {
                 uploadTable(context, "tenants", array)
             }
 
-            // 3. outlets (Metadata - upload all)
+            // 3. outlets (Metadata - filter unsynced)
             val outlets = db.outletDao().getAll().filter { it.tenantId == activeTenantId }
-            if (outlets.isNotEmpty()) {
+            val unsyncedOutlets = outlets.filter { !it.isSynced }
+            if (unsyncedOutlets.isNotEmpty()) {
                 val array = JSONArray()
-                outlets.forEach { o ->
+                unsyncedOutlets.forEach { o ->
                     array.put(JSONObject().apply {
                         put("id", o.id)
                         put("tenantId", o.tenantId)
@@ -244,18 +245,22 @@ object SupabaseSyncManager {
                         put("isDefault", o.isDefault)
                         put("isOpen", o.isOpen)
                         put("currentEmployee", o.currentEmployee ?: JSONObject.NULL)
+                        put("isSynced", true)
                         put("createdAt", o.createdAt)
                         put("updatedAt", o.updatedAt)
                     })
                 }
-                uploadTable(context, "outlets", array)
+                if (uploadTable(context, "outlets", array)) {
+                    unsyncedOutlets.forEach { db.outletDao().markSynced(it.id) }
+                }
             }
-
-            // 4. employees (Metadata - upload all)
+ 
+            // 4. employees (Metadata - filter unsynced)
             val employees = db.employeeDao().getAll().filter { it.tenantId == activeTenantId }
-            if (employees.isNotEmpty()) {
+            val unsyncedEmployees = employees.filter { !it.isSynced }
+            if (unsyncedEmployees.isNotEmpty()) {
                 val array = JSONArray()
-                employees.forEach { e ->
+                unsyncedEmployees.forEach { e ->
                     array.put(JSONObject().apply {
                         put("id", e.id)
                         put("tenantId", e.tenantId)
@@ -270,11 +275,14 @@ object SupabaseSyncManager {
                         put("payPeriod", e.payPeriod)
                         put("lastPaidAt", e.lastPaidAt ?: JSONObject.NULL)
                         put("emailVerified", e.emailVerified)
+                        put("isSynced", true)
                         put("createdAt", e.createdAt)
                         put("updatedAt", e.updatedAt)
                     })
                 }
-                uploadTable(context, "employees", array)
+                if (uploadTable(context, "employees", array)) {
+                    unsyncedEmployees.forEach { db.employeeDao().markSynced(it.id) }
+                }
             }
 
             // 5. bmp_clients (Operational - filter unsynced)
@@ -375,11 +383,12 @@ object SupabaseSyncManager {
                 }
             }
  
-            // 8. bmp_master_products (Metadata - upload all)
+            // 8. bmp_master_products (Metadata - filter unsynced)
             val bmpMasterProducts = db.bmpMasterProductDao().getAll().filter { it.tenantId == activeTenantId }
-            if (bmpMasterProducts.isNotEmpty()) {
+            val unsyncedBmpMasterProducts = bmpMasterProducts.filter { !it.isSynced }
+            if (unsyncedBmpMasterProducts.isNotEmpty()) {
                 val array = JSONArray()
-                bmpMasterProducts.forEach { mp ->
+                unsyncedBmpMasterProducts.forEach { mp ->
                     array.put(JSONObject().apply {
                         put("id", mp.id)
                         put("tenantId", mp.tenantId)
@@ -394,11 +403,14 @@ object SupabaseSyncManager {
                         put("uniqueID", mp.uniqueID ?: JSONObject.NULL)
                         put("slug", mp.slug ?: JSONObject.NULL)
                         put("jenisBahanBaku", mp.jenisBahanBaku)
+                        put("isSynced", true)
                         put("createdAt", mp.createdAt)
                         put("updatedAt", mp.updatedAt)
                     })
                 }
-                uploadTable(context, "bmp_master_products", array)
+                if (uploadTable(context, "bmp_master_products", array)) {
+                    unsyncedBmpMasterProducts.forEach { db.bmpMasterProductDao().markSynced(it.id) }
+                }
             }
  
             // 9. bmp_invoice_payments (Operational - filter unsynced)
@@ -477,11 +489,12 @@ object SupabaseSyncManager {
                 uploadTable(context, "bmp_settings", array)
             }
  
-            // 12. bmp_employees (Metadata - upload all)
+            // 12. bmp_employees (Metadata - filter unsynced)
             val bmpEmployees = db.bmpEmployeeDao().getAll().filter { it.tenantId == activeTenantId }
-            if (bmpEmployees.isNotEmpty()) {
+            val unsyncedBmpEmployees = bmpEmployees.filter { !it.isSynced }
+            if (unsyncedBmpEmployees.isNotEmpty()) {
                 val array = JSONArray()
-                bmpEmployees.forEach { e ->
+                unsyncedBmpEmployees.forEach { e ->
                     array.put(JSONObject().apply {
                         put("id", e.id)
                         put("tenantId", e.tenantId)
@@ -491,11 +504,14 @@ object SupabaseSyncManager {
                         put("salaryAmount", e.salaryAmount)
                         put("isActive", e.isActive)
                         put("fingerprintPIN", e.fingerprintPIN ?: JSONObject.NULL)
+                        put("isSynced", true)
                         put("createdAt", e.createdAt)
                         put("updatedAt", e.updatedAt)
                     })
                 }
-                uploadTable(context, "bmp_employees", array)
+                if (uploadTable(context, "bmp_employees", array)) {
+                    unsyncedBmpEmployees.forEach { db.bmpEmployeeDao().markSynced(it.id) }
+                }
             }
  
             // 13. bmp_payrolls (Operational - filter unsynced)
@@ -618,11 +634,12 @@ object SupabaseSyncManager {
                 uploadTable(context, "print_settings", array)
             }
  
-            // 17. products (Metadata - upload all NON-DELETED)
+            // 17. products (Metadata - filter unsynced)
             val productsList = db.productDao().getAll().filter { it.tenantId == activeTenantId && !it.isDeleted }
-            if (productsList.isNotEmpty()) {
+            val unsyncedProducts = productsList.filter { !it.isSynced }
+            if (unsyncedProducts.isNotEmpty()) {
                 val array = JSONArray()
-                productsList.forEach { p ->
+                unsyncedProducts.forEach { p ->
                     array.put(JSONObject().apply {
                         put("id", p.id)
                         put("tenantId", p.tenantId)
@@ -638,29 +655,36 @@ object SupabaseSyncManager {
                         put("wholesalePrices", p.wholesalePrices ?: JSONObject.NULL)
                         put("variants", p.variants ?: JSONObject.NULL)
                         put("image", p.image ?: JSONObject.NULL)
+                        put("isSynced", true)
                         put("createdAt", p.createdAt)
                         put("updatedAt", p.updatedAt)
                     })
                 }
-                uploadTable(context, "products", array)
+                if (uploadTable(context, "products", array)) {
+                    unsyncedProducts.forEach { db.productDao().markSynced(it.id) }
+                }
             }
  
-            // 18. customers (Metadata - upload all)
+            // 18. customers (Metadata - filter unsynced)
             val customersList = db.customerDao().getAll().filter { it.tenantId == activeTenantId }
-            if (customersList.isNotEmpty()) {
+            val unsyncedCustomers = customersList.filter { !it.isSynced }
+            if (unsyncedCustomers.isNotEmpty()) {
                 val array = JSONArray()
-                customersList.forEach { c ->
+                unsyncedCustomers.forEach { c ->
                     array.put(JSONObject().apply {
                         put("id", c.id)
                         put("tenantId", c.tenantId)
                         put("name", c.name)
                         put("phone", c.phone ?: JSONObject.NULL)
                         put("address", c.address ?: JSONObject.NULL)
+                        put("isSynced", true)
                         put("createdAt", c.createdAt)
                         put("updatedAt", c.updatedAt)
                     })
                 }
-                uploadTable(context, "customers", array)
+                if (uploadTable(context, "customers", array)) {
+                    unsyncedCustomers.forEach { db.customerDao().markSynced(it.id) }
+                }
             }
  
             // 19. transactions (Operational / POS Transactions - upload all NON-DELETED)
@@ -835,7 +859,7 @@ object SupabaseSyncManager {
             // ── BMP: urutan child → parent ──────────────────────────────────
 
             // 1. bmp_products (child invoice)
-            val deletedProductIds = db.bmpProductDao().getDeletedIds()
+            val deletedProductIds = db.bmpProductDao().getDeletedIds(tenantId)
             for (id in deletedProductIds) {
                 if (deleteRow(context, "bmp_products", id, tenantId)) {
                     db.bmpProductDao().hardDelete(id)
@@ -877,7 +901,7 @@ object SupabaseSyncManager {
             }
 
             // 6. bmp_bahan_baku_item (child header)
-            val deletedBahanBakuItemIds = db.bmpBahanBakuItemDao().getDeletedIds()
+            val deletedBahanBakuItemIds = db.bmpBahanBakuItemDao().getDeletedIds(tenantId)
             for (id in deletedBahanBakuItemIds) {
                 if (deleteRow(context, "bmp_bahan_baku_item", id, tenantId)) {
                     db.bmpBahanBakuItemDao().hardDelete(id)
@@ -1119,10 +1143,13 @@ object SupabaseSyncManager {
             val outletsArray = pullTable(context, "outlets", activeTenantId)
             if (outletsArray != null) {
                 val list = mutableListOf<Outlet>()
+                val serverIds = mutableSetOf<Long>()
                 for (i in 0 until outletsArray.length()) {
                     val obj = outletsArray.getJSONObject(i)
+                    val idVal = obj.optLong("id", 0L)
+                    serverIds.add(idVal)
                     list.add(Outlet(
-                        id = obj.optLong("id", 0L),
+                        id = idVal,
                         tenantId = obj.optString("tenantId", activeTenantId),
                         name = obj.optString("name"),
                         address = if (obj.isNull("address")) null else obj.optString("address"),
@@ -1131,11 +1158,19 @@ object SupabaseSyncManager {
                         isOpen = obj.optBoolean("isOpen", true),
                         currentEmployee = if (obj.isNull("currentEmployee")) null else obj.optString("currentEmployee"),
                         createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
-                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis()),
+                        isSynced = true
                     ))
                 }
                 if (list.isNotEmpty()) {
                     list.forEach { db.outletDao().insert(it) }
+                }
+                // Local pruning
+                val localOutlets = db.outletDao().getAll().filter { it.tenantId == activeTenantId }
+                localOutlets.forEach { local ->
+                    if (local.isSynced && local.id !in serverIds) {
+                        db.outletDao().delete(local.id)
+                    }
                 }
             }
 
@@ -1143,11 +1178,14 @@ object SupabaseSyncManager {
             val employeesArray = pullTable(context, "employees", activeTenantId)
             if (employeesArray != null) {
                 val list = mutableListOf<Employee>()
+                val serverIds = mutableSetOf<Long>()
                 for (i in 0 until employeesArray.length()) {
                     val obj = employeesArray.getJSONObject(i)
+                    val idVal = obj.optLong("id", 0L)
+                    serverIds.add(idVal)
                     val outletId = if (obj.isNull("outletId")) null else obj.optLong("outletId")
                     list.add(Employee(
-                        id = obj.optLong("id", 0L),
+                        id = idVal,
                         tenantId = obj.optString("tenantId", activeTenantId),
                         outletId = outletId,
                         name = obj.optString("name"),
@@ -1161,11 +1199,19 @@ object SupabaseSyncManager {
                         lastPaidAt = if (obj.isNull("lastPaidAt")) null else obj.optLong("lastPaidAt"),
                         emailVerified = obj.optBoolean("emailVerified", false),
                         createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
-                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis()),
+                        isSynced = true
                     ))
                 }
                 if (list.isNotEmpty()) {
                     list.forEach { db.employeeDao().insert(it) }
+                }
+                // Local pruning
+                val localEmployees = db.employeeDao().getAll().filter { it.tenantId == activeTenantId }
+                localEmployees.forEach { local ->
+                    if (local.isSynced && local.id !in serverIds) {
+                        db.employeeDao().deleteById(local.id)
+                    }
                 }
             }
 
@@ -1173,11 +1219,14 @@ object SupabaseSyncManager {
             val productsArray = pullTable(context, "products", activeTenantId)
             if (productsArray != null) {
                 val list = mutableListOf<ProductEntity>()
+                val serverIds = mutableSetOf<Long>()
                 for (i in 0 until productsArray.length()) {
                     val obj = productsArray.getJSONObject(i)
+                    val idVal = obj.optLong("id", 0L)
+                    serverIds.add(idVal)
                     val outletId = if (obj.isNull("outletId")) null else obj.optLong("outletId")
                     list.add(ProductEntity(
-                        id = obj.optLong("id", 0L),
+                        id = idVal,
                         tenantId = obj.optString("tenantId", activeTenantId),
                         outletId = outletId,
                         name = obj.optString("name"),
@@ -1192,11 +1241,19 @@ object SupabaseSyncManager {
                         variants = if (obj.isNull("variants")) null else obj.opt("variants")?.toString(),
                         image = if (obj.isNull("image")) null else obj.optString("image"),
                         createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
-                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis()),
+                        isSynced = true
                     ))
                 }
                 if (list.isNotEmpty()) {
                     db.productDao().insertAll(list)
+                }
+                // Local pruning
+                val localProducts = db.productDao().getAll().filter { it.tenantId == activeTenantId }
+                localProducts.forEach { local ->
+                    if (local.isSynced && local.id !in serverIds) {
+                        db.productDao().delete(local.id)
+                    }
                 }
             }
 
@@ -1204,20 +1261,31 @@ object SupabaseSyncManager {
             val customersArray = pullTable(context, "customers", activeTenantId)
             if (customersArray != null) {
                 val list = mutableListOf<CustomerEntity>()
+                val serverIds = mutableSetOf<Long>()
                 for (i in 0 until customersArray.length()) {
                     val obj = customersArray.getJSONObject(i)
+                    val idVal = obj.optLong("id", 0L)
+                    serverIds.add(idVal)
                     list.add(CustomerEntity(
-                        id = obj.optLong("id", 0L),
+                        id = idVal,
                         tenantId = obj.optString("tenantId", activeTenantId),
                         name = obj.optString("name"),
                         phone = if (obj.isNull("phone")) null else obj.optString("phone"),
                         address = if (obj.isNull("address")) null else obj.optString("address"),
                         createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
-                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis()),
+                        isSynced = true
                     ))
                 }
                 if (list.isNotEmpty()) {
                     db.customerDao().insertAll(list)
+                }
+                // Local pruning
+                val localCustomers = db.customerDao().getAll().filter { it.tenantId == activeTenantId }
+                localCustomers.forEach { local ->
+                    if (local.isSynced && local.id !in serverIds) {
+                        db.customerDao().delete(local.id)
+                    }
                 }
             }
 
@@ -1322,10 +1390,13 @@ object SupabaseSyncManager {
             val bmpClientsArray = pullTable(context, "bmp_clients", activeTenantId)
             if (bmpClientsArray != null) {
                 val list = mutableListOf<BmpClientEntity>()
+                val serverIds = mutableSetOf<Long>()
                 for (i in 0 until bmpClientsArray.length()) {
                     val obj = bmpClientsArray.getJSONObject(i)
+                    val idVal = obj.optLong("id", 0L)
+                    serverIds.add(idVal)
                     list.add(BmpClientEntity(
-                        id = obj.optLong("id", 0L),
+                        id = idVal,
                         tenantId = obj.optString("tenantId", activeTenantId),
                         outletId = if (obj.isNull("outletId")) null else obj.optLong("outletId"),
                         clientName = obj.optString("clientName"),
@@ -1351,16 +1422,26 @@ object SupabaseSyncManager {
                     val localDeletedIds = db.bmpClientDao().getDeletedIds(activeTenantId).toSet()
                     list.filter { it.id !in localDeletedIds }.forEach { db.bmpClientDao().upsert(it) }
                 }
+                // Local pruning
+                val localClients = db.bmpClientDao().getAll().filter { it.tenantId == activeTenantId }
+                localClients.forEach { local ->
+                    if (local.isSynced && local.id !in serverIds) {
+                        db.bmpClientDao().hardDelete(local.id)
+                    }
+                }
             }
 
             // 8. Pull bmp_invoices
             val bmpInvoicesArray = pullTable(context, "bmp_invoices", activeTenantId)
             if (bmpInvoicesArray != null) {
                 val list = mutableListOf<BmpInvoiceEntity>()
+                val serverIds = mutableSetOf<Long>()
                 for (i in 0 until bmpInvoicesArray.length()) {
                     val obj = bmpInvoicesArray.getJSONObject(i)
+                    val idVal = obj.optLong("id", 0L)
+                    serverIds.add(idVal)
                     list.add(BmpInvoiceEntity(
-                        id = obj.optLong("id", 0L),
+                        id = idVal,
                         tenantId = obj.optString("tenantId", activeTenantId),
                         outletId = if (obj.isNull("outletId")) null else obj.optLong("outletId"),
                         clientId = if (obj.isNull("clientId")) null else obj.optLong("clientId"),
@@ -1384,16 +1465,26 @@ object SupabaseSyncManager {
                 if (list.isNotEmpty()) {
                     list.forEach { db.bmpInvoiceDao().upsert(it) }
                 }
+                // Local pruning
+                val localInvoices = db.bmpInvoiceDao().getAll().filter { it.tenantId == activeTenantId }
+                localInvoices.forEach { local ->
+                    if (local.isSynced && local.id !in serverIds) {
+                        db.bmpInvoiceDao().hardDelete(local.id)
+                    }
+                }
             }
 
             // 9. Pull bmp_products
             val bmpProductsArray = pullTable(context, "bmp_products", activeTenantId)
             if (bmpProductsArray != null) {
                 val list = mutableListOf<BmpProductEntity>()
+                val serverIds = mutableSetOf<Long>()
                 for (i in 0 until bmpProductsArray.length()) {
                     val obj = bmpProductsArray.getJSONObject(i)
+                    val idVal = obj.optLong("id", 0L)
+                    serverIds.add(idVal)
                     list.add(BmpProductEntity(
-                        id = obj.optLong("id", 0L),
+                        id = idVal,
                         tenantId = obj.optString("tenantId", activeTenantId),
                         invoiceId = if (obj.isNull("invoiceId")) null else obj.optLong("invoiceId"),
                         masterItemID = if (obj.isNull("masterItemID")) null else obj.optLong("masterItemID"),
@@ -1415,16 +1506,26 @@ object SupabaseSyncManager {
                 if (list.isNotEmpty()) {
                     db.bmpProductDao().insertAll(list)
                 }
+                // Local pruning
+                val localProducts = db.bmpProductDao().getAll().filter { it.tenantId == activeTenantId }
+                localProducts.forEach { local ->
+                    if (local.isSynced && local.id !in serverIds) {
+                        db.bmpProductDao().hardDelete(local.id)
+                    }
+                }
             }
 
             // 10. Pull bmp_master_products
             val bmpMasterProductsArray = pullTable(context, "bmp_master_products", activeTenantId)
             if (bmpMasterProductsArray != null) {
                 val list = mutableListOf<BmpMasterProductEntity>()
+                val serverIds = mutableSetOf<Long>()
                 for (i in 0 until bmpMasterProductsArray.length()) {
                     val obj = bmpMasterProductsArray.getJSONObject(i)
+                    val idVal = obj.optLong("id", 0L)
+                    serverIds.add(idVal)
                     list.add(BmpMasterProductEntity(
-                        id = obj.optLong("id", 0L),
+                        id = idVal,
                         tenantId = obj.optString("tenantId", activeTenantId),
                         title = obj.optString("title"),
                         description = if (obj.isNull("description")) null else obj.optString("description"),
@@ -1438,11 +1539,19 @@ object SupabaseSyncManager {
                         slug = if (obj.isNull("slug")) null else obj.optString("slug"),
                         jenisBahanBaku = obj.optString("jenisBahanBaku", ""),
                         createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
-                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis()),
+                        isSynced = true
                     ))
                 }
                 if (list.isNotEmpty()) {
                     list.forEach { db.bmpMasterProductDao().upsert(it) }
+                }
+                // Local pruning
+                val localMasterProducts = db.bmpMasterProductDao().getAll().filter { it.tenantId == activeTenantId }
+                localMasterProducts.forEach { local ->
+                    if (local.isSynced && local.id !in serverIds) {
+                        db.bmpMasterProductDao().hardDelete(local.id)
+                    }
                 }
             }
 
@@ -1450,10 +1559,13 @@ object SupabaseSyncManager {
             val bmpPaymentsArray = pullTable(context, "bmp_invoice_payments", activeTenantId)
             if (bmpPaymentsArray != null) {
                 val list = mutableListOf<BmpInvoicePaymentEntity>()
+                val serverIds = mutableSetOf<Long>()
                 for (i in 0 until bmpPaymentsArray.length()) {
                     val obj = bmpPaymentsArray.getJSONObject(i)
+                    val idVal = obj.optLong("id", 0L)
+                    serverIds.add(idVal)
                     list.add(BmpInvoicePaymentEntity(
-                        id = obj.optLong("id", 0L),
+                        id = idVal,
                         tenantId = obj.optString("tenantId", activeTenantId),
                         invoiceId = obj.optLong("invoiceId"),
                         paymentDate = obj.optLong("paymentDate"),
@@ -1467,16 +1579,26 @@ object SupabaseSyncManager {
                 if (list.isNotEmpty()) {
                     list.forEach { db.bmpPaymentDao().upsert(it) }
                 }
+                // Local pruning
+                val localPayments = db.bmpPaymentDao().getAll().filter { it.tenantId == activeTenantId }
+                localPayments.forEach { local ->
+                    if (local.isSynced && local.id !in serverIds) {
+                        db.bmpPaymentDao().hardDelete(local.id)
+                    }
+                }
             }
 
             // 12. Pull bmp_cashflow
             val bmpCashFlowArray = pullTable(context, "bmp_cashflow", activeTenantId)
             if (bmpCashFlowArray != null) {
                 val list = mutableListOf<BmpCashFlowEntity>()
+                val serverIds = mutableSetOf<Long>()
                 for (i in 0 until bmpCashFlowArray.length()) {
                     val obj = bmpCashFlowArray.getJSONObject(i)
+                    val idVal = obj.optLong("id", 0L)
+                    serverIds.add(idVal)
                     list.add(BmpCashFlowEntity(
-                        id = obj.optLong("id", 0L),
+                        id = idVal,
                         tenantId = obj.optString("tenantId", activeTenantId),
                         transactionDate = obj.optLong("transactionDate"),
                         transactionType = obj.optString("transactionType"),
@@ -1489,6 +1611,13 @@ object SupabaseSyncManager {
                 }
                 if (list.isNotEmpty()) {
                     list.forEach { db.bmpCashFlowDao().upsert(it) }
+                }
+                // Local pruning
+                val localCashFlow = db.bmpCashFlowDao().getAll().filter { it.tenantId == activeTenantId }
+                localCashFlow.forEach { local ->
+                    if (local.isSynced && local.id !in serverIds) {
+                        db.bmpCashFlowDao().hardDelete(local.id)
+                    }
                 }
             }
 
@@ -1521,7 +1650,12 @@ object SupabaseSyncManager {
                     ))
                 }
                 if (list.isNotEmpty()) {
-                    list.forEach { db.bmpSettingsDao().upsert(it) }
+                    list.forEach { serverSettings ->
+                        val localSettings = db.bmpSettingsDao().get(serverSettings.tenantId)
+                        if (localSettings == null || serverSettings.updatedAt > localSettings.updatedAt) {
+                            db.bmpSettingsDao().upsert(serverSettings)
+                        }
+                    }
                 }
             }
 
@@ -1529,10 +1663,13 @@ object SupabaseSyncManager {
             val bmpEmployeesArray = pullTable(context, "bmp_employees", activeTenantId)
             if (bmpEmployeesArray != null) {
                 val list = mutableListOf<BmpEmployeeEntity>()
+                val serverIds = mutableSetOf<Long>()
                 for (i in 0 until bmpEmployeesArray.length()) {
                     val obj = bmpEmployeesArray.getJSONObject(i)
+                    val idVal = obj.optLong("id", 0L)
+                    serverIds.add(idVal)
                     list.add(BmpEmployeeEntity(
-                        id = obj.optLong("id", 0L),
+                        id = idVal,
                         tenantId = obj.optString("tenantId", activeTenantId),
                         outletId = if (obj.isNull("outletId")) null else obj.optLong("outletId"),
                         name = obj.optString("name"),
@@ -1541,11 +1678,19 @@ object SupabaseSyncManager {
                         isActive = obj.optBoolean("isActive", true),
                         fingerprintPIN = if (obj.isNull("fingerprintPIN")) null else obj.optString("fingerprintPIN"),
                         createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
-                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis()),
+                        isSynced = true
                     ))
                 }
                 if (list.isNotEmpty()) {
                     list.forEach { db.bmpEmployeeDao().upsert(it) }
+                }
+                // Local pruning
+                val localBmpEmployees = db.bmpEmployeeDao().getAll().filter { it.tenantId == activeTenantId }
+                localBmpEmployees.forEach { local ->
+                    if (local.isSynced && local.id !in serverIds) {
+                        db.bmpEmployeeDao().hardDelete(local.id)
+                    }
                 }
             }
 
@@ -1553,10 +1698,13 @@ object SupabaseSyncManager {
             val bmpPayrollsArray = pullTable(context, "bmp_payrolls", activeTenantId)
             if (bmpPayrollsArray != null) {
                 val list = mutableListOf<BmpPayrollEntity>()
+                val serverIds = mutableSetOf<Long>()
                 for (i in 0 until bmpPayrollsArray.length()) {
                     val obj = bmpPayrollsArray.getJSONObject(i)
+                    val idVal = obj.optLong("id", 0L)
+                    serverIds.add(idVal)
                     list.add(BmpPayrollEntity(
-                        id = obj.optLong("id", 0L),
+                        id = idVal,
                         tenantId = obj.optString("tenantId", activeTenantId),
                         employeeId = obj.optLong("employeeId"),
                         paymentDate = obj.optLong("paymentDate"),
@@ -1571,16 +1719,26 @@ object SupabaseSyncManager {
                 if (list.isNotEmpty()) {
                     list.forEach { db.bmpPayrollDao().upsert(it) }
                 }
+                // Local pruning
+                val localPayrolls = db.bmpPayrollDao().getAll().filter { it.tenantId == activeTenantId }
+                localPayrolls.forEach { local ->
+                    if (local.isSynced && local.id !in serverIds) {
+                        db.bmpPayrollDao().delete(local.id)
+                    }
+                }
             }
 
             // 16. Pull bmp_bahan_baku
             val bmpBahanBakuArray = pullTable(context, "bmp_bahan_baku", activeTenantId)
             if (bmpBahanBakuArray != null) {
                 val list = mutableListOf<BmpBahanBakuEntity>()
+                val serverIds = mutableSetOf<Long>()
                 for (i in 0 until bmpBahanBakuArray.length()) {
                     val obj = bmpBahanBakuArray.getJSONObject(i)
+                    val idVal = obj.optLong("id", 0L)
+                    serverIds.add(idVal)
                     list.add(BmpBahanBakuEntity(
-                        id = obj.optLong("id", 0L),
+                        id = idVal,
                         tenantId = obj.optString("tenantId", activeTenantId),
                         tanggal = obj.optLong("tanggal", System.currentTimeMillis()),
                         noTagihan = obj.optString("noTagihan"),
@@ -1596,16 +1754,26 @@ object SupabaseSyncManager {
                 if (list.isNotEmpty()) {
                     list.forEach { db.bmpBahanBakuDao().upsert(it) }
                 }
+                // Local pruning
+                val localBahanBaku = db.bmpBahanBakuDao().getAll().filter { it.tenantId == activeTenantId }
+                localBahanBaku.forEach { local ->
+                    if (local.isSynced && local.id !in serverIds) {
+                        db.bmpBahanBakuDao().hardDelete(local.id)
+                    }
+                }
             }
 
             // 17. Pull bmp_bahan_baku_item
             val bmpBahanBakuItemsArray = pullTable(context, "bmp_bahan_baku_item", activeTenantId)
             if (bmpBahanBakuItemsArray != null) {
                 val list = mutableListOf<BmpBahanBakuItemEntity>()
+                val serverIds = mutableSetOf<Long>()
                 for (i in 0 until bmpBahanBakuItemsArray.length()) {
                     val obj = bmpBahanBakuItemsArray.getJSONObject(i)
+                    val idVal = obj.optLong("id", 0L)
+                    serverIds.add(idVal)
                     list.add(BmpBahanBakuItemEntity(
-                        id = obj.optLong("id", 0L),
+                        id = idVal,
                         tenantId = obj.optString("tenantId", activeTenantId),
                         bahanBakuId = obj.optLong("bahanBakuId"),
                         jenisBahan = obj.optString("jenisBahan"),
@@ -1619,16 +1787,26 @@ object SupabaseSyncManager {
                 if (list.isNotEmpty()) {
                     db.bmpBahanBakuItemDao().insertAll(list)
                 }
+                // Local pruning
+                val localBahanBakuItems = db.bmpBahanBakuItemDao().getAll().filter { it.tenantId == activeTenantId }
+                localBahanBakuItems.forEach { local ->
+                    if (local.isSynced && local.id !in serverIds) {
+                        db.bmpBahanBakuItemDao().hardDelete(local.id)
+                    }
+                }
             }
 
             // 17a. Pull bmp_product_stocks
             val bmpProductStocksArray = pullTable(context, "bmp_product_stocks", activeTenantId)
             if (bmpProductStocksArray != null) {
                 val list = mutableListOf<BmpProductStockEntity>()
+                val serverIds = mutableSetOf<Long>()
                 for (i in 0 until bmpProductStocksArray.length()) {
                     val obj = bmpProductStocksArray.getJSONObject(i)
+                    val idVal = obj.optLong("id", 0L)
+                    serverIds.add(idVal)
                     list.add(BmpProductStockEntity(
-                        id = obj.optLong("id", 0L),
+                        id = idVal,
                         tenantId = obj.optString("tenantId", activeTenantId),
                         masterProductId = obj.optLong("masterProductId"),
                         quantity = obj.optDouble("quantity", 0.0),
@@ -1641,16 +1819,26 @@ object SupabaseSyncManager {
                     val localDeletedIds = db.bmpProductStockDao().getDeletedIds(activeTenantId).toSet()
                     list.filter { it.id !in localDeletedIds }.forEach { db.bmpProductStockDao().upsert(it) }
                 }
+                // Local pruning
+                val localProductStocks = db.bmpProductStockDao().getAll().filter { it.tenantId == activeTenantId }
+                localProductStocks.forEach { local ->
+                    if (local.isSynced && local.id !in serverIds) {
+                        db.bmpProductStockDao().hardDelete(local.id)
+                    }
+                }
             }
 
             // 17b. Pull bmp_stock_ledger
             val bmpStockLedgerArray = pullTable(context, "bmp_stock_ledger", activeTenantId)
             if (bmpStockLedgerArray != null) {
                 val list = mutableListOf<BmpStockLedgerEntity>()
+                val serverIds = mutableSetOf<Long>()
                 for (i in 0 until bmpStockLedgerArray.length()) {
                     val obj = bmpStockLedgerArray.getJSONObject(i)
+                    val idVal = obj.optLong("id", 0L)
+                    serverIds.add(idVal)
                     list.add(BmpStockLedgerEntity(
-                        id = obj.optLong("id", 0L),
+                        id = idVal,
                         tenantId = obj.optString("tenantId", activeTenantId),
                         masterProductId = obj.optLong("masterProductId"),
                         referenceId = obj.optLong("referenceId"),
@@ -1666,16 +1854,26 @@ object SupabaseSyncManager {
                     val localDeletedIds = db.bmpStockLedgerDao().getDeletedIds(activeTenantId).toSet()
                     list.filter { it.id !in localDeletedIds }.forEach { db.bmpStockLedgerDao().insert(it) }
                 }
+                // Local pruning
+                val localStockLedgers = db.bmpStockLedgerDao().getAll().filter { it.tenantId == activeTenantId }
+                localStockLedgers.forEach { local ->
+                    if (local.isSynced && local.id !in serverIds) {
+                        db.bmpStockLedgerDao().hardDelete(local.id)
+                    }
+                }
             }
 
             // 17c. Pull bmp_production_logs
             val bmpProductionLogsArray = pullTable(context, "bmp_production_logs", activeTenantId)
             if (bmpProductionLogsArray != null) {
                 val list = mutableListOf<BmpProductionLogEntity>()
+                val serverIds = mutableSetOf<Long>()
                 for (i in 0 until bmpProductionLogsArray.length()) {
                     val obj = bmpProductionLogsArray.getJSONObject(i)
+                    val idVal = obj.optLong("id", 0L)
+                    serverIds.add(idVal)
                     list.add(BmpProductionLogEntity(
-                        id = obj.optLong("id", 0L),
+                        id = idVal,
                         tenantId = obj.optString("tenantId", activeTenantId),
                         masterProductId = obj.optLong("masterProductId"),
                         quantityProduced = obj.optDouble("quantityProduced", 0.0),
@@ -1690,6 +1888,13 @@ object SupabaseSyncManager {
                 if (list.isNotEmpty()) {
                     val localDeletedIds = db.bmpProductionLogDao().getDeletedIds(activeTenantId).toSet()
                     list.filter { it.id !in localDeletedIds }.forEach { db.bmpProductionLogDao().upsert(it) }
+                }
+                // Local pruning
+                val localProductionLogs = db.bmpProductionLogDao().getAll().filter { it.tenantId == activeTenantId }
+                localProductionLogs.forEach { local ->
+                    if (local.isSynced && local.id !in serverIds) {
+                        db.bmpProductionLogDao().hardDelete(local.id)
+                    }
                 }
             }
 
@@ -1742,7 +1947,12 @@ object SupabaseSyncManager {
                     ))
                 }
                 if (list.isNotEmpty()) {
-                    list.forEach { db.printSettingsDao().upsert(it) }
+                    list.forEach { serverSettings ->
+                        val localSettings = db.printSettingsDao().get(serverSettings.tenantId, serverSettings.moduleKey)
+                        if (localSettings == null || serverSettings.updatedAt > localSettings.updatedAt) {
+                            db.printSettingsDao().upsert(serverSettings)
+                        }
+                    }
                 }
             }
 

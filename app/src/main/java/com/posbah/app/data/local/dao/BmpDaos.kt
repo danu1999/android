@@ -175,8 +175,8 @@ interface BmpProductDao {
     suspend fun markSynced(id: Long)
 
     /** Ambil ID yang sudah soft-deleted */
-    @Query("SELECT id FROM bmp_products WHERE isDeleted = 1")
-    suspend fun getDeletedIds(): List<Long>
+    @Query("SELECT id FROM bmp_products WHERE tenantId = :tenantId AND isDeleted = 1")
+    suspend fun getDeletedIds(tenantId: String): List<Long>
 
     @Query("DELETE FROM bmp_products WHERE id = :id")
     suspend fun hardDelete(id: Long)
@@ -207,6 +207,9 @@ interface BmpMasterProductDao {
 
     @Query("DELETE FROM bmp_master_products WHERE id = :id")
     suspend fun hardDelete(id: Long)
+
+    @Query("UPDATE bmp_master_products SET isSynced = 1 WHERE id = :id")
+    suspend fun markSynced(id: Long)
 }
 
 @Dao
@@ -351,6 +354,12 @@ interface BmpEmployeeDao {
 
     @Query("SELECT * FROM bmp_employees")
     suspend fun getAll(): List<BmpEmployeeEntity>
+
+    @Query("UPDATE bmp_employees SET isSynced = 1 WHERE id = :id")
+    suspend fun markSynced(id: Long)
+
+    @Query("DELETE FROM bmp_employees WHERE id = :id")
+    suspend fun hardDelete(id: Long)
 }
 
 @Dao
@@ -462,8 +471,8 @@ interface BmpBahanBakuItemDao {
     @Query("SELECT IFNULL(SUM(kuantitas), 0.0) FROM bmp_bahan_baku_item WHERE tenantId = :tenantId AND jenisBahan = :jenisBahan AND isDeleted = 0")
     suspend fun sumPurchasedBahanBaku(tenantId: String, jenisBahan: String): Double
 
-    @Query("SELECT id FROM bmp_bahan_baku_item WHERE isDeleted = 1")
-    suspend fun getDeletedIds(): List<Long>
+    @Query("SELECT id FROM bmp_bahan_baku_item WHERE tenantId = :tenantId AND isDeleted = 1")
+    suspend fun getDeletedIds(tenantId: String): List<Long>
 
     @Query("DELETE FROM bmp_bahan_baku_item WHERE id = :id")
     suspend fun hardDelete(id: Long)

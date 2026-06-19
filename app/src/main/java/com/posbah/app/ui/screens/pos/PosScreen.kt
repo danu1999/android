@@ -256,7 +256,7 @@ fun PosScreen(
 
     val triggerNativePrint = { tx: TransactionEntity, lines: List<TransactionItemEntity> ->
         val html = com.posbah.app.ui.print.ReceiptPrinter.generateReceiptHtml(
-            context, tx, lines, viewModel.products.value, ui.printConfig
+            context, tx, lines, viewModel.products.value, ui.printConfig, tenantName
         )
 
         printHtmlReceipt(context, html)
@@ -907,7 +907,7 @@ fun PosScreen(
                         IconButton(
                             onClick = {
                                 val html = com.posbah.app.ui.print.ReceiptPrinter.generateReceiptHtml(
-                                    context, r, rItems, viewModel.products.value, ui.printConfig
+                                    context, r, rItems, viewModel.products.value, ui.printConfig, tenantName
                                 )
                                 com.posbah.app.ui.print.ReceiptPrinter.print(context, html)
                             }
@@ -1630,12 +1630,12 @@ fun PosScreen(
                 title = { Text("Bagikan Toko Online") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                        Text("Gunakan link di bawah ini untuk membagikan toko online Anda ke pelanggan. Link ini akan kedaluwarsa secara otomatis dalam 5 menit demi keamanan stock.", fontSize = 12.sp)
+                        Text("Gunakan link di bawah ini untuk membagikan toko online Anda ke pelanggan agar pelanggan dapat melihat katalog produk terupdate.", fontSize = 12.sp)
                         OutlinedTextField(
                             value = activeStoreToken!!,
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text("Link Toko Online (Expired 5m)") },
+                            label = { Text("Link Toko Online") },
                             modifier = Modifier.fillMaxWidth()
                         )
                         Button(
@@ -1669,25 +1669,10 @@ fun PosScreen(
             )
         }
 
-        // Dialog: Simulasi Toko Online (Masa Berlaku 5 Menit & Real-time Stock)
+        // Dialog: Simulasi Toko Online (Real-time Stock)
         if (showStoreSimulationDialog && activeStoreToken != null) {
             val tokenStr = activeStoreToken!!.removePrefix(OnlineStoreLinkGenerator.BASE_URL)
             val validatedTenant = OnlineStoreLinkGenerator.validateToken(tokenStr)
-            var remainingSeconds by remember { mutableStateOf(300L) }
-
-            LaunchedEffect(tokenStr) {
-                while (true) {
-                    try {
-                        val decodedBytes = android.util.Base64.decode(tokenStr, android.util.Base64.NO_WRAP or android.util.Base64.URL_SAFE or android.util.Base64.NO_PADDING)
-                        val parts = String(decodedBytes, java.nio.charset.StandardCharsets.UTF_8).split(":")
-                        val expiry = parts[1].toLong()
-                        remainingSeconds = ((expiry - System.currentTimeMillis()) / 1000).coerceAtLeast(0)
-                    } catch (e: Exception) {
-                        remainingSeconds = 0
-                    }
-                    delay(1000)
-                }
-            }
 
             AlertDialog(
                 onDismissRequest = { showStoreSimulationDialog = false },
@@ -1700,12 +1685,11 @@ fun PosScreen(
                         Text("Browser: Toko Online")
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = if (validatedTenant != null && remainingSeconds > 0) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else MaterialTheme.colorScheme.error.copy(alpha = 0.1f)
+                            color = if (validatedTenant != null) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else MaterialTheme.colorScheme.error.copy(alpha = 0.1f)
                         ) {
-                            val timeStr = String.format("%02d:%02d", remainingSeconds / 60, remainingSeconds % 60)
                             Text(
-                                text = if (validatedTenant != null && remainingSeconds > 0) "Masa Berlaku: $timeStr" else "Expired",
-                                color = if (validatedTenant != null && remainingSeconds > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                                text = if (validatedTenant != null) "Status: Aktif" else "Invalid",
+                                color = if (validatedTenant != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -1718,15 +1702,15 @@ fun PosScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth().height(400.dp)
                     ) {
-                        if (validatedTenant == null || remainingSeconds <= 0) {
+                        if (validatedTenant == null) {
                             Column(
                                 modifier = Modifier.fillMaxSize(),
                                 verticalArrangement = Arrangement.Center,
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text("🚫 Link Toko Online Kedaluwarsa", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error, fontSize = 16.sp)
+                                Text("🚫 Link Toko Online Tidak Valid", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error, fontSize = 16.sp)
                                 Spacer(Modifier.height(8.dp))
-                                Text("Link toko online ini hanya berlaku selama 5 menit. Silakan generate link baru di kasir POS.", textAlign = TextAlign.Center, fontSize = 12.sp)
+                                Text("Link toko online ini tidak valid atau salah format. Silakan hubungi kasir.", textAlign = TextAlign.Center, fontSize = 12.sp)
                             }
                         } else {
                             Text("Selamat Datang di Katalog Online Kami!", fontWeight = FontWeight.Bold, fontSize = 14.sp)

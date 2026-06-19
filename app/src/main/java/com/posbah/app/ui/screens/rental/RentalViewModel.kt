@@ -55,6 +55,7 @@ class RentalViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val tenantId = authRepository.activeTenantId().orEmpty()
+    val activeTenantId get() = tenantId
     private val currentOutletId get() = sessionState.outletId.value
 
     val tenantName = flow {

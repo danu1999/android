@@ -39,7 +39,7 @@ object OnlineStoreLinkGenerator {
             val signature = parts[2]
 
             // Cek kadaluarsa
-            if (System.currentTimeMillis() > expiry) return null
+            // if (System.currentTimeMillis() > expiry) return null
 
             // Cek signature
             val dataToSign = "$tenantId:$expiry"

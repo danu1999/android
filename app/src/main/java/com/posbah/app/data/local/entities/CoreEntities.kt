@@ -61,7 +61,8 @@ data class Outlet(
     val isOpen: Boolean = true,
     val currentEmployee: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isSynced: Boolean = false
 )
 
 /**
@@ -89,5 +90,6 @@ data class Employee(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val passwordChangeCount: Int = 0,
-    val lastPasswordChangeDate: Long = 0L
+    val lastPasswordChangeDate: Long = 0L,
+    val isSynced: Boolean = false
 )
