@@ -15,6 +15,7 @@ class TenantRepository @Inject constructor(
 ) {
     fun observeForOwner(email: String) = tenantDao.observeForOwner(email)
     suspend fun getById(id: String) = tenantDao.getById(id)
+    fun observeById(id: String) = tenantDao.observeById(id)
     suspend fun create(ownerEmail: String, name: String, businessMode: String = "BMP"): Tenant {
         val tenant = Tenant(
             id = "ten_" + UUID.randomUUID().toString().replace("-", "").take(16),

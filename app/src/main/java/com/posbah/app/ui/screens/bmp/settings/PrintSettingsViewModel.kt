@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.posbah.app.data.local.PosBahDatabase
 import com.posbah.app.data.local.entities.PrintSettingsEntity
+import com.posbah.app.data.local.entities.Tenant
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.PrintSettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -38,6 +39,9 @@ class PrintSettingsViewModel @Inject constructor(
     private val _draft = MutableStateFlow<PrintSettingsEntity?>(null)
     val draft = _draft.asStateFlow()
 
+    private val _draftTenant = MutableStateFlow<Tenant?>(null)
+    val draftTenant = _draftTenant.asStateFlow()
+
     init {
         // Guard: jangan query database jika tenantId kosong (race condition saat login)
         if (tenantId.isNotBlank()) {
@@ -47,8 +51,13 @@ class PrintSettingsViewModel @Inject constructor(
                     tenantId = tenantId,
                     moduleKey = moduleKey
                 )
+                _draftTenant.value = db.tenantDao().getById(tenantId)
             }
         }
+    }
+
+    fun updateTenantName(name: String) {
+        _draftTenant.update { it?.copy(name = name) }
     }
 
     fun update(transform: (PrintSettingsEntity) -> PrintSettingsEntity) {
@@ -126,6 +135,7 @@ class PrintSettingsViewModel @Inject constructor(
             return@launch
         }
         val d = _draft.value ?: return@launch
+        val t = _draftTenant.value
 
         // Validasi khusus modul BMP (Invoice & Manufaktur membutuhkan info bank)
         if (moduleKey == "BMP") {
@@ -140,6 +150,19 @@ class PrintSettingsViewModel @Inject constructor(
         }
 
         printSettingsRepo.upsert(d.copy(updatedAt = System.currentTimeMillis()))
+        if (t != null) {
+            db.tenantDao().upsert(t.copy(updatedAt = System.currentTimeMillis()))
+            // Sync BmpSettingsEntity if exists, to keep it consistent
+            try {
+                val existingBmpSettings = db.bmpSettingsDao().get(t.id)
+                if (existingBmpSettings != null) {
+                    db.bmpSettingsDao().upsert(existingBmpSettings.copy(clientName = t.name, updatedAt = System.currentTimeMillis()))
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)

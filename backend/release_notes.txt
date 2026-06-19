@@ -1,3 +1,14 @@
+POSBah v2.17.18 - Pengaturan Ganti Nama Usaha Konsisten & Sinkronisasi Dua Arah
+
+Halo Kak! POSBah v2.17.18 hadir dengan pembaruan pengaturan nama usaha dan peningkatan sinkronisasi:
+1. Ganti Nama Usaha/Toko Konsisten: Menambahkan pengaturan untuk mengganti nama usaha / toko Anda langsung dari menu pengaturan struk POS (FnB, Rental, Laundry) dan profil BMP (Invoice & Manufaktur). Nama usaha yang baru akan langsung terupdate di semua struk, invoice, dan layar kasir POS secara real-time.
+2. Sinkronisasi Dua Arah Tenants: Mengintegrasikan tabel `tenants` ke dalam mekanisme penarikan sinkronisasi (`pullAll`) menggunakan perbandingan timestamp `updatedAt`. Perangkat lain milik Anda otomatis tersinkronisasi dengan nama usaha terbaru tanpa risiko kembali ke nama lama (anti-revert).
+3. Pembaruan Versi POS & Invoice: Pembaruan ini berlaku menyeluruh di seluruh sistem POS (FnB, Rental, Laundry) serta aplikasi Invoice & Manufaktur (BMP).
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.17 - Perbaikan Toko Online Tanpa Timer & Penguatan Halaman Web Katalog
 
 Halo Kak! POSBah v2.17.17 hadir dengan pembaruan fitur Toko Online dan ketahanan server:

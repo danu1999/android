@@ -58,10 +58,9 @@ class RentalViewModel @Inject constructor(
     val activeTenantId get() = tenantId
     private val currentOutletId get() = sessionState.outletId.value
 
-    val tenantName = flow {
-        val t = db.tenantDao().getById(tenantId)
-        emit(t?.name ?: "Rental POS")
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, "Rental POS")
+    val tenantName = db.tenantDao().observeById(tenantId)
+        .map { it?.name ?: "Rental POS" }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "Rental POS")
 
     val printConfig = printSettingsRepository.observe(tenantId, "RENTAL")
         .map { PrintConfig.fromEntity(it) }

@@ -1139,6 +1139,30 @@ object SupabaseSyncManager {
             // Guard: push deletes dulu sebelum pull agar data yang dihapus tidak di-restore
             pushDeletedRecordsToServer(context, db, activeTenantId)
 
+            // 0. Pull tenants
+            val tenantsArray = pullTable(context, "tenants", activeTenantId)
+            if (tenantsArray != null && tenantsArray.length() > 0) {
+                for (i in 0 until tenantsArray.length()) {
+                    val obj = tenantsArray.getJSONObject(i)
+                    val idVal = obj.getString("id")
+                    if (idVal == activeTenantId) {
+                        val serverTenant = Tenant(
+                            id = idVal,
+                            name = obj.getString("name"),
+                            ownerEmail = obj.getString("ownerEmail"),
+                            businessMode = obj.getString("businessMode"),
+                            isActive = obj.optBoolean("isActive", true),
+                            createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
+                            updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                        )
+                        val localTenant = db.tenantDao().getById(activeTenantId)
+                        if (localTenant == null || serverTenant.updatedAt > localTenant.updatedAt) {
+                            db.tenantDao().upsert(serverTenant)
+                        }
+                    }
+                }
+            }
+
             // 1. Pull outlets
             val outletsArray = pullTable(context, "outlets", activeTenantId)
             if (outletsArray != null) {

@@ -54,6 +54,7 @@ import androidx.lifecycle.viewModelScope
 import coil.compose.AsyncImage
 import com.posbah.app.data.local.entities.BmpSettingsEntity
 import com.posbah.app.data.local.entities.Outlet
+import com.posbah.app.data.local.entities.Tenant
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpSettingsRepository
 import com.posbah.app.data.repository.OutletRepository
@@ -88,6 +89,9 @@ class SettingsViewModel @Inject constructor(
     private val _draft = MutableStateFlow<BmpSettingsEntity?>(null)
     val draft = _draft.asStateFlow()
 
+    private val _draftTenant = MutableStateFlow<Tenant?>(null)
+    val draftTenant = _draftTenant.asStateFlow()
+
     val outlets = outletRepo.observe(tenantId)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -101,6 +105,7 @@ class SettingsViewModel @Inject constructor(
                 tenantId = tenantId,
                 clientName = "Perusahaan Saya"
             )
+            _draftTenant.value = db.tenantDao().getById(tenantId)
         }
     }
 
@@ -109,9 +114,18 @@ class SettingsViewModel @Inject constructor(
         _draft.update { transform(cur) }
     }
 
+    fun updateTenantName(name: String) {
+        _draftTenant.update { it?.copy(name = name) }
+        _draft.update { it?.copy(clientName = name) }
+    }
+
     fun save() = viewModelScope.launch {
         val d = _draft.value ?: return@launch
+        val t = _draftTenant.value
         settingsRepo.upsert(d)
+        if (t != null) {
+            db.tenantDao().upsert(t.copy(updatedAt = System.currentTimeMillis()))
+        }
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
@@ -323,9 +337,10 @@ fun SettingsScreen(
                 }
             }
             item {
+                val tenantDraft by viewModel.draftTenant.collectAsState()
                 OutlinedTextField(
-                    value = d.clientName,
-                    onValueChange = { v -> viewModel.update { it.copy(clientName = v) } },
+                    value = tenantDraft?.name ?: d.clientName,
+                    onValueChange = { v -> viewModel.updateTenantName(v) },
                     label = { Text("Nama Perusahaan") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().testTag("settings-name")

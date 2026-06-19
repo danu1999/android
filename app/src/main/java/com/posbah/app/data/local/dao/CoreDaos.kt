@@ -39,6 +39,9 @@ interface TenantDao {
     @Query("SELECT * FROM tenants WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): Tenant?
 
+    @Query("SELECT * FROM tenants WHERE id = :id LIMIT 1")
+    fun observeById(id: String): Flow<Tenant?>
+
     @Query("SELECT * FROM tenants WHERE ownerEmail = :email COLLATE NOCASE")
     fun observeForOwner(email: String): Flow<List<Tenant>>
 

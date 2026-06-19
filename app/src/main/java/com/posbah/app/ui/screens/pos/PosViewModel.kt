@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -97,10 +98,9 @@ class PosViewModel @Inject constructor(
     private val currentOutletId get() = sessionState.outletId.value
     val activeTenantId get() = tenantId
 
-    val tenantName = flow {
-        val t = db.tenantDao().getById(tenantId)
-        emit(t?.name ?: "Kasir F&B")
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, "Kasir F&B")
+    val tenantName = db.tenantDao().observeById(tenantId)
+        .map { it?.name ?: "Kasir F&B" }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "Kasir F&B")
 
     private val _uiState = MutableStateFlow(PosUiState())
     val uiState = _uiState.asStateFlow()

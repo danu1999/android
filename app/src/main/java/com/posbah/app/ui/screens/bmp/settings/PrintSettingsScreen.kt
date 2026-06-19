@@ -315,6 +315,31 @@ fun PrintSettingsScreen(
                         }
                     }
                     TAB_POS -> {
+                        item {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text("Nama Usaha / Toko", fontWeight = FontWeight.SemiBold)
+                                    Text(
+                                        "Ganti nama usaha Anda untuk struk dan invoice",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    val tenantDraft by viewModel.draftTenant.collectAsState()
+                                    OutlinedTextField(
+                                        value = tenantDraft?.name.orEmpty(),
+                                        onValueChange = { viewModel.updateTenantName(it) },
+                                        label = { Text("Nama Usaha") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth().testTag("print-settings-tenant-name")
+                                    )
+                                }
+                            }
+                        }
                         // Struk POS Section
                         item {
                             Card(
