@@ -1710,8 +1710,17 @@ func handleDownloadApk(w http.ResponseWriter, r *http.Request) {
 	direct := r.URL.Query().Get("direct") == "true"
 	if direct {
 		apkPath := fmt.Sprintf("./posbah-v%s.apk", version)
+		if _, err := os.Stat(apkPath); err != nil {
+			// Try fallback to debug APK name
+			apkPathDebug := fmt.Sprintf("./posbah-v%s-debug.apk", version)
+			if _, errD := os.Stat(apkPathDebug); errD == nil {
+				apkPath = apkPathDebug
+			}
+		}
+
 		if _, err := os.Stat(apkPath); err == nil {
-			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=POSBah-v%s.apk", version))
+			filename := filepath.Base(apkPath)
+			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 			w.Header().Set("Content-Type", "application/vnd.android.package-archive")
 			http.ServeFile(w, r, apkPath)
 			return
