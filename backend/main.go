@@ -5324,6 +5324,8 @@ func handleAdminApkConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func compareVersions(v1, v2 string) int {
+	v1 = strings.TrimSuffix(v1, "-debug")
+	v2 = strings.TrimSuffix(v2, "-debug")
 	parts1 := strings.Split(v1, ".")
 	parts2 := strings.Split(v2, ".")
 	for i := 0; i < len(parts1) && i < len(parts2); i++ {
@@ -5378,6 +5380,7 @@ func autoDetectApkVersion() {
 		filename := filepath.Base(f)
 		version := strings.TrimPrefix(filename, "posbah-v")
 		version = strings.TrimSuffix(version, ".apk")
+		version = strings.TrimSuffix(version, "-debug")
 		if latestVersion == "" || compareVersions(version, latestVersion) > 0 {
 			latestVersion = version
 		}
