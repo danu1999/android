@@ -1,3 +1,14 @@
+POSBah v2.17.9 - Perbaikan Sinkronisasi & Penghapusan Data Permanen (Semua Sistem)
+
+Halo Kak! POSBah v2.17.9 hadir dengan perbaikan kritis untuk sinkronisasi penghapusan data:
+1. Penghapusan Data Permanen (Hard Delete): Memperbaiki masalah data yang sudah dihapus oleh pengguna muncul kembali setelah sinkronisasi. Sekarang data yang dihapus akan terhapus secara permanen dari server PostgreSQL dan tidak akan muncul kembali.
+2. Sinkronisasi Global Semua Sistem: Perbaikan ini berlaku secara menyeluruh untuk ketiga sistem POS (FnB, Rental, Laundry) serta modul Invoice & Manufaktur (BMP).
+3. Interkoneksi Tipe Data Database: Menyelaraskan pengikatan tipe data ID numerik pada endpoint REST API sinkronisasi DELETE dan GET server dengan database PostgreSQL.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.8 - Perbaikan Sinkronisasi Multi-Sistem Usaha Premium
 
 Halo Kak! POSBah v2.17.8 hadir dengan perbaikan sinkronisasi sistem usaha premium:

@@ -2961,7 +2961,7 @@ func handleSyncPatch(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			whereClauses = append(whereClauses, fmt.Sprintf(`"%s" = $%d`, k, idx))
-			args = append(args, realVal)
+			args = append(args, parseQueryParamValue(tableName, k, realVal))
 			idx++
 		}
 	}
@@ -3092,7 +3092,7 @@ func handleSyncDelete(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			whereClauses = append(whereClauses, fmt.Sprintf(`"%s" = $%d`, k, idx))
-			args = append(args, realVal)
+			args = append(args, parseQueryParamValue(tableName, k, realVal))
 			idx++
 		}
 	}
@@ -3206,7 +3206,7 @@ func handleSyncQuery(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			whereClauses = append(whereClauses, fmt.Sprintf(`"%s" = $%d`, k, idx))
-			args = append(args, realVal)
+			args = append(args, parseQueryParamValue(tableName, k, realVal))
 			idx++
 		}
 	}
@@ -6397,4 +6397,25 @@ func handleOutletMarginReport(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(result)
 }
+
+func parseQueryParamValue(tableName, colName, rawVal string) interface{} {
+	colLower := strings.ToLower(colName)
+	tableLower := strings.ToLower(tableName)
+
+	if colLower == "tenantid" {
+		return rawVal
+	}
+	if tableLower == "tenants" && colLower == "id" {
+		return rawVal
+	}
+
+	if colLower == "id" || strings.HasSuffix(colLower, "id") {
+		if valInt, err := strconv.ParseInt(rawVal, 10, 64); err == nil {
+			return valInt
+		}
+	}
+
+	return rawVal
+}
+
 
