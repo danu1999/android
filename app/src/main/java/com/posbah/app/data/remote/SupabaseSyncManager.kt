@@ -1776,4 +1776,90 @@ object SupabaseSyncManager {
             if (pullMutex.isLocked) pullMutex.unlock()
         }
     }
+
+    /**
+     * Unduh semua tenant yang dimiliki oleh ownerEmail dari VPS dan simpan ke Room local DB.
+     * Ini juga mengunduh outlet default untuk tiap tenant agar proses pemilihan tenant lancar.
+     */
+    suspend fun fetchAndInsertOwnerTenants(context: Context, db: PosBahDatabase, ownerEmail: String) = withContext(Dispatchers.IO) {
+        if (!isNetworkAvailable(context)) {
+            Log.w(TAG, "[fetchAndInsertOwnerTenants] Jaringan tidak tersedia, lewati.")
+            return@withContext
+        }
+        try {
+            val emailEncoded = java.net.URLEncoder.encode(ownerEmail.lowercase().trim(), "UTF-8")
+            val url = URL("$VPS_URL/api/sync/tenants?ownerEmail=eq.$emailEncoded")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 15_000
+                readTimeout = 30_000
+                setRequestProperty("Accept", "application/json")
+                val securePrefs = com.posbah.app.security.SecurePreferences(context)
+                val activeTenantId = securePrefs.currentTenantId ?: "ten_premium_mulyakus84_gmail_com_FNB"
+                setRequestProperty("x-tenant-id", activeTenantId)
+                setRequestProperty("x-user-email", ownerEmail)
+                setRequestProperty("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
+            }
+            if (conn.responseCode in 200..299) {
+                val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+                val array = JSONArray(responseText)
+                Log.d(TAG, "[fetchAndInsertOwnerTenants] Ditemukan ${array.length()} tenant di server.")
+                for (i in 0 until array.length()) {
+                    val obj = array.getJSONObject(i)
+                    val tenant = Tenant(
+                        id = obj.getString("id"),
+                        name = obj.getString("name"),
+                        ownerEmail = obj.getString("ownerEmail"),
+                        businessMode = obj.getString("businessMode"),
+                        isActive = obj.optBoolean("isActive", true),
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                    )
+                    db.tenantDao().upsert(tenant)
+
+                    // Unduh data outlet untuk tenant ini agar tidak kosong saat dipilih
+                    try {
+                        val outletsArray = pullTable(context, "outlets", tenant.id)
+                        if (outletsArray != null && outletsArray.length() > 0) {
+                            for (j in 0 until outletsArray.length()) {
+                                val oObj = outletsArray.getJSONObject(j)
+                                db.outletDao().insert(
+                                    Outlet(
+                                        id = oObj.optLong("id", 0L),
+                                        tenantId = oObj.optString("tenantId", tenant.id),
+                                        name = oObj.optString("name"),
+                                        address = if (oObj.isNull("address")) null else oObj.optString("address"),
+                                        phone = if (oObj.isNull("phone")) null else oObj.optString("phone"),
+                                        isDefault = oObj.optBoolean("isDefault", false),
+                                        isOpen = oObj.optBoolean("isOpen", true),
+                                        currentEmployee = if (oObj.isNull("currentEmployee")) null else oObj.optString("currentEmployee"),
+                                        createdAt = oObj.optLong("createdAt", System.currentTimeMillis()),
+                                        updatedAt = oObj.optLong("updatedAt", System.currentTimeMillis())
+                                    )
+                                )
+                            }
+                        } else {
+                            // Seed local default outlet if none exists on server
+                            val localOutlets = db.outletDao().listForTenant(tenant.id)
+                            if (localOutlets.isEmpty()) {
+                                db.outletDao().insert(
+                                    Outlet(
+                                        tenantId = tenant.id,
+                                        name = "Outlet Utama",
+                                        isDefault = true
+                                    )
+                                )
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Gagal mengunduh outlets untuk tenant ${tenant.id}: ${e.message}")
+                    }
+                }
+            } else {
+                Log.e(TAG, "Gagal mengunduh tenants untuk owner $ownerEmail: ${conn.responseCode}")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception saat mengunduh tenants untuk owner $ownerEmail: ${e.message}", e)
+        }
+    }
 }

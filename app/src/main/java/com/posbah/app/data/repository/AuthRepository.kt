@@ -1002,6 +1002,10 @@ class AuthRepository @Inject constructor(
             // Trigger background pull sync right after successful login
             CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
                 try {
+                    val cleanEmail = successUser.email.lowercase().trim()
+                    if (cleanEmail == "muhammadmuizz8@gmail.com" || cleanEmail == "mulyakus84@gmail.com") {
+                        com.posbah.app.data.remote.SupabaseSyncManager.fetchAndInsertOwnerTenants(context, db, cleanEmail)
+                    }
                     com.posbah.app.data.remote.SupabaseSyncManager.pullAll(context, db, successUser.tenantId.orEmpty())
                 } catch (e: Exception) {
                     e.printStackTrace()

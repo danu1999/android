@@ -3212,6 +3212,7 @@ func handleSyncQuery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tenantID := r.Header.Get("x-tenant-id")
+	userEmail := r.Header.Get("x-user-email")
 	if tenantID != "" {
 		if tableName == "transaction_items" {
 			var txIDVal string
@@ -3234,13 +3235,21 @@ func handleSyncQuery(w http.ResponseWriter, r *http.Request) {
 			}
 		} else if tableName == "tenants" {
 			hasIdFilter := false
-			for k := range r.URL.Query() {
+			hasOwnerEmailFilter := false
+			for k, vList := range r.URL.Query() {
 				if k == "id" {
 					hasIdFilter = true
-					break
+				}
+				if k == "ownerEmail" && len(vList) > 0 {
+					hasOwnerEmailFilter = true
+					queriedEmail := strings.TrimPrefix(vList[0], "eq.")
+					if strings.TrimSpace(strings.ToLower(queriedEmail)) != strings.TrimSpace(strings.ToLower(userEmail)) {
+						http.Error(w, "Forbidden: you can only query tenants that you own", http.StatusForbidden)
+						return
+					}
 				}
 			}
-			if !hasIdFilter {
+			if !hasIdFilter && !hasOwnerEmailFilter {
 				whereClauses = append(whereClauses, fmt.Sprintf(`"id" = $%d`, idx))
 				args = append(args, tenantID)
 				idx++

@@ -7,6 +7,8 @@ import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.TenantRepository
 import com.posbah.app.security.SecurePreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import android.content.Context
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,7 +34,8 @@ class TenantPickerViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val securePrefs: SecurePreferences,
     private val db: PosBahDatabase,
-    private val sessionState: SessionState
+    private val sessionState: SessionState,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _ui = MutableStateFlow(TenantPickerUiState())
@@ -48,6 +51,13 @@ class TenantPickerViewModel @Inject constructor(
 
             val lowerEmail = email.lowercase().trim()
             if (lowerEmail == "muhammadmuizz8@gmail.com" || lowerEmail == "mulyakus84@gmail.com") {
+                viewModelScope.launch {
+                    try {
+                        com.posbah.app.data.remote.SupabaseSyncManager.fetchAndInsertOwnerTenants(context, db, email)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
                 tenantRepository.observeForOwner(email).collect { list ->
                     _ui.update { 
                         it.copy(

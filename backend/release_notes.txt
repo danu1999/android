@@ -1,3 +1,13 @@
+POSBah v2.17.8 - Perbaikan Sinkronisasi Multi-Sistem Usaha Premium
+
+Halo Kak! POSBah v2.17.8 hadir dengan perbaikan sinkronisasi sistem usaha premium:
+1. Sinkronisasi Otomatis Seluruh Tenant: Memperbaiki masalah sinkronisasi di mana hanya satu sistem usaha (FnB) yang muncul, sekarang seluruh sistem usaha yang dimiliki (termasuk Laundry) akan disinkronisasikan dan ditampilkan secara otomatis di layar Pilih Tenant.
+2. Integrasi & Promosi Tenant Laundry: Memindahkan tenant Laundry dari mode demo ke mode premium penuh secara aman di database server tanpa kehilangan data transaksi lama.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.7 - Dukungan Multi-Sistem Usaha Premium
 
 Halo Kak! POSBah v2.17.7 hadir dengan pembaruan khusus untuk mendukung bisnis Anda:
