@@ -267,7 +267,7 @@ fun InvoiceDetailScreen(
                             },
                             modifier = Modifier
                                 .clickable {
-                                    val html = generateSuratJalanHtml(context, inv, ui.products, ui.client, ui.settings, ui.printConfig.sj)
+                                    val html = generateSuratJalanHtml(context, inv, ui.products, ui.client, ui.settings, ui.printConfig.sj, ui.printConfig)
                                     printHtml(context, html, "SuratJalan_${inv.number}", ui.printConfig.sj.isColor)
                                 }
                                 .background(Color.Transparent)
@@ -669,7 +669,7 @@ private fun generateInvoiceHtml(
     printConfig: DocPrintConfig,
     globalConfig: PrintConfig
 ): String {
-    val logoBase64 = if (printConfig.useLogo) getAssetBase64(context, "logo.jpg") else ""
+    val logoBase64 = if (printConfig.useLogo) com.posbah.app.ui.print.ReceiptPrinter.getUriOrAssetBase64(context, globalConfig.logoPath, "logo.jpg") else ""
 
     val companyName = settings?.clientName ?: "CV. Bahtera Mulya Plastik"
     val companyAddress = settings?.addressLine1 ?: "Sidoarjo, Jawa Timur"
@@ -960,9 +960,10 @@ private fun generateSuratJalanHtml(
     products: List<com.posbah.app.data.local.entities.BmpProductEntity>,
     client: com.posbah.app.data.local.entities.BmpClientEntity?,
     settings: com.posbah.app.data.local.entities.BmpSettingsEntity?,
-    printConfig: DocPrintConfig
+    printConfig: DocPrintConfig,
+    globalConfig: PrintConfig
 ): String {
-    val logoBase64 = if (printConfig.useLogo) getAssetBase64(context, "logo.jpg") else ""
+    val logoBase64 = if (printConfig.useLogo) com.posbah.app.ui.print.ReceiptPrinter.getUriOrAssetBase64(context, globalConfig.logoPath, "logo.jpg") else ""
     val isColor = printConfig.isColor
 
     val companyName = settings?.clientName ?: "CV. Bahtera Mulya Plastik"

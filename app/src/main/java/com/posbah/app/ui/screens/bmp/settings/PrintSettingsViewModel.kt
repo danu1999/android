@@ -56,6 +56,69 @@ class PrintSettingsViewModel @Inject constructor(
         _draft.update { transform(cur) }
     }
 
+    fun processAndSetLogo(uri: android.net.Uri, onError: (String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                if (inputStream == null) {
+                    launch(Dispatchers.Main) { onError("Gagal membuka gambar") }
+                    return@launch
+                }
+                val originalBitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
+                inputStream.close()
+                if (originalBitmap == null) {
+                    launch(Dispatchers.Main) { onError("Gambar tidak valid") }
+                    return@launch
+                }
+
+                // Resize bitmap so that max dimension is 512px
+                val maxDim = 512
+                val width = originalBitmap.width
+                val height = originalBitmap.height
+                val (newWidth, newHeight) = if (width > height) {
+                    if (width > maxDim) {
+                        maxDim to (height * maxDim / width)
+                    } else {
+                        width to height
+                    }
+                } else {
+                    if (height > maxDim) {
+                        (width * maxDim / height) to maxDim
+                    } else {
+                        width to height
+                    }
+                }
+                
+                val resizedBitmap = android.graphics.Bitmap.createScaledBitmap(
+                    originalBitmap,
+                    newWidth,
+                    newHeight,
+                    true
+                )
+                if (resizedBitmap != originalBitmap) {
+                    originalBitmap.recycle()
+                }
+
+                val outputStream = java.io.ByteArrayOutputStream()
+                resizedBitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 85, outputStream)
+                val bytes = outputStream.toByteArray()
+                resizedBitmap.recycle()
+
+                val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                val base64Url = "data:image/png;base64,$base64"
+
+                launch(Dispatchers.Main) {
+                    update { e -> e.copy(logoPath = base64Url) }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                launch(Dispatchers.Main) {
+                    onError("Terjadi kesalahan: ${e.localizedMessage}")
+                }
+            }
+        }
+    }
+
     fun save(onError: (String) -> Unit = {}, onDone: () -> Unit = {}) = viewModelScope.launch {
         // Guard: pastikan tenantId tidak kosong
         if (tenantId.isBlank()) {

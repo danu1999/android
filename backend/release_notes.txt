@@ -1,3 +1,13 @@
+POSBah v2.17.15 - Penyimpanan Permanen Logo Struk (Base64) & Pembaruan Cetak Dokumen
+
+Halo Kak! POSBah v2.17.15 hadir dengan pembaruan dan perbaikan penting:
+1. Penyimpanan Logo Permanen (Base64): Memperbaiki masalah logo struk kustom yang selalu kembali ke logo awal setelah beberapa waktu. Sekarang gambar logo Anda diunggah dan disimpan secara permanen di database lokal serta server menggunakan enkripsi Base64, sehingga aman dari masalah perizinan berkas temporer Android.
+2. Penyelarasan Logo Dokumen: Logo kustom yang diunggah kini juga otomatis digunakan di cetak Invoice PDF dan Surat Jalan untuk keselarasan branding usaha Anda.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.14 - Perbaikan Layout Dialog Pembaruan Wajib & Pemeliharaan Sistem
 
 Halo Kak! POSBah v2.17.14 hadir dengan pembaruan dan perbaikan penting:

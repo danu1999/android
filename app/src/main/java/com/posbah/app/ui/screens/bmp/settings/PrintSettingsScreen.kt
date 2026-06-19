@@ -83,7 +83,9 @@ fun PrintSettingsScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         uri?.let {
-            viewModel.update { e -> e.copy(logoPath = it.toString()) }
+            viewModel.processAndSetLogo(it) { err ->
+                Toast.makeText(context, err, Toast.LENGTH_LONG).show()
+            }
         }
     }
 

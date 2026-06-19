@@ -186,9 +186,12 @@ object ReceiptPrinter {
         }
     }
 
-    private fun getUriOrAssetBase64(context: Context, pathOrUri: String?, defaultAsset: String): String {
+    fun getUriOrAssetBase64(context: Context, pathOrUri: String?, defaultAsset: String): String {
         if (pathOrUri.isNullOrBlank()) {
             return getAssetBase64(context, defaultAsset)
+        }
+        if (pathOrUri.startsWith("data:")) {
+            return pathOrUri
         }
         return try {
             val uri = android.net.Uri.parse(pathOrUri)
