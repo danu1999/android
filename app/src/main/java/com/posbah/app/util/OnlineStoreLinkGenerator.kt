@@ -13,12 +13,9 @@ object OnlineStoreLinkGenerator {
     private const val SECRET_KEY = "PosBahStoreSecretKey123!"
     const val BASE_URL = "https://www.zedmz.cloud/store/"
 
-    fun generateShareLink(tenantId: String, durationMinutes: Int = 5): String {
-        val expiry = System.currentTimeMillis() + (durationMinutes * 60 * 1000L)
-        val dataToSign = "$tenantId:$expiry"
-        val signature = computeHmacSha256(dataToSign, SECRET_KEY)
-        
-        val tokenRaw = "$tenantId:$expiry:$signature"
+    fun generateShareLink(tenantId: String): String {
+        val signature = computeHmacSha256(tenantId, SECRET_KEY)
+        val tokenRaw = "$tenantId:$signature"
         val tokenEncoded = Base64.encodeToString(
             tokenRaw.toByteArray(StandardCharsets.UTF_8),
             Base64.NO_WRAP or Base64.URL_SAFE or Base64.NO_PADDING
@@ -32,20 +29,20 @@ object OnlineStoreLinkGenerator {
             val decodedBytes = Base64.decode(tokenEncoded, Base64.NO_WRAP or Base64.URL_SAFE or Base64.NO_PADDING)
             val tokenRaw = String(decodedBytes, StandardCharsets.UTF_8)
             val parts = tokenRaw.split(":")
-            if (parts.size != 3) return null
-
-            val tenantId = parts[0]
-            val expiry = parts[1].toLongOrNull() ?: return null
-            val signature = parts[2]
-
-            // Cek kadaluarsa
-            // if (System.currentTimeMillis() > expiry) return null
-
-            // Cek signature
-            val dataToSign = "$tenantId:$expiry"
-            val expectedSignature = computeHmacSha256(dataToSign, SECRET_KEY)
-            
-            if (expectedSignature == signature) tenantId else null
+            if (parts.size == 2) {
+                val tenantId = parts[0]
+                val signature = parts[1]
+                val expectedSignature = computeHmacSha256(tenantId, SECRET_KEY)
+                if (expectedSignature == signature) tenantId else null
+            } else if (parts.size == 3) {
+                val tenantId = parts[0]
+                val expiry = parts[1].toLongOrNull() ?: return null
+                val signature = parts[2]
+                val expectedSignature = computeHmacSha256("$tenantId:$expiry", SECRET_KEY)
+                if (expectedSignature == signature) tenantId else null
+            } else {
+                null
+            }
         } catch (e: Exception) {
             null
         }

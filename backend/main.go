@@ -2798,6 +2798,9 @@ func loadTenantProducts(tenantId string) ([]StoreProduct, error) {
 }
 
 func renderStoreCatalogPage(businessName string, products []StoreProduct) string {
+	if products == nil {
+		products = []StoreProduct{}
+	}
 	productsJSON, _ := json.Marshal(products)
 
 	return fmt.Sprintf(`<!DOCTYPE html>

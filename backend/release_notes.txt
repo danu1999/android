@@ -1,3 +1,14 @@
+POSBah v2.17.17 - Perbaikan Toko Online Tanpa Timer & Penguatan Halaman Web Katalog
+
+Halo Kak! POSBah v2.17.17 hadir dengan pembaruan fitur Toko Online dan ketahanan server:
+1. Toko Online Tanpa Timer (Permanen): Link bagikan Toko Online sekarang bersifat permanen tanpa batas waktu 5 menit, sehingga aman dibagikan di media sosial (WhatsApp, Instagram, Facebook) pelanggan Anda selamanya.
+2. Penguatan Halaman Web Katalog: Memperbaiki kendala halaman web katalog kosong/blank saat dibuka untuk pertama kali atau saat tenant belum memiliki produk. Sekarang halaman web akan memuat dengan aman dan menampilkan pesan informatif secara elegan.
+3. Integrasi Semua POS: Tombol berbagi Toko Online kini telah aktif di semua POS (FnB, Rental, dan Laundry).
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.16 - Sinkronisasi Pengaturan Konsisten & Isolasi Tenant/Owner
 
 Halo Kak! POSBah v2.17.16 hadir dengan peningkatan stabilitas sinkronisasi dan manajemen data:
