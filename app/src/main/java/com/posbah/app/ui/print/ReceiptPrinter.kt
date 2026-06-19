@@ -213,7 +213,8 @@ object ReceiptPrinter {
 
     fun print(context: Context, html: String) {
         val base64Html = android.util.Base64.encodeToString(html.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
-        val intentUri = Uri.parse("rawbt:data:text/html;base64,$base64Html")
+        val encodedBase64 = java.net.URLEncoder.encode(base64Html, "UTF-8")
+        val intentUri = Uri.parse("rawbt:data:text/html;base64,$encodedBase64")
         val rawbtIntent = Intent(Intent.ACTION_VIEW, intentUri).apply {
             setPackage("ru.a402d.rawbtprinter")
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

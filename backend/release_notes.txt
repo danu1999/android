@@ -1,3 +1,13 @@
+POSBah v2.17.11 - Perbaikan Teks & Gambar Struk RawBT (Semua POS)
+
+Halo Kak! POSBah v2.17.11 hadir dengan perbaikan sistem cetak nota:
+1. Perbaikan Preview & Cetak RawBT: Memperbaiki kendala cetak di mana teks dan gambar notanya tidak muncul atau blank putih di aplikasi RawBT. Sekarang data struk HTML telah di-encode menggunakan format URL-Safe sehingga terbaca dengan sempurna oleh printer kasir Bluetooth thermal EPPOS.
+2. Sinkronisasi Data Cetak: Menjamin kestabilan format cetak di ketiga sistem POS (F&B, Rental, dan Laundry) secara langsung dan real-time.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.10 - Cetak Nota POS Bluetooth RawBT (Semua Sistem)
 
 Halo Kak! POSBah v2.17.10 hadir dengan pembaruan dan integrasi sistem cetak:
