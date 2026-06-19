@@ -109,3 +109,6 @@ query.sql
 # Environment secrets (jangan commit!)
 .posbah-env
 backend/.posbah-env
+
+# Temporary agent files
+appDataDir/

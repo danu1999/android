@@ -595,10 +595,17 @@ class PosViewModel @Inject constructor(
         onDone: () -> Unit
     ) {
         viewModelScope.launch {
-            var compressedPath: String? = null
+            var base64Url: String? = null
             if (imageFile != null && imageFile.exists()) {
-                val compressed = CameraUtils.compressToMaxSize(imageFile, 100)
-                compressedPath = compressed.absolutePath
+                try {
+                    val compressed = CameraUtils.compressToMaxSize(imageFile, 80)
+                    val bytes = compressed.readBytes()
+                    val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                    base64Url = "data:image/jpeg;base64,$base64"
+                    try { compressed.delete() } catch(e: Exception) {}
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
             val p = ProductEntity(
                 tenantId = tenantId,
@@ -610,10 +617,58 @@ class PosViewModel @Inject constructor(
                 unit = "pcs",
                 barcode = barcode?.takeIf { it.isNotBlank() },
                 category = category.ifBlank { "Umum" },
-                image = compressedPath
+                image = base64Url
             )
             productRepository.upsert(p)
             logActivity("TAMBAH PRODUK", "Menambahkan produk baru: $name (Jual: Rp $price, Beli: Rp $costPrice)")
+            onDone()
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
+    fun editProduct(
+        product: ProductEntity,
+        name: String,
+        price: Double,
+        costPrice: Double,
+        stock: Int,
+        category: String,
+        barcode: String?,
+        imageFile: java.io.File?,
+        keepExistingImage: Boolean,
+        onDone: () -> Unit
+    ) {
+        viewModelScope.launch {
+            var base64Url = if (keepExistingImage) product.image else null
+            if (imageFile != null && imageFile.exists()) {
+                try {
+                    val compressed = CameraUtils.compressToMaxSize(imageFile, 80)
+                    val bytes = compressed.readBytes()
+                    val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                    base64Url = "data:image/jpeg;base64,$base64"
+                    try { compressed.delete() } catch(e: Exception) {}
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            val updated = product.copy(
+                name = name,
+                price = price,
+                costPrice = costPrice,
+                stock = stock,
+                category = category.ifBlank { "Umum" },
+                barcode = barcode?.takeIf { it.isNotBlank() },
+                image = base64Url,
+                updatedAt = System.currentTimeMillis()
+            )
+            productRepository.upsert(updated)
+            logActivity("EDIT PRODUK", "Mengubah produk: $name (Jual: Rp $price, Beli: Rp $costPrice)")
             onDone()
             viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 try {

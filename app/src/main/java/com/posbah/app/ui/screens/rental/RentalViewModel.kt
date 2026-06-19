@@ -213,10 +213,17 @@ class RentalViewModel @Inject constructor(
         onDone: () -> Unit
     ) {
         viewModelScope.launch {
-            var compressedPath: String? = null
+            var base64Url: String? = null
             if (imageFile != null && imageFile.exists()) {
-                val compressed = CameraUtils.compressToMaxSize(imageFile, 100)
-                compressedPath = compressed.absolutePath
+                try {
+                    val compressed = CameraUtils.compressToMaxSize(imageFile, 80)
+                    val bytes = compressed.readBytes()
+                    val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                    base64Url = "data:image/jpeg;base64,$base64"
+                    try { compressed.delete() } catch(e: Exception) {}
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
             val metadataStr = Json.encodeToString(
                 ProductWholesaleMetadata.serializer(),
@@ -233,10 +240,64 @@ class RentalViewModel @Inject constructor(
                 barcode = plateNumber,
                 category = type,
                 wholesalePrices = metadataStr,
-                image = compressedPath
+                image = base64Url
             )
             productRepository.upsert(p)
             logActivity("TAMBAH KENDARAAN", "Menambahkan armada baru: $name ($plateNumber) Jual: $pricePerDay Modal: $costPrice")
+            onDone()
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
+    fun editVehicle(
+        vehicleId: String,
+        name: String,
+        plateNumber: String,
+        type: String,
+        pricePerDay: Double,
+        costPrice: Double,
+        monthlyMaintenance: Double,
+        imageFile: java.io.File?,
+        keepExistingImage: Boolean,
+        onDone: () -> Unit
+    ) {
+        viewModelScope.launch {
+            val idVal = vehicleId.toLongOrNull() ?: return@launch
+            val product = productRepository.getById(idVal) ?: return@launch
+            var base64Url = if (keepExistingImage) product.image else null
+            if (imageFile != null && imageFile.exists()) {
+                try {
+                    val compressed = CameraUtils.compressToMaxSize(imageFile, 80)
+                    val bytes = compressed.readBytes()
+                    val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                    base64Url = "data:image/jpeg;base64,$base64"
+                    try { compressed.delete() } catch(e: Exception) {}
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            val metadataStr = Json.encodeToString(
+                ProductWholesaleMetadata.serializer(),
+                ProductWholesaleMetadata(monthlyMaintenance)
+            )
+            val updated = product.copy(
+                name = name,
+                barcode = plateNumber,
+                category = type,
+                price = pricePerDay,
+                costPrice = costPrice,
+                wholesalePrices = metadataStr,
+                image = base64Url,
+                updatedAt = System.currentTimeMillis()
+            )
+            productRepository.upsert(updated)
+            logActivity("EDIT KENDARAAN", "Mengubah armada: $name ($plateNumber) Jual: $pricePerDay Modal: $costPrice")
             onDone()
             viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 try {

@@ -10,6 +10,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -166,6 +168,15 @@ fun PosScreen(
     var newCustName by remember { mutableStateOf("") }
     var newCustPhone by remember { mutableStateOf("") }
     var newCustAddress by remember { mutableStateOf("") }
+
+    var showEditProductDialog by remember { mutableStateOf(false) }
+    var productToEdit by remember { mutableStateOf<ProductEntity?>(null) }
+    var editProdName by remember { mutableStateOf("") }
+    var editProdPrice by remember { mutableStateOf("") }
+    var editProdCostPrice by remember { mutableStateOf("") }
+    var editProdStock by remember { mutableStateOf("") }
+    var editProdCategory by remember { mutableStateOf("") }
+    var editProdBarcode by remember { mutableStateOf("") }
 
     var showTransactionsHistoryDialog by remember { mutableStateOf(false) }
     var showEditReceiptDialog by remember { mutableStateOf(false) }
@@ -547,6 +558,17 @@ fun PosScreen(
                                         } else {
                                             viewModel.addToCart(p)
                                         }
+                                    },
+                                    onLongClick = {
+                                        productToEdit = p
+                                        editProdName = p.name
+                                        editProdPrice = p.price.toString()
+                                        editProdCostPrice = p.costPrice.toString()
+                                        editProdStock = p.stock.toString()
+                                        editProdCategory = p.category
+                                        editProdBarcode = p.barcode.orEmpty()
+                                        capturedPhotoFile = null
+                                        showEditProductDialog = true
                                     }
                                 )
                             }
@@ -1071,6 +1093,177 @@ fun PosScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = { showAddProductDialog = false }) { Text("Batal") }
+                }
+            )
+        }
+
+        // Dialog: Edit Produk
+        if (showEditProductDialog && productToEdit != null) {
+            val originalProduct = productToEdit!!
+            AlertDialog(
+                onDismissRequest = { showEditProductDialog = false },
+                title = { Text("Edit Produk") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
+                        OutlinedTextField(
+                            value = editProdName,
+                            onValueChange = { editProdName = it },
+                            label = { Text("Nama Produk") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = editProdPrice,
+                            onValueChange = { editProdPrice = it },
+                            label = { Text("Harga Jual (Rp)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = editProdCostPrice,
+                            onValueChange = { editProdCostPrice = it },
+                            label = { Text("Harga Beli (Rp)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Real-time margin calculator
+                        val jual = editProdPrice.toDoubleOrNull() ?: 0.0
+                        val beli = editProdCostPrice.toDoubleOrNull() ?: 0.0
+                        val margin = if (jual > 0) ((jual - beli) / jual) * 100 else 0.0
+                        Text(
+                            text = "Margin Keuntungan: ${String.format("%.1f", margin)}%",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (margin >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(vertical = 2.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = editProdStock,
+                            onValueChange = { editProdStock = it },
+                            label = { Text("Stok") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = editProdCategory,
+                            onValueChange = { editProdCategory = it },
+                            label = { Text("Kategori") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = editProdBarcode,
+                            onValueChange = { editProdBarcode = it },
+                            label = { Text("Barcode (Opsional)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Camera & Image Section
+                        if (capturedPhotoFile != null) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(100.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.Gray.copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AsyncImage(
+                                    model = capturedPhotoFile,
+                                    contentDescription = "Preview Foto Baru",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                )
+                                IconButton(
+                                    onClick = { capturedPhotoFile = null },
+                                    modifier = Modifier.align(Alignment.TopEnd)
+                                ) {
+                                    Icon(Icons.Outlined.Close, contentDescription = "Hapus Foto", tint = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                        } else if (!originalProduct.image.isNullOrBlank()) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(120.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.Gray.copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AsyncImage(
+                                    model = decodeBase64Image(originalProduct.image),
+                                    contentDescription = "Foto Produk Saat Ini",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                )
+                                Row(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .background(Color.Black.copy(alpha = 0.6f))
+                                        .fillMaxWidth()
+                                        .padding(4.dp),
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Text("Foto saat ini tersimpan", color = Color.White, fontSize = 11.sp)
+                                }
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            OutlinedButton(
+                                onClick = launchCamera,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Ganti Foto")
+                            }
+                        } else {
+                            OutlinedButton(
+                                onClick = launchCamera,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Ambil Foto Produk")
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val price = editProdPrice.toDoubleOrNull() ?: 0.0
+                            val costPrice = editProdCostPrice.toDoubleOrNull() ?: 0.0
+                            val stock = editProdStock.toIntOrNull() ?: 0
+                            if (editProdName.isNotBlank() && price > 0) {
+                                val keepExisting = capturedPhotoFile == null && !originalProduct.image.isNullOrBlank()
+                                viewModel.editProduct(
+                                    product = originalProduct,
+                                    name = editProdName,
+                                    price = price,
+                                    costPrice = costPrice,
+                                    stock = stock,
+                                    category = editProdCategory,
+                                    barcode = editProdBarcode,
+                                    imageFile = capturedPhotoFile,
+                                    keepExistingImage = keepExisting
+                                ) {
+                                    showEditProductDialog = false
+                                    Toast.makeText(context, "Produk berhasil diubah!", Toast.LENGTH_SHORT).show()
+                                }
+                            } else {
+                                Toast.makeText(context, "Nama produk dan harga wajib diisi!", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    ) { Text("Simpan Perubahan") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showEditProductDialog = false }) { Text("Batal") }
                 }
             )
         }
@@ -2221,18 +2414,23 @@ private fun PaymentDialogContent(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ProductCard(
     product: ProductEntity,
     hasVariants: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
 ) {
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
             .shadow(elevation = 2.dp, shape = RoundedCornerShape(16.dp))
             .testTag("prod-card-${product.id}")
     ) {

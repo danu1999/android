@@ -1189,10 +1189,10 @@ object SupabaseSyncManager {
                 if (list.isNotEmpty()) {
                     list.forEach { db.outletDao().insert(it) }
                 }
-                // Local pruning
+                // Local pruning — NEVER prune the default outlet to prevent data lockouts
                 val localOutlets = db.outletDao().getAll().filter { it.tenantId == activeTenantId }
                 localOutlets.forEach { local ->
-                    if (local.isSynced && local.id !in serverIds) {
+                    if (local.isSynced && !local.isDefault && local.id !in serverIds) {
                         db.outletDao().delete(local.id)
                     }
                 }
@@ -1230,10 +1230,10 @@ object SupabaseSyncManager {
                 if (list.isNotEmpty()) {
                     list.forEach { db.employeeDao().insert(it) }
                 }
-                // Local pruning
+                // Local pruning — NEVER prune the OWNER account to prevent lockouts
                 val localEmployees = db.employeeDao().getAll().filter { it.tenantId == activeTenantId }
                 localEmployees.forEach { local ->
-                    if (local.isSynced && local.id !in serverIds) {
+                    if (local.isSynced && local.role != "OWNER" && local.id !in serverIds) {
                         db.employeeDao().deleteById(local.id)
                     }
                 }

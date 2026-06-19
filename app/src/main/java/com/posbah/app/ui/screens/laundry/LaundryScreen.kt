@@ -75,6 +75,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.posbah.app.ui.components.PosBahTopBar
 import com.posbah.app.util.Formatters
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 
 import androidx.compose.material.icons.outlined.PhotoCamera
 import coil.compose.AsyncImage
@@ -117,7 +121,7 @@ data class LaundryOrder(
     val dateIn: Long
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun LaundryScreen(
     onBack: () -> Unit,
@@ -178,6 +182,27 @@ fun LaundryScreen(
 
     var tempPhotoFile by remember { mutableStateOf<java.io.File?>(null) }
     var capturedPhotoFile by remember { mutableStateOf<java.io.File?>(null) }
+
+    var showEditServiceDialog by remember { mutableStateOf(false) }
+    var serviceToEdit by remember { mutableStateOf<LaundryServiceItem?>(null) }
+    var editServiceName by remember { mutableStateOf("") }
+    var editServiceCategory by remember { mutableStateOf("KILOAN") }
+    var editServicePrice by remember { mutableStateOf("") }
+    var editServiceCost by remember { mutableStateOf("") }
+    var editServiceMonthlyMaintenance by remember { mutableStateOf("") }
+    var editServiceUnit by remember { mutableStateOf("Kg") }
+
+    val onLongClickService = { service: LaundryServiceItem ->
+        serviceToEdit = service
+        editServiceName = service.name
+        editServiceCategory = service.category
+        editServicePrice = service.price.toString()
+        editServiceCost = service.costPrice.toString()
+        editServiceMonthlyMaintenance = service.monthlyMaintenance.toString()
+        editServiceUnit = service.unit
+        capturedPhotoFile = null
+        showEditServiceDialog = true
+    }
 
     // Mobile tab state: 0 = Layanan, 1 = Keranjang
     var mobileTabIndex by remember { mutableStateOf(0) }
@@ -395,6 +420,7 @@ fun LaundryScreen(
                                     Toast.makeText(context, "Layanan berhasil dihapus!", Toast.LENGTH_SHORT).show()
                                 }
                             },
+                            onLongClickService = onLongClickService,
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth()
@@ -461,6 +487,7 @@ fun LaundryScreen(
                                 Toast.makeText(context, "Layanan berhasil dihapus!", Toast.LENGTH_SHORT).show()
                             }
                         },
+                        onLongClickService = onLongClickService,
                         modifier = Modifier
                             .weight(1.2f)
                             .fillMaxHeight()
@@ -949,6 +976,187 @@ fun LaundryScreen(
         )
     }
 
+    // Dialog: Edit Layanan
+    if (showEditServiceDialog && serviceToEdit != null) {
+        val originalService = serviceToEdit!!
+        AlertDialog(
+            onDismissRequest = { showEditServiceDialog = false },
+            title = { Text("Edit Layanan Laundry") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    OutlinedTextField(
+                        value = editServiceName,
+                        onValueChange = { editServiceName = it },
+                        label = { Text("Nama Layanan") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = editServicePrice,
+                        onValueChange = { editServicePrice = it },
+                        label = { Text("Harga Layanan / Tarif Jual (Rp)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = editServiceCost,
+                        onValueChange = { editServiceCost = it },
+                        label = { Text("Harga Modal / Beli (Rp)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = editServiceMonthlyMaintenance,
+                        onValueChange = { editServiceMonthlyMaintenance = it },
+                        label = { Text("Biaya Operasional Bulanan (Rp)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    val jual = editServicePrice.toDoubleOrNull() ?: 0.0
+                    val beli = editServiceCost.toDoubleOrNull() ?: 0.0
+                    val margin = if (jual > 0) ((jual - beli) / jual) * 100 else 0.0
+                    Text(
+                        text = "Margin Keuntungan: ${String.format("%.1f", margin)}%",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (margin >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(vertical = 2.dp)
+                    )
+
+                    Text("Kategori Layanan:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = {
+                                editServiceCategory = "KILOAN"
+                                editServiceUnit = "Kg"
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (editServiceCategory == "KILOAN") MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (editServiceCategory == "KILOAN") MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) { Text("KILOAN (Kg)") }
+                        Button(
+                            onClick = {
+                                editServiceCategory = "SATUAN"
+                                editServiceUnit = "Pcs"
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (editServiceCategory == "SATUAN") MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (editServiceCategory == "SATUAN") MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) { Text("SATUAN (Pcs)") }
+                    }
+
+                    Spacer(Modifier.height(4.dp))
+
+                    if (capturedPhotoFile != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(100.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.Gray.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AsyncImage(
+                                model = capturedPhotoFile,
+                                contentDescription = "Preview Foto Baru",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                            )
+                            IconButton(
+                                onClick = { capturedPhotoFile = null },
+                                modifier = Modifier.align(Alignment.TopEnd)
+                            ) {
+                                Icon(Icons.Outlined.Clear, contentDescription = "Hapus Foto", tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    } else if (!originalService.image.isNullOrBlank()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(100.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.Gray.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AsyncImage(
+                                model = decodeBase64Image(originalService.image),
+                                contentDescription = "Foto Layanan Saat Ini",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        OutlinedButton(
+                            onClick = launchCamera,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Ganti Foto Layanan")
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = launchCamera,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Ambil Foto Layanan")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val rate = editServicePrice.toDoubleOrNull() ?: 0.0
+                        val cost = editServiceCost.toDoubleOrNull() ?: 0.0
+                        val monthlyMaint = editServiceMonthlyMaintenance.toDoubleOrNull() ?: 0.0
+                        if (editServiceName.isNotBlank() && rate > 0) {
+                            val keepExisting = capturedPhotoFile == null && !originalService.image.isNullOrBlank()
+                            val prodEntity = viewModel.products.value.find { it.id.toString() == originalService.id }
+                            if (prodEntity != null) {
+                                viewModel.editService(
+                                    product = prodEntity,
+                                    name = editServiceName,
+                                    price = rate,
+                                    costPrice = cost,
+                                    monthlyMaintenance = monthlyMaint,
+                                    category = editServiceCategory,
+                                    unit = editServiceUnit,
+                                    imageFile = capturedPhotoFile,
+                                    keepExistingImage = keepExisting
+                                ) {
+                                    showEditServiceDialog = false
+                                    Toast.makeText(context, "Layanan laundry berhasil diubah!", Toast.LENGTH_SHORT).show()
+                                }
+                            } else {
+                                Toast.makeText(context, "Gagal menemukan data asli layanan!", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            Toast.makeText(context, "Nama dan harga wajib diisi!", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                ) { Text("Simpan") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditServiceDialog = false }) { Text("Batal") }
+            }
+        )
+    }
+
     if (showAddExpenseDialog) {
         AlertDialog(
             onDismissRequest = { showAddExpenseDialog = false },
@@ -1349,6 +1557,7 @@ fun LaundryScreen(
 
 // ====================== EXTRACTED PANES ======================
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ServiceCatalogPane(
     services: List<LaundryServiceItem>,
@@ -1359,6 +1568,7 @@ private fun ServiceCatalogPane(
     onCategoryChange: (String) -> Unit,
     onServiceClick: (LaundryServiceItem) -> Unit,
     onDeleteService: (String) -> Unit,
+    onLongClickService: (LaundryServiceItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -1510,7 +1720,10 @@ private fun ServiceCatalogPane(
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onServiceClick(service) }
+                            .combinedClickable(
+                                onClick = { onServiceClick(service) },
+                                onLongClick = { onLongClickService(service) }
+                            )
                     ) {
                         Row(
                             modifier = Modifier.padding(12.dp),

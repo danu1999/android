@@ -203,10 +203,17 @@ class LaundryViewModel @Inject constructor(
         onDone: () -> Unit
     ) {
         viewModelScope.launch {
-            var compressedPath: String? = null
+            var base64Url: String? = null
             if (imageFile != null && imageFile.exists()) {
-                val compressed = CameraUtils.compressToMaxSize(imageFile, 100)
-                compressedPath = compressed.absolutePath
+                try {
+                    val compressed = CameraUtils.compressToMaxSize(imageFile, 80)
+                    val bytes = compressed.readBytes()
+                    val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                    base64Url = "data:image/jpeg;base64,$base64"
+                    try { compressed.delete() } catch(e: Exception) {}
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
             val metadataStr = Json.encodeToString(
                 ProductWholesaleMetadata.serializer(),
@@ -223,10 +230,62 @@ class LaundryViewModel @Inject constructor(
                 barcode = "LD-SRV-${System.currentTimeMillis()}",
                 category = category,
                 wholesalePrices = metadataStr,
-                image = compressedPath
+                image = base64Url
             )
             productRepository.upsert(p)
             logActivity("TAMBAH LAYANAN", "Menambahkan layanan laundry baru: $name ($category) Jual: $price Modal: $costPrice")
+            onDone()
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
+
+    fun editService(
+        product: ProductEntity,
+        name: String,
+        price: Double,
+        costPrice: Double,
+        monthlyMaintenance: Double,
+        category: String,
+        unit: String,
+        imageFile: java.io.File?,
+        keepExistingImage: Boolean,
+        onDone: () -> Unit
+    ) {
+        viewModelScope.launch {
+            var base64Url = if (keepExistingImage) product.image else null
+            if (imageFile != null && imageFile.exists()) {
+                try {
+                    val compressed = CameraUtils.compressToMaxSize(imageFile, 80)
+                    val bytes = compressed.readBytes()
+                    val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                    base64Url = "data:image/jpeg;base64,$base64"
+                    try { compressed.delete() } catch(e: Exception) {}
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            val metadataStr = Json.encodeToString(
+                ProductWholesaleMetadata.serializer(),
+                ProductWholesaleMetadata(monthlyMaintenance)
+            )
+            val updated = product.copy(
+                name = name,
+                price = price,
+                costPrice = costPrice,
+                category = category,
+                unit = unit,
+                wholesalePrices = metadataStr,
+                image = base64Url,
+                updatedAt = System.currentTimeMillis()
+            )
+            productRepository.upsert(updated)
+            logActivity("EDIT LAYANAN", "Mengubah layanan laundry: $name ($category) Jual: $price Modal: $costPrice")
             onDone()
             viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 try {

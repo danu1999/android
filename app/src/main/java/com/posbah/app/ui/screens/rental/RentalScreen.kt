@@ -5,6 +5,10 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -174,6 +178,27 @@ fun RentalScreen(
 
     // Mobile tab: 0 = Armada (catalog), 1 = Sewa (orders)
     var mobileTabIndex by remember { mutableStateOf(0) }
+
+    var showEditVehicleDialog by remember { mutableStateOf(false) }
+    var vehicleToEdit by remember { mutableStateOf<Vehicle?>(null) }
+    var editVehicleName by remember { mutableStateOf("") }
+    var editVehiclePlate by remember { mutableStateOf("") }
+    var editVehicleType by remember { mutableStateOf("MOBIL") }
+    var editVehiclePrice by remember { mutableStateOf("") }
+    var editVehicleCost by remember { mutableStateOf("") }
+    var editVehicleMonthlyMaintenance by remember { mutableStateOf("") }
+
+    val onLongClickVehicle = { vehicle: Vehicle ->
+        vehicleToEdit = vehicle
+        editVehicleName = vehicle.name
+        editVehiclePlate = vehicle.plateNumber
+        editVehicleType = vehicle.type
+        editVehiclePrice = vehicle.pricePerDay.toString()
+        editVehicleCost = vehicle.costPrice.toString()
+        editVehicleMonthlyMaintenance = vehicle.monthlyMaintenance.toString()
+        capturedPhotoFile = null
+        showEditVehicleDialog = true
+    }
     // Right pane (tablet) / orders pane: history toggle
     var showHistory by remember { mutableStateOf(false) }
 
@@ -386,6 +411,7 @@ fun RentalScreen(
                                     Toast.makeText(context, "Armada berhasil dihapus!", Toast.LENGTH_SHORT).show()
                                 }
                             },
+                            onLongClickVehicle = onLongClickVehicle,
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth()
@@ -432,6 +458,7 @@ fun RentalScreen(
                                 Toast.makeText(context, "Armada berhasil dihapus!", Toast.LENGTH_SHORT).show()
                             }
                         },
+                        onLongClickVehicle = onLongClickVehicle,
                         modifier = Modifier
                             .weight(1.2f)
                             .fillMaxHeight()
@@ -973,6 +1000,193 @@ fun RentalScreen(
         )
     }
 
+    // Dialog: Edit Kendaraan
+    if (showEditVehicleDialog && vehicleToEdit != null) {
+        val originalVehicle = vehicleToEdit!!
+        AlertDialog(
+            onDismissRequest = { showEditVehicleDialog = false },
+            title = { Text("Edit Armada Kendaraan", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    OutlinedTextField(
+                        value = editVehicleName,
+                        onValueChange = { editVehicleName = it },
+                        label = { Text("Nama Kendaraan") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = editVehiclePlate,
+                        onValueChange = { editVehiclePlate = it },
+                        label = { Text("Nomor Plat Kendaraan") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = editVehiclePrice,
+                        onValueChange = { editVehiclePrice = it },
+                        label = { Text("Tarif Jual per Hari (Rp)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = editVehicleCost,
+                        onValueChange = { editVehicleCost = it },
+                        label = { Text("Biaya Modal/Beli (Rp)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = editVehicleMonthlyMaintenance,
+                        onValueChange = { editVehicleMonthlyMaintenance = it },
+                        label = { Text("Biaya Perawatan Bulanan (Rp)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    val jual = editVehiclePrice.toDoubleOrNull() ?: 0.0
+                    val beli = editVehicleCost.toDoubleOrNull() ?: 0.0
+                    val margin = if (jual > 0) ((jual - beli) / jual) * 100 else 0.0
+                    Text(
+                        text = "Margin Keuntungan: ${String.format("%.1f", margin)}%",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (margin >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(vertical = 2.dp)
+                    )
+
+                    Text("Tipe Kendaraan:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { editVehicleType = "MOBIL" },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (editVehicleType == "MOBIL") MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (editVehicleType == "MOBIL") MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) { Text("MOBIL") }
+                        Button(
+                            onClick = { editVehicleType = "MOTOR" },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (editVehicleType == "MOTOR") MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (editVehicleType == "MOTOR") MaterialTheme.colorScheme.onPrimary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) { Text("MOTOR") }
+                    }
+
+                    Spacer(Modifier.height(4.dp))
+
+                    if (capturedPhotoFile != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(100.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.Gray.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AsyncImage(
+                                model = capturedPhotoFile,
+                                contentDescription = "Preview Foto Baru",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                            )
+                            IconButton(
+                                onClick = { capturedPhotoFile = null },
+                                modifier = Modifier.align(Alignment.TopEnd)
+                            ) {
+                                Icon(Icons.Outlined.Close, contentDescription = "Hapus Foto", tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    } else if (!originalVehicle.image.isNullOrBlank()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(100.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.Gray.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AsyncImage(
+                                model = decodeBase64Image(originalVehicle.image),
+                                contentDescription = "Foto Kendaraan Saat Ini",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        OutlinedButton(
+                            onClick = launchCamera,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Ganti Foto Kendaraan")
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = launchCamera,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Ambil Foto Kendaraan")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val rate = editVehiclePrice.toDoubleOrNull() ?: 0.0
+                        val cost = editVehicleCost.toDoubleOrNull() ?: 0.0
+                        val monthlyMaint = editVehicleMonthlyMaintenance.toDoubleOrNull() ?: 0.0
+                        if (editVehicleName.isNotBlank() && editVehiclePlate.isNotBlank() && rate > 0) {
+                            val keepExisting = capturedPhotoFile == null && !originalVehicle.image.isNullOrBlank()
+                            viewModel.editVehicle(
+                                vehicleId = originalVehicle.id,
+                                name = editVehicleName,
+                                plateNumber = editVehiclePlate,
+                                type = editVehicleType,
+                                pricePerDay = rate,
+                                costPrice = cost,
+                                monthlyMaintenance = monthlyMaint,
+                                imageFile = capturedPhotoFile,
+                                keepExistingImage = keepExisting
+                            ) {
+                                showEditVehicleDialog = false
+                                Toast.makeText(context, "Armada berhasil diperbarui!", Toast.LENGTH_SHORT).show()
+                            }
+                        } else {
+                            Toast.makeText(context, "Nama, plat, dan tarif wajib diisi!", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    shape = RoundedCornerShape(10.dp)
+                ) { Text("Simpan Perubahan") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditVehicleDialog = false }) { Text("Batal") }
+            }
+        )
+    }
+
     if (showAddExpenseDialog) {
         AlertDialog(
             onDismissRequest = { showAddExpenseDialog = false },
@@ -1385,6 +1599,7 @@ private fun VehicleCatalogPane(
     onStatusChange: (String) -> Unit,
     onVehicleClick: (Vehicle) -> Unit,
     onDeleteVehicle: (String) -> Unit,
+    onLongClickVehicle: (Vehicle) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
@@ -1565,6 +1780,7 @@ private fun VehicleCatalogPane(
                     VehicleCard(
                         vehicle = vehicle,
                         onClick = { onVehicleClick(vehicle) },
+                        onLongClick = { onLongClickVehicle(vehicle) },
                         onDelete = { onDeleteVehicle(vehicle.id) }
                     )
                 }
@@ -1573,10 +1789,12 @@ private fun VehicleCatalogPane(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun VehicleCard(
     vehicle: Vehicle,
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
     onDelete: () -> Unit
 ) {
     Surface(
@@ -1586,7 +1804,10 @@ private fun VehicleCard(
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = !vehicle.isRented, onClick = onClick)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             // === Top row: image + name + price ===
