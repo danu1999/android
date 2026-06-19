@@ -18,8 +18,8 @@
 -keep class kotlinx.coroutines.** { *; }
 -dontwarn kotlinx.coroutines.**
 
-# ===== Kotlinx Serialization =====
--keepattributes *Annotation*, InnerClasses
+# ===== Kotlinx Serialization & Reflection =====
+-keepattributes Signature, *Annotation*, InnerClasses, EnclosingMethod
 -dontnote kotlinx.serialization.AnnotationsKt
 -keepclassmembers class kotlinx.serialization.json.** {
     *** Companion;
@@ -72,8 +72,13 @@
 # ===== Play Integrity =====
 -keep class com.google.android.play.core.integrity.** { *; }
 
-# ===== Auth0 JWTDecode =====
+# ===== Auth0 JWTDecode & Gson =====
 -keep class com.auth0.android.jwt.** { *; }
+-keep class com.google.gson.** { *; }
+-keep class com.google.gson.reflect.TypeToken { *; }
+-keep class * extends com.google.gson.reflect.TypeToken
+-keep public class * implements java.lang.reflect.Type
+-dontwarn com.google.gson.**
 
 # ===== POSBah Domain Models (keep entity field names for Room) =====
 -keep class com.posbah.app.data.local.entities.** { *; }
