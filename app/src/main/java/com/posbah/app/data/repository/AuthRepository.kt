@@ -231,20 +231,12 @@ class AuthRepository @Inject constructor(
             is com.posbah.app.auth.GoogleSignInClient.Result.Success -> googleResult.identity
             com.posbah.app.auth.GoogleSignInClient.Result.Cancelled -> return@withContext LoginOutcome.Cancelled
             is com.posbah.app.auth.GoogleSignInClient.Result.Error -> {
-                // FALLBACK: If Google Sign-In fails due to missing credentials, invalid tokens, or unexpected API errors on the device (e.g. no Google Play Services or Google account logged in),
-                // fall back to a simulated offline demo user so the app can still be tested/reviewed by Google Play Console testers/reviewers.
-                val uuid = securePrefs.simulatedUserUuid ?: java.util.UUID.randomUUID().toString().substring(0, 8).also {
-                    securePrefs.simulatedUserUuid = it
+                val errorMsg = when (googleResult) {
+                    is com.posbah.app.auth.GoogleSignInClient.Result.Error.NoCredentials -> googleResult.message ?: "No credentials found"
+                    is com.posbah.app.auth.GoogleSignInClient.Result.Error.InvalidToken -> googleResult.reason
+                    is com.posbah.app.auth.GoogleSignInClient.Result.Error.Unexpected -> googleResult.throwable.localizedMessage ?: "Unexpected error"
                 }
-                com.posbah.app.auth.GoogleSignInClient.GoogleIdentity(
-                    sub = "simulated_sub_demo_$uuid",
-                    email = "demo.user.$uuid@posbah.com",
-                    displayName = "Demo Tester $uuid",
-                    photoUrl = null,
-                    rawIdToken = "simulated_token",
-                    issuedAt = System.currentTimeMillis(),
-                    expiresAt = System.currentTimeMillis() + 3600000
-                )
+                return@withContext LoginOutcome.Error("Gagal Google Sign-In: $errorMsg")
             }
         }
 

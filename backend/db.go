@@ -650,6 +650,10 @@ func initSchema() error {
 		`ALTER TABLE "bmp_master_products" ADD COLUMN IF NOT EXISTS "jenisBahanBaku" VARCHAR(100) DEFAULT '';`,
 		`ALTER TABLE "bmp_master_products" DROP CONSTRAINT IF EXISTS "bmp_master_products_pkey";`,
 		`ALTER TABLE "bmp_master_products" ADD PRIMARY KEY ("id", "tenantId") ON CONFLICT DO NOTHING;`,
+
+		// v2.17.6: Ubah primary key print_settings menjadi composite (id, tenantId) untuk mencegah duplikasi key error
+		`ALTER TABLE "print_settings" DROP CONSTRAINT IF EXISTS "print_settings_pkey";`,
+		`ALTER TABLE "print_settings" ADD PRIMARY KEY ("id", "tenantId");`,
 	}
 
 	for _, q := range migrationQueries {

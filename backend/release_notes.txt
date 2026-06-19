@@ -1,3 +1,14 @@
+POSBah v2.17.6 - Perbaikan Otentikasi Google & Sinkronisasi Database
+
+Halo Kak! POSBah v2.17.6 hadir dengan perbaikan alur otentikasi Google dan sinkronisasi data:
+1. Otentikasi Google Murni: Menghapus email simulasi (demo.user.xxxx@posbah.com) untuk memastikan semua pengguna demo masuk menggunakan akun Google asli mereka.
+2. Penanganan Error Google Sign-In: Menampilkan pesan error yang sebenarnya jika Google Sign-In gagal, sehingga memudahkan diagnosis konfigurasi.
+3. Sinkronisasi Cetak (Print Settings): Memperbaiki masalah duplikasi primary key pada database server agar sinkronisasi cetak antar perangkat berjalan dengan mulus.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.5 - Pembaruan Google Sign-In & Perbaikan Alur Registrasi
 
 Halo Kak! POSBah v2.17.5 hadir dengan peningkatan stabilitas sistem dan perbaikan alur otentikasi Google:
