@@ -1,3 +1,13 @@
+POSBah v2.17.14 - Perbaikan Layout Dialog Pembaruan Wajib & Pemeliharaan Sistem
+
+Halo Kak! POSBah v2.17.14 hadir dengan pembaruan dan perbaikan penting:
+1. Perbaikan Layout Tombol Unduh: Memindahkan tombol "Unduh APK Sekarang" ke bagian atas area detail rilis dan membatasi tinggi dialog agar tombol selalu terlihat di layar Anda. Deskripsi pembaruan juga kini didukung scrolling yang lebih responsif.
+2. Interkoneksi & Sinkronisasi Data: Memastikan seluruh data di frontend (Android), backend (server Go), database PostgreSQL, dan server terintegrasi serta sinkron secara optimal.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.13 - Cetak Nota Universal & Dukungan Driver Printer Thermal (Semua POS)
 
 Halo Kak! POSBah v2.17.13 hadir dengan pembaruan cetak universal tanpa RawBT:

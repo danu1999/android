@@ -43,10 +43,13 @@ import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -368,14 +371,16 @@ fun ForcedUpdateOverlay(
             shape = RoundedCornerShape(28.dp),
             color = Color(0xFF0F172A),
             shadowElevation = 8.dp,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.85f)
         ) {
             Column(
                 modifier = Modifier
                     .padding(32.dp)
-                    .fillMaxWidth(),
+                    .fillMaxSize(),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                verticalArrangement = Arrangement.Top
             ) {
                 Icon(
                     imageVector = Icons.Outlined.ErrorOutline,
@@ -406,35 +411,7 @@ fun ForcedUpdateOverlay(
                 )
                 
                 Spacer(modifier = Modifier.height(24.dp))
-                
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = Color(0xFF1E293B),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.Start
-                    ) {
-                        Text(
-                            text = "Versi Terbaru: v$version",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFF97316)
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = description,
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = Color(0xFFE2E8F0)
-                            )
-                        )
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(32.dp))
-                
+
                 Button(
                     onClick = {
                         uriHandler.openUri("https://www.zedmz.cloud/api/download-apk")
@@ -452,6 +429,38 @@ fun ForcedUpdateOverlay(
                             fontWeight = FontWeight.Bold
                         )
                     )
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = Color(0xFF1E293B),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = false)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.Start
+                    ) {
+                        Text(
+                            text = "Versi Terbaru: v$version",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFF97316)
+                            )
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = description,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = Color(0xFFE2E8F0)
+                            )
+                        )
+                    }
                 }
             }
         }
