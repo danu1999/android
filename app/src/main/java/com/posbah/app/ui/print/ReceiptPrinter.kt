@@ -212,28 +212,21 @@ object ReceiptPrinter {
     }
 
     fun print(context: Context, html: String) {
-        val base64Html = android.util.Base64.encodeToString(html.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
-        val intentUri = Uri.parse("rawbt:data:text/html;base64,$base64Html")
-        val rawbtIntent = Intent(Intent.ACTION_VIEW, intentUri).apply {
-            setPackage("ru.a402d.rawbtprinter")
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-
-        try {
-            context.startActivity(rawbtIntent)
-            Toast.makeText(context, "Mengirim nota ke printer RawBT...", Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
-            // Fallback to standard system print service
-            val webView = WebView(context)
-            webView.webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, url: String?) {
-                    val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
-                    val printAdapter = webView.createPrintDocumentAdapter("POS_Receipt_${System.currentTimeMillis()}")
-                    printManager.print("POS Receipt", printAdapter, PrintAttributes.Builder().build())
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            try {
+                val webView = WebView(context)
+                webView.webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
+                        val printAdapter = webView.createPrintDocumentAdapter("POS_Receipt_${System.currentTimeMillis()}")
+                        printManager.print("POS Receipt", printAdapter, PrintAttributes.Builder().build())
+                    }
                 }
+                webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+                Toast.makeText(context, "Membuka dialog cetak sistem...", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "Gagal mencetak: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
             }
-            webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
-            Toast.makeText(context, "Membuka dialog cetak sistem...", Toast.LENGTH_SHORT).show()
         }
     }
 

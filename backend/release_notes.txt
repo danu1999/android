@@ -1,3 +1,13 @@
+POSBah v2.17.13 - Cetak Nota Universal & Dukungan Driver Printer Thermal (Semua POS)
+
+Halo Kak! POSBah v2.17.13 hadir dengan pembaruan cetak universal tanpa RawBT:
+1. Cetak Universal Bawaan Sistem: Semua nota POS (FnB, Rental, Laundry) kini menggunakan Dialog Cetak Sistem Android (PrintManager) secara langsung. Ini menyelesaikan masalah struk blank putih pada RawBT.
+2. Dukungan Driver Pihak Ketiga: Dengan System Print, Anda dapat menginstal driver apa pun dari Google Play Store (seperti ESC/POS Bluetooth Print Service dari Aron, atau Thermer) untuk mencetak langsung ke printer EPPOS thermal kasir via Bluetooth secara rapi dan stabil.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.12 - Perbaikan Final Teks & Gambar Struk RawBT (Semua POS)
 
 Halo Kak! POSBah v2.17.12 hadir dengan perbaikan final sistem cetak nota:
