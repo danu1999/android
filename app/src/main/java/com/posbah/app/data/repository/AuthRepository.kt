@@ -506,7 +506,6 @@ class AuthRepository @Inject constructor(
                     android.util.Log.e("AuthRepository", "Error seeding google login data for mode FNB", e)
                 }
             }
-
             securePrefs.setActiveSession(sub, cleanEmail)
             securePrefs.currentTenantId = targetTenantId
             val outlets = outletDao.listForTenant(targetTenantId)
@@ -517,6 +516,7 @@ class AuthRepository @Inject constructor(
             CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
                 try {
                     com.posbah.app.data.remote.SupabaseSyncManager.pullAll(context, db, targetTenantId)
+                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, targetTenantId)
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
@@ -996,7 +996,7 @@ class AuthRepository @Inject constructor(
             securePrefs.setActiveSession(successUser.googleSub, successUser.email)
             securePrefs.currentTenantId = successUser.tenantId
 
-            // Seed default configurations if they do not exist
+                            // Seed default configurations if they do not exist
             localDataSeeder.seedDefaultSettings(successUser.tenantId.orEmpty())
 
             // Trigger background pull sync right after successful login
@@ -1007,6 +1007,7 @@ class AuthRepository @Inject constructor(
                         com.posbah.app.data.remote.SupabaseSyncManager.fetchAndInsertOwnerTenants(context, db, cleanEmail)
                     }
                     com.posbah.app.data.remote.SupabaseSyncManager.pullAll(context, db, successUser.tenantId.orEmpty())
+                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, successUser.tenantId.orEmpty())
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }

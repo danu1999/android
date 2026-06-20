@@ -408,6 +408,9 @@ interface BmpBahanBakuDao {
     @Query("SELECT * FROM bmp_bahan_baku WHERE id = :id AND isDeleted = 0 LIMIT 1")
     suspend fun getById(id: Long): com.posbah.app.data.local.entities.BmpBahanBakuEntity?
 
+    @Query("SELECT * FROM bmp_bahan_baku WHERE tenantId = :tenantId AND noTagihan = :noTagihan AND isDeleted = 0 LIMIT 1")
+    suspend fun getByTagihan(tenantId: String, noTagihan: String): com.posbah.app.data.local.entities.BmpBahanBakuEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entry: com.posbah.app.data.local.entities.BmpBahanBakuEntity): Long
 

@@ -129,6 +129,7 @@ func main() {
 
 	// Sync API for Android client
 	http.HandleFunc("/api/sync/", handleSyncRoute)
+	http.HandleFunc("/api/sync-summary", handleSyncSummary)
 	http.HandleFunc("/api/employee/confirm", handleEmployeeConfirm)
 
 	// Auth Rejoin endpoints for deleted users
@@ -7020,6 +7021,94 @@ func parseQueryParamValue(tableName, colName, rawVal string) interface{} {
 	}
 
 	return rawVal
+}
+
+// Handler: GET /api/sync-summary
+// Mengembalikan statistik jumlah data yang sudah di-upload ke server (VPS) untuk tenant terkait.
+func handleSyncSummary(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, x-tenant-id, x-user-email")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	tenantID := strings.TrimSpace(r.Header.Get("x-tenant-id"))
+	userEmail := strings.TrimSpace(strings.ToLower(r.Header.Get("x-user-email")))
+
+	if tenantID == "" || userEmail == "" {
+		tenantID = strings.TrimSpace(r.URL.Query().Get("tenantId"))
+		userEmail = strings.TrimSpace(strings.ToLower(r.URL.Query().Get("email")))
+	}
+
+	if tenantID == "" || userEmail == "" {
+		http.Error(w, `{"error":"missing tenantId or email"}`, http.StatusUnauthorized)
+		return
+	}
+
+	if db == nil {
+		http.Error(w, `{"error":"database not initialized"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Verifikasi apakah user aktif dan berhak mengakses tenantId tersebut
+	var isAllowed bool
+	var countLU int
+	err := db.QueryRow(`SELECT COUNT(*) FROM "local_users" WHERE TRIM(LOWER("email")) = $1 AND "tenantId" = $2 AND "isActive" = TRUE`, userEmail, tenantID).Scan(&countLU)
+	if err == nil && countLU > 0 {
+		isAllowed = true
+	}
+	if !isAllowed {
+		var countE int
+		err = db.QueryRow(`SELECT COUNT(*) FROM "employees" WHERE TRIM(LOWER("email")) = $1 AND "tenantId" = $2 AND "isActive" = TRUE`, userEmail, tenantID).Scan(&countE)
+		if err == nil && countE > 0 {
+			isAllowed = true
+		}
+	}
+	if !isAllowed {
+		http.Error(w, `{"error":"forbidden: tenant access denied"}`, http.StatusForbidden)
+		return
+	}
+
+	counts := make(map[string]int)
+	tables := []string{
+		"bmp_payrolls",
+		"bmp_clients",
+		"bmp_invoices",
+		"bmp_master_products",
+		"bmp_cashflow",
+		"bmp_settings",
+		"bmp_employees",
+		"bmp_bahan_baku",
+		"products",
+		"customers",
+		"transactions",
+		"outlets",
+	}
+
+	for _, table := range tables {
+		var count int
+		query := fmt.Sprintf(`SELECT COUNT(*) FROM "%s" WHERE "tenantId" = $1`, table)
+		err := db.QueryRow(query, tenantID).Scan(&count)
+		if err == nil {
+			counts[table] = count
+		} else {
+			counts[table] = 0
+		}
+	}
+
+	response := map[string]interface{}{
+		"tenantId": tenantID,
+		"counts":   counts,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
 

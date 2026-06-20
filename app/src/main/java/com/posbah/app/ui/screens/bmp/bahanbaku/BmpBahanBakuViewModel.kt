@@ -150,6 +150,12 @@ class BahanBakuFormViewModel @Inject constructor(
     savedState: SavedStateHandle
 ) : ViewModel() {
 
+    companion object {
+        private val uploadScope = kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO
+        )
+    }
+
     private val tenantId = authRepo.activeTenantId().orEmpty()
     private val editingId: Long =
         savedState.get<String>("id")?.toLongOrNull()?.takeIf { it > 0 } ?: -1L
@@ -302,7 +308,7 @@ class BahanBakuFormViewModel @Inject constructor(
      * Setelah user berikan credential, upload akan berjalan otomatis.
      */
     private fun uploadToCloudinary(uri: android.net.Uri) {
-        viewModelScope.launch {
+        uploadScope.launch {
             _ui.update { it.copy(fotoUploadStatus = FotoUploadStatus.UPLOADING) }
 
             val fileName = "NOTA_${_ui.value.header?.noTagihan ?: "UNKNOWN"}_${System.currentTimeMillis()}"
@@ -322,6 +328,22 @@ class BahanBakuFormViewModel @Inject constructor(
                             fotoUploadStatus = FotoUploadStatus.UPLOADED,
                             fotoUploadError = null
                         )
+                    }
+                    // Simpan URL ke DB secara langsung jika data utama bahan baku sudah di-save sebelumnya
+                    val noTagihan = _ui.value.header?.noTagihan
+                    if (!noTagihan.isNullOrBlank()) {
+                        val saved = repo.getByTagihan(tenantId, noTagihan)
+                        if (saved != null) {
+                            val updated = saved.copy(
+                                notaFotoPath = _ui.value.notaFotoPath,
+                                notaFotoUrl = result.url,
+                                isSynced = false,
+                                updatedAt = System.currentTimeMillis()
+                            )
+                            repo.updateHeaderOnly(updated)
+                            // Trigger background sync agar data server terupdate
+                            com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+                        }
                     }
                 }
                 is com.posbah.app.data.remote.CloudinaryUploader.UploadResult.Error -> {

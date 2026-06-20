@@ -59,6 +59,12 @@ class MainActivity : FragmentActivity() {
                             if (!email.isNullOrBlank()) {
                                 val dbUser = activeDb.localUserDao().getByEmail(email)
                                 if (dbUser != null && dbUser.apkVersion != com.posbah.app.BuildConfig.VERSION_NAME) {
+                                    try {
+                                        com.posbah.app.data.remote.SupabaseSyncManager.pullAll(context, activeDb, tenantId)
+                                        com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, activeDb, tenantId)
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                    }
                                     activeDb.localUserDao().upsert(
                                         dbUser.copy(
                                             apkVersion = com.posbah.app.BuildConfig.VERSION_NAME,

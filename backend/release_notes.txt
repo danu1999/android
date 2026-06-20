@@ -1,3 +1,25 @@
+POSBah v2.17.25 - Pemuatan Data Otomatis & Pemantauan Unggahan Server
+
+Halo Kak! POSBah v2.17.25 hadir dengan peningkatan fitur sinkronisasi dan transparansi data berikut:
+1. Pemuatan Data Otomatis (Settings Sync): Memperbarui tombol "Sinkronisasi Cloud" di menu Pengaturan aplikasi agar melakukan penarikan data remote (pullAll) terlebih dahulu sebelum mengunggah perubahan lokal (syncAll), memastikan data server ditarik penuh setelah apk di-update atau logout.
+2. Endpoint Pemantauan Data (/api/sync-summary): Menambahkan otomatisasi API server pada VPS agar pengguna dapat melihat ringkasan jumlah data (transaksi, outlet, karyawan, bahan baku, invoice, dll.) milik mereka yang sudah berhasil diunggah ke VPS PostgreSQL.
+3. Perbaikan & Keamanan Rantai Unggah: Memastikan alur sinkronisasi data foto nota bahan baku berjalan aman dan persisten lintas siklus logout/login.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
+POSBah v2.17.24 - Perbaikan Sinkronisasi Foto Nota (Catat Bahan) & Persistensi Logout/Login
+
+Halo Kak! POSBah v2.17.24 hadir dengan perbaikan penting berikut:
+1. Perbaikan Persistensi Foto Nota (BMP): Menyelesaikan kendala di mana gambar/foto nota catat bahan baku hilang setelah pengguna melakukan logout dan login kembali, atau saat memperbarui APK.
+2. Sinkronisasi Unggahan Latar Belakang Mandiri: Memodifikasi coroutine pengunggahan Cloudinary agar berjalan di dalam cakupan proses mandiri yang aman (uploadScope) agar tidak terpengaruh atau terbatalkan ketika pengguna langsung keluar dari layar form setelah klik simpan.
+3. Penyimpanan Instan URL Cloud: Menjamin tautan Cloudinary (notaFotoUrl) disimpan secara langsung ke database lokal Room SQLite dan disinkronkan ke PostgreSQL Cloud saat proses unggahan latar belakang selesai.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.23 - Konfigurasi Cloudinary Khusus CV Bahtera Mulya Plastik
 
 Halo Kak! POSBah v2.17.23 hadir dengan pembaruan dan konfigurasi khusus berikut:

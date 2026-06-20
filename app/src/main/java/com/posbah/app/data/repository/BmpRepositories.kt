@@ -687,6 +687,8 @@ class BmpBahanBakuRepository @Inject constructor(
     fun totalHarga(tenantId: String) = bahanBakuDao.totalHarga(tenantId)
     fun totalNominal(tenantId: String) = bahanBakuDao.totalNominal(tenantId)
     suspend fun getById(id: Long) = bahanBakuDao.getById(id)
+    suspend fun getByTagihan(tenantId: String, noTagihan: String) = bahanBakuDao.getByTagihan(tenantId, noTagihan)
+    suspend fun updateHeaderOnly(entry: com.posbah.app.data.local.entities.BmpBahanBakuEntity) = bahanBakuDao.update(entry)
     suspend fun getLatestRate(tenantId: String, jenisBahan: String) =
         itemDao.getLatestRate(tenantId, jenisBahan)
 

@@ -107,6 +107,7 @@ class SettingsViewModel @Inject constructor(
             )
             _draftTenant.value = db.tenantDao().getById(tenantId)
         }
+        loadSyncSummary()
     }
 
     fun update(transform: (BmpSettingsEntity) -> BmpSettingsEntity) {
@@ -206,13 +207,52 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    private val _syncSummary = MutableStateFlow<Map<String, Int>?>(null)
+    val syncSummary = _syncSummary.asStateFlow()
+
+    fun loadSyncSummary() = viewModelScope.launch(Dispatchers.IO) {
+        val email = getActiveUserEmail()
+        if (tenantId.isBlank() || email.isNullOrBlank()) return@launch
+        try {
+            val urlStr = "https://www.zedmz.cloud/api/sync-summary?tenantId=${java.net.URLEncoder.encode(tenantId, "UTF-8")}&email=${java.net.URLEncoder.encode(email, "UTF-8")}"
+            val conn = java.net.URL(urlStr).openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 10000
+            conn.readTimeout = 10000
+            if (conn.responseCode == 200) {
+                val response = conn.inputStream.bufferedReader().use { it.readText() }
+                val jsonObj = org.json.JSONObject(response)
+                val countsObj = jsonObj.getJSONObject("counts")
+                val map = mutableMapOf<String, Int>()
+                val keys = countsObj.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next() as String
+                    map[key] = countsObj.getInt(key)
+                }
+                _syncSummary.value = map
+            } else {
+                android.util.Log.e("SettingsViewModel", "Failed to fetch sync summary: ${conn.responseCode}")
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     fun performSync(context: Context) = viewModelScope.launch {
         _syncStatus.value = "Sedang mensinkronisasikan..."
+        val pullResult = com.posbah.app.data.remote.SupabaseSyncManager.pullAll(context, db, tenantId)
+        if (pullResult is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Error) {
+            _syncStatus.value = "Gagal memuat data dari server: ${pullResult.message}"
+            return@launch
+        }
         val result = com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
         _syncStatus.value = when (result) {
-            is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Success -> "Sinkronisasi berhasil!"
+            is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Success -> {
+                loadSyncSummary()
+                "Sinkronisasi berhasil!"
+            }
             is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.NoConnection -> "Koneksi internet tidak tersedia."
-            is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Error -> "Gagal: ${result.message}"
+            is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Error -> "Gagal mengirim data: ${result.message}"
         }
     }
 
@@ -505,6 +545,7 @@ fun SettingsScreen(
                 Spacer(Modifier.height(8.dp))
                 val context = androidx.compose.ui.platform.LocalContext.current
                 val syncStatus by viewModel.syncStatus.collectAsState()
+                val syncSummary by viewModel.syncSummary.collectAsState()
 
                 Column(modifier = Modifier.fillMaxWidth()) {
                     PrimaryButton(
@@ -520,6 +561,48 @@ fun SettingsScreen(
                             color = if (syncStatus!!.contains("berhasil")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                             modifier = Modifier.align(Alignment.CenterHorizontally).testTag("sync-status-text")
                         )
+                    }
+                    if (syncSummary != null) {
+                        Spacer(Modifier.height(12.dp))
+                        androidx.compose.material3.Card(
+                            colors = androidx.compose.material3.CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = "Status Data Ter-upload di VPS:",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                val displayMap = mapOf(
+                                    "transactions" to "Transaksi POS",
+                                    "bmp_invoices" to "Invoice B2B",
+                                    "bmp_bahan_baku" to "Log Bahan Baku",
+                                    "products" to "Produk POS",
+                                    "customers" to "Pelanggan POS",
+                                    "bmp_clients" to "Klien B2B",
+                                    "bmp_employees" to "Karyawan BMP",
+                                    "bmp_payrolls" to "Gaji / Payroll",
+                                    "bmp_cashflow" to "Arus Kas (Bmp)",
+                                    "bmp_settings" to "Profil Perusahaan",
+                                    "outlets" to "Cabang / Outlet",
+                                    "bmp_master_products" to "Master Produk (Bmp)"
+                                )
+                                displayMap.forEach { (table, displayName) ->
+                                    val count = syncSummary!![table] ?: 0
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(displayName, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text("$count item", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.primary)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
