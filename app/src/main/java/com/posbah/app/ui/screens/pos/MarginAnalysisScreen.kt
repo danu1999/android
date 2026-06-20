@@ -1127,7 +1127,7 @@ fun MarginAnalysisScreen(
                                 border = BorderStroke(1.dp, Color(0xFFE65100).copy(alpha = 0.2f))
                             ) {
                                 Column(modifier = Modifier.padding(10.dp)) {
-                                    Text("🐄 Plowhorses", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFFE65100))
+                                    Text("↗️ Plowhorses", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFFE65100))
                                     Text("$plowhorseCount Menu", fontWeight = FontWeight.Black, fontSize = 16.sp, color = Color(0xFFE65100))
                                     Text("Laris tapi Margin Rendah", fontSize = 9.sp, color = Color(0xFFE65100))
                                 }
@@ -1141,7 +1141,7 @@ fun MarginAnalysisScreen(
                                 border = BorderStroke(1.dp, Color(0xFF1A237E).copy(alpha = 0.2f))
                             ) {
                                 Column(modifier = Modifier.padding(10.dp)) {
-                                    Text("🧩 Puzzles", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF1A237E))
+                                    Text("➡️ Puzzles", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF1A237E))
                                     Text("$puzzleCount Menu", fontWeight = FontWeight.Black, fontSize = 16.sp, color = Color(0xFF1A237E))
                                     Text("Sepi tapi Margin Tinggi", fontSize = 9.sp, color = Color(0xFF1A237E))
                                 }
@@ -1153,7 +1153,7 @@ fun MarginAnalysisScreen(
                                 border = BorderStroke(1.dp, Color(0xFFC62828).copy(alpha = 0.2f))
                             ) {
                                 Column(modifier = Modifier.padding(10.dp)) {
-                                    Text("🐕 Dogs", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFFB71C1C))
+                                    Text("⬇️ Dogs", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFFB71C1C))
                                     Text("$dogCount Menu", fontWeight = FontWeight.Black, fontSize = 16.sp, color = Color(0xFFB71C1C))
                                     Text("Sepi & Margin Rendah", fontSize = 9.sp, color = Color(0xFFC62828))
                                 }
@@ -1204,9 +1204,9 @@ fun MarginAnalysisScreen(
                                     val cat = getMenuCategory(item)
                                     val catLabel = when (cat) {
                                         "STAR" -> "⭐ Star"
-                                        "PLOWHORSE" -> "🐄 Plowhorse"
-                                        "PUZZLE" -> "🧩 Puzzle"
-                                        else -> "🐕 Dog"
+                                        "PLOWHORSE" -> "↗️ Plowhorse"
+                                        "PUZZLE" -> "➡️ Puzzle"
+                                        else -> "⬇️ Dog"
                                     }
                                     val catColor = when (cat) {
                                         "STAR" -> Color(0xFFE8F5E9) to Color(0xFF1B5E20)

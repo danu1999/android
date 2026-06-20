@@ -73,6 +73,9 @@ import com.posbah.app.util.Formatters
 import com.posbah.app.data.local.entities.Outlet
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.CompareArrows
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,6 +96,14 @@ fun OutletControlScreen(
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var outletToDelete by remember { mutableStateOf<Outlet?>(null) }
 
+    var showTransferDialog by remember { mutableStateOf(false) }
+    var transferSourceOutletId by remember { mutableStateOf<Long?>(null) }
+    var transferDestOutletId by remember { mutableStateOf<Long?>(null) }
+    var transferProductId by remember { mutableStateOf<Long?>(null) }
+    var transferQtyInput by remember { mutableStateOf("") }
+    var productSearchQuery by remember { mutableStateOf("") }
+    var productDropdownExpanded by remember { mutableStateOf(false) }
+
     LaunchedEffect(state.error) {
         state.error?.let { err ->
             Toast.makeText(context, err, Toast.LENGTH_LONG).show()
@@ -107,6 +118,16 @@ fun OutletControlScreen(
                 subtitle = "Analisis Margin & Status Toko",
                 onBack = onBack,
                 actions = {
+                    IconButton(onClick = {
+                        transferSourceOutletId = null
+                        transferDestOutletId = null
+                        transferProductId = null
+                        transferQtyInput = ""
+                        productSearchQuery = ""
+                        showTransferDialog = true
+                    }) {
+                        Icon(Icons.Outlined.CompareArrows, contentDescription = "Transfer Stok")
+                    }
                     if (state.outlets.size < 3) {
                         IconButton(onClick = {
                             editingOutlet = null
@@ -507,6 +528,211 @@ fun OutletControlScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    if (showTransferDialog) {
+        var sourceOutletDropdownExpanded by remember { mutableStateOf(false) }
+        var destOutletDropdownExpanded by remember { mutableStateOf(false) }
+
+        val sourceProducts = remember(state.products, transferSourceOutletId) {
+            if (transferSourceOutletId == null) emptyList()
+            else {
+                val sourceOutlet = state.outlets.find { it.outlet.id == transferSourceOutletId }
+                val isDefault = sourceOutlet?.outlet?.isDefault ?: false
+                state.products.filter { p ->
+                    p.outletId == transferSourceOutletId || (isDefault && p.outletId == null)
+                }
+            }
+        }
+
+        val filteredProductsForTransfer = remember(sourceProducts, productSearchQuery) {
+            if (productSearchQuery.isBlank()) sourceProducts
+            else sourceProducts.filter { it.name.contains(productSearchQuery, ignoreCase = true) }
+        }
+
+        val selectedProduct = sourceProducts.find { it.id == transferProductId }
+
+        AlertDialog(
+            onDismissRequest = { showTransferDialog = false },
+            title = { Text("Transfer Stok Antar-Outlet") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // Source Outlet selector
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        val sourceLabel = state.outlets.find { it.outlet.id == transferSourceOutletId }?.outlet?.name ?: "- Pilih Outlet Asal -"
+                        OutlinedTextField(
+                            value = sourceLabel,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Outlet Asal") },
+                            trailingIcon = {
+                                IconButton(onClick = { sourceOutletDropdownExpanded = true }) {
+                                    Text("▾", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { sourceOutletDropdownExpanded = true }
+                        )
+                        DropdownMenu(
+                            expanded = sourceOutletDropdownExpanded,
+                            onDismissRequest = { sourceOutletDropdownExpanded = false }
+                        ) {
+                            state.outlets.forEach { summary ->
+                                DropdownMenuItem(
+                                    text = { Text(summary.outlet.name) },
+                                    onClick = {
+                                        transferSourceOutletId = summary.outlet.id
+                                        transferProductId = null
+                                        productSearchQuery = ""
+                                        sourceOutletDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Destination Outlet selector
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        val destLabel = state.outlets.find { it.outlet.id == transferDestOutletId }?.outlet?.name ?: "- Pilih Outlet Tujuan -"
+                        OutlinedTextField(
+                            value = destLabel,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Outlet Tujuan") },
+                            trailingIcon = {
+                                IconButton(onClick = { destOutletDropdownExpanded = true }) {
+                                    Text("▾", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { destOutletDropdownExpanded = true }
+                        )
+                        DropdownMenu(
+                            expanded = destOutletDropdownExpanded,
+                            onDismissRequest = { destOutletDropdownExpanded = false }
+                        ) {
+                            state.outlets.filter { it.outlet.id != transferSourceOutletId }.forEach { summary ->
+                                DropdownMenuItem(
+                                    text = { Text(summary.outlet.name) },
+                                    onClick = {
+                                        transferDestOutletId = summary.outlet.id
+                                        destOutletDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Product Selector
+                    if (transferSourceOutletId != null) {
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            OutlinedTextField(
+                                value = if (selectedProduct != null && !productDropdownExpanded) selectedProduct.name else productSearchQuery,
+                                onValueChange = {
+                                    productSearchQuery = it
+                                    productDropdownExpanded = true
+                                    if (selectedProduct != null && it != selectedProduct.name) {
+                                        transferProductId = null
+                                    }
+                                },
+                                label = { Text("Pilih Produk") },
+                                placeholder = { Text("Ketik untuk mencari produk...") },
+                                trailingIcon = {
+                                    IconButton(onClick = { productDropdownExpanded = !productDropdownExpanded }) {
+                                        Text("▾", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            DropdownMenu(
+                                expanded = productDropdownExpanded,
+                                onDismissRequest = { productDropdownExpanded = false },
+                                modifier = Modifier.fillMaxWidth(0.9f).heightIn(max = 250.dp)
+                            ) {
+                                if (filteredProductsForTransfer.isEmpty()) {
+                                    DropdownMenuItem(
+                                        text = { Text("Tidak ada produk ditemukan") },
+                                        onClick = {}
+                                    )
+                                } else {
+                                    filteredProductsForTransfer.forEach { prod ->
+                                        DropdownMenuItem(
+                                            text = { Text("${prod.name} (Stok: ${prod.stock} ${prod.unit})") },
+                                            onClick = {
+                                                transferProductId = prod.id
+                                                productSearchQuery = prod.name
+                                                productDropdownExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Qty selector
+                    if (selectedProduct != null) {
+                        Text(
+                            text = "Stok Tersedia: ${selectedProduct.stock} ${selectedProduct.unit}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.padding(horizontal = 4.dp)
+                        )
+                        OutlinedTextField(
+                            value = transferQtyInput,
+                            onValueChange = { transferQtyInput = it },
+                            label = { Text("Jumlah Transfer") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val sourceId = transferSourceOutletId
+                        val destId = transferDestOutletId
+                        val prodId = transferProductId
+                        val qty = transferQtyInput.toIntOrNull()
+
+                        if (sourceId == null || destId == null || prodId == null || qty == null || qty <= 0) {
+                            Toast.makeText(context, "Silakan lengkapi semua input dengan benar.", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+
+                        if (selectedProduct != null && selectedProduct.stock < qty) {
+                            Toast.makeText(context, "Stok tidak mencukupi.", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+
+                        viewModel.transferStock(
+                            sourceOutletId = sourceId,
+                            destOutletId = destId,
+                            productId = prodId,
+                            qty = qty,
+                            onSuccess = {
+                                Toast.makeText(context, "Stok berhasil ditransfer.", Toast.LENGTH_SHORT).show()
+                                showTransferDialog = false
+                            },
+                            onError = { err ->
+                                Toast.makeText(context, err, Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    }
+                ) {
+                    Text("Transfer")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTransferDialog = false }) {
                     Text("Batal")
                 }
             }

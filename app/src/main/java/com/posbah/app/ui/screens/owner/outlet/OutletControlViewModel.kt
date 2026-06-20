@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.posbah.app.data.local.PosBahDatabase
 import com.posbah.app.data.local.entities.Outlet
 import com.posbah.app.data.local.entities.Employee
+import com.posbah.app.data.local.entities.ProductEntity
 import com.posbah.app.data.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -40,7 +41,8 @@ data class OutletControlUiState(
     val marginHistory: List<MarginDataPoint> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
-    val isOwner: Boolean = false
+    val isOwner: Boolean = false,
+    val products: List<ProductEntity> = emptyList()
 )
 
 @HiltViewModel
@@ -198,7 +200,8 @@ class OutletControlViewModel @Inject constructor(
                         employees = allEmployees,
                         marginHistory = history,
                         isLoading = false,
-                        isOwner = isOwner
+                        isOwner = isOwner,
+                        products = allProducts
                     ) 
                 }
             } catch (e: Exception) {
@@ -445,6 +448,96 @@ class OutletControlViewModel @Inject constructor(
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }
+            }
+        }
+    }
+
+    fun transferStock(
+        sourceOutletId: Long,
+        destOutletId: Long,
+        productId: Long,
+        qty: Int,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                if (sourceOutletId == destOutletId) {
+                    onError("Outlet asal dan tujuan tidak boleh sama.")
+                    return@launch
+                }
+                if (qty <= 0) {
+                    onError("Jumlah transfer harus lebih dari 0.")
+                    return@launch
+                }
+                val product = db.productDao().getById(productId)
+                if (product == null) {
+                    onError("Produk asal tidak ditemukan.")
+                    return@launch
+                }
+                if (product.stock < qty) {
+                    onError("Stok produk tidak mencukupi (Tersedia: ${product.stock}).")
+                    return@launch
+                }
+
+                val sourceOutlet = db.outletDao().getById(sourceOutletId)
+                val destOutlet = db.outletDao().getById(destOutletId)
+                if (sourceOutlet == null || destOutlet == null) {
+                    onError("Outlet tidak ditemukan.")
+                    return@launch
+                }
+
+                // Deduct source stock
+                val newSourceStock = product.stock - qty
+                db.productDao().updateStock(product.id, newSourceStock)
+
+                // Find or create destination product
+                val allTenantProducts = db.productDao().list(tenantId)
+                val isDestDefault = destOutlet.isDefault
+                val destProduct = allTenantProducts.firstOrNull { p ->
+                    p.name.equals(product.name, ignoreCase = true) &&
+                    (p.outletId == destOutletId || (isDestDefault && p.outletId == null))
+                }
+
+                if (destProduct != null) {
+                    db.productDao().updateStock(destProduct.id, destProduct.stock + qty)
+                } else {
+                    val newProduct = product.copy(
+                        id = 0,
+                        outletId = destOutletId,
+                        stock = qty,
+                        createdAt = System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis(),
+                        isSynced = false
+                    )
+                    db.productDao().upsert(newProduct)
+                }
+
+                // Log activity
+                db.activityLogDao().insertLog(
+                    com.posbah.app.data.local.entities.ActivityLogEntity(
+                        tenantId = tenantId,
+                        action = "STOCK_TRANSFER",
+                        description = "Owner mentransfer $qty ${product.unit} ${product.name} dari ${sourceOutlet.name} ke ${destOutlet.name}",
+                        date = System.currentTimeMillis(),
+                        employeeName = authRepository.getActiveUser()?.displayName ?: "Owner",
+                        appMode = "FNB"
+                    )
+                )
+
+                loadData()
+                onSuccess()
+
+                // Trigger background sync
+                viewModelScope.launch(Dispatchers.IO) {
+                    try {
+                        com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            } catch (e: Exception) {
+                onError(e.localizedMessage ?: "Gagal melakukan transfer stok.")
             }
         }
     }

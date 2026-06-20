@@ -47,6 +47,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -80,6 +83,8 @@ fun EmployeeManagementScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+
+    var selectedTab by remember { mutableStateOf(0) }
 
     var showAddDialog by remember { mutableStateOf(false) }
     var nameInput by remember { mutableStateOf("") }
@@ -195,71 +200,145 @@ fun EmployeeManagementScreen(
                 }
             }
         } else {
-            LazyColumn(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (state.employees.isEmpty()) {
-                    item {
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 32.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(32.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
-                                    Icons.Outlined.People,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(48.dp),
-                                    tint = Color.Gray
-                                )
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Text(
-                                    "Belum Ada Karyawan",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp
-                                )
-                                Text(
-                                    "Tambahkan karyawan baru dengan menekan tombol plus di kanan atas.",
-                                    color = Color.Gray,
-                                    fontSize = 12.sp,
-                                    textAlign = TextAlign.Center
+                TabRow(
+                    selectedTabIndex = selectedTab,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        text = { Text("Daftar Karyawan") }
+                    )
+                    Tab(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        text = { Text("Log Aktivitas") }
+                    )
+                }
+
+                if (selectedTab == 0) {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (state.employees.isEmpty()) {
+                            item {
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 32.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(32.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Icon(
+                                            Icons.Outlined.People,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(48.dp),
+                                            tint = Color.Gray
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Text(
+                                            "Belum Ada Karyawan",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp
+                                        )
+                                        Text(
+                                            "Tambahkan karyawan baru dengan menekan tombol plus di kanan atas.",
+                                            color = Color.Gray,
+                                            fontSize = 12.sp,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            items(state.employees) { emp ->
+                                EmployeeCard(
+                                    employee = emp,
+                                    onPaySalary = { viewModel.paySalary(emp) },
+                                    onChangeSalary = {
+                                        activeEmployeeForSalaryChange = emp
+                                        newSalaryInput = emp.salary.toLong().toString()
+                                        newPayPeriodInput = emp.payPeriod
+                                        showSalaryChangeDialog = true
+                                    },
+                                    onChangePassword = {
+                                        activeEmployeeForPasswordChange = emp
+                                        newPasswordInput = ""
+                                        showPasswordChangeDialog = true
+                                    },
+                                    onDelete = {
+                                        activeEmployeeForDelete = emp
+                                        showDeleteConfirmDialog = true
+                                    }
                                 )
                             }
                         }
                     }
                 } else {
-                    items(state.employees) { emp ->
-                        EmployeeCard(
-                            employee = emp,
-                            onPaySalary = { viewModel.paySalary(emp) },
-                            onChangeSalary = {
-                                activeEmployeeForSalaryChange = emp
-                                newSalaryInput = emp.salary.toLong().toString()
-                                newPayPeriodInput = emp.payPeriod
-                                showSalaryChangeDialog = true
-                            },
-                            onChangePassword = {
-                                activeEmployeeForPasswordChange = emp
-                                newPasswordInput = ""
-                                showPasswordChangeDialog = true
-                            },
-                            onDelete = {
-                                activeEmployeeForDelete = emp
-                                showDeleteConfirmDialog = true
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (state.activityLogs.isEmpty()) {
+                            item {
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 32.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(32.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Icon(
+                                            Icons.Outlined.History,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(48.dp),
+                                            tint = Color.Gray
+                                        )
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                        Text(
+                                            "Belum Ada Aktivitas",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp
+                                        )
+                                        Text(
+                                            "Aktivitas operasional karyawan akan tercatat di sini secara otomatis.",
+                                            color = Color.Gray,
+                                            fontSize = 12.sp,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
                             }
-                        )
+                        } else {
+                            items(state.activityLogs) { log ->
+                                ActivityLogItem(log = log)
+                            }
+                        }
                     }
                 }
             }
@@ -846,3 +925,89 @@ fun EmployeeCard(
         }
     }
 }
+
+@Composable
+fun ActivityLogItem(log: com.posbah.app.data.local.entities.ActivityLogEntity) {
+    val sdf = remember { SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault()) }
+    val formattedDate = remember(log.date) { sdf.format(Date(log.date)) }
+
+    val modeColor = when (log.appMode.uppercase()) {
+        "FNB" -> Color(0xFF2E7D32) // Green
+        "LAUNDRY" -> Color(0xFF1565C0) // Blue
+        "RENTAL" -> Color(0xFFEF6C00) // Orange
+        else -> Color.Gray
+    }
+
+    val modeBgColor = when (log.appMode.uppercase()) {
+        "FNB" -> Color(0xFFE8F5E8)
+        "LAUNDRY" -> Color(0xFFE3F2FD)
+        "RENTAL" -> Color(0xFFFFF3E0)
+        else -> Color(0xFFF5F5F5)
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = log.employeeName,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = modeBgColor,
+                    contentColor = modeColor
+                ) {
+                    Text(
+                        text = log.appMode,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = log.description,
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = formattedDate,
+                    fontSize = 11.sp,
+                    color = Color.Gray
+                )
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
+                ) {
+                    Text(
+                        text = log.action,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+

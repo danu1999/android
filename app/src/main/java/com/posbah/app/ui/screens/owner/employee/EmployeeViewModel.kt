@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.posbah.app.data.local.PosBahDatabase
 import com.posbah.app.data.local.entities.Employee
+import com.posbah.app.data.local.entities.ActivityLogEntity
 import com.posbah.app.data.local.entities.TransactionEntity
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.security.PinHasher
@@ -14,6 +15,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -32,7 +35,8 @@ data class EmployeeManagementUiState(
     val pendingEmployee: Employee? = null,
     // ── Ganti Gaji ──────────────────────────────────────────────────────────
     val showSalaryChangeDialog: Boolean = false,
-    val activeEmployeeForSalaryChange: Employee? = null
+    val activeEmployeeForSalaryChange: Employee? = null,
+    val activityLogs: List<ActivityLogEntity> = emptyList()
 )
 
 @HiltViewModel
@@ -74,19 +78,23 @@ class EmployeeViewModel @Inject constructor(
 
             val outletsList = db.outletDao().listForTenant(tenantId)
 
-            db.employeeDao().observeForTenant(tenantId).collect { list ->
-                val filteredList = list.filter { emp ->
+            combine(
+                db.employeeDao().observeForTenant(tenantId),
+                db.activityLogDao().observeAllLogs(tenantId)
+            ) { employeesList, logsList ->
+                val filteredList = employeesList.filter { emp ->
                     emp.role != "OWNER" && emp.email?.lowercase()?.trim() != user?.email?.lowercase()?.trim()
                 }
                 _uiState.update { 
                     it.copy(
                         employees = filteredList,
+                        activityLogs = logsList,
                         outlets = outletsList,
                         isOwner = true,
                         isLoading = false
                     ) 
                 }
-            }
+            }.collect()
         }
     }
 

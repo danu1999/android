@@ -1,7 +1,17 @@
+POSBah v2.17.34 - Transfer Stok Antar-Outlet & Audit Log Karyawan
+
+Halo Kak! POSBah v2.17.34 hadir membawa fitur pengelolaan multi-outlet yang lebih tangguh dan pengawasan yang lebih ketat:
+1. Transfer Stok Antar-Outlet: Owner kini dapat memindahkan kuantitas stok produk dari satu outlet ke outlet lainnya secara instan. Sistem secara otomatis mengurangi stok outlet asal, menambahkan (atau menduplikasi metadata jika belum ada) stok di outlet tujuan, mencatat riwayat transfer di audit log, dan mensinkronisasikan perubahannya ke VPS dalam waktu 3 detik.
+2. Penampil Log Audit Karyawan: Layar Kelola Karyawan kini dilengkapi dengan tab "Log Aktivitas" yang menyajikan audit trail dari seluruh tindakan operasional penting karyawan (seperti transfer stok, pembayaran gaji, perubahan gaji, dan pergantian password) secara kronologis berdasarkan waktu kejadian.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.33 - Klasifikasi Menu Engineering & Pencatatan Wastage Realtime
 
 Halo Kak! POSBah v2.17.33 hadir membawa fitur analisis tingkat lanjut dan pencatatan kerugian inventaris untuk usaha Anda:
-1. Klasifikasi Menu Engineering: Modul analisis margin kini dilengkapi dengan pengelompokan produk secara otomatis ke dalam kategori Stars, Plowhorses, Puzzles, dan Dogs berdasarkan volume penjualan dan profit margin produk dibandingkan rata-rata outlet. Membantu Anda mengambil keputusan menu/produk andalan dengan lebih strategis.
+1. Kategori Menu Engineering: Modul analisis margin kini dilengkapi dengan pengelompokan produk secara otomatis ke dalam kategori Stars, Plowhorses, Puzzles, dan Dogs berdasarkan volume penjualan dan profit margin produk dibandingkan rata-rata outlet. Membantu Anda mengambil keputusan menu/produk andalan dengan lebih strategis.
 2. Pencatatan Wastage & Spoilage Bawaan: Menambahkan fitur pencatatan bahan baku/produk terbuang (rusak, tumpah, atau kedaluwarsa). Pencatatan wastage secara otomatis akan mengurangi stok produk di perangkat lokal Anda saat itu juga, menghitung kerugian berbasis HPP, dan mencatatnya sebagai Biaya Usaha (Expense) yang tersinkronisasi secara real-time ke VPS dalam waktu 3 detik.
 
 Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
