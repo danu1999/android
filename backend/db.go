@@ -30,6 +30,10 @@ func initDatabase(dbURL string) error {
 
 func initSchema() error {
 	queries := []string{
+		`CREATE TABLE IF NOT EXISTS "tenant_sync_status" (
+			"tenantId" VARCHAR(100) PRIMARY KEY,
+			"lastUpdated" BIGINT NOT NULL
+		);`,
 		`CREATE TABLE IF NOT EXISTS "deleted_users" (
 			"email" VARCHAR(255) PRIMARY KEY,
 			"status" VARCHAR(50) NOT NULL DEFAULT 'DELETED',
@@ -702,10 +706,37 @@ func initSchema() error {
 	_, _ = db.Exec(`INSERT INTO "system_admins" ("email", "passwordHash", "createdAt")
 		VALUES ('muhammadmuizz8@gmail.com', $1, $2)
 		ON CONFLICT ("email") DO UPDATE SET "passwordHash" = EXCLUDED."passwordHash";`, defaultAdminHash, time.Now().UnixNano()/int64(time.Millisecond))
-	// Seed default apk_config — v2.5.0
+	
+	// One-time POS data cleanup on update to v2.17.29 (except bahteramulyap@gmail.com / ten_premium_bahteramulyap_gmail_com)
+	var currentConfigVer string
+	_ = db.QueryRow(`SELECT "version" FROM "apk_config" WHERE "id" = 1`).Scan(&currentConfigVer)
+	if currentConfigVer != "2.17.29" {
+		log.Println("[Migration] Upgrading to v2.17.29, performing POS data cleanup...")
+		// Delete products
+		_, errProd := db.Exec(`DELETE FROM "products" WHERE "tenantId" NOT IN ('bahteramulyap@gmail.com', 'ten_premium_bahteramulyap_gmail_com')`)
+		if errProd != nil {
+			log.Printf("[Migration] Warning: delete products failed: %v", errProd)
+		}
+		// Delete transaction items
+		_, errTxItems := db.Exec(`DELETE FROM "transaction_items" WHERE "transactionId" NOT IN (
+			SELECT "id" FROM "transactions" WHERE "tenantId" IN ('bahteramulyap@gmail.com', 'ten_premium_bahteramulyap_gmail_com')
+		)`)
+		if errTxItems != nil {
+			log.Printf("[Migration] Warning: delete transaction_items failed: %v", errTxItems)
+		}
+		// Delete transactions
+		_, errTx := db.Exec(`DELETE FROM "transactions" WHERE "tenantId" NOT IN ('bahteramulyap@gmail.com', 'ten_premium_bahteramulyap_gmail_com')`)
+		if errTx != nil {
+			log.Printf("[Migration] Warning: delete transactions failed: %v", errTx)
+		}
+		log.Println("[Migration] POS data cleanup completed.")
+	}
+
+	// Seed default apk_config — v2.17.29
 	_, _ = db.Exec(`INSERT INTO "apk_config" ("id", "version", "description", "downloadUrl", "updatedAt")
-		VALUES (1, '2.5.0', 'Pembaruan wajib untuk kelancaran sinkronisasi data transaksi dan peningkatan keamanan sistem POSBah Anda. Silakan unduh versi terbaru untuk melanjutkan.', '/api/download-apk', $1)
-		ON CONFLICT ("id") DO NOTHING;`, time.Now().UnixNano()/int64(time.Millisecond))
+		VALUES (1, '2.17.29', 'Pembaruan wajib untuk kelancaran sinkronisasi data transaksi secara realtime dan peningkatan keamanan sistem POSBah Anda. Silakan unduh versi terbaru untuk melanjutkan.', '/api/download-apk', $1)
+		ON CONFLICT ("id") DO UPDATE SET "version" = EXCLUDED."version", "description" = EXCLUDED."description", "updatedAt" = EXCLUDED."updatedAt";`, time.Now().UnixNano()/int64(time.Millisecond))
+	
 	// Protect syerlirahma7@gmail.com: mark as ACTIVE in deleted_users so she is never purged again
 	_, _ = db.Exec(`INSERT INTO "deleted_users" ("email", "status", "updatedAt")
 		VALUES ('syerlirahma7@gmail.com', 'ACTIVE', $1)

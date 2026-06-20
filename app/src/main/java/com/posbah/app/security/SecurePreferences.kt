@@ -75,6 +75,14 @@ class SecurePreferences @Inject constructor(
         get() = prefs.getString("simulated_user_uuid", null)
         set(value) = prefs.edit().putString("simulated_user_uuid", value).apply()
 
+    var lastSyncedTimestamp: Long
+        get() = prefs.getLong("last_synced_ts_" + (currentTenantId ?: ""), 0L)
+        set(value) = prefs.edit().putLong("last_synced_ts_" + (currentTenantId ?: ""), value).apply()
+
+    var isPosRedesignWipedV1: Boolean
+        get() = prefs.getBoolean("pos_redesign_wipe_v1", false)
+        set(value) = prefs.edit().putBoolean("pos_redesign_wipe_v1", value).apply()
+
     /**
      * ID outlet yang dikunci untuk karyawan non-OWNER.
      * Diset otomatis saat login berhasil, berdasarkan employee.outletId.

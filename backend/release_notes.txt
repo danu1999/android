@@ -1,3 +1,14 @@
+POSBah v2.17.29 - Redesign Arsitektur Sinkronisasi Realtime & Pembersihan Data POS
+
+Halo Kak! POSBah v2.17.29 hadir dengan peningkatan performa sinkronisasi real-time dan pembersihan database POS:
+1. Sinkronisasi Realtime POS & BMP: Mendukung pengunggahan data secara instan pada saat itu juga ketika ada input baru (produk, stok, transaksi, karyawan, struk, biaya/bahan baku, dll.) ke VPS. Perangkat kasir / owner lain akan memperbarui datanya secara real-time dalam waktu maksimal 5 detik melalui sistem polling status server teroptimasi.
+2. Pembersihan Otomatis POS Lama: Untuk meningkatkan kinerja dan kelancaran sistem database POS baru, semua data produk, layanan, rental mobil/sepeda, dan riwayat transaksi lama dihapus secara otomatis baik dari memori HP lokal maupun database server VPS (kecuali untuk akun bahteramulyap@gmail.com yang tetap utuh).
+3. Pembaruan Kinerja & Koneksi Multi-Perangkat: Memastikan sinkronisasi modul Invoice & Manufaktur (BMP) tetap stabil meskipun diakses oleh 3 HP secara bersamaan setiap harinya.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.26 - Rilis Versi 65 & Penyempurnaan Sinkronisasi
 
 Halo Kak! POSBah v2.17.26 hadir dengan pembaruan rilis:

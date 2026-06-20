@@ -1118,6 +1118,49 @@ object SupabaseSyncManager {
     }
 
     /**
+     * Mengecek timestamp pembaruan terakhir tenant dari server VPS.
+     */
+    fun checkServerSyncStatus(context: Context, tenantId: String): Long {
+        if (tenantId.isBlank()) return 0L
+        if (!isNetworkAvailable(context)) return 0L
+
+        var conn: HttpURLConnection? = null
+        return try {
+            val endpointUrl = "$VPS_URL/api/sync/check-status?tenantId=${java.net.URLEncoder.encode(tenantId, "UTF-8")}"
+            val url = URL(endpointUrl)
+
+            conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = 5_000
+                readTimeout = 5_000
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("x-tenant-id", tenantId)
+                setRequestProperty("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
+                val securePrefs = com.posbah.app.security.SecurePreferences(context)
+                val email = securePrefs.currentEmail
+                if (!email.isNullOrBlank()) {
+                    setRequestProperty("x-user-email", email)
+                }
+            }
+
+            val responseCode = conn.responseCode
+            if (responseCode in 200..299) {
+                val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+                val json = JSONObject(responseText)
+                json.optLong("lastUpdated", 0L)
+            } else {
+                Log.w(TAG, "Gagal mengecek status sinkronisasi server ($responseCode)")
+                0L
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception saat mengecek status sinkronisasi server: ${e.message}")
+            0L
+        } finally {
+            conn?.disconnect()
+        }
+    }
+
+    /**
      * Jalankan sinkronisasi unduh penuh untuk data Master: outlets, employees, dan products.
      */
     suspend fun pullAll(context: Context, db: PosBahDatabase, activeTenantId: String): SyncResult = withContext(Dispatchers.IO) {

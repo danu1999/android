@@ -128,6 +128,7 @@ func main() {
 	http.HandleFunc("/iclock/getrequest", handleGetRequest)
 
 	// Sync API for Android client
+	http.HandleFunc("/api/sync/check-status", handleSyncCheckStatus)
 	http.HandleFunc("/api/sync/", handleSyncRoute)
 	http.HandleFunc("/api/sync-summary", handleSyncSummary)
 	http.HandleFunc("/api/employee/confirm", handleEmployeeConfirm)
@@ -3490,6 +3491,65 @@ func getLatestVersionFromDb() string {
 	return version
 }
 
+func touchTenantSync(tenantID string) {
+	if tenantID == "" || db == nil {
+		return
+	}
+	_, err := db.Exec(`
+		INSERT INTO "tenant_sync_status" ("tenantId", "lastUpdated")
+		VALUES ($1, $2)
+		ON CONFLICT ("tenantId") DO UPDATE
+		SET "lastUpdated" = EXCLUDED."lastUpdated"`,
+		tenantID, time.Now().UnixNano()/1e6)
+	if err != nil {
+		log.Printf("[SyncStatus] Failed to update lastUpdated for tenant %s: %v", tenantID, err)
+	}
+}
+
+func handleSyncCheckStatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, x-tenant-id, x-user-email, x-client-version")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	tenantID := strings.TrimSpace(r.Header.Get("x-tenant-id"))
+	if tenantID == "" {
+		tenantID = strings.TrimSpace(r.URL.Query().Get("tenantId"))
+	}
+	if tenantID == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":"missing tenantId"}`))
+		return
+	}
+
+	if db == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"database not initialized"}`))
+		return
+	}
+
+	var lastUpdated int64
+	err := db.QueryRow(`SELECT "lastUpdated" FROM "tenant_sync_status" WHERE "tenantId" = $1`, tenantID).Scan(&lastUpdated)
+	if err != nil {
+		lastUpdated = 0
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"tenantId":    tenantID,
+		"lastUpdated": lastUpdated,
+	})
+}
+
 // handleSyncRoute acts as a gateway for both GET (query) and POST (upsert) requests on /api/sync/
 func handleSyncRoute(w http.ResponseWriter, r *http.Request) {
 	clientVersion := strings.TrimSpace(r.Header.Get("x-client-version"))
@@ -3666,6 +3726,10 @@ func handleSyncPatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if tenantID != "" {
+		touchTenantSync(tenantID)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"success":true}`))
 }
@@ -3778,6 +3842,10 @@ func handleSyncDelete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Delete failed: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	if tenantID != "" {
+		touchTenantSync(tenantID)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -4282,6 +4350,10 @@ func handleSyncTable(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+	}
+
+	if tenantID != "" && len(rows) > 0 {
+		touchTenantSync(tenantID)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -51,9 +51,28 @@ class MainActivity : FragmentActivity() {
                     try {
                         val tenantId = authRepository.activeTenantId()
                         if (!tenantId.isNullOrBlank()) {
-                            // Run synchronization in Dispatchers.IO
                             val context = applicationContext
                             val activeDb = db
+
+                            // One-time local POS data wipe for POS redesign v2.17.29 (except bahteramulyap)
+                            val securePrefs = com.posbah.app.security.SecurePreferences(context)
+                            if (!securePrefs.isPosRedesignWipedV1) {
+                                val email = authRepository.activeUserEmail()?.lowercase()?.trim().orEmpty()
+                                if (email != "bahteramulyap@gmail.com" && tenantId != "ten_premium_bahteramulyap_gmail_com") {
+                                    try {
+                                        val writeDb = activeDb.openHelper.writableDatabase
+                                        writeDb.execSQL("DELETE FROM products WHERE tenantId = ?", arrayOf(tenantId))
+                                        writeDb.execSQL("DELETE FROM transaction_items WHERE transactionId NOT IN (SELECT id FROM transactions WHERE tenantId = ?)", arrayOf(tenantId))
+                                        writeDb.execSQL("DELETE FROM transactions WHERE tenantId = ?", arrayOf(tenantId))
+                                        writeDb.execSQL("DELETE FROM customers WHERE tenantId = ?", arrayOf(tenantId))
+                                        writeDb.execSQL("DELETE FROM activity_logs WHERE tenantId = ?", arrayOf(tenantId))
+                                        android.util.Log.i("MainActivity", "POS redesign local data wipe completed successfully for tenant: $tenantId")
+                                    } catch (e: Exception) {
+                                        android.util.Log.e("MainActivity", "Failed to run POS redesign local data wipe", e)
+                                    }
+                                }
+                                securePrefs.isPosRedesignWipedV1 = true
+                            }
 
                             val email = authRepository.activeUserEmail()
                             if (!email.isNullOrBlank()) {
@@ -116,15 +135,25 @@ class MainActivity : FragmentActivity() {
                                 }
                             }
 
-                            // 1. Pull remote updates first
-                            com.posbah.app.data.remote.SupabaseSyncManager.pullAll(context, activeDb, tenantId)
-                            // 2. Push any unsynced local mutations
-                            com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, activeDb, tenantId)
+                            // Optimized Realtime Polling: Check status first
+                            val serverTs = com.posbah.app.data.remote.SupabaseSyncManager.checkServerSyncStatus(context, tenantId)
+                            val localTs = securePrefs.lastSyncedTimestamp
+                            if (serverTs > localTs || localTs == 0L) {
+                                // 1. Pull remote updates first
+                                val pullRes = com.posbah.app.data.remote.SupabaseSyncManager.pullAll(context, activeDb, tenantId)
+                                // 2. Push any unsynced local mutations
+                                val syncRes = com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, activeDb, tenantId)
+
+                                if (pullRes is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Success &&
+                                    syncRes is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Success) {
+                                    securePrefs.lastSyncedTimestamp = if (serverTs > 0L) serverTs else System.currentTimeMillis()
+                                }
+                            }
                         }
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
-                    delay(30_000)
+                    delay(5_000)
                 }
             }
         }
