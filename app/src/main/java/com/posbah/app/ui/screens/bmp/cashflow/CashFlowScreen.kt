@@ -53,10 +53,16 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+import android.content.Context
+import com.posbah.app.data.local.PosBahDatabase
+import com.posbah.app.data.remote.SupabaseSyncManager
+
 @HiltViewModel
 class CashFlowViewModel @Inject constructor(
     private val repo: BmpCashFlowRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val db: PosBahDatabase,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
     val flows = repo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -74,6 +80,11 @@ class CashFlowViewModel @Inject constructor(
                 amount = amount
             )
         )
+        try {
+            SupabaseSyncManager.syncAll(context, db, tenantId)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 }
 

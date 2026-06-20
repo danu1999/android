@@ -1,3 +1,14 @@
+POSBah v2.17.31 - Redesign Arsitektur Full Online & Realtime Sync 3 Detik
+
+Halo Kak! POSBah v2.17.31 hadir membawa sistem POS ke tingkat kestabilan baru:
+1. Redesign Arsitektur Full Online: Seluruh transaksi, arus kas (cash flow), mutasi stok, pengaturan, dan input karyawan/pelanggan di semua sistem POS (FnB, Laundry, Rental) serta modul Invoice & Manufaktur (BMP) terikat secara real-time dan ter-upload secara instan ke server VPS saat itu juga.
+2. Latency Polling Teroptimasi (3 Detik): Kecepatan deteksi perubahan data antar-perangkat ditingkatkan secara maksimal dengan interval polling dipangkas menjadi **3 detik** sekali. Ini menjamin pengalaman sinkronisasi yang sangat responsif layaknya aplikasi full online, namun tetap ramah baterai dan kuota.
+3. Kepatuhan Sinkronisasi Menyeluruh: Pengunggahan langsung (immediate push) diintegrasikan ke seluruh modul termasuk pencatatan Arus Kas (Cash Flow) manual di modul BMP.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.30 - Perbaikan Mutasi Outlet Karyawan & Realtime Sync
 
 Halo Kak! POSBah v2.17.30 hadir dengan pembaruan dan peningkatan fungsionalitas:

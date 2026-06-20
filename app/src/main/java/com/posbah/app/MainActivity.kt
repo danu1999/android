@@ -174,7 +174,7 @@ class MainActivity : FragmentActivity() {
                     } catch (e: Exception) {
                         e.printStackTrace()
                     }
-                    delay(5_000)
+                    delay(3_000)
                 }
             }
         }
