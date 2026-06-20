@@ -149,8 +149,14 @@ interface BmpProductDao {
     @Query("SELECT * FROM bmp_products WHERE invoiceId = :invoiceId AND isDeleted = 0 ORDER BY id ASC")
     suspend fun listByInvoice(invoiceId: Long): List<BmpProductEntity>
 
+    @Query("SELECT * FROM bmp_products WHERE id = :id LIMIT 1")
+    suspend fun getById(id: Long): BmpProductEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(product: BmpProductEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(product: BmpProductEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(products: List<BmpProductEntity>)

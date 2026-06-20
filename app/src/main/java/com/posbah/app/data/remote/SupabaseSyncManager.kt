@@ -1187,7 +1187,16 @@ object SupabaseSyncManager {
                     ))
                 }
                 if (list.isNotEmpty()) {
-                    list.forEach { db.outletDao().insert(it) }
+                    list.forEach { serverOutlet ->
+                        val localOutlet = db.outletDao().getById(serverOutlet.id)
+                        if (localOutlet == null) {
+                            db.outletDao().insert(serverOutlet)
+                        } else if (localOutlet.isSynced) {
+                            if (serverOutlet.updatedAt >= localOutlet.updatedAt) {
+                                db.outletDao().insert(serverOutlet)
+                            }
+                        }
+                    }
                 }
                 // Local pruning — NEVER prune the default outlet to prevent data lockouts
                 val localOutlets = db.outletDao().getAll().filter { it.tenantId == activeTenantId }
@@ -1228,7 +1237,16 @@ object SupabaseSyncManager {
                     ))
                 }
                 if (list.isNotEmpty()) {
-                    list.forEach { db.employeeDao().insert(it) }
+                    list.forEach { serverEmployee ->
+                        val localEmployee = db.employeeDao().getById(serverEmployee.id)
+                        if (localEmployee == null) {
+                            db.employeeDao().insert(serverEmployee)
+                        } else if (localEmployee.isSynced) {
+                            if (serverEmployee.updatedAt >= localEmployee.updatedAt) {
+                                db.employeeDao().insert(serverEmployee)
+                            }
+                        }
+                    }
                 }
                 // Local pruning — NEVER prune the OWNER account to prevent lockouts
                 val localEmployees = db.employeeDao().getAll().filter { it.tenantId == activeTenantId }
@@ -1270,7 +1288,16 @@ object SupabaseSyncManager {
                     ))
                 }
                 if (list.isNotEmpty()) {
-                    db.productDao().insertAll(list)
+                    list.forEach { serverProd ->
+                        val localProd = db.productDao().getById(serverProd.id)
+                        if (localProd == null) {
+                            db.productDao().upsert(serverProd)
+                        } else if (localProd.isSynced) {
+                            if (serverProd.updatedAt >= localProd.updatedAt) {
+                                db.productDao().upsert(serverProd)
+                            }
+                        }
+                    }
                 }
                 // Local pruning
                 val localProducts = db.productDao().getAll().filter { it.tenantId == activeTenantId }
@@ -1302,7 +1329,16 @@ object SupabaseSyncManager {
                     ))
                 }
                 if (list.isNotEmpty()) {
-                    db.customerDao().insertAll(list)
+                    list.forEach { serverCustomer ->
+                        val localCustomer = db.customerDao().getById(serverCustomer.id)
+                        if (localCustomer == null) {
+                            db.customerDao().upsert(serverCustomer)
+                        } else if (localCustomer.isSynced) {
+                            if (serverCustomer.updatedAt >= localCustomer.updatedAt) {
+                                db.customerDao().upsert(serverCustomer)
+                            }
+                        }
+                    }
                 }
                 // Local pruning
                 val localCustomers = db.customerDao().getAll().filter { it.tenantId == activeTenantId }
@@ -1444,7 +1480,16 @@ object SupabaseSyncManager {
                 if (list.isNotEmpty()) {
                     // Guard: jangan restore klien yang sudah di-soft-delete lokal
                     val localDeletedIds = db.bmpClientDao().getDeletedIds(activeTenantId).toSet()
-                    list.filter { it.id !in localDeletedIds }.forEach { db.bmpClientDao().upsert(it) }
+                    list.filter { it.id !in localDeletedIds }.forEach { serverClient ->
+                        val localClient = db.bmpClientDao().getById(serverClient.id)
+                        if (localClient == null) {
+                            db.bmpClientDao().upsert(serverClient)
+                        } else if (localClient.isSynced) {
+                            if (serverClient.updatedAt >= localClient.updatedAt) {
+                                db.bmpClientDao().upsert(serverClient)
+                            }
+                        }
+                    }
                 }
                 // Local pruning
                 val localClients = db.bmpClientDao().getAll().filter { it.tenantId == activeTenantId }
@@ -1487,7 +1532,16 @@ object SupabaseSyncManager {
                     ))
                 }
                 if (list.isNotEmpty()) {
-                    list.forEach { db.bmpInvoiceDao().upsert(it) }
+                    list.forEach { serverInvoice ->
+                        val localInvoice = db.bmpInvoiceDao().getById(serverInvoice.id)
+                        if (localInvoice == null) {
+                            db.bmpInvoiceDao().upsert(serverInvoice)
+                        } else if (localInvoice.isSynced) {
+                            if (serverInvoice.updatedAt >= localInvoice.updatedAt) {
+                                db.bmpInvoiceDao().upsert(serverInvoice)
+                            }
+                        }
+                    }
                 }
                 // Local pruning
                 val localInvoices = db.bmpInvoiceDao().getAll().filter { it.tenantId == activeTenantId }
@@ -1528,7 +1582,16 @@ object SupabaseSyncManager {
                     ))
                 }
                 if (list.isNotEmpty()) {
-                    db.bmpProductDao().insertAll(list)
+                    list.forEach { serverProd ->
+                        val localProd = db.bmpProductDao().getById(serverProd.id)
+                        if (localProd == null) {
+                            db.bmpProductDao().upsert(serverProd)
+                        } else if (localProd.isSynced) {
+                            if (serverProd.updatedAt >= localProd.updatedAt) {
+                                db.bmpProductDao().upsert(serverProd)
+                            }
+                        }
+                    }
                 }
                 // Local pruning
                 val localProducts = db.bmpProductDao().getAll().filter { it.tenantId == activeTenantId }
@@ -1568,7 +1631,16 @@ object SupabaseSyncManager {
                     ))
                 }
                 if (list.isNotEmpty()) {
-                    list.forEach { db.bmpMasterProductDao().upsert(it) }
+                    list.forEach { serverProd ->
+                        val localProd = db.bmpMasterProductDao().getById(serverProd.id)
+                        if (localProd == null) {
+                            db.bmpMasterProductDao().upsert(serverProd)
+                        } else if (localProd.isSynced) {
+                            if (serverProd.updatedAt >= localProd.updatedAt) {
+                                db.bmpMasterProductDao().upsert(serverProd)
+                            }
+                        }
+                    }
                 }
                 // Local pruning
                 val localMasterProducts = db.bmpMasterProductDao().getAll().filter { it.tenantId == activeTenantId }

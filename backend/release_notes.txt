@@ -1,3 +1,14 @@
+POSBah v2.17.19 - Perbaikan Masalah Gambar Produk & Konflik Sinkronisasi
+
+Halo Kak! POSBah v2.17.19 hadir dengan perbaikan sistem sinkronisasi dan penyimpanan gambar produk:
+1. Pencegahan Overwrite Data (Safe Merge): Memperbaiki kendala gambar produk/layanan yang kadang hilang setelah update atau sinkronisasi. Sistem kini melarang data server menimpa perubahan lokal yang belum selesai di-upload (isSynced = false). Untuk data yang sudah tersinkronisasi, sistem hanya menerima data server jika timestamp updatedAt server lebih baru daripada local (anti-overwrite).
+2. Penerapan di Semua Modul: Proteksi sinkronisasi cerdas ini berlaku di seluruh modul kasir POS (FnB, Rental, Laundry) serta modul Invoice & Manufaktur (BMP).
+3. Pemeliharaan Versi & Keamanan Data: Peningkatan keandalan sinkronisasi dua arah untuk menjamin data tetap utuh dan konsisten di semua perangkat Anda.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.18 - Pengaturan Ganti Nama Usaha Konsisten & Sinkronisasi Dua Arah
 
 Halo Kak! POSBah v2.17.18 hadir dengan pembaruan pengaturan nama usaha dan peningkatan sinkronisasi:
