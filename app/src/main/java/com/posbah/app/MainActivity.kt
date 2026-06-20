@@ -18,6 +18,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.Lifecycle
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.local.PosBahDatabase
+import com.posbah.app.data.repository.SessionState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +40,9 @@ class MainActivity : FragmentActivity() {
 
     @Inject
     lateinit var db: PosBahDatabase
+
+    @Inject
+    lateinit var sessionState: SessionState
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = installSplashScreen()
@@ -147,6 +151,23 @@ class MainActivity : FragmentActivity() {
                                 if (pullRes is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Success &&
                                     syncRes is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Success) {
                                     securePrefs.lastSyncedTimestamp = if (serverTs > 0L) serverTs else System.currentTimeMillis()
+
+                                    // Reactively monitor and update employee outlet lock if owner changed it
+                                    val activeEmail = authRepository.activeUserEmail()
+                                    if (!activeEmail.isNullOrBlank()) {
+                                        val dbUser = activeDb.localUserDao().getByEmail(activeEmail)
+                                        if (dbUser != null && dbUser.role != "OWNER") {
+                                            val empRecord = activeDb.employeeDao().findByEmail(activeEmail)
+                                            if (empRecord != null) {
+                                                val currentLock = sessionState.lockedEmployeeOutletId.value
+                                                if (empRecord.outletId != currentLock) {
+                                                    android.util.Log.i("MainActivity", "Dynamic outlet shift detected for employee $activeEmail: $currentLock -> ${empRecord.outletId}")
+                                                    sessionState.setEmployeeOutletLock(empRecord.outletId)
+                                                    securePrefs.currentOutletId = empRecord.outletId
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }

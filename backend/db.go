@@ -707,11 +707,11 @@ func initSchema() error {
 		VALUES ('muhammadmuizz8@gmail.com', $1, $2)
 		ON CONFLICT ("email") DO UPDATE SET "passwordHash" = EXCLUDED."passwordHash";`, defaultAdminHash, time.Now().UnixNano()/int64(time.Millisecond))
 	
-	// One-time POS data cleanup on update to v2.17.29 (except bahteramulyap@gmail.com / ten_premium_bahteramulyap_gmail_com)
+	// One-time POS data cleanup on update to v2.17.29/v2.17.30 (except bahteramulyap@gmail.com / ten_premium_bahteramulyap_gmail_com)
 	var currentConfigVer string
 	_ = db.QueryRow(`SELECT "version" FROM "apk_config" WHERE "id" = 1`).Scan(&currentConfigVer)
-	if currentConfigVer != "2.17.29" {
-		log.Println("[Migration] Upgrading to v2.17.29, performing POS data cleanup...")
+	if currentConfigVer != "2.17.29" && currentConfigVer != "2.17.30" {
+		log.Println("[Migration] Upgrading, performing POS data cleanup...")
 		// Delete products
 		_, errProd := db.Exec(`DELETE FROM "products" WHERE "tenantId" NOT IN ('bahteramulyap@gmail.com', 'ten_premium_bahteramulyap_gmail_com')`)
 		if errProd != nil {
@@ -732,9 +732,9 @@ func initSchema() error {
 		log.Println("[Migration] POS data cleanup completed.")
 	}
 
-	// Seed default apk_config — v2.17.29
+	// Seed default apk_config — v2.17.30
 	_, _ = db.Exec(`INSERT INTO "apk_config" ("id", "version", "description", "downloadUrl", "updatedAt")
-		VALUES (1, '2.17.29', 'Pembaruan wajib untuk kelancaran sinkronisasi data transaksi secara realtime dan peningkatan keamanan sistem POSBah Anda. Silakan unduh versi terbaru untuk melanjutkan.', '/api/download-apk', $1)
+		VALUES (1, '2.17.30', 'Pembaruan wajib untuk perbaikan mutasi tugas karyawan antar-outlet dan sinkronisasi realtime POSBah Anda. Silakan unduh versi terbaru untuk melanjutkan.', '/api/download-apk', $1)
 		ON CONFLICT ("id") DO UPDATE SET "version" = EXCLUDED."version", "description" = EXCLUDED."description", "updatedAt" = EXCLUDED."updatedAt";`, time.Now().UnixNano()/int64(time.Millisecond))
 	
 	// Protect syerlirahma7@gmail.com: mark as ACTIVE in deleted_users so she is never purged again

@@ -1,3 +1,14 @@
+POSBah v2.17.30 - Perbaikan Mutasi Outlet Karyawan & Realtime Sync
+
+Halo Kak! POSBah v2.17.30 hadir dengan pembaruan dan peningkatan fungsionalitas:
+1. Dinamis Mutasi Outlet Karyawan: Ketika owner memindahkan outlet tugas karyawan (karyawanoutlet) di panel owner ke outlet lain, aplikasi pada HP karyawan bersangkutan akan mendeteksi perubahan tersebut secara realtime (dalam 5 detik), kemudian otomatis mengunci dan memperbarui data produk, gambar produk, riwayat, dan transaksi lokal agar mengikuti outlet baru tersebut.
+2. Sinkronisasi Realtime & Interkoneksi: Kecepatan respon interkoneksi data realtime diperkuat di seluruh modul kasir POS (FnB, Laundry, Rental) serta modul Invoice & Manufaktur (BMP).
+3. HPP & Laporan Outlet untuk Owner: Memastikan owner dapat memantau dengan tepat produk, detail transaksi, data checkout, dan margin HPP secara terisolasi per masing-masing outlet.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.29 - Redesign Arsitektur Sinkronisasi Realtime & Pembersihan Data POS
 
 Halo Kak! POSBah v2.17.29 hadir dengan peningkatan performa sinkronisasi real-time dan pembersihan database POS:

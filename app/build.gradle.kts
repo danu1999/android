@@ -15,8 +15,8 @@ android {
         applicationId = "com.posbah.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 68
-        versionName = "2.17.29"
+        versionCode = 69
+        versionName = "2.17.30"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
