@@ -306,7 +306,13 @@ class BahanBakuFormViewModel @Inject constructor(
             _ui.update { it.copy(fotoUploadStatus = FotoUploadStatus.UPLOADING) }
 
             val fileName = "NOTA_${_ui.value.header?.noTagihan ?: "UNKNOWN"}_${System.currentTimeMillis()}"
-            val result = com.posbah.app.data.remote.CloudinaryUploader.upload(context, uri, fileName)
+            val result = com.posbah.app.data.remote.CloudinaryUploader.upload(
+                context = context,
+                uri = uri,
+                fileName = fileName,
+                tenantId = tenantId,
+                email = authRepo.activeUserEmail()
+            )
 
             when (result) {
                 is com.posbah.app.data.remote.CloudinaryUploader.UploadResult.Success -> {

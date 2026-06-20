@@ -1,3 +1,14 @@
+POSBah v2.17.23 - Konfigurasi Cloudinary Khusus CV Bahtera Mulya Plastik
+
+Halo Kak! POSBah v2.17.23 hadir dengan pembaruan dan konfigurasi khusus berikut:
+1. Konfigurasi Cloudinary Resmi: Mengonfigurasi Cloudinary menggunakan credentials resmi (Cloud Name, API Key, dan API Secret) untuk tenant premium CV Bahtera Mulya Plastik.
+2. Keamanan Unggahan Signed Uploads: Mengimplementasikan tanda tangan digital SHA-1 secara internal untuk mengamankan proses unggah langsung ke Cloudinary tanpa perlu mengekspos API secret secara tidak aman.
+3. Hak Akses Khusus: Membatasi fitur sinkronisasi unggahan Cloudinary secara otomatis hanya untuk akun bahteramulyap@gmail.com yang telah berlangganan penuh.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.22 - Pembaruan Scoped Storage (MediaStore URI) & Sinkronisasi Cloudinary
 
 Halo Kak! POSBah v2.17.22 hadir dengan peningkatan fitur penyimpanan dan sinkronisasi berikut:

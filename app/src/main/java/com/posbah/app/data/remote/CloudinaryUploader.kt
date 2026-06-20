@@ -40,11 +40,12 @@ import java.net.URL
 object CloudinaryUploader {
 
     // ── CONFIG — ISI SAAT DAPAT CREDENTIAL ─────────────────────────────────
-    private const val CLOUDINARY_ENABLED = false          // ← Ubah ke true setelah isi credential
+    private const val CLOUDINARY_ENABLED = true
 
-    private const val CLOUD_NAME = "ISI_CLOUD_NAME_DI_SINI"          // contoh: "dxyz123abc"
-    private const val UPLOAD_PRESET = "ISI_UPLOAD_PRESET_DI_SINI"    // contoh: "nota_bahan_baku"
-    private const val FOLDER = "posbah/nota_bahan_baku"               // folder di Cloudinary
+    private const val CLOUD_NAME = "dkkbizenf"
+    private const val API_KEY = "684949892897861"
+    private const val API_SECRET = "o6_fkK4BSGan70-gYvbfiurdCnM"
+    private const val FOLDER = "posbah/nota_bahan_baku"
     // ────────────────────────────────────────────────────────────────────────
 
     private val UPLOAD_URL get() = "https://api.cloudinary.com/v1_1/$CLOUD_NAME/image/upload"
@@ -59,17 +60,34 @@ object CloudinaryUploader {
         object Disabled : UploadResult()
     }
 
+    private fun sha1(input: String): String {
+        val md = java.security.MessageDigest.getInstance("SHA-1")
+        val bytes = md.digest(input.toByteArray(java.nio.charset.StandardCharsets.UTF_8))
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
+
     /**
      * Upload foto nota ke Cloudinary menggunakan MediaStore Uri.
      */
-    suspend fun upload(context: Context, uri: Uri, fileName: String): UploadResult = withContext(Dispatchers.IO) {
+    suspend fun upload(
+        context: Context,
+        uri: Uri,
+        fileName: String,
+        tenantId: String,
+        email: String?
+    ): UploadResult = withContext(Dispatchers.IO) {
         if (!CLOUDINARY_ENABLED) {
-            Log.d("CloudinaryUploader", "Upload dinonaktifkan. Set CLOUDINARY_ENABLED = true setelah isi credential.")
+            Log.d("CloudinaryUploader", "Upload dinonaktifkan.")
             return@withContext UploadResult.Disabled
         }
 
-        if (CLOUD_NAME == "ISI_CLOUD_NAME_DI_SINI" || UPLOAD_PRESET == "ISI_UPLOAD_PRESET_DI_SINI") {
-            return@withContext UploadResult.Error("Cloudinary belum dikonfigurasi. Isi CLOUD_NAME dan UPLOAD_PRESET.")
+        // Khusus untuk akun bahteramulyap@gmail.com karena sudah bayar full
+        val isAllowed = tenantId == "ten_premium_bahteramulyap_gmail_com" ||
+                        email?.trim()?.lowercase() == "bahteramulyap@gmail.com"
+
+        if (!isAllowed) {
+            Log.d("CloudinaryUploader", "Cloudinary upload bypass: Hanya aktif untuk akun bahteramulyap@gmail.com (tenant: $tenantId, email: $email)")
+            return@withContext UploadResult.Disabled
         }
 
         try {
@@ -86,6 +104,10 @@ object CloudinaryUploader {
                 // fallback
             }
 
+            val timestamp = (System.currentTimeMillis() / 1000).toString()
+            val baseString = "folder=$FOLDER&public_id=$fileName&timestamp=$timestamp$API_SECRET"
+            val signature = sha1(baseString)
+
             val boundary = "------PosBahBoundary${System.currentTimeMillis()}"
             val conn = (URL(UPLOAD_URL).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
@@ -98,10 +120,20 @@ object CloudinaryUploader {
             conn.outputStream.use { out ->
                 val writer = out.bufferedWriter()
 
-                // Field: upload_preset
+                // Field: api_key
                 writer.write("--$boundary\r\n")
-                writer.write("Content-Disposition: form-data; name=\"upload_preset\"\r\n\r\n")
-                writer.write("$UPLOAD_PRESET\r\n")
+                writer.write("Content-Disposition: form-data; name=\"api_key\"\r\n\r\n")
+                writer.write("$API_KEY\r\n")
+
+                // Field: timestamp
+                writer.write("--$boundary\r\n")
+                writer.write("Content-Disposition: form-data; name=\"timestamp\"\r\n\r\n")
+                writer.write("$timestamp\r\n")
+
+                // Field: signature
+                writer.write("--$boundary\r\n")
+                writer.write("Content-Disposition: form-data; name=\"signature\"\r\n\r\n")
+                writer.write("$signature\r\n")
 
                 // Field: folder
                 writer.write("--$boundary\r\n")
@@ -156,20 +188,25 @@ object CloudinaryUploader {
 
     /**
      * Upload foto nota ke Cloudinary menggunakan multipart/form-data.
-     *
-     * @param file File JPEG yang sudah dikompresi (≤100 KB dari [CameraUtils.compressToMaxSize])
-     * @param fileName Nama file untuk identifikasi di Cloudinary (contoh: "NOTA_20260609_123456")
-     * @return [UploadResult.Success] dengan URL, [UploadResult.Error] jika gagal,
-     *         [UploadResult.Disabled] jika belum dikonfigurasi
      */
-    suspend fun upload(file: File, fileName: String): UploadResult = withContext(Dispatchers.IO) {
+    suspend fun upload(
+        file: File,
+        fileName: String,
+        tenantId: String,
+        email: String?
+    ): UploadResult = withContext(Dispatchers.IO) {
         if (!CLOUDINARY_ENABLED) {
-            Log.d("CloudinaryUploader", "Upload dinonaktifkan. Set CLOUDINARY_ENABLED = true setelah isi credential.")
+            Log.d("CloudinaryUploader", "Upload dinonaktifkan.")
             return@withContext UploadResult.Disabled
         }
 
-        if (CLOUD_NAME == "ISI_CLOUD_NAME_DI_SINI" || UPLOAD_PRESET == "ISI_UPLOAD_PRESET_DI_SINI") {
-            return@withContext UploadResult.Error("Cloudinary belum dikonfigurasi. Isi CLOUD_NAME dan UPLOAD_PRESET.")
+        // Khusus untuk akun bahteramulyap@gmail.com karena sudah bayar full
+        val isAllowed = tenantId == "ten_premium_bahteramulyap_gmail_com" ||
+                        email?.trim()?.lowercase() == "bahteramulyap@gmail.com"
+
+        if (!isAllowed) {
+            Log.d("CloudinaryUploader", "Cloudinary upload bypass: Hanya aktif untuk akun bahteramulyap@gmail.com (tenant: $tenantId, email: $email)")
+            return@withContext UploadResult.Disabled
         }
 
         if (!file.exists() || file.length() == 0L) {
@@ -177,6 +214,10 @@ object CloudinaryUploader {
         }
 
         try {
+            val timestamp = (System.currentTimeMillis() / 1000).toString()
+            val baseString = "folder=$FOLDER&public_id=$fileName&timestamp=$timestamp$API_SECRET"
+            val signature = sha1(baseString)
+
             val boundary = "------PosBahBoundary${System.currentTimeMillis()}"
             val conn = (URL(UPLOAD_URL).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
@@ -189,10 +230,20 @@ object CloudinaryUploader {
             conn.outputStream.use { out ->
                 val writer = out.bufferedWriter()
 
-                // Field: upload_preset
+                // Field: api_key
                 writer.write("--$boundary\r\n")
-                writer.write("Content-Disposition: form-data; name=\"upload_preset\"\r\n\r\n")
-                writer.write("$UPLOAD_PRESET\r\n")
+                writer.write("Content-Disposition: form-data; name=\"api_key\"\r\n\r\n")
+                writer.write("$API_KEY\r\n")
+
+                // Field: timestamp
+                writer.write("--$boundary\r\n")
+                writer.write("Content-Disposition: form-data; name=\"timestamp\"\r\n\r\n")
+                writer.write("$timestamp\r\n")
+
+                // Field: signature
+                writer.write("--$boundary\r\n")
+                writer.write("Content-Disposition: form-data; name=\"signature\"\r\n\r\n")
+                writer.write("$signature\r\n")
 
                 // Field: folder
                 writer.write("--$boundary\r\n")
@@ -228,7 +279,6 @@ object CloudinaryUploader {
                 return@withContext UploadResult.Error("Upload gagal: HTTP $responseCode")
             }
 
-            // Parse JSON response sederhana (tanpa library tambahan)
             val url = extractJsonString(responseBody, "secure_url")
                 ?: return@withContext UploadResult.Error("Gagal parse URL dari response Cloudinary")
             val publicId = extractJsonString(responseBody, "public_id") ?: fileName
