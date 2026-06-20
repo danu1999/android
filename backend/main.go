@@ -3495,15 +3495,20 @@ func touchTenantSync(tenantID string) {
 	if tenantID == "" || db == nil {
 		return
 	}
+	nowMs := time.Now().UnixNano() / 1e6
 	_, err := db.Exec(`
 		INSERT INTO "tenant_sync_status" ("tenantId", "lastUpdated")
 		VALUES ($1, $2)
 		ON CONFLICT ("tenantId") DO UPDATE
 		SET "lastUpdated" = EXCLUDED."lastUpdated"`,
-		tenantID, time.Now().UnixNano()/1e6)
+		tenantID, nowMs)
 	if err != nil {
 		log.Printf("[SyncStatus] Failed to update lastUpdated for tenant %s: %v", tenantID, err)
 	}
+
+	// Broadcast WebSocket sync trigger to other active devices of this tenant
+	wsMsg := fmt.Sprintf(`{"type":"sync_trigger","tenantId":"%s","timestamp":%d}`, tenantID, nowMs)
+	broadcastToTenant(tenantID, wsMsg)
 }
 
 func handleSyncCheckStatus(w http.ResponseWriter, r *http.Request) {
@@ -4696,13 +4701,15 @@ const landingHtmlPage = `<!DOCTYPE html>
 </html>`
 
 var (
-	wsClients    = make(map[net.Conn]bool)
+	wsClients    = make(map[string]map[net.Conn]bool) // tenantId -> conn -> active
 	wsClientsMu  sync.Mutex
 	qrSessions   = make(map[string]map[string]interface{})
 	qrSessionsMu sync.Mutex
 )
 
 func handleWS(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.URL.Query().Get("tenantId")
+
 	hj, ok := w.(http.Hijacker)
 	if !ok {
 		http.Error(w, "webserver doesn't support hijacking", http.StatusInternalServerError)
@@ -4732,18 +4739,26 @@ func handleWS(w http.ResponseWriter, r *http.Request) {
 	bufrw.Flush()
 
 	wsClientsMu.Lock()
-	wsClients[conn] = true
+	if wsClients[tenantID] == nil {
+		wsClients[tenantID] = make(map[net.Conn]bool)
+	}
+	wsClients[tenantID][conn] = true
 	wsClientsMu.Unlock()
 
-	log.Printf("[WS] Client connected. Total active: %d", len(wsClients))
+	log.Printf("[WS] Client connected for tenant '%s'.", tenantID)
 
 	go func() {
 		defer func() {
 			wsClientsMu.Lock()
-			delete(wsClients, conn)
+			if wsClients[tenantID] != nil {
+				delete(wsClients[tenantID], conn)
+				if len(wsClients[tenantID]) == 0 {
+					delete(wsClients, tenantID)
+				}
+			}
 			wsClientsMu.Unlock()
 			conn.Close()
-			log.Println("[WS] Client disconnected")
+			log.Printf("[WS] Client disconnected for tenant '%s'", tenantID)
 		}()
 		buf := make([]byte, 1024)
 		for {
@@ -4775,7 +4790,53 @@ func broadcastWSMessage(message string) {
 	}
 
 	frame := append(header, payload...)
-	for conn := range wsClients {
+	for _, conns := range wsClients {
+		for conn := range conns {
+			go func(c net.Conn) {
+				_, _ = c.Write(frame)
+			}(conn)
+		}
+	}
+}
+
+func broadcastToTenant(tenantID string, message string) {
+	if tenantID == "" {
+		broadcastWSMessage(message)
+		return
+	}
+
+	wsClientsMu.Lock()
+	conns, exists := wsClients[tenantID]
+	if !exists || len(conns) == 0 {
+		wsClientsMu.Unlock()
+		return
+	}
+	wsClientsMu.Unlock()
+
+	payload := []byte(message)
+	length := len(payload)
+
+	var header []byte
+	if length <= 125 {
+		header = []byte{0x81, byte(length)}
+	} else if length <= 65535 {
+		header = []byte{0x81, 126, byte(length >> 8), byte(length & 0xFF)}
+	} else {
+		header = []byte{0x81, 127,
+			0, 0, 0, 0,
+			byte(length >> 24), byte(length >> 16), byte(length >> 8), byte(length & 0xFF),
+		}
+	}
+
+	frame := append(header, payload...)
+
+	wsClientsMu.Lock()
+	defer wsClientsMu.Unlock()
+	conns, exists = wsClients[tenantID]
+	if !exists {
+		return
+	}
+	for conn := range conns {
 		go func(c net.Conn) {
 			_, _ = c.Write(frame)
 		}(conn)

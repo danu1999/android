@@ -15,8 +15,8 @@ android {
         applicationId = "com.posbah.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 73
-        versionName = "2.17.34"
+        versionCode = 74
+        versionName = "2.17.35"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -134,6 +134,9 @@ dependencies {
     val composeBom = platform(libs.androidx.compose.bom)
     implementation(composeBom)
     androidTestImplementation(composeBom)
+
+    // Networking & WebSockets
+    implementation(libs.okhttp)
 
     // AndroidX & Lifecycle
     implementation(libs.androidx.core.ktx)

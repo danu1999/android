@@ -1,3 +1,13 @@
+POSBah v2.17.35 - Sinkronisasi Real-Time Instan (WebSockets) & Hemat Daya
+
+Halo Kak! POSBah v2.17.35 hadir dengan optimalisasi koneksi dan sinkronisasi real-time murni:
+1. Sinkronisasi Real-Time Berbasis WebSockets: Sistem kini tidak lagi mengandalkan polling HTTP berulang. Setiap kali ada perangkat yang melakukan transaksi, mengedit produk, atau mencatat log aktivitas baru, server akan secara langsung menyiarkan event (push notification) via WebSocket ke perangkat lain di tenant yang sama sehingga perubahan langsung terlihat seketika (0 detik).
+2. Hemat Konsumsi Baterai & Kuota Data: Dengan beralihnya sistem ke arsitektur WebSockets, interval polling cadangan di latar belakang ditingkatkan menjadi 30 detik. Ini menurunkan konsumsi baterai dan pemakaian data internet hingga 90% saat aplikasi sedang diam (idle).
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.34 - Transfer Stok Antar-Outlet & Audit Log Karyawan
 
 Halo Kak! POSBah v2.17.34 hadir membawa fitur pengelolaan multi-outlet yang lebih tangguh dan pengawasan yang lebih ketat:
