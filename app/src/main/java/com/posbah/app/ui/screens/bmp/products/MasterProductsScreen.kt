@@ -52,6 +52,18 @@ import com.posbah.app.ui.components.EmptyState
 import com.posbah.app.ui.components.PosBahTopBar
 import com.posbah.app.ui.components.PrimaryButton
 import com.posbah.app.util.Formatters
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material3.IconButton
+import androidx.compose.foundation.layout.width
+import android.widget.Toast
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Divider
@@ -118,10 +130,22 @@ class MasterProductsViewModel @Inject constructor(
         _form.update { it.copy(editing = transform(cur)) }
     }
 
-    fun save() = viewModelScope.launch {
+    fun save(imageFile: java.io.File?, keepExistingImage: Boolean) = viewModelScope.launch {
         val e = _form.value.editing ?: return@launch
         if (e.title.isBlank()) return@launch
-        repo.upsert(e)
+        var base64Url = if (keepExistingImage) e.image else null
+        if (imageFile != null && imageFile.exists()) {
+            try {
+                val compressed = com.posbah.app.util.CameraUtils.compressToMaxSize(imageFile, 80)
+                val bytes = compressed.readBytes()
+                val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                base64Url = "data:image/jpeg;base64,$base64"
+                try { compressed.delete() } catch(ex: Exception) {}
+            } catch (ex: Exception) {
+                ex.printStackTrace()
+            }
+        }
+        repo.upsert(e.copy(image = base64Url))
         _form.update { FormState() }
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -159,6 +183,53 @@ fun MasterProductsScreen(
 ) {
     val list by viewModel.products.collectAsState()
     val form by viewModel.form.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    var tempPhotoFile by remember { mutableStateOf<java.io.File?>(null) }
+    var capturedPhotoFile by remember { mutableStateOf<java.io.File?>(null) }
+
+    LaunchedEffect(form.show, form.editing?.id) {
+        if (form.show) {
+            capturedPhotoFile = null
+            tempPhotoFile = null
+        }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success && tempPhotoFile != null) {
+            capturedPhotoFile = tempPhotoFile
+        }
+    }
+
+    val launchCamera = {
+        try {
+            val file = com.posbah.app.util.CameraUtils.createTempCameraFile(context)
+            tempPhotoFile = file
+            val uri = com.posbah.app.util.CameraUtils.getFileProviderUri(context, file)
+            cameraLauncher.launch(uri)
+        } catch (e: Exception) {
+            Toast.makeText(context, "Gagal membuka kamera: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            val file = com.posbah.app.util.CameraUtils.copyUriToTempFile(context, it)
+            if (file != null) {
+                capturedPhotoFile = file
+            } else {
+                Toast.makeText(context, "Gagal memuat gambar dari galeri", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val launchGallery = {
+        galleryLauncher.launch("image/*")
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -200,7 +271,16 @@ fun MasterProductsScreen(
                                     modifier = Modifier.size(38.dp)
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
-                                        Icon(Icons.Outlined.Inventory2, null, tint = MaterialTheme.colorScheme.primary)
+                                        if (!p.image.isNullOrBlank()) {
+                                            AsyncImage(
+                                                model = decodeBase64Image(p.image),
+                                                contentDescription = null,
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                            )
+                                        } else {
+                                            Icon(Icons.Outlined.Inventory2, null, tint = MaterialTheme.colorScheme.primary)
+                                        }
                                     }
                                 }
                                 Spacer(Modifier.size(12.dp))
@@ -397,6 +477,99 @@ fun MasterProductsScreen(
                         label = { Text("Deskripsi") },
                         modifier = Modifier.fillMaxWidth()
                     )
+                    Spacer(Modifier.size(8.dp))
+                    Text("Foto Produk (Opsional)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.size(4.dp))
+                    if (capturedPhotoFile != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(120.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.Gray.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AsyncImage(
+                                model = capturedPhotoFile,
+                                contentDescription = "Preview Foto Baru",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                            )
+                            IconButton(
+                                onClick = { capturedPhotoFile = null },
+                                modifier = Modifier.align(Alignment.TopEnd)
+                            ) {
+                                Icon(Icons.Outlined.Close, contentDescription = "Hapus Foto", tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                    } else if (!e.image.isNullOrBlank()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(120.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.Gray.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AsyncImage(
+                                model = decodeBase64Image(e.image),
+                                contentDescription = "Foto Produk Saat Ini",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                            )
+                            IconButton(
+                                onClick = { viewModel.updateField { it.copy(image = null) } },
+                                modifier = Modifier.align(Alignment.TopEnd)
+                            ) {
+                                Icon(Icons.Outlined.Close, contentDescription = "Hapus Foto", tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = launchCamera,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
+                                Spacer(Modifier.width(4.dp))
+                                Text("Ganti Kamera", fontSize = 11.sp)
+                            }
+                            OutlinedButton(
+                                onClick = launchGallery,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Outlined.Image, contentDescription = null)
+                                Spacer(Modifier.width(4.dp))
+                                Text("Ganti Galeri", fontSize = 11.sp)
+                            }
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = launchCamera,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
+                                Spacer(Modifier.width(4.dp))
+                                Text("Kamera", fontSize = 12.sp)
+                            }
+                            OutlinedButton(
+                                onClick = launchGallery,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Outlined.Image, contentDescription = null)
+                                Spacer(Modifier.width(4.dp))
+                                Text("Galeri", fontSize = 12.sp)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.size(8.dp))
 
                     if (hppRes != null) {
                         Spacer(Modifier.height(12.dp))
@@ -467,11 +640,30 @@ fun MasterProductsScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = viewModel::save, modifier = Modifier.testTag("btn-save-product")) {
+                TextButton(
+                    onClick = {
+                        val keepExisting = capturedPhotoFile == null && !(e.image.isNullOrBlank())
+                        viewModel.save(capturedPhotoFile, keepExisting)
+                    },
+                    modifier = Modifier.testTag("btn-save-product")
+                ) {
                     Text("Simpan")
                 }
             },
             dismissButton = { TextButton(onClick = viewModel::closeForm) { Text("Batal") } }
         )
     }
+}
+
+private fun decodeBase64Image(imageStr: String?): Any? {
+    if (imageStr.isNullOrBlank()) return null
+    if (imageStr.startsWith("data:image")) {
+        val base64Data = imageStr.substringAfter("base64,")
+        return try {
+            android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT)
+        } catch (e: Exception) {
+            imageStr
+        }
+    }
+    return imageStr
 }

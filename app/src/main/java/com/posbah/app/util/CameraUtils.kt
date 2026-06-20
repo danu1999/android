@@ -191,4 +191,18 @@ object CameraUtils {
         }
         return (File(filePath).length() / 1024).coerceAtLeast(0)
     }
+
+    fun copyUriToTempFile(context: Context, uri: Uri): File? {
+        return try {
+            val inputStream = context.contentResolver.openInputStream(uri) ?: return null
+            val tempFile = createTempCameraFile(context)
+            tempFile.outputStream().use { output ->
+                inputStream.use { it.copyTo(output) }
+            }
+            tempFile
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
 }

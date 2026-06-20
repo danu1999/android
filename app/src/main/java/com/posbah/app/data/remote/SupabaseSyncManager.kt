@@ -403,6 +403,7 @@ object SupabaseSyncManager {
                         put("uniqueID", mp.uniqueID ?: JSONObject.NULL)
                         put("slug", mp.slug ?: JSONObject.NULL)
                         put("jenisBahanBaku", mp.jenisBahanBaku)
+                        put("image", mp.image ?: JSONObject.NULL)
                         put("isSynced", true)
                         put("createdAt", mp.createdAt)
                         put("updatedAt", mp.updatedAt)
@@ -1627,6 +1628,7 @@ object SupabaseSyncManager {
                         uniqueID = if (obj.isNull("uniqueID")) null else obj.optString("uniqueID"),
                         slug = if (obj.isNull("slug")) null else obj.optString("slug"),
                         jenisBahanBaku = obj.optString("jenisBahanBaku", ""),
+                        image = if (obj.isNull("image")) null else obj.optString("image"),
                         createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
                         updatedAt = obj.optLong("updatedAt", System.currentTimeMillis()),
                         isSynced = true

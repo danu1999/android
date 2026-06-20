@@ -87,6 +87,7 @@ data class BmpMasterProductEntity(
     val slug: String? = null,
     val isDeleted: Boolean = false,   // soft-delete flag
     val jenisBahanBaku: String = "",   // Pemetaan ke jenis bijih plastik (misal: PP, HDPE)
+    val image: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val isSynced: Boolean = false

@@ -169,6 +169,7 @@ func initSchema() error {
 			"uniqueID" VARCHAR(100),
 			"slug" VARCHAR(255),
 			"jenisBahanBaku" VARCHAR(100) DEFAULT '',
+			"image" TEXT,
 			"createdAt" BIGINT,
 			"updatedAt" BIGINT,
 			PRIMARY KEY ("id", "tenantId")
@@ -593,7 +594,7 @@ func initSchema() error {
 
 		`UPDATE "bmp_master_products" SET "tenantId" = 'demo_tenant' WHERE "tenantId" IS NULL OR "tenantId" = '';`,
 		`ALTER TABLE "bmp_master_products" DROP CONSTRAINT IF EXISTS "bmp_master_products_pkey";`,
-		`ALTER TABLE "bmp_master_products" ADD PRIMARY KEY ("id", "tenantId");`,
+		`ALTER TABLE "bmp_master_products" ADD PRIMARY KEY ("id", "tenantId") ON CONFLICT DO NOTHING;`,
 
 		`UPDATE "bmp_invoice_payments" SET "tenantId" = 'demo_tenant' WHERE "tenantId" IS NULL OR "tenantId" = '';`,
 		`ALTER TABLE "bmp_invoice_payments" DROP CONSTRAINT IF EXISTS "bmp_invoice_payments_pkey";`,
@@ -650,6 +651,9 @@ func initSchema() error {
 		`ALTER TABLE "bmp_master_products" ADD COLUMN IF NOT EXISTS "jenisBahanBaku" VARCHAR(100) DEFAULT '';`,
 		`ALTER TABLE "bmp_master_products" DROP CONSTRAINT IF EXISTS "bmp_master_products_pkey";`,
 		`ALTER TABLE "bmp_master_products" ADD PRIMARY KEY ("id", "tenantId") ON CONFLICT DO NOTHING;`,
+
+		// v2.17.9: Tambah kolom image pada bmp_master_products
+		`ALTER TABLE "bmp_master_products" ADD COLUMN IF NOT EXISTS "image" TEXT;`,
 
 		// v2.17.6: Ubah primary key print_settings menjadi composite (id, tenantId) untuk mencegah duplikasi key error
 		`ALTER TABLE "print_settings" DROP CONSTRAINT IF EXISTS "print_settings_pkey";`,

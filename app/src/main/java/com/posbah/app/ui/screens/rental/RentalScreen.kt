@@ -40,6 +40,7 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material.icons.outlined.Share
 import com.posbah.app.util.OnlineStoreLinkGenerator
@@ -219,6 +220,23 @@ fun RentalScreen(
         } catch (e: Exception) {
             Toast.makeText(context, "Gagal membuka kamera: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
         }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            val file = CameraUtils.copyUriToTempFile(context, it)
+            if (file != null) {
+                capturedPhotoFile = file
+            } else {
+                Toast.makeText(context, "Gagal memuat gambar dari galeri", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val launchGallery = {
+        galleryLauncher.launch("image/*")
     }
 
     val filteredVehicles = remember(vehicles, searchQuery, selectedCategory, selectedStatus) {
@@ -963,14 +981,28 @@ fun RentalScreen(
                             }
                         }
                     } else {
-                        OutlinedButton(
-                            onClick = launchCamera,
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.fillMaxWidth()
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Ambil Foto Kendaraan")
+                            OutlinedButton(
+                                onClick = launchCamera,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
+                                Spacer(Modifier.width(4.dp))
+                                Text("Kamera", fontSize = 12.sp)
+                            }
+                            OutlinedButton(
+                                onClick = launchGallery,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Outlined.Image, contentDescription = null)
+                                Spacer(Modifier.width(4.dp))
+                                Text("Galeri", fontSize = 12.sp)
+                            }
                         }
                     }
                 }
@@ -1130,24 +1162,52 @@ fun RentalScreen(
                             )
                         }
                         Spacer(Modifier.height(4.dp))
-                        OutlinedButton(
-                            onClick = launchCamera,
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.fillMaxWidth()
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Ganti Foto Kendaraan")
+                            OutlinedButton(
+                                onClick = launchCamera,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
+                                Spacer(Modifier.width(4.dp))
+                                Text("Ganti Kamera", fontSize = 11.sp)
+                            }
+                            OutlinedButton(
+                                onClick = launchGallery,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Outlined.Image, contentDescription = null)
+                                Spacer(Modifier.width(4.dp))
+                                Text("Ganti Galeri", fontSize = 11.sp)
+                            }
                         }
                     } else {
-                        OutlinedButton(
-                            onClick = launchCamera,
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.fillMaxWidth()
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Ambil Foto Kendaraan")
+                            OutlinedButton(
+                                onClick = launchCamera,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
+                                Spacer(Modifier.width(4.dp))
+                                Text("Kamera", fontSize = 12.sp)
+                            }
+                            OutlinedButton(
+                                onClick = launchGallery,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Outlined.Image, contentDescription = null)
+                                Spacer(Modifier.width(4.dp))
+                                Text("Galeri", fontSize = 12.sp)
+                            }
                         }
                     }
                 }

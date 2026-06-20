@@ -81,6 +81,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 
 import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.Image
 import coil.compose.AsyncImage
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -224,6 +225,23 @@ fun LaundryScreen(
         } catch (e: Exception) {
             Toast.makeText(context, "Gagal membuka kamera: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
         }
+    }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            val file = CameraUtils.copyUriToTempFile(context, it)
+            if (file != null) {
+                capturedPhotoFile = file
+            } else {
+                Toast.makeText(context, "Gagal memuat gambar dari galeri", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val launchGallery = {
+        galleryLauncher.launch("image/*")
     }
 
     val filteredServices = remember(services, searchQuery, selectedCategory) {
@@ -941,15 +959,29 @@ fun LaundryScreen(
                             }
                         }
                     } else {
-                        OutlinedButton(
-                            onClick = launchCamera,
-                            modifier = Modifier.fillMaxWidth()
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Ambil Foto Layanan")
+                            OutlinedButton(
+                                onClick = launchCamera,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
+                                Spacer(Modifier.width(4.dp))
+                                Text("Kamera", fontSize = 12.sp)
+                            }
+                            OutlinedButton(
+                                onClick = launchGallery,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Outlined.Image, contentDescription = null)
+                                Spacer(Modifier.width(4.dp))
+                                Text("Galeri", fontSize = 12.sp)
+                            }
                         }
                     }
+
                 }
             },
             confirmButton = {
@@ -1098,22 +1130,48 @@ fun LaundryScreen(
                             )
                         }
                         Spacer(Modifier.height(4.dp))
-                        OutlinedButton(
-                            onClick = launchCamera,
-                            modifier = Modifier.fillMaxWidth()
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Ganti Foto Layanan")
+                            OutlinedButton(
+                                onClick = launchCamera,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
+                                Spacer(Modifier.width(4.dp))
+                                Text("Ganti Kamera", fontSize = 11.sp)
+                            }
+                            OutlinedButton(
+                                onClick = launchGallery,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Outlined.Image, contentDescription = null)
+                                Spacer(Modifier.width(4.dp))
+                                Text("Ganti Galeri", fontSize = 11.sp)
+                            }
                         }
                     } else {
-                        OutlinedButton(
-                            onClick = launchCamera,
-                            modifier = Modifier.fillMaxWidth()
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Ambil Foto Layanan")
+                            OutlinedButton(
+                                onClick = launchCamera,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Outlined.PhotoCamera, contentDescription = null)
+                                Spacer(Modifier.width(4.dp))
+                                Text("Kamera", fontSize = 12.sp)
+                            }
+                            OutlinedButton(
+                                onClick = launchGallery,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Outlined.Image, contentDescription = null)
+                                Spacer(Modifier.width(4.dp))
+                                Text("Galeri", fontSize = 12.sp)
+                            }
                         }
                     }
                 }
