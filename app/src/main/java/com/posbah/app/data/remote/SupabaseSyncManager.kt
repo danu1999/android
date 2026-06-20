@@ -1848,7 +1848,18 @@ object SupabaseSyncManager {
                     ))
                 }
                 if (list.isNotEmpty()) {
-                    list.forEach { db.bmpBahanBakuDao().upsert(it) }
+                    list.forEach { serverBahan ->
+                        val localBahan = db.bmpBahanBakuDao().getById(serverBahan.id)
+                        if (localBahan == null) {
+                            db.bmpBahanBakuDao().upsert(serverBahan)
+                        } else if (localBahan.isSynced) {
+                            if (serverBahan.updatedAt >= localBahan.updatedAt) {
+                                // Preserve local photo path to prevent the local image from disappearing
+                                val merged = serverBahan.copy(notaFotoPath = localBahan.notaFotoPath)
+                                db.bmpBahanBakuDao().upsert(merged)
+                            }
+                        }
+                    }
                 }
                 // Local pruning
                 val localBahanBaku = db.bmpBahanBakuDao().getAll().filter { it.tenantId == activeTenantId }
@@ -1881,7 +1892,14 @@ object SupabaseSyncManager {
                     ))
                 }
                 if (list.isNotEmpty()) {
-                    db.bmpBahanBakuItemDao().insertAll(list)
+                    list.forEach { serverItem ->
+                        val localItem = db.bmpBahanBakuItemDao().getById(serverItem.id)
+                        if (localItem == null) {
+                            db.bmpBahanBakuItemDao().upsert(serverItem)
+                        } else if (localItem.isSynced) {
+                            db.bmpBahanBakuItemDao().upsert(serverItem)
+                        }
+                    }
                 }
                 // Local pruning
                 val localBahanBakuItems = db.bmpBahanBakuItemDao().getAll().filter { it.tenantId == activeTenantId }

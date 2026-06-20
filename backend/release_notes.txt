@@ -1,3 +1,14 @@
+POSBah v2.17.20 - Perbaikan Sinkronisasi Gambar Catat Bahan & Safe Merge
+
+Halo Kak! POSBah v2.17.20 hadir dengan perbaikan penting berikut:
+1. Perbaikan Gambar Catat Bahan (BMP): Menyelesaikan masalah gambar pada pencatatan bahan baku ("catat bahan") di modul Invoice & Manufaktur yang hilang/kosong secara tiba-tiba setelah sinkronisasi.
+2. Proteksi Path Foto Lokal: Menambahkan pengamanan agar sinkronisasi pull tidak menghapus/menimpa path foto lokal (notaFotoPath) yang tersimpan di memori perangkat, sehingga foto tetap dapat diakses dengan cepat dan aman tanpa bergantung penuh pada koneksi internet.
+3. Penerapan Safe Merge Komplit: Memperluas mekanisme safe merge sinkronisasi pada data bahan baku untuk mencegah penimpasan data lokal yang belum sinkron (isSynced = false).
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.19 - Perbaikan Masalah Gambar Produk & Konflik Sinkronisasi
 
 Halo Kak! POSBah v2.17.19 hadir dengan perbaikan sistem sinkronisasi dan penyimpanan gambar produk:

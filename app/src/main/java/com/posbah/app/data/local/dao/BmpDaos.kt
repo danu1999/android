@@ -448,11 +448,14 @@ interface BmpBahanBakuItemDao {
     @Query("SELECT * FROM bmp_bahan_baku_item WHERE bahanBakuId = :bahanBakuId AND isDeleted = 0 ORDER BY id ASC")
     fun observeByBahanBaku(bahanBakuId: Long): Flow<List<com.posbah.app.data.local.entities.BmpBahanBakuItemEntity>>
 
-    @Query("SELECT * FROM bmp_bahan_baku_item WHERE bahanBakuId = :bahanBakuId AND isDeleted = 0 ORDER BY id ASC")
-    suspend fun listByBahanBaku(bahanBakuId: Long): List<com.posbah.app.data.local.entities.BmpBahanBakuItemEntity>
+    @Query("SELECT * FROM bmp_bahan_baku_item WHERE id = :id LIMIT 1")
+    suspend fun getById(id: Long): com.posbah.app.data.local.entities.BmpBahanBakuItemEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(items: List<com.posbah.app.data.local.entities.BmpBahanBakuItemEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(item: com.posbah.app.data.local.entities.BmpBahanBakuItemEntity): Long
 
     /** Soft-delete semua item milik bahan baku tertentu */
     @Query("UPDATE bmp_bahan_baku_item SET isDeleted = 1 WHERE bahanBakuId = :bahanBakuId")
