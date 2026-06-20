@@ -63,7 +63,7 @@ function hideLoginOverlay() {
     document.getElementById("app-container").style.display = "flex";
 }
 
-window.closeLoginOverlay = function() {
+window.closeLoginOverlay = function () {
     document.getElementById("login-overlay").style.display = "none";
     if (qrPollInterval) {
         clearInterval(qrPollInterval);
@@ -91,7 +91,7 @@ async function generateQRLogin() {
     try {
         const response = await fetch(`${BASE_URL}/api/auth/qr-session`);
         if (!response.ok) throw new Error("Gagal mengambil session ID dari server");
-        
+
         const data = await response.json();
         const sessionId = data.sessionId;
 
@@ -103,9 +103,9 @@ async function generateQRLogin() {
             text: sessionId,
             width: 200,
             height: 200,
-            colorDark : "#0B0F19",
-            colorLight : "#ffffff",
-            correctLevel : QRCode.CorrectLevel.H
+            colorDark: "#0B0F19",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.H
         });
 
         qrLoading.style.display = "none";
@@ -144,7 +144,7 @@ function startQrPolling(sessionId) {
             if (session.status === "authorized") {
                 clearInterval(qrPollInterval);
                 clearTimeout(qrAutoRefreshTimeout);
-                
+
                 // Save credentials in localStorage
                 localStorage.setItem("tenantId", session.tenantId || "default_tenant");
                 localStorage.setItem("email", session.email || "user@posbah.com");
@@ -190,7 +190,7 @@ function initializeDashboard() {
     document.getElementById("user-email").innerText = email;
     document.getElementById("tenant-name-badge").innerText = `Toko: ${tenantId.toUpperCase()}`;
     document.getElementById("stat-account-mode").innerText = isPremium ? "PREMIUM ACCOUNT" : "DEMO ACCOUNT (2 HARI)";
-    
+
     const modeBadge = document.getElementById("stat-account-mode");
     if (isPremium) {
         modeBadge.className = "stat-val text-success";
@@ -337,7 +337,7 @@ function renderDashboardStats(transactions) {
 
     transactions.slice(0, 5).forEach(tx => {
         const tr = document.createElement("tr");
-        const formattedDate = new Date(Number(tx.date)).toLocaleTimeString("id-ID", {hour: '2-digit', minute:'2-digit'});
+        const formattedDate = new Date(Number(tx.date)).toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit' });
         tr.innerHTML = `
             <td>${formattedDate}</td>
             <td><strong>${tx.receiptNumber}</strong></td>
@@ -446,7 +446,7 @@ function renderAttendanceLogs() {
 
     // Calculate active stats
     document.getElementById("stat-employee-count").innerText = employees.length;
-    
+
     let today = new Date().toDateString();
     let todayLogs = attendanceLogs.filter(log => new Date(log.logTime).toDateString() === today);
     document.getElementById("stat-today-attendance").innerText = todayLogs.length;
@@ -470,11 +470,11 @@ function renderAttendanceLogs() {
         const emp = employees.find(e => e.fingerprintPIN === log.employeePIN);
         const employeeName = emp ? emp.name : `Karyawan (${log.employeePIN})`;
 
-        const logInTimeStr = new Date(log.logTime).toLocaleTimeString("id-ID", {hour: '2-digit', minute:'2-digit'});
-        
+        const logInTimeStr = new Date(log.logTime).toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit' });
+
         let logOutTimeStr = "-";
         if (log.checkOutTime) {
-            logOutTimeStr = new Date(log.checkOutTime).toLocaleTimeString("id-ID", {hour: '2-digit', minute:'2-digit'});
+            logOutTimeStr = new Date(log.checkOutTime).toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit' });
         }
 
         let isCheckoutMissing = !log.checkOutTime;
@@ -483,7 +483,7 @@ function renderAttendanceLogs() {
 
         let aiPredictionText = "-";
         let aiBadgeClass = "";
-        
+
         if (isCheckoutMissing && timeDiffHours > 12) {
             aiPredictionText = "Lupa Scan Pulang (Deteksi AI)";
             aiBadgeClass = "ai-badge warning";
@@ -547,7 +547,7 @@ function updateCartUI() {
     let subtotal = 0;
     cart.forEach(item => {
         subtotal += item.price * item.qty;
-        
+
         const itemRow = document.createElement("div");
         itemRow.className = "cart-item";
         itemRow.innerHTML = `
@@ -576,7 +576,7 @@ function updateCartUI() {
     document.getElementById("cart-total").innerText = formatRupiah(total);
 }
 
-window.changeQty = function(id, val) {
+window.changeQty = function (id, val) {
     const item = cart.find(i => i.id === id);
     if (!item) return;
 
@@ -597,7 +597,7 @@ async function triggerCheckout() {
     const subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
     const discount = Number(document.getElementById("cart-discount").value) || 0;
     const total = subtotal - discount;
-    
+
     const activePayMethod = document.querySelector(".pay-method-btn.active").getAttribute("data-method");
     const timestamp = Date.now();
     const receiptNum = `SB-${timestamp.toString().slice(-6)}`;
@@ -637,7 +637,7 @@ async function triggerCheckout() {
         // Post Transaction
         const resTx = await fetch(`${BASE_URL}/api/sync/transactions`, {
             method: "POST",
-            headers: { 
+            headers: {
                 "Content-Type": "application/json",
                 "x-tenant-id": tenantId || "",
                 "x-user-email": localStorage.getItem("email") || "",
@@ -649,7 +649,7 @@ async function triggerCheckout() {
         // Post Items
         const resItems = await fetch(`${BASE_URL}/api/sync/transaction_items`, {
             method: "POST",
-            headers: { 
+            headers: {
                 "Content-Type": "application/json",
                 "x-tenant-id": tenantId || "",
                 "x-user-email": localStorage.getItem("email") || "",
@@ -660,7 +660,7 @@ async function triggerCheckout() {
 
         if (resTx.ok && resItems.ok) {
             alert("Transaksi Sukses!");
-            
+
             // Generate print trigger
             const fullTx = { ...txPayload[0], items: cart };
             triggerThermalPrint(fullTx);
@@ -700,11 +700,11 @@ function connectWebSocket() {
         try {
             const payload = JSON.parse(event.data);
             console.log("[WS MESSAGE RECEIVED]:", payload);
-            
+
             if (payload.event === "new_transaction" && payload.data) {
                 const tenantId = localStorage.getItem("tenantId");
                 const firstRow = payload.data[0];
-                
+
                 if (firstRow && firstRow.tenantId === tenantId) {
                     console.log("[WS] Triggering automatic thermal print for receipt:", firstRow.receiptNumber);
                     triggerThermalPrint(firstRow);
@@ -713,7 +713,7 @@ function connectWebSocket() {
             } else if (payload.event === "data_synced" && payload.data) {
                 const tenantId = localStorage.getItem("tenantId");
                 const firstRow = payload.data[0];
-                
+
                 if (firstRow && firstRow.tenantId === tenantId) {
                     console.log("[WS] Silent data refresh triggered for table:", payload.table);
                     refreshData();
@@ -728,7 +728,7 @@ function connectWebSocket() {
         console.warn("WebSocket terputus. Mencoba menghubungkan kembali dalam 5 detik...");
         document.getElementById("ws-status").innerText = "Koneksi Terputus";
         document.getElementById("ws-status").parentElement.querySelector(".dot").className = "dot";
-        
+
         setTimeout(connectWebSocket, 5000);
     };
 
@@ -740,10 +740,10 @@ function connectWebSocket() {
 // Continuous Form Thermal Print Layout Injection (Groziie TD630 layout)
 function triggerThermalPrint(tx) {
     const printArea = document.getElementById("print-area");
-    
+
     const formattedDate = new Date(Number(tx.date || Date.now())).toLocaleString("id-ID");
     const items = tx.items || [];
-    
+
     let itemsRowsHtml = "";
     if (items.length > 0) {
         items.forEach(item => {
@@ -874,7 +874,7 @@ function setupPOSListeners() {
         btn.addEventListener("click", () => {
             categoryBtns.forEach(b => b.classList.remove("active"));
             btn.classList.add("active");
-            
+
             const category = btn.getAttribute("data-category");
             const searchVal = document.getElementById("product-search").value;
             renderPOSProducts(category, searchVal);
@@ -1043,7 +1043,7 @@ function renderInvoicesList() {
         const clientName = client ? client.clientName : `Klien ID: ${inv.clientId}`;
 
         // Format Date
-        const dueDateStr = inv.dueDate ? new Date(Number(inv.dueDate)).toLocaleDateString("id-ID", {year: 'numeric', month: 'short', day: 'numeric'}) : "-";
+        const dueDateStr = inv.dueDate ? new Date(Number(inv.dueDate)).toLocaleDateString("id-ID", { year: 'numeric', month: 'short', day: 'numeric' }) : "-";
 
         let statusClass = "warning";
         if (inv.status === "PAID") statusClass = "success";
@@ -1066,7 +1066,7 @@ function renderInvoicesList() {
     });
 }
 
-window.showInvoiceDetails = function(invoiceId) {
+window.showInvoiceDetails = function (invoiceId) {
     const invoice = invoices.find(i => i.id === invoiceId);
     if (!invoice) return;
 
@@ -1078,7 +1078,7 @@ window.showInvoiceDetails = function(invoiceId) {
     document.getElementById("inv-detail-number").innerText = invoice.number || "-";
     document.getElementById("inv-detail-title").innerText = invoice.title || "-";
     document.getElementById("inv-detail-client").innerText = clientName;
-    document.getElementById("inv-detail-due").innerText = invoice.dueDate ? new Date(Number(invoice.dueDate)).toLocaleDateString("id-ID", {year: 'numeric', month: 'long', day: 'numeric'}) : "-";
+    document.getElementById("inv-detail-due").innerText = invoice.dueDate ? new Date(Number(invoice.dueDate)).toLocaleDateString("id-ID", { year: 'numeric', month: 'long', day: 'numeric' }) : "-";
     document.getElementById("inv-detail-status").innerText = translateInvoiceStatus(invoice.status || "DRAFT");
     document.getElementById("inv-detail-terms").innerText = translatePaymentTerms(invoice.paymentTerms || "14 days");
 
@@ -1384,7 +1384,7 @@ function triggerInvoicePrint() {
             #print-area {
                 width: 9.5in !important;
                 height: 11in !important;
-                padding: 0.6in 0.8in !important;
+                padding: 0.3in 0.3in !important;
                 box-sizing: border-box !important;
             }
         `;
@@ -1442,8 +1442,8 @@ function triggerInvoicePrint() {
                 <td style="text-align: right; vertical-align: top; line-height: 1.4; font-size: 13px; color: #000;">
                     <span class="doc-title">FAKTUR</span><br>
                     No: ${currentInvoice.number}<br>
-                    Tanggal Faktur: ${new Date(Number(currentInvoice.createdAt || Date.now())).toLocaleDateString("id-ID", {year: 'numeric', month: 'long', day: 'numeric'})}<br>
-                    Jatuh Tempo: ${currentInvoice.dueDate ? new Date(Number(currentInvoice.dueDate)).toLocaleDateString("id-ID", {year: 'numeric', month: 'long', day: 'numeric'}) : "-"}<br>
+                    Tanggal Faktur: ${new Date(Number(currentInvoice.createdAt || Date.now())).toLocaleDateString("id-ID", { year: 'numeric', month: 'long', day: 'numeric' })}<br>
+                    Jatuh Tempo: ${currentInvoice.dueDate ? new Date(Number(currentInvoice.dueDate)).toLocaleDateString("id-ID", { year: 'numeric', month: 'long', day: 'numeric' }) : "-"}<br>
                     Status: <span style="font-weight: bold; color: ${currentInvoice.status === 'PAID' ? '#10B981' : '#EF4444'};">${translateInvoiceStatus(currentInvoice.status)}</span>
                 </td>
             </tr>
@@ -1589,7 +1589,7 @@ function triggerSjPrint() {
             #print-area {
                 width: 9.5in !important;
                 height: 11in !important;
-                padding: 0.6in 0.8in !important;
+                padding: 0.3in 0.3in !important;
                 box-sizing: border-box !important;
             }
         `;
@@ -1638,7 +1638,7 @@ function triggerSjPrint() {
                 <td style="text-align: right; vertical-align: top;">
                     <span class="doc-title">Surat Jalan</span><br>
                     No. SJ: <strong>SJ-${currentInvoice.number}</strong><br>
-                    Tanggal: ${new Date().toLocaleDateString("id-ID", {year: 'numeric', month: 'long', day: 'numeric'})}
+                    Tanggal: ${new Date().toLocaleDateString("id-ID", { year: 'numeric', month: 'long', day: 'numeric' })}
                 </td>
             </tr>
         </table>
@@ -1827,7 +1827,7 @@ async function fetchOutletMarginReport(days = 7) {
                 totalMargin += row.margin;
 
                 const marginPercent = row.revenue > 0 ? ((row.margin / row.revenue) * 100).toFixed(1) : "0.0";
-                
+
                 const tr = document.createElement("tr");
                 tr.innerHTML = `
                     <td>${row.id}</td>
@@ -1845,7 +1845,7 @@ async function fetchOutletMarginReport(days = 7) {
         // Update card values
         document.getElementById("margin-total-revenue").innerText = formatRupiah(totalRevenue);
         document.getElementById("margin-total-cogs").innerText = formatRupiah(totalCogs);
-        
+
         const totalMarginPercent = totalRevenue > 0 ? ((totalMargin / totalRevenue) * 100).toFixed(1) : "0.0";
         document.getElementById("margin-total-profit").innerText = `${formatRupiah(totalMargin)} (${totalMarginPercent}%)`;
 
