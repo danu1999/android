@@ -1,3 +1,13 @@
+POSBah v2.17.33 - Klasifikasi Menu Engineering & Pencatatan Wastage Realtime
+
+Halo Kak! POSBah v2.17.33 hadir membawa fitur analisis tingkat lanjut dan pencatatan kerugian inventaris untuk usaha Anda:
+1. Klasifikasi Menu Engineering: Modul analisis margin kini dilengkapi dengan pengelompokan produk secara otomatis ke dalam kategori Stars, Plowhorses, Puzzles, dan Dogs berdasarkan volume penjualan dan profit margin produk dibandingkan rata-rata outlet. Membantu Anda mengambil keputusan menu/produk andalan dengan lebih strategis.
+2. Pencatatan Wastage & Spoilage Bawaan: Menambahkan fitur pencatatan bahan baku/produk terbuang (rusak, tumpah, atau kedaluwarsa). Pencatatan wastage secara otomatis akan mengurangi stok produk di perangkat lokal Anda saat itu juga, menghitung kerugian berbasis HPP, dan mencatatnya sebagai Biaya Usaha (Expense) yang tersinkronisasi secara real-time ke VPS dalam waktu 3 detik.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.32 - Batas Minimum Stok & Peningkatan Sinkronisasi Realtime
 
 Halo Kak! POSBah v2.17.32 hadir membawa peningkatan pengelolaan produk:

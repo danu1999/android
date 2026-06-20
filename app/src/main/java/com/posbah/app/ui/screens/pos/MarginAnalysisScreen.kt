@@ -148,7 +148,63 @@ class MarginAnalysisViewModel @Inject constructor(
             }
         }
     }
+
+    fun addWastage(
+        context: android.content.Context,
+        product: ProductEntity,
+        quantity: Int,
+        reason: String,
+        outletId: Long,
+        onSuccess: () -> Unit
+    ) {
+        viewModelScope.launch {
+            val costPrice = product.costPrice
+            val totalLoss = quantity * costPrice
+            val todayStr = SimpleDateFormat("yyMMdd", Locale.US).format(Date())
+            val prefix = when {
+                product.category.contains("rental", ignoreCase = true) -> "RN"
+                product.category.contains("laundry", ignoreCase = true) -> "LD"
+                else -> "FNB"
+            }
+            val receiptNumber = "EXP-$prefix-WASTAGE-$todayStr-${java.util.UUID.randomUUID().toString().take(6).uppercase()}"
+            val tx = TransactionEntity(
+                tenantId = tenantId,
+                outletId = outletId,
+                employeeId = 1L,
+                customerName = "Wastage / Spoilage",
+                receiptNumber = receiptNumber,
+                date = System.currentTimeMillis(),
+                subtotal = -totalLoss,
+                total = -totalLoss,
+                paymentMethod = "CASH",
+                status = "COMPLETED",
+                type = "EXPENSE",
+                notes = "Wastage: ${product.name} (Qty: $quantity ${product.unit}) - Alasan: $reason"
+            )
+            transactionRepository.checkout(tx, emptyList())
+            
+            // Deduct stock
+            val newStock = (product.stock - quantity).coerceAtLeast(0)
+            productRepository.updateStock(product.id, newStock)
+            
+            refreshItems()
+            onSuccess()
+            
+            viewModelScope.launch(Dispatchers.IO) {
+                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context.applicationContext, db, tenantId)
+            }
+        }
+    }
 }
+
+data class ProductAnalysisItem(
+    val product: ProductEntity,
+    val unitsSold: Double,
+    val revenue: Double,
+    val cogs: Double,
+    val grossProfit: Double,
+    val marginPercent: Double
+)
 
 fun getMonthlyMaintenance(wholesalePrices: String?): Double {
     if (wholesalePrices.isNullOrBlank()) return 0.0
@@ -210,8 +266,9 @@ fun MarginAnalysisScreen(
     var posMode by remember { mutableStateOf("SEMUA") } // SEMUA, FNB, RENTAL, LAUNDRY
     var datePreset by remember { mutableStateOf("HARI_INI") } // HARI_INI, 7_HARI, 30_HARI, KUSTOM
     var customerType by remember { mutableStateOf("SEMUA") } // SEMUA, PELANGGAN, UMUM
-    var activeTab by remember { mutableStateOf("HISTORY") } // "HISTORY" or "AGING_AR"
+    var activeTab by remember { mutableStateOf("HISTORY") } // "HISTORY", "MENU_ENGINEERING", "AGING_AR"
     var txToSettle by remember { mutableStateOf<TransactionEntity?>(null) }
+    var showWastageDialog by remember { mutableStateOf(false) }
 
     // Date pickers state
     val calendar = Calendar.getInstance()
@@ -346,6 +403,80 @@ fun MarginAnalysisScreen(
     val netProfit = grossProfit - totalExpenses
     val marginPercent = if (totalRevenue > 0) (grossProfit / totalRevenue) * 100.0 else 0.0
     val netMarginPercent = if (totalRevenue > 0) (netProfit / totalRevenue) * 100.0 else 0.0
+
+    // Menu Engineering & Product margin analysis calculations
+    val productAnalysisItems = remember(products, filteredTx, transactionItems) {
+        val salesTxOnly = filteredTx.filter { it.type != "EXPENSE" }
+        products.map { prod ->
+            val salesForProd = transactionItems.filter { item ->
+                item.productId == prod.id && salesTxOnly.any { it.id == item.transactionId }
+            }
+            val unitsSold = salesForProd.sumOf { item ->
+                val tx = salesTxOnly.find { it.id == item.transactionId }
+                val isKg = tx?.receiptNumber?.startsWith("LD-") == true && prod.unit == "Kg"
+                if (isKg) item.quantity / 10.0 else item.quantity.toDouble()
+            }
+            val revenue = salesForProd.sumOf { item ->
+                val tx = salesTxOnly.find { it.id == item.transactionId }
+                val isKg = tx?.receiptNumber?.startsWith("LD-") == true && prod.unit == "Kg"
+                val qty = if (isKg) item.quantity / 10.0 else item.quantity.toDouble()
+                qty * item.price
+            }
+            val cogs = salesForProd.sumOf { item ->
+                val tx = salesTxOnly.find { it.id == item.transactionId }
+                val isKg = tx?.receiptNumber?.startsWith("LD-") == true && prod.unit == "Kg"
+                val qty = if (isKg) item.quantity / 10.0 else item.quantity.toDouble()
+                when {
+                    tx?.receiptNumber?.startsWith("FNB-") == true -> item.quantity * item.costPrice
+                    tx?.receiptNumber?.startsWith("RN-") == true -> {
+                        val days = tx.queueNumber ?: 1
+                        val monthlyMaint = getMonthlyMaintenance(prod.wholesalePrices)
+                        val dailyCogs = (if (item.costPrice > 1_000_000.0) item.costPrice / 1825.0 else item.costPrice) + (monthlyMaint / 30.0)
+                        dailyCogs * days
+                    }
+                    tx?.receiptNumber?.startsWith("LD-") == true -> {
+                        val monthlyMaint = getMonthlyMaintenance(prod.wholesalePrices)
+                        val baseCogs = qty * item.costPrice
+                        val maintShare = qty * (monthlyMaint / 300.0)
+                        baseCogs + maintShare
+                    }
+                    else -> item.quantity * item.costPrice
+                }
+            }
+            val grossProfit = revenue - cogs
+            val marginPercent = if (revenue > 0) (grossProfit / revenue) * 100.0 else {
+                if (prod.price > 0) ((prod.price - prod.costPrice) / prod.price) * 100.0 else 0.0
+            }
+
+            ProductAnalysisItem(
+                product = prod,
+                unitsSold = unitsSold,
+                revenue = revenue,
+                cogs = cogs,
+                grossProfit = grossProfit,
+                marginPercent = marginPercent
+            )
+        }
+    }
+
+    val soldProducts = remember(productAnalysisItems) {
+        productAnalysisItems.filter { it.unitsSold > 0 }
+    }
+    val avgPopularity = remember(soldProducts) {
+        if (soldProducts.isNotEmpty()) soldProducts.sumOf { it.unitsSold } / soldProducts.size else 0.0
+    }
+    val avgMarginPercent = remember(soldProducts) {
+        if (soldProducts.isNotEmpty()) soldProducts.sumOf { it.marginPercent } / soldProducts.size else 0.0
+    }
+
+    fun getMenuCategory(item: ProductAnalysisItem): String {
+        return when {
+            item.unitsSold >= avgPopularity && item.marginPercent >= avgMarginPercent -> "STAR"
+            item.unitsSold >= avgPopularity && item.marginPercent < avgMarginPercent -> "PLOWHORSE"
+            item.unitsSold < avgPopularity && item.marginPercent >= avgMarginPercent -> "PUZZLE"
+            else -> "DOG"
+        }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -774,7 +905,7 @@ fun MarginAnalysisScreen(
             // Tab Toggle Button Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Button(
                     onClick = { activeTab = "HISTORY" },
@@ -782,11 +913,23 @@ fun MarginAnalysisScreen(
                         containerColor = if (activeTab == "HISTORY") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                         contentColor = if (activeTab == "HISTORY") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                     ),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
                 ) {
-                    Icon(Icons.Outlined.History, null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Riwayat Margin", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Outlined.History, null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Riwayat", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+                Button(
+                    onClick = { activeTab = "MENU_ENGINEERING" },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (activeTab == "MENU_ENGINEERING") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = if (activeTab == "MENU_ENGINEERING") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+                    modifier = Modifier.weight(1.2f),
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                ) {
+                    Text("📊 Analisis Menu", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
                 Button(
                     onClick = { activeTab = "AGING_AR" },
@@ -794,284 +937,466 @@ fun MarginAnalysisScreen(
                         containerColor = if (activeTab == "AGING_AR") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                         contentColor = if (activeTab == "AGING_AR") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                     ),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
                 ) {
-                    Icon(Icons.Outlined.People, null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Buku Piutang & Aging AR", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Outlined.People, null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Buku Piutang", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
-            if (activeTab == "HISTORY") {
-                // Transaction History Title
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Riwayat Transaksi Terfilter (${filteredTx.size} Transaksi)",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                // LazyColumn of Transactions
-                if (filteredTx.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        contentAlignment = Alignment.Center
+            when (activeTab) {
+                "HISTORY" -> {
+                    // Transaction History Title
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Tidak ada data transaksi untuk filter ini.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            text = "Riwayat Transaksi Terfilter (${filteredTx.size} Transaksi)",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(filteredTx, key = { it.id }) { tx ->
-                            val dateStr = SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault()).format(Date(tx.date))
-                            val posType = when {
-                                tx.receiptNumber.startsWith("FNB-") || tx.receiptNumber.startsWith("EXP-FNB-") -> "FnB"
-                                tx.receiptNumber.startsWith("RN-") || tx.receiptNumber.startsWith("EXP-RN-") -> "Rental"
-                                tx.receiptNumber.startsWith("LD-") || tx.receiptNumber.startsWith("EXP-LD-") -> "Laundry"
-                                else -> "POS"
-                            }
-                            val posColor = when (posType) {
-                                "FnB" -> Color(0xFFE8F5E9) to Color(0xFF2E7D32)
-                                "Rental" -> Color(0xFFFFF3E0) to Color(0xFFE65100)
-                                "Laundry" -> Color(0xFFE1F5FE) to Color(0xFF0288D1)
-                                else -> Color(0xFFECEFF1) to Color(0xFF37474F)
-                            }
 
-                            val isExpense = tx.type == "EXPENSE"
-
-                            // Calculate HPP/COGS for this transaction
-                            val txItems = transactionItems.filter { it.transactionId == tx.id }
-                            val txCogs = if (isExpense) 0.0 else txItems.sumOf { item ->
-                                when {
-                                    tx.receiptNumber.startsWith("FNB-") -> {
-                                        item.quantity * item.costPrice
-                                    }
-                                    tx.receiptNumber.startsWith("RN-") -> {
-                                        val days = tx.queueNumber ?: 1
-                                        val prod = products.find { it.id == item.productId }
-                                        val monthlyMaint = getMonthlyMaintenance(prod?.wholesalePrices)
-                                        val dailyCogs = (if (item.costPrice > 1_000_000.0) item.costPrice / 1825.0 else item.costPrice) + (monthlyMaint / 30.0)
-                                        dailyCogs * days
-                                    }
-                                    tx.receiptNumber.startsWith("LD-") -> {
-                                        val prod = products.find { it.id == item.productId }
-                                        val isKg = prod?.unit == "Kg"
-                                        val monthlyMaint = getMonthlyMaintenance(prod?.wholesalePrices)
-                                        val qty = if (isKg) item.quantity / 10.0 else item.quantity.toDouble()
-                                        val baseCogs = qty * item.costPrice
-                                        val maintShare = qty * (monthlyMaint / 300.0)
-                                        baseCogs + maintShare
-                                    }
-                                    else -> item.quantity * item.costPrice
+                    // LazyColumn of Transactions
+                    if (filteredTx.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("Tidak ada data transaksi untuk filter ini.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(filteredTx, key = { it.id }) { tx ->
+                                val dateStr = SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault()).format(Date(tx.date))
+                                val posType = when {
+                                    tx.receiptNumber.startsWith("FNB-") || tx.receiptNumber.startsWith("EXP-FNB-") -> "FnB"
+                                    tx.receiptNumber.startsWith("RN-") || tx.receiptNumber.startsWith("EXP-RN-") -> "Rental"
+                                    tx.receiptNumber.startsWith("LD-") || tx.receiptNumber.startsWith("EXP-LD-") -> "Laundry"
+                                    else -> "POS"
                                 }
-                            }
-                            val txMargin = if (isExpense) 0.0 else tx.total - txCogs
-                            val txMarginPercent = if (!isExpense && tx.total > 0) (txMargin / tx.total) * 100.0 else 0.0
+                                val posColor = when (posType) {
+                                    "FnB" -> Color(0xFFE8F5E9) to Color(0xFF2E7D32)
+                                    "Rental" -> Color(0xFFFFF3E0) to Color(0xFFE65100)
+                                    "Laundry" -> Color(0xFFE1F5FE) to Color(0xFF0288D1)
+                                    else -> Color(0xFFECEFF1) to Color(0xFF37474F)
+                                }
 
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        selectedTxDetails = tx
-                                        selectedTxItems = txItems
+                                val isExpense = tx.type == "EXPENSE"
+
+                                // Calculate HPP/COGS for this transaction
+                                val txItems = transactionItems.filter { it.transactionId == tx.id }
+                                val txCogs = if (isExpense) 0.0 else txItems.sumOf { item ->
+                                    when {
+                                        tx.receiptNumber.startsWith("FNB-") -> {
+                                            item.quantity * item.costPrice
+                                        }
+                                        tx.receiptNumber.startsWith("RN-") -> {
+                                            val days = tx.queueNumber ?: 1
+                                            val prod = products.find { it.id == item.productId }
+                                            val monthlyMaint = getMonthlyMaintenance(prod?.wholesalePrices)
+                                            val dailyCogs = (if (item.costPrice > 1_000_000.0) item.costPrice / 1825.0 else item.costPrice) + (monthlyMaint / 30.0)
+                                            dailyCogs * days
+                                        }
+                                        tx.receiptNumber.startsWith("LD-") -> {
+                                            val prod = products.find { it.id == item.productId }
+                                            val isKg = prod?.unit == "Kg"
+                                            val monthlyMaint = getMonthlyMaintenance(prod?.wholesalePrices)
+                                            val qty = if (isKg) item.quantity / 10.0 else item.quantity.toDouble()
+                                            val baseCogs = qty * item.costPrice
+                                            val maintShare = qty * (monthlyMaint / 300.0)
+                                            baseCogs + maintShare
+                                        }
+                                        else -> item.quantity * item.costPrice
                                     }
-                            ) {
-                                Column(modifier = Modifier.padding(14.dp)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text(tx.receiptNumber, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                                Spacer(Modifier.width(8.dp))
-                                                Surface(
-                                                    shape = RoundedCornerShape(4.dp),
-                                                    color = posColor.first,
-                                                    contentColor = posColor.second
-                                                ) {
+                                }
+                                val txMargin = if (isExpense) 0.0 else tx.total - txCogs
+                                val txMarginPercent = if (!isExpense && tx.total > 0) (txMargin / tx.total) * 100.0 else 0.0
+
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            selectedTxDetails = tx
+                                            selectedTxItems = txItems
+                                        }
+                                ) {
+                                    Column(modifier = Modifier.padding(14.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Text(tx.receiptNumber, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                                    Spacer(Modifier.width(8.dp))
+                                                    Surface(
+                                                        shape = RoundedCornerShape(4.dp),
+                                                        color = posColor.first,
+                                                        contentColor = posColor.second
+                                                    ) {
+                                                        Text(
+                                                            text = if (isExpense) "$posType (Biaya)" else posType,
+                                                            fontSize = 9.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                }
+                                                Spacer(Modifier.height(2.dp))
+                                                Text(dateStr, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                Text(if (isExpense) "Keterangan: ${tx.notes ?: "-"}" else "Pelanggan: ${tx.customerName ?: "Umum"}", fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                            }
+
+                                            Column(horizontalAlignment = Alignment.End) {
+                                                Text(
+                                                    text = Formatters.rupiah(tx.total),
+                                                    fontWeight = FontWeight.Black,
+                                                    color = if (isExpense) Color(0xFFC62828) else MaterialTheme.colorScheme.primary,
+                                                    fontSize = 13.sp
+                                                )
+                                                if (isExpense) {
                                                     Text(
-                                                        text = if (isExpense) "$posType (Biaya)" else posType,
-                                                        fontSize = 9.sp,
+                                                        text = "Biaya Usaha",
+                                                        fontSize = 10.sp,
                                                         fontWeight = FontWeight.Bold,
-                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                        color = Color(0xFFC62828)
+                                                    )
+                                                } else {
+                                                    Text(
+                                                        text = "Profit: ${Formatters.rupiah(txMargin)} (${String.format("%.0f%%", txMarginPercent)})",
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (txMargin >= 0) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
                                                     )
                                                 }
                                             }
-                                            Spacer(Modifier.height(2.dp))
-                                            Text(dateStr, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                            Text(if (isExpense) "Keterangan: ${tx.notes ?: "-"}" else "Pelanggan: ${tx.customerName ?: "Umum"}", fontSize = 11.sp, fontWeight = FontWeight.Medium)
                                         }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                "MENU_ENGINEERING" -> {
+                    var menuSearchQuery by remember { mutableStateOf("") }
+                    val filteredProductsForAnalysis = remember(productAnalysisItems, menuSearchQuery) {
+                        productAnalysisItems.filter {
+                            it.product.name.contains(menuSearchQuery, ignoreCase = true)
+                        }
+                    }
 
+                    val starCount = productAnalysisItems.count { getMenuCategory(it) == "STAR" }
+                    val plowhorseCount = productAnalysisItems.count { getMenuCategory(it) == "PLOWHORSE" }
+                    val puzzleCount = productAnalysisItems.count { getMenuCategory(it) == "PUZZLE" }
+                    val dogCount = productAnalysisItems.count { getMenuCategory(it) == "DOG" }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            Surface(
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0xFFE8F5E9),
+                                border = BorderStroke(1.dp, Color(0xFF2E7D32).copy(alpha = 0.2f))
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Text("⭐ Stars", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF1B5E20))
+                                    Text("$starCount Menu", fontWeight = FontWeight.Black, fontSize = 16.sp, color = Color(0xFF1B5E20))
+                                    Text("Laris & Margin Tinggi", fontSize = 9.sp, color = Color(0xFF2E7D32))
+                                }
+                            }
+                            Surface(
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0xFFFFF3E0),
+                                border = BorderStroke(1.dp, Color(0xFFE65100).copy(alpha = 0.2f))
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Text("🐄 Plowhorses", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFFE65100))
+                                    Text("$plowhorseCount Menu", fontWeight = FontWeight.Black, fontSize = 16.sp, color = Color(0xFFE65100))
+                                    Text("Laris tapi Margin Rendah", fontSize = 9.sp, color = Color(0xFFE65100))
+                                }
+                            }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            Surface(
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0xFFE8EAF6),
+                                border = BorderStroke(1.dp, Color(0xFF1A237E).copy(alpha = 0.2f))
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Text("🧩 Puzzles", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF1A237E))
+                                    Text("$puzzleCount Menu", fontWeight = FontWeight.Black, fontSize = 16.sp, color = Color(0xFF1A237E))
+                                    Text("Sepi tapi Margin Tinggi", fontSize = 9.sp, color = Color(0xFF1A237E))
+                                }
+                            }
+                            Surface(
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0xFFFFEBEE),
+                                border = BorderStroke(1.dp, Color(0xFFC62828).copy(alpha = 0.2f))
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Text("🐕 Dogs", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFFB71C1C))
+                                    Text("$dogCount Menu", fontWeight = FontWeight.Black, fontSize = 16.sp, color = Color(0xFFB71C1C))
+                                    Text("Sepi & Margin Rendah", fontSize = 9.sp, color = Color(0xFFC62828))
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(4.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = menuSearchQuery,
+                                onValueChange = { menuSearchQuery = it },
+                                label = { Text("Cari menu...", fontSize = 11.sp) },
+                                modifier = Modifier.weight(1f).height(48.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                singleLine = true,
+                                textStyle = LocalTextStyle.current.copy(fontSize = 12.sp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Button(
+                                onClick = { showWastageDialog = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828)),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.height(42.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp)
+                            ) {
+                                Text("🗑️ Catat Wastage", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+                        }
+
+                        if (filteredProductsForAnalysis.isEmpty()) {
+                            Box(
+                                modifier = Modifier.weight(1f).fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("Tidak ada produk untuk filter ini.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.weight(1f).fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(filteredProductsForAnalysis, key = { it.product.id }) { item ->
+                                    val cat = getMenuCategory(item)
+                                    val catLabel = when (cat) {
+                                        "STAR" -> "⭐ Star"
+                                        "PLOWHORSE" -> "🐄 Plowhorse"
+                                        "PUZZLE" -> "🧩 Puzzle"
+                                        else -> "🐕 Dog"
+                                    }
+                                    val catColor = when (cat) {
+                                        "STAR" -> Color(0xFFE8F5E9) to Color(0xFF1B5E20)
+                                        "PLOWHORSE" -> Color(0xFFFFF3E0) to Color(0xFFE65100)
+                                        "PUZZLE" -> Color(0xFFE8EAF6) to Color(0xFF1A237E)
+                                        else -> Color(0xFFFFEBEE) to Color(0xFFB71C1C)
+                                    }
+
+                                    val isKg = item.product.unit == "Kg"
+                                    val unitsSoldStr = if (isKg) {
+                                        "${String.format("%.1f", item.unitsSold)} Kg"
+                                    } else {
+                                        "${item.unitsSold.toInt()} ${item.product.unit}"
+                                    }
+
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MaterialTheme.colorScheme.surface,
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(item.product.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                                Surface(
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    color = catColor.first,
+                                                    contentColor = catColor.second
+                                                ) {
+                                                    Text(
+                                                        text = catLabel,
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                                    )
+                                                }
+                                            }
+                                            Spacer(Modifier.height(6.dp))
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Column {
+                                                    Text("Terjual: $unitsSoldStr", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                    Text("Harga Jual: ${Formatters.rupiah(item.product.price)}", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                    Text("HPP: ${Formatters.rupiah(item.product.costPrice)}", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                }
+                                                Column(horizontalAlignment = Alignment.End) {
+                                                    Text("Omzet: ${Formatters.rupiah(item.revenue)}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                                    Text("Profit: ${Formatters.rupiah(item.grossProfit)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                                                    Text("Margin %: ${String.format("%.1f%%", item.marginPercent)}", fontSize = 11.sp, fontWeight = FontWeight.Black, color = Color(0xFF6A1B9A))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                "AGING_AR" -> {
+                    // Tab Buku Piutang & Aging AR
+                    val unpaidTx = remember(transactions) {
+                        transactions.filter { it.paymentMethod == "HUTANG" && it.type != "EXPENSE" }
+                    }
+                    val unpaidTxFiltered = remember(unpaidTx, posMode) {
+                        unpaidTx.filter { tx ->
+                            when (posMode) {
+                                "FNB" -> tx.receiptNumber.startsWith("FNB-")
+                                "RENTAL" -> tx.receiptNumber.startsWith("RN-")
+                                "LAUNDRY" -> tx.receiptNumber.startsWith("LD-")
+                                else -> true
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Buku Piutang (${unpaidTxFiltered.size} Piutang Outstanding)",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    if (unpaidTxFiltered.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("Tidak ada piutang outstanding.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    } else {
+                        val todayMs = Calendar.getInstance().apply {
+                            set(Calendar.HOUR_OF_DAY, 0)
+                            set(Calendar.MINUTE, 0)
+                            set(Calendar.SECOND, 0)
+                            set(Calendar.MILLISECOND, 0)
+                        }.timeInMillis
+
+                        LazyColumn(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(unpaidTxFiltered, key = { it.id }) { tx ->
+                                val txDateStr = SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(tx.date))
+                                val dueDateStr = if (tx.deliveryDate != null) {
+                                    SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(tx.deliveryDate))
+                                } else {
+                                    "Tidak Diatur"
+                                }
+
+                                // Calculate aging category
+                                val agingCat = if (tx.deliveryDate == null) {
+                                    "Belum Jatuh Tempo"
+                                } else {
+                                    val diffMs = todayMs - tx.deliveryDate
+                                    val diffDays = diffMs / (24 * 60 * 60 * 1000)
+                                    when {
+                                        diffDays <= 0 -> "Belum Jatuh Tempo"
+                                        diffDays in 1..30 -> "Terlambat 1-30 Hari"
+                                        diffDays in 31..60 -> "Terlambat 31-60 Hari"
+                                        else -> "Terlambat > 60 Hari"
+                                    }
+                                }
+
+                                val agingColor = when (agingCat) {
+                                    "Belum Jatuh Tempo" -> Color(0xFF2E7D32)
+                                    "Terlambat 1-30 Hari" -> Color(0xFFE65100)
+                                    "Terlambat 31-60 Hari" -> Color(0xFFD84315)
+                                    else -> Color(0xFFC62828)
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(14.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(tx.receiptNumber, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                            Text("Pelanggan: ${tx.customerName ?: "Umum"}", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                            Spacer(Modifier.height(4.dp))
+                                            Text("Tgl Transaksi: $txDateStr", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text("Tgl Jatuh Tempo: $dueDateStr", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = agingColor)
+                                            Spacer(Modifier.height(4.dp))
+                                            Surface(
+                                                shape = RoundedCornerShape(4.dp),
+                                                color = agingColor.copy(alpha = 0.1f)
+                                            ) {
+                                                Text(
+                                                    text = agingCat,
+                                                    color = agingColor,
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
                                         Column(horizontalAlignment = Alignment.End) {
                                             Text(
                                                 text = Formatters.rupiah(tx.total),
                                                 fontWeight = FontWeight.Black,
-                                                color = if (isExpense) Color(0xFFC62828) else MaterialTheme.colorScheme.primary,
-                                                fontSize = 13.sp
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontSize = 14.sp
                                             )
-                                            if (isExpense) {
-                                                Text(
-                                                    text = "Biaya Usaha",
-                                                    fontSize = 10.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = Color(0xFFC62828)
-                                                )
-                                            } else {
-                                                Text(
-                                                    text = "Profit: ${Formatters.rupiah(txMargin)} (${String.format("%.0f%%", txMarginPercent)})",
-                                                    fontSize = 10.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = if (txMargin >= 0) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
-                                                )
+                                            Spacer(Modifier.height(8.dp))
+                                            Button(
+                                                onClick = { txToSettle = tx },
+                                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                                shape = RoundedCornerShape(8.dp),
+                                                modifier = Modifier.height(28.dp)
+                                            ) {
+                                                Text("Settle / Lunas", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                             }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                // Tab Buku Piutang & Aging AR
-                val unpaidTx = remember(transactions) {
-                    transactions.filter { it.paymentMethod == "HUTANG" && it.type != "EXPENSE" }
-                }
-                val unpaidTxFiltered = remember(unpaidTx, posMode) {
-                    unpaidTx.filter { tx ->
-                        when (posMode) {
-                            "FNB" -> tx.receiptNumber.startsWith("FNB-")
-                            "RENTAL" -> tx.receiptNumber.startsWith("RN-")
-                            "LAUNDRY" -> tx.receiptNumber.startsWith("LD-")
-                            else -> true
-                        }
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Buku Piutang (${unpaidTxFiltered.size} Piutang Outstanding)",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                if (unpaidTxFiltered.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("Tidak ada piutang outstanding.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                } else {
-                    val todayMs = Calendar.getInstance().apply {
-                        set(Calendar.HOUR_OF_DAY, 0)
-                        set(Calendar.MINUTE, 0)
-                        set(Calendar.SECOND, 0)
-                        set(Calendar.MILLISECOND, 0)
-                    }.timeInMillis
-
-                    LazyColumn(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(unpaidTxFiltered, key = { it.id }) { tx ->
-                            val txDateStr = SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(tx.date))
-                            val dueDateStr = if (tx.deliveryDate != null) {
-                                SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(tx.deliveryDate))
-                            } else {
-                                "Tidak Diatur"
-                            }
-
-                            // Calculate aging category
-                            val agingCat = if (tx.deliveryDate == null) {
-                                "Belum Jatuh Tempo"
-                            } else {
-                                val diffMs = todayMs - tx.deliveryDate
-                                val diffDays = diffMs / (24 * 60 * 60 * 1000)
-                                when {
-                                    diffDays <= 0 -> "Belum Jatuh Tempo"
-                                    diffDays in 1..30 -> "Terlambat 1-30 Hari"
-                                    diffDays in 31..60 -> "Terlambat 31-60 Hari"
-                                    else -> "Terlambat > 60 Hari"
-                                }
-                            }
-
-                            val agingColor = when (agingCat) {
-                                "Belum Jatuh Tempo" -> Color(0xFF2E7D32)
-                                "Terlambat 1-30 Hari" -> Color(0xFFE65100)
-                                "Terlambat 31-60 Hari" -> Color(0xFFD84315)
-                                else -> Color(0xFFC62828)
-                            }
-
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(14.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(tx.receiptNumber, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                        Text("Pelanggan: ${tx.customerName ?: "Umum"}", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                        Spacer(Modifier.height(4.dp))
-                                        Text("Tgl Transaksi: $txDateStr", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Text("Tgl Jatuh Tempo: $dueDateStr", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = agingColor)
-                                        Spacer(Modifier.height(4.dp))
-                                        Surface(
-                                            shape = RoundedCornerShape(4.dp),
-                                            color = agingColor.copy(alpha = 0.1f)
-                                        ) {
-                                            Text(
-                                                text = agingCat,
-                                                color = agingColor,
-                                                fontSize = 9.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
-                                        }
-                                    }
-                                    Column(horizontalAlignment = Alignment.End) {
-                                        Text(
-                                            text = Formatters.rupiah(tx.total),
-                                            fontWeight = FontWeight.Black,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontSize = 14.sp
-                                        )
-                                        Spacer(Modifier.height(8.dp))
-                                        Button(
-                                            onClick = { txToSettle = tx },
-                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                                            shape = RoundedCornerShape(8.dp),
-                                            modifier = Modifier.height(28.dp)
-                                        ) {
-                                            Text("Settle / Lunas", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                         }
                                     }
                                 }
@@ -1224,6 +1549,211 @@ fun MarginAnalysisScreen(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { txToSettle = null }) { Text("Batal") }
+            }
+        )
+    }
+
+    // Dialog: Catat Wastage
+    if (showWastageDialog) {
+        var wastageOutletIdState by remember { mutableStateOf<Long?>(selectedOutletId ?: availableOutlets.firstOrNull()?.id) }
+        var wastageProductState by remember { mutableStateOf<ProductEntity?>(null) }
+        var wastageQtyState by remember { mutableStateOf("") }
+        var wastageReasonState by remember { mutableStateOf("") }
+        var productSearchQuery by remember { mutableStateOf("") }
+        var showProductDropdown by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { showWastageDialog = false },
+            title = { Text("Catat Wastage / Bahan Terbuang", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    // 1. Outlet Selection
+                    if (selectedOutletId == null && availableOutlets.size > 1) {
+                        Text("Pilih Outlet:", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        var outletExpanded by remember { mutableStateOf(false) }
+                        val activeOutlet = availableOutlets.find { it.id == wastageOutletIdState }
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            OutlinedButton(
+                                onClick = { outletExpanded = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(activeOutlet?.name ?: "Pilih Outlet")
+                            }
+                            DropdownMenu(
+                                expanded = outletExpanded,
+                                onDismissRequest = { outletExpanded = false },
+                                modifier = Modifier.fillMaxWidth(0.8f)
+                            ) {
+                                availableOutlets.forEach { ot ->
+                                    DropdownMenuItem(
+                                        text = { Text(ot.name) },
+                                        onClick = {
+                                            wastageOutletIdState = ot.id
+                                            wastageProductState = null
+                                            productSearchQuery = ""
+                                            outletExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // 2. Product Selection with Search
+                    Text("Pilih Produk:", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    val productsForWastage = remember(products, wastageOutletIdState) {
+                        if (wastageOutletIdState != null) {
+                            products.filter { it.outletId == wastageOutletIdState && !it.isDeleted }
+                        } else {
+                            products.filter { !it.isDeleted }
+                        }
+                    }
+                    val filteredProductsForDropdown = remember(productsForWastage, productSearchQuery) {
+                        productsForWastage.filter { it.name.contains(productSearchQuery, ignoreCase = true) }
+                    }
+
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = if (wastageProductState != null && !showProductDropdown) wastageProductState!!.name else productSearchQuery,
+                            onValueChange = {
+                                productSearchQuery = it
+                                showProductDropdown = true
+                                if (wastageProductState?.name != it) {
+                                    wastageProductState = null
+                                }
+                            },
+                            placeholder = { Text("Ketik nama produk...", fontSize = 12.sp) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            trailingIcon = {
+                                IconButton(onClick = { showProductDropdown = !showProductDropdown }) {
+                                    Text("▼", fontSize = 10.sp)
+                                }
+                            },
+                            textStyle = LocalTextStyle.current.copy(fontSize = 12.sp)
+                        )
+                        if (showProductDropdown && filteredProductsForDropdown.isNotEmpty()) {
+                            DropdownMenu(
+                                expanded = showProductDropdown,
+                                onDismissRequest = { showProductDropdown = false },
+                                modifier = Modifier.fillMaxWidth(0.8f).heightIn(max = 200.dp)
+                            ) {
+                                filteredProductsForDropdown.forEach { prod ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text(prod.name, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                                Text("Stok: ${prod.stock} ${prod.unit} | HPP: ${Formatters.rupiah(prod.costPrice)}", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        },
+                                        onClick = {
+                                            wastageProductState = prod
+                                            productSearchQuery = prod.name
+                                            showProductDropdown = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Selected product info
+                    if (wastageProductState != null) {
+                        val prod = wastageProductState!!
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(8.dp)) {
+                                Text("Unit: ${prod.unit}", fontSize = 11.sp)
+                                Text("Stok Sekarang: ${prod.stock} ${prod.unit}", fontSize = 11.sp)
+                                Text("HPP (Cost Price): ${Formatters.rupiah(prod.costPrice)}", fontSize = 11.sp)
+                            }
+                        }
+                    }
+
+                    // 3. Qty Input
+                    OutlinedTextField(
+                        value = wastageQtyState,
+                        onValueChange = { wastageQtyState = it.filter { char -> char.isDigit() } },
+                        label = { Text("Jumlah Terbuang (Qty)", fontSize = 11.sp) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        singleLine = true,
+                        textStyle = LocalTextStyle.current.copy(fontSize = 12.sp)
+                    )
+
+                    // 4. Reason Input
+                    OutlinedTextField(
+                        value = wastageReasonState,
+                        onValueChange = { wastageReasonState = it },
+                        label = { Text("Alasan / Catatan", fontSize = 11.sp) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        textStyle = LocalTextStyle.current.copy(fontSize = 12.sp)
+                    )
+
+                    // 5. Loss Calculation
+                    val qty = wastageQtyState.toIntOrNull() ?: 0
+                    val costPrice = wastageProductState?.costPrice ?: 0.0
+                    val estimatedLoss = qty * costPrice
+                    if (estimatedLoss > 0) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Estimasi Kerugian:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Text(Formatters.rupiah(estimatedLoss), fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                val qty = wastageQtyState.toIntOrNull() ?: 0
+                val prod = wastageProductState
+                val outletId = wastageOutletIdState
+                Button(
+                    onClick = {
+                        if (prod == null) {
+                            Toast.makeText(context, "Silakan pilih produk!", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        if (qty <= 0) {
+                            Toast.makeText(context, "Jumlah harus lebih besar dari 0!", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        if (outletId == null) {
+                            Toast.makeText(context, "Outlet tidak valid!", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        viewModel.addWastage(
+                            context = context,
+                            product = prod,
+                            quantity = qty,
+                            reason = wastageReasonState.ifBlank { "Wastage / Spoilage tanpa alasan spesifik" },
+                            outletId = outletId
+                        ) {
+                            showWastageDialog = false
+                            wastageQtyState = ""
+                            wastageReasonState = ""
+                            wastageProductState = null
+                            productSearchQuery = ""
+                            Toast.makeText(context, "Wastage berhasil dicatat & disinkronkan!", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Catat & Potong Stok")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showWastageDialog = false }) { Text("Batal") }
             }
         )
     }
