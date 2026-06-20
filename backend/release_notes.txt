@@ -1,3 +1,13 @@
+POSBah v2.17.26 - Rilis Versi 65 & Penyempurnaan Sinkronisasi
+
+Halo Kak! POSBah v2.17.26 hadir dengan pembaruan rilis:
+1. Peningkatan Kode Versi ke 65: Menghindari bentrok kode versi saat pengunggahan di Google Play Console.
+2. Sinkronisasi Data Faktur & Web: Memastikan sinkronisasi data invoice/faktur serta POS berjalan lancar dan akurat di web portal dan HP.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.25 - Pemuatan Data Otomatis & Pemantauan Unggahan Server
 
 Halo Kak! POSBah v2.17.25 hadir dengan peningkatan fitur sinkronisasi dan transparansi data berikut:
