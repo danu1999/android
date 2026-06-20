@@ -3494,7 +3494,7 @@ func getLatestVersionFromDb() string {
 func handleSyncRoute(w http.ResponseWriter, r *http.Request) {
 	clientVersion := strings.TrimSpace(r.Header.Get("x-client-version"))
 	latestVersion := getLatestVersionFromDb()
-	if clientVersion == "" || compareVersions(clientVersion, latestVersion) < 0 {
+	if clientVersion != "web" && (clientVersion == "" || compareVersions(clientVersion, latestVersion) < 0) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUpgradeRequired)
 		json.NewEncoder(w).Encode(map[string]string{

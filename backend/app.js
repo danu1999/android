@@ -239,7 +239,8 @@ async function refreshData() {
     const businessMode = localStorage.getItem("businessMode");
     const headers = {
         "x-tenant-id": tenantId || "",
-        "x-user-email": email || ""
+        "x-user-email": email || "",
+        "x-client-version": "web"
     };
 
     try {
@@ -639,7 +640,8 @@ async function triggerCheckout() {
             headers: { 
                 "Content-Type": "application/json",
                 "x-tenant-id": tenantId || "",
-                "x-user-email": localStorage.getItem("email") || ""
+                "x-user-email": localStorage.getItem("email") || "",
+                "x-client-version": "web"
             },
             body: JSON.stringify(txPayload)
         });
@@ -650,7 +652,8 @@ async function triggerCheckout() {
             headers: { 
                 "Content-Type": "application/json",
                 "x-tenant-id": tenantId || "",
-                "x-user-email": localStorage.getItem("email") || ""
+                "x-user-email": localStorage.getItem("email") || "",
+                "x-client-version": "web"
             },
             body: JSON.stringify(txItemsPayload)
         });
@@ -1179,7 +1182,8 @@ async function saveBankInfo() {
             headers: {
                 "Content-Type": "application/json",
                 "x-tenant-id": tenantId || "",
-                "x-user-email": email || ""
+                "x-user-email": email || "",
+                "x-client-version": "web"
             },
             body: JSON.stringify(payload)
         });
@@ -1755,7 +1759,8 @@ async function fetchOutletMarginReport(days = 7) {
     const email = localStorage.getItem("email");
     const headers = {
         "x-tenant-id": tenantId || "",
-        "x-user-email": email || ""
+        "x-user-email": email || "",
+        "x-client-version": "web"
     };
 
     const tbody = document.getElementById("margin-outlet-list-body");
