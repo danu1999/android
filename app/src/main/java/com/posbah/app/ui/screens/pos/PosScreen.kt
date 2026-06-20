@@ -166,6 +166,7 @@ fun PosScreen(
     var newProdStock by remember { mutableStateOf("999") }
     var newProdCategory by remember { mutableStateOf("Umum") }
     var newProdBarcode by remember { mutableStateOf("") }
+    var newProdMinStockAlert by remember { mutableStateOf("0") }
     var newCustName by remember { mutableStateOf("") }
     var newCustPhone by remember { mutableStateOf("") }
     var newCustAddress by remember { mutableStateOf("") }
@@ -178,6 +179,7 @@ fun PosScreen(
     var editProdStock by remember { mutableStateOf("") }
     var editProdCategory by remember { mutableStateOf("") }
     var editProdBarcode by remember { mutableStateOf("") }
+    var editProdMinStockAlert by remember { mutableStateOf("") }
 
     var showTransactionsHistoryDialog by remember { mutableStateOf(false) }
     var showEditReceiptDialog by remember { mutableStateOf(false) }
@@ -390,6 +392,7 @@ fun PosScreen(
                                         newProdStock = "999"
                                         newProdCategory = "Umum"
                                         newProdBarcode = ""
+                                        newProdMinStockAlert = "0"
                                         capturedPhotoFile = null
                                         showAddProductDialog = true
                                     }
@@ -537,6 +540,7 @@ fun PosScreen(
                                             newProdStock = "999"
                                             newProdCategory = "Umum"
                                             newProdBarcode = ""
+                                            newProdMinStockAlert = "0"
                                             capturedPhotoFile = null
                                             showAddProductDialog = true
                                         }
@@ -585,6 +589,7 @@ fun PosScreen(
                                         editProdStock = p.stock.toString()
                                         editProdCategory = p.category
                                         editProdBarcode = p.barcode.orEmpty()
+                                        editProdMinStockAlert = p.minStockAlert.toString()
                                         capturedPhotoFile = null
                                         showEditProductDialog = true
                                     }
@@ -1042,6 +1047,14 @@ fun PosScreen(
                             modifier = Modifier.fillMaxWidth().testTag("add-product-stock")
                         )
                         OutlinedTextField(
+                            value = newProdMinStockAlert,
+                            onValueChange = { valStr -> newProdMinStockAlert = valStr },
+                            label = { Text("Batas Minimum Stok (Peringatan)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().testTag("add-product-min-stock")
+                        )
+                        OutlinedTextField(
                             value = newProdCategory,
                             onValueChange = { catVal -> newProdCategory = catVal },
                             label = { Text("Kategori") },
@@ -1110,8 +1123,9 @@ fun PosScreen(
                             val price = newProdPrice.toDoubleOrNull() ?: 0.0
                             val costPrice = newProdCostPrice.toDoubleOrNull() ?: 0.0
                             val stock = newProdStock.toIntOrNull() ?: 0
+                            val minStock = newProdMinStockAlert.toIntOrNull() ?: 0
                             if (newProdName.isNotBlank() && price > 0) {
-                                viewModel.addProduct(newProdName, price, costPrice, stock, newProdCategory, newProdBarcode, capturedPhotoFile) {
+                                viewModel.addProduct(newProdName, price, costPrice, stock, newProdCategory, newProdBarcode, capturedPhotoFile, minStock) {
                                     showAddProductDialog = false
                                     Toast.makeText(context, "Produk berhasil ditambahkan!", Toast.LENGTH_SHORT).show()
                                 }
@@ -1176,6 +1190,14 @@ fun PosScreen(
                             value = editProdStock,
                             onValueChange = { editProdStock = it },
                             label = { Text("Stok") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = editProdMinStockAlert,
+                            onValueChange = { editProdMinStockAlert = it },
+                            label = { Text("Batas Minimum Stok (Peringatan)") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
@@ -1297,6 +1319,7 @@ fun PosScreen(
                             val price = editProdPrice.toDoubleOrNull() ?: 0.0
                             val costPrice = editProdCostPrice.toDoubleOrNull() ?: 0.0
                             val stock = editProdStock.toIntOrNull() ?: 0
+                            val minStock = editProdMinStockAlert.toIntOrNull() ?: 0
                             if (editProdName.isNotBlank() && price > 0) {
                                 val keepExisting = capturedPhotoFile == null && !originalProduct.image.isNullOrBlank()
                                 viewModel.editProduct(
@@ -1308,7 +1331,8 @@ fun PosScreen(
                                     category = editProdCategory,
                                     barcode = editProdBarcode,
                                     imageFile = capturedPhotoFile,
-                                    keepExistingImage = keepExisting
+                                    keepExistingImage = keepExisting,
+                                    minStockAlert = minStock
                                 ) {
                                     showEditProductDialog = false
                                     Toast.makeText(context, "Produk berhasil diubah!", Toast.LENGTH_SHORT).show()

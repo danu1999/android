@@ -656,6 +656,7 @@ object SupabaseSyncManager {
                         put("wholesalePrices", p.wholesalePrices ?: JSONObject.NULL)
                         put("variants", p.variants ?: JSONObject.NULL)
                         put("image", p.image ?: JSONObject.NULL)
+                        put("minStockAlert", p.minStockAlert)
                         put("isSynced", true)
                         put("createdAt", p.createdAt)
                         put("updatedAt", p.updatedAt)
@@ -1326,6 +1327,7 @@ object SupabaseSyncManager {
                         wholesalePrices = if (obj.isNull("wholesalePrices")) null else obj.opt("wholesalePrices")?.toString(),
                         variants = if (obj.isNull("variants")) null else obj.opt("variants")?.toString(),
                         image = if (obj.isNull("image")) null else obj.optString("image"),
+                        minStockAlert = obj.optInt("minStockAlert", 0),
                         createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
                         updatedAt = obj.optLong("updatedAt", System.currentTimeMillis()),
                         isSynced = true

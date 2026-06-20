@@ -592,6 +592,7 @@ class PosViewModel @Inject constructor(
         category: String,
         barcode: String?,
         imageFile: java.io.File?,
+        minStockAlert: Int,
         onDone: () -> Unit
     ) {
         viewModelScope.launch {
@@ -617,7 +618,8 @@ class PosViewModel @Inject constructor(
                 unit = "pcs",
                 barcode = barcode?.takeIf { it.isNotBlank() },
                 category = category.ifBlank { "Umum" },
-                image = base64Url
+                image = base64Url,
+                minStockAlert = minStockAlert
             )
             productRepository.upsert(p)
             logActivity("TAMBAH PRODUK", "Menambahkan produk baru: $name (Jual: Rp $price, Beli: Rp $costPrice)")
@@ -642,6 +644,7 @@ class PosViewModel @Inject constructor(
         barcode: String?,
         imageFile: java.io.File?,
         keepExistingImage: Boolean,
+        minStockAlert: Int,
         onDone: () -> Unit
     ) {
         viewModelScope.launch {
@@ -665,6 +668,7 @@ class PosViewModel @Inject constructor(
                 category = category.ifBlank { "Umum" },
                 barcode = barcode?.takeIf { it.isNotBlank() },
                 image = base64Url,
+                minStockAlert = minStockAlert,
                 updatedAt = System.currentTimeMillis()
             )
             productRepository.upsert(updated)

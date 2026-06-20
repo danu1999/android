@@ -31,6 +31,7 @@ data class ProductEntity(
     val wholesalePrices: String? = null, // JSON String representation of wholesale tiers
     val variants: String? = null, // JSON String representation of variants
     val image: String? = null,
+    val minStockAlert: Int = 0,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val isDeleted: Boolean = false,  // soft-delete flag

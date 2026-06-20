@@ -1,3 +1,13 @@
+POSBah v2.17.32 - Batas Minimum Stok & Peningkatan Sinkronisasi Realtime
+
+Halo Kak! POSBah v2.17.32 hadir membawa peningkatan pengelolaan produk:
+1. Batas Minimum Stok (minStockAlert): Menambahkan kolom batas minimum stok pada dialog "Tambah Produk Baru" dan "Edit Produk" di sistem POS FnB. Memungkinkan penentuan nilai peringatan stok menipis secara dinamis.
+2. Sinkronisasi Data Realtime Kolom Baru: Kolom `minStockAlert` baru ini terintegrasi sepenuhnya dengan database server VPS PostgreSQL dan SQLite lokal HP Anda secara realtime, sehingga perubahan dari HP manapun akan langsung tersinkron dalam waktu 3 detik.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.31 - Redesign Arsitektur Full Online & Realtime Sync 3 Detik
 
 Halo Kak! POSBah v2.17.31 hadir membawa sistem POS ke tingkat kestabilan baru:
