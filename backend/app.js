@@ -1378,13 +1378,13 @@ function triggerInvoicePrint() {
     } else {
         sizeStyle = `
             @page {
-                size: 9.5in 11in !important;
+                size: 11in 9.5in landscape !important;
                 margin: 0 !important;
             }
             #print-area {
-                width: 9.5in !important;
-                height: 11in !important;
-                padding: 0.3in 0.3in !important;
+                width: 11in !important;
+                height: 9.5in !important;
+                padding: 0.1in 0.3in 0.3in 0.3in !important;
                 box-sizing: border-box !important;
             }
         `;
@@ -1583,13 +1583,13 @@ function triggerSjPrint() {
     } else {
         sizeStyle = `
             @page {
-                size: 9.5in 11in !important;
+                size: 11in 9.5in landscape !important;
                 margin: 0 !important;
             }
             #print-area {
-                width: 9.5in !important;
-                height: 11in !important;
-                padding: 0.3in 0.3in !important;
+                width: 11in !important;
+                height: 9.5in !important;
+                padding: 0.1in 0.3in 0.3in 0.3in !important;
                 box-sizing: border-box !important;
             }
         `;
