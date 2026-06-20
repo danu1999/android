@@ -1,6 +1,7 @@
 package com.posbah.app.data.remote
 
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -56,6 +57,101 @@ object CloudinaryUploader {
         ) : UploadResult()
         data class Error(val message: String) : UploadResult()
         object Disabled : UploadResult()
+    }
+
+    /**
+     * Upload foto nota ke Cloudinary menggunakan MediaStore Uri.
+     */
+    suspend fun upload(context: Context, uri: Uri, fileName: String): UploadResult = withContext(Dispatchers.IO) {
+        if (!CLOUDINARY_ENABLED) {
+            Log.d("CloudinaryUploader", "Upload dinonaktifkan. Set CLOUDINARY_ENABLED = true setelah isi credential.")
+            return@withContext UploadResult.Disabled
+        }
+
+        if (CLOUD_NAME == "ISI_CLOUD_NAME_DI_SINI" || UPLOAD_PRESET == "ISI_UPLOAD_PRESET_DI_SINI") {
+            return@withContext UploadResult.Error("Cloudinary belum dikonfigurasi. Isi CLOUD_NAME dan UPLOAD_PRESET.")
+        }
+
+        try {
+            val contentResolver = context.contentResolver
+            val inputStream = contentResolver.openInputStream(uri)
+                ?: return@withContext UploadResult.Error("Gagal membuka stream untuk URI: $uri")
+
+            var size = 0L
+            try {
+                contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                    size = pfd.statSize
+                }
+            } catch (e: Exception) {
+                // fallback
+            }
+
+            val boundary = "------PosBahBoundary${System.currentTimeMillis()}"
+            val conn = (URL(UPLOAD_URL).openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                doOutput = true
+                connectTimeout = 30_000
+                readTimeout = 60_000
+                setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+            }
+
+            conn.outputStream.use { out ->
+                val writer = out.bufferedWriter()
+
+                // Field: upload_preset
+                writer.write("--$boundary\r\n")
+                writer.write("Content-Disposition: form-data; name=\"upload_preset\"\r\n\r\n")
+                writer.write("$UPLOAD_PRESET\r\n")
+
+                // Field: folder
+                writer.write("--$boundary\r\n")
+                writer.write("Content-Disposition: form-data; name=\"folder\"\r\n\r\n")
+                writer.write("$FOLDER\r\n")
+
+                // Field: public_id (nama file di Cloudinary)
+                writer.write("--$boundary\r\n")
+                writer.write("Content-Disposition: form-data; name=\"public_id\"\r\n\r\n")
+                writer.write("$fileName\r\n")
+
+                // Field: file (binary)
+                writer.write("--$boundary\r\n")
+                writer.write("Content-Disposition: form-data; name=\"file\"; filename=\"$fileName.jpg\"\r\n")
+                writer.write("Content-Type: image/jpeg\r\n\r\n")
+                writer.flush()
+
+                inputStream.use { input -> input.copyTo(out) }
+
+                writer.write("\r\n--$boundary--\r\n")
+                writer.flush()
+            }
+
+            val responseCode = conn.responseCode
+            val responseBody = if (responseCode in 200..299) {
+                conn.inputStream.bufferedReader().readText()
+            } else {
+                conn.errorStream?.bufferedReader()?.readText() ?: "HTTP $responseCode"
+            }
+
+            if (responseCode !in 200..299) {
+                Log.e("CloudinaryUploader", "Upload gagal [$responseCode]: $responseBody")
+                return@withContext UploadResult.Error("Upload gagal: HTTP $responseCode")
+            }
+
+            val url = extractJsonString(responseBody, "secure_url")
+                ?: return@withContext UploadResult.Error("Gagal parse URL dari response Cloudinary")
+            val publicId = extractJsonString(responseBody, "public_id") ?: fileName
+            val bytes = extractJsonInt(responseBody, "bytes") ?: size.toInt()
+
+            Log.d("CloudinaryUploader", "Upload berhasil: $url ($bytes bytes)")
+            UploadResult.Success(url = url, publicId = publicId, bytes = bytes)
+
+        } catch (e: IOException) {
+            Log.e("CloudinaryUploader", "IO Error: ${e.message}")
+            UploadResult.Error("Koneksi gagal: ${e.message}")
+        } catch (e: Exception) {
+            Log.e("CloudinaryUploader", "Unexpected error: ${e.message}")
+            UploadResult.Error("Error tidak terduga: ${e.message}")
+        }
     }
 
     /**

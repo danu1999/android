@@ -1,3 +1,14 @@
+POSBah v2.17.22 - Pembaruan Scoped Storage (MediaStore URI) & Sinkronisasi Cloudinary
+
+Halo Kak! POSBah v2.17.22 hadir dengan peningkatan fitur penyimpanan dan sinkronisasi berikut:
+1. Peningkatan Scoped Storage (MediaStore URI): Memperbaiki pembacaan ukuran file gambar (file size KB) agar mendeteksi URI MediaStore ("content://") secara akurat.
+2. Integrasi Unggah Cloudinary Berbasis URI: Memodifikasi mekanisme CloudinaryUploader agar dapat membaca dan mengunggah gambar langsung dari MediaStore URI menggunakan ContentResolver (mendukung Android 10 dan 11+).
+3. Pengaktifan Kembali Sinkronisasi Cloudinary: Memastikan foto nota catat bahan baku diunggah secara otomatis ke cloud saat perangkat terhubung dengan internet, untuk memudahkan akses lintas perangkat dan dashboard web.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.21 - Perbaikan Sinkronisasi Tanda Tangan & Cetak Dokumen
 
 Halo Kak! POSBah v2.17.21 hadir dengan perbaikan penting berikut:

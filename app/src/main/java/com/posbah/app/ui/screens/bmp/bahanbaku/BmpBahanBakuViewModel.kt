@@ -188,7 +188,7 @@ class BahanBakuFormViewModel @Inject constructor(
                     items = existingItems.ifEmpty { listOf(BahanBakuItemDraft()) },
                     notaFotoPath = h.notaFotoPath,
                     notaFotoUrl = h.notaFotoUrl,
-                    fotoFileSizeKb = com.posbah.app.util.CameraUtils.fileSizeKb(h.notaFotoPath),
+                    fotoFileSizeKb = com.posbah.app.util.CameraUtils.fileSizeKb(context, h.notaFotoPath),
                     fotoUploadStatus = when {
                         !h.notaFotoUrl.isNullOrBlank() -> FotoUploadStatus.UPLOADED
                         !h.notaFotoPath.isNullOrBlank() -> FotoUploadStatus.LOCAL_SAVED
@@ -244,20 +244,35 @@ class BahanBakuFormViewModel @Inject constructor(
                 com.posbah.app.util.CameraUtils.compressToMaxSize(java.io.File(filePath), maxSizeKb = 100)
             }
 
-            val sizeKb = com.posbah.app.util.CameraUtils.fileSizeKb(compressedFile.absolutePath)
+            val sizeKb = com.posbah.app.util.CameraUtils.fileSizeKb(context, compressedFile.absolutePath)
 
-            // Step 2: Update state lokal
+            // Step 2: Pindahkan ke MediaStore (storage permanen — survive uninstall & clear storage)
+            val persistentUri = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.posbah.app.util.CameraUtils.persistToMediaStore(context, compressedFile, tenantId)
+            }
+
+            if (persistentUri == null) {
+                _ui.update { st ->
+                    st.copy(
+                        fotoUploadStatus = FotoUploadStatus.IDLE,
+                        fotoUploadError = "Gagal menyimpan foto ke storage permanen"
+                    )
+                }
+                return@launch
+            }
+
+            // Step 3: Update state lokal — simpan URI MediaStore (BUKAN file path lagi)
             _ui.update { st ->
                 st.copy(
-                    notaFotoPath = compressedFile.absolutePath,
+                    notaFotoPath = persistentUri.toString(),
                     fotoFileSizeKb = sizeKb,
                     fotoUploadStatus = FotoUploadStatus.LOCAL_SAVED,
                     fotoUploadError = null
                 )
             }
 
-            // Step 3: Coba upload Cloudinary (saat ini DISABLED — akan aktif setelah credential diisi)
-            uploadToCloudinary(compressedFile)
+            // Step 4: Cloudinary upload
+            uploadToCloudinary(persistentUri)
         }
     }
 
@@ -266,9 +281,9 @@ class BahanBakuFormViewModel @Inject constructor(
      * Juga menghapus file dari storage lokal.
      */
     fun removePhoto() {
-        val path = _ui.value.notaFotoPath
+        val uri = _ui.value.notaFotoPath
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            com.posbah.app.util.CameraUtils.deleteSafely(path)
+            com.posbah.app.util.CameraUtils.deleteMediaStoreUri(context, uri)
         }
         _ui.update {
             it.copy(
@@ -286,12 +301,12 @@ class BahanBakuFormViewModel @Inject constructor(
      * Saat ini disabled (CLOUDINARY_ENABLED = false di [CloudinaryUploader]).
      * Setelah user berikan credential, upload akan berjalan otomatis.
      */
-    private fun uploadToCloudinary(file: java.io.File) {
+    private fun uploadToCloudinary(uri: android.net.Uri) {
         viewModelScope.launch {
             _ui.update { it.copy(fotoUploadStatus = FotoUploadStatus.UPLOADING) }
 
             val fileName = "NOTA_${_ui.value.header?.noTagihan ?: "UNKNOWN"}_${System.currentTimeMillis()}"
-            val result = com.posbah.app.data.remote.CloudinaryUploader.upload(file, fileName)
+            val result = com.posbah.app.data.remote.CloudinaryUploader.upload(context, uri, fileName)
 
             when (result) {
                 is com.posbah.app.data.remote.CloudinaryUploader.UploadResult.Success -> {

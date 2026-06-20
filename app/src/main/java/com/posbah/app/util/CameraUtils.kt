@@ -1,10 +1,13 @@
 package com.posbah.app.util
 
+import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
@@ -12,28 +15,16 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/**
- * Utilitas untuk kamera dan kompresi foto nota bahan baku.
- *
- * Alur kerja:
- * 1. [createTempCameraFile] → buat file kosong di direktori Pictures/NotaBahanBaku
- * 2. [getFileProviderUri] → konversi file ke URI yang aman untuk intent kamera
- * 3. [compressToMaxSize] → kompres hasil foto ke ≤ [maxSizeKb] KB (default 100 KB)
- *
- * Catatan arsitektur:
- * - File foto disimpan di getExternalFilesDir(Pictures/NotaBahanBaku) — tidak butuh READ_EXTERNAL_STORAGE
- * - Kompresi menggunakan iterasi progressif (kualitas 90 → 80 → 70 → 50 → 30) sampai ≤ 100 KB
- * - File dirotasi berdasarkan EXIF orientation agar tampil benar di semua perangkat
- */
 object CameraUtils {
 
     private const val AUTHORITY_SUFFIX = ".fileprovider"
     private const val PHOTO_DIR = "Pictures/NotaBahanBaku"
+    private const val MEDIASTORE_RELATIVE_PATH = "Pictures/PosBah/NotaBahanBaku"
     private val DATE_FORMAT = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
 
     /**
-     * Buat file kosong untuk target foto kamera.
-     * @return File di [getExternalFilesDir]/Pictures/NotaBahanBaku/NOTA_yyyyMMdd_HHmmss.jpg
+     * Buat file temporary untuk kamera (tetap di externalFilesDir untuk staging).
+     * Setelah dikompres, panggil persistToMediaStore untuk pindahkan ke storage permanen.
      */
     fun createTempCameraFile(context: Context): File {
         val dir = File(context.getExternalFilesDir(null), PHOTO_DIR).also { it.mkdirs() }
@@ -41,9 +32,6 @@ object CameraUtils {
         return File(dir, "NOTA_${timestamp}.jpg")
     }
 
-    /**
-     * Konversi File ke URI menggunakan FileProvider (aman untuk Android 7+).
-     */
     fun getFileProviderUri(context: Context, file: File): Uri {
         return FileProvider.getUriForFile(
             context,
@@ -53,32 +41,73 @@ object CameraUtils {
     }
 
     /**
-     * Kompres file foto hingga ukurannya ≤ [maxSizeKb] KB.
-     *
-     * Algoritma:
-     * - Decode bitmap dari [sourceFile]
-     * - Koreksi orientasi berdasarkan EXIF (penting untuk foto portrait/landscape)
-     * - Iterasi kompresi JPEG dengan penurunan kualitas bertahap
-     * - Jika kualitas minimum tidak cukup → scale down resolusi 50% dan ulangi
-     * - Hasil ditulis kembali ke [sourceFile] (in-place, hemat storage)
-     *
-     * @return File yang sudah dikompresi (sama dengan [sourceFile])
+     * Pindah file dari externalFilesDir ke MediaStore (storage permanen).
+     * Foto akan: survive app uninstall, survive Clear Storage, visible di Gallery.
      */
+    fun persistToMediaStore(
+        context: Context,
+        sourceFile: File,
+        tenantId: String
+    ): Uri? {
+        if (!sourceFile.exists()) return null
+
+        val fileName = "NOTA_${tenantId}_${DATE_FORMAT.format(Date())}.jpg"
+
+        val contentValues = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
+            put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.Images.Media.RELATIVE_PATH, "$MEDIASTORE_RELATIVE_PATH/$tenantId")
+                put(MediaStore.Images.Media.IS_PENDING, 1)
+            }
+        }
+
+        val uri = context.contentResolver.insert(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            contentValues
+        ) ?: return null
+
+        return try {
+            context.contentResolver.openOutputStream(uri)?.use { out ->
+                sourceFile.inputStream().use { it.copyTo(out) }
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                contentValues.clear()
+                contentValues.put(MediaStore.Images.Media.IS_PENDING, 0)
+                context.contentResolver.update(uri, contentValues, null, null)
+            }
+
+            sourceFile.delete()
+            uri
+        } catch (e: Exception) {
+            context.contentResolver.delete(uri, null, null)
+            null
+        }
+    }
+
+    /** Cek apakah URI MediaStore masih valid (file belum dihapus user dari Gallery). */
+    fun isMediaStoreUriValid(context: Context, uriString: String?): Boolean {
+        if (uriString.isNullOrBlank()) return false
+        return try {
+            val uri = Uri.parse(uriString)
+            context.contentResolver.openInputStream(uri)?.use { true } ?: false
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     fun compressToMaxSize(sourceFile: File, maxSizeKb: Int = 100): File {
         if (!sourceFile.exists() || sourceFile.length() == 0L) return sourceFile
 
-        // Decode bitmap
         val options = BitmapFactory.Options().apply { inJustDecodeBounds = false }
-        var bitmap = BitmapFactory.decodeFile(sourceFile.absolutePath, options)
-            ?: return sourceFile
-
-        // Koreksi EXIF rotation
+        var bitmap = BitmapFactory.decodeFile(sourceFile.absolutePath, options) ?: return sourceFile
         bitmap = correctExifRotation(bitmap, sourceFile.absolutePath)
 
         val maxBytes = maxSizeKb * 1024L
         val qualities = intArrayOf(90, 80, 70, 50, 35, 20)
 
-        // Iterasi kualitas
         for (quality in qualities) {
             val compressed = compressBitmapToBytes(bitmap, quality)
             if (compressed.size <= maxBytes) {
@@ -88,13 +117,7 @@ object CameraUtils {
             }
         }
 
-        // Masih terlalu besar → scale down 50% dan ulangi sekali
-        val scaledBitmap = Bitmap.createScaledBitmap(
-            bitmap,
-            bitmap.width / 2,
-            bitmap.height / 2,
-            true
-        )
+        val scaledBitmap = Bitmap.createScaledBitmap(bitmap, bitmap.width / 2, bitmap.height / 2, true)
         bitmap.recycle()
 
         for (quality in qualities) {
@@ -106,7 +129,6 @@ object CameraUtils {
             }
         }
 
-        // Final fallback: tulis dengan kualitas 20 apapun hasilnya
         val finalBytes = compressBitmapToBytes(scaledBitmap, 20)
         FileOutputStream(sourceFile).use { it.write(finalBytes) }
         scaledBitmap.recycle()
@@ -119,10 +141,6 @@ object CameraUtils {
         return stream.toByteArray()
     }
 
-    /**
-     * Koreksi rotasi berdasarkan EXIF metadata.
-     * Banyak kamera Android menyimpan foto landscape meski orientasi portrait — EXIF yang menyimpan rotasinya.
-     */
     private fun correctExifRotation(bitmap: Bitmap, filePath: String): Bitmap {
         return try {
             val exif = androidx.exifinterface.media.ExifInterface(filePath)
@@ -143,19 +161,34 @@ object CameraUtils {
             if (rotated != bitmap) bitmap.recycle()
             rotated
         } catch (e: Exception) {
-            bitmap // jika gagal baca EXIF, kembalikan bitmap asli
+            bitmap
         }
     }
 
-    /** Hapus file foto sementara dari storage (saat user batalkan atau error). */
     fun deleteSafely(filePath: String?) {
         if (filePath.isNullOrBlank()) return
         try { File(filePath).delete() } catch (_: Exception) {}
     }
 
-    /** Ukuran file dalam KB. */
-    fun fileSizeKb(filePath: String?): Long {
+    /** Hapus dari MediaStore via ContentResolver (untuk removePhoto). */
+    fun deleteMediaStoreUri(context: Context, uriString: String?) {
+        if (uriString.isNullOrBlank()) return
+        try {
+            context.contentResolver.delete(Uri.parse(uriString), null, null)
+        } catch (_: Exception) {}
+    }
+
+    fun fileSizeKb(context: Context, filePath: String?): Long {
         if (filePath.isNullOrBlank()) return 0L
+        if (filePath.startsWith("content://")) {
+            return try {
+                context.contentResolver.openFileDescriptor(Uri.parse(filePath), "r")?.use { pfd ->
+                    (pfd.statSize / 1024).coerceAtLeast(0)
+                } ?: 0L
+            } catch (e: Exception) {
+                0L
+            }
+        }
         return (File(filePath).length() / 1024).coerceAtLeast(0)
     }
 }
