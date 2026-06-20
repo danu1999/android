@@ -15,12 +15,12 @@ android {
         applicationId = "com.posbah.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 58
-        versionName = "2.17.20"
+        versionCode = 59
+        versionName = "2.17.21"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
-
+    
         // Inject Google OAuth Web Client ID at build time
         buildConfigField(
             "String",

@@ -1,3 +1,13 @@
+POSBah v2.17.21 - Perbaikan Sinkronisasi Tanda Tangan & Cetak Dokumen
+
+Halo Kak! POSBah v2.17.21 hadir dengan perbaikan penting berikut:
+1. Perbaikan Cetak Invoice & Surat Jalan (BMP): Menyelesaikan kendala tanda tangan penerima yang kadang hilang/tidak muncul saat cetak dokumen.
+2. Proteksi Path Tanda Tangan Lokal: Menambahkan pengamanan agar sinkronisasi pull tidak menghapus/menimpa path tanda tangan lokal (receiverSignaturePath) yang tersimpan di perangkat, sehingga tanda tangan tetap muncul secara konsisten pada halaman cetak WebView meskipun server atau internet tidak dapat dijangkau.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.20 - Perbaikan Sinkronisasi Gambar Catat Bahan & Safe Merge
 
 Halo Kak! POSBah v2.17.20 hadir dengan perbaikan penting berikut:

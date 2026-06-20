@@ -1538,7 +1538,9 @@ object SupabaseSyncManager {
                             db.bmpInvoiceDao().upsert(serverInvoice)
                         } else if (localInvoice.isSynced) {
                             if (serverInvoice.updatedAt >= localInvoice.updatedAt) {
-                                db.bmpInvoiceDao().upsert(serverInvoice)
+                                // Preserve local signature file path to keep the printed invoice signature working offline
+                                val merged = serverInvoice.copy(receiverSignaturePath = localInvoice.receiverSignaturePath)
+                                db.bmpInvoiceDao().upsert(merged)
                             }
                         }
                     }
