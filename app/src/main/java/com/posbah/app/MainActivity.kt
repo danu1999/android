@@ -76,6 +76,11 @@ class MainActivity : FragmentActivity() {
         val isOnlineInitial = capabilities != null && capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
         sessionState.setOnline(isOnlineInitial)
 
+        // Setup connection listener callback for remote requests
+        com.posbah.app.data.remote.SupabaseSyncManager.onConnectionStateChanged = { online ->
+            sessionState.setOnline(online)
+        }
+
         // Periodic foreground auto-sync: pulls remote updates & pushes local changes every 30 seconds
         lifecycleScope.launch(Dispatchers.IO) {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -210,7 +215,7 @@ class MainActivity : FragmentActivity() {
                         } catch (e: Exception) {
                             e.printStackTrace()
                         }
-                        delay(30_000)
+                        delay(if (sessionState.isOnline.value) 30_000 else 5_000)
                     }
                 } finally {
                     com.posbah.app.data.remote.WebSocketSyncClient.disconnect()

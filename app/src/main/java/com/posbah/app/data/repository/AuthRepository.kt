@@ -794,6 +794,7 @@ class AuthRepository @Inject constructor(
         } else {
             // Check if we can fetch the latest employee details from the server (if online)
             var fetchedEmp: Employee? = null
+            var networkError = false
             var conn: java.net.HttpURLConnection? = null
             try {
                 val url = java.net.URL("https://www.zedmz.cloud/api/sync/employees?email=eq.$cleanEmail")
@@ -936,22 +937,21 @@ class AuthRepository @Inject constructor(
                             localDataSeeder.seedDefaultSettings(tenantId)
                         }
                     }
+                } else {
+                    networkError = true
                 }
             } catch (e: java.lang.Exception) {
                 e.printStackTrace()
+                networkError = true
             } finally {
                 conn?.disconnect()
             }
 
-            var emp = fetchedEmp
-            if (emp == null) {
-                // Offline fallback: check local employees table in database
-                emp = employeeDao.findByEmail(cleanEmail)
-                if (emp != null && !emp.isActive) {
-                    emp = null
-                }
+            if (networkError) {
+                return@withContext LoginOutcome.Error("Gagal masuk: Server tidak terjangkau atau Anda sedang offline.")
             }
 
+            var emp = fetchedEmp
             if (emp == null) {
                 // Query VPS local_users table to see if they are an unactivated demo user
                 var isDemo = false
@@ -1192,6 +1192,12 @@ class AuthRepository @Inject constructor(
         }
         
         googleClient.signOut()
+        try {
+            db.clearAllTables()
+            android.util.Log.i("AuthRepository", "Wiped all local database tables on logout for online-only enforcement")
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
         securePrefs.wipe()
     }
 

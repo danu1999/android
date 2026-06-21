@@ -30,6 +30,13 @@ object SupabaseSyncManager {
     private const val VPS_URL = "https://www.zedmz.cloud"
 
     @Volatile
+    var onConnectionStateChanged: ((Boolean) -> Unit)? = null
+
+    private fun notifyConnectionState(online: Boolean) {
+        onConnectionStateChanged?.invoke(online)
+    }
+
+    @Volatile
     private var currentTenantId: String = ""
 
     private val syncScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
@@ -53,15 +60,18 @@ object SupabaseSyncManager {
     fun isNetworkAvailable(context: Context): Boolean {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: run {
             Log.e(TAG, "[Network] ConnectivityManager tidak tersedia")
+            notifyConnectionState(false)
             return false
         }
         val activeNetwork = cm.activeNetwork
         if (activeNetwork == null) {
             Log.w(TAG, "[Network] Tidak ada jaringan aktif terdeteksi")
+            notifyConnectionState(false)
             return false
         }
         val capabilities = cm.getNetworkCapabilities(activeNetwork) ?: run {
             Log.w(TAG, "[Network] Gagal mengambil NetworkCapabilities")
+            notifyConnectionState(false)
             return false
         }
         val isInternet = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
@@ -75,6 +85,7 @@ object SupabaseSyncManager {
             Log.i(TAG, "[Network] Internet tersedia via $transport")
         } else {
             Log.w(TAG, "[Network] Koneksi ada tetapi tidak memiliki kemampuan NET_CAPABILITY_INTERNET")
+            notifyConnectionState(false)
         }
         return isInternet
     }
@@ -1050,14 +1061,17 @@ object SupabaseSyncManager {
             val responseCode = conn.responseCode
             if (responseCode in 200..299) {
                 Log.d(TAG, "Berhasil mengunggah tabel: $tableName ($responseCode)")
+                notifyConnectionState(true)
                 true
             } else {
                 val errorStream = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
                 Log.e(TAG, "Gagal mengunggah tabel: $tableName ($responseCode): $errorStream")
+                notifyConnectionState(false)
                 false
             }
         } catch (e: IOException) {
             Log.e(TAG, "IO Exception saat mengunggah tabel $tableName: ${e.message}")
+            notifyConnectionState(false)
             false
         } finally {
             conn?.disconnect()
@@ -1102,10 +1116,12 @@ object SupabaseSyncManager {
 
             val responseCode = conn.responseCode
             if (responseCode in 200..299) {
+                notifyConnectionState(true)
                 SyncResult.Success
             } else {
                 val errorStream = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
                 Log.e(TAG, "Gagal mengunggah table write-through: $tableName ($responseCode): $errorStream")
+                notifyConnectionState(false)
 
                 var errorMsg = "Upload failed ($responseCode)"
                 try {
@@ -1126,6 +1142,7 @@ object SupabaseSyncManager {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Exception saat mengunggah table write-through $tableName: ${e.message}")
+            notifyConnectionState(false)
             SyncResult.Error(e.message ?: "Connection error")
         } finally {
             conn?.disconnect()
@@ -1240,10 +1257,12 @@ object SupabaseSyncManager {
 
             val responseCode = conn.responseCode
             if (responseCode in 200..299) {
+                notifyConnectionState(true)
                 SyncResult.Success
             } else {
                 val errorStream = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
                 Log.e(TAG, "Gagal meng-patch table write-through: $tableName ($responseCode): $errorStream")
+                notifyConnectionState(false)
                 var errorMsg = "Update failed ($responseCode)"
                 try {
                     val errorObj = JSONObject(errorStream)
@@ -1263,6 +1282,7 @@ object SupabaseSyncManager {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Exception saat meng-patch table write-through $tableName: ${e.message}")
+            notifyConnectionState(false)
             SyncResult.Error(e.message ?: "Connection error")
         } finally {
             conn?.disconnect()
@@ -1298,14 +1318,17 @@ object SupabaseSyncManager {
             val responseCode = conn.responseCode
             if (responseCode in 200..299) {
                 Log.d(TAG, "Berhasil menghapus baris dari tabel $tableName di server: ID $id")
+                notifyConnectionState(true)
                 true
             } else {
                 val errorStream = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
                 Log.e(TAG, "Gagal menghapus baris dari tabel $tableName di server: ID $id ($responseCode): $errorStream")
+                notifyConnectionState(false)
                 false
             }
         } catch (e: Exception) {
             Log.e(TAG, "Exception saat menghapus baris dari tabel $tableName: ${e.message}", e)
+            notifyConnectionState(false)
             false
         } finally {
             conn?.disconnect()
@@ -1338,15 +1361,18 @@ object SupabaseSyncManager {
 
             val responseCode = conn.responseCode
             if (responseCode in 200..299) {
+                notifyConnectionState(true)
                 val responseText = conn.inputStream.bufferedReader().use { it.readText() }
                 JSONArray(responseText)
             } else {
                 val errorStream = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
                 Log.e(TAG, "Gagal mengunduh tabel: $tableName ($responseCode): $errorStream")
+                notifyConnectionState(false)
                 null
             }
         } catch (e: Exception) {
             Log.e(TAG, "Exception saat mengunduh tabel $tableName: ${e.message}", e)
+            notifyConnectionState(false)
             null
         } finally {
             conn?.disconnect()
@@ -1378,15 +1404,18 @@ object SupabaseSyncManager {
 
             val responseCode = conn.responseCode
             if (responseCode in 200..299) {
+                notifyConnectionState(true)
                 val responseText = conn.inputStream.bufferedReader().use { it.readText() }
                 val json = JSONObject(responseText)
                 json.optLong("lastUpdated", 0L)
             } else {
                 Log.w(TAG, "Gagal mengecek status sinkronisasi server ($responseCode)")
+                notifyConnectionState(false)
                 0L
             }
         } catch (e: Exception) {
             Log.e(TAG, "Exception saat mengecek status sinkronisasi server: ${e.message}")
+            notifyConnectionState(false)
             0L
         } finally {
             conn?.disconnect()
