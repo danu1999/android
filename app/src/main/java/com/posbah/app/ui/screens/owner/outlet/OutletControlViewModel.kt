@@ -213,7 +213,7 @@ class OutletControlViewModel @Inject constructor(
     fun toggleOutletStatus(outletId: Long) {
         viewModelScope.launch {
             val outlet = db.outletDao().getById(outletId) ?: return@launch
-            val updated = outlet.copy(isOpen = !outlet.isOpen, updatedAt = System.currentTimeMillis())
+            val updated = outlet.copy(isOpen = !outlet.isOpen, isSynced = false, updatedAt = System.currentTimeMillis())
             db.outletDao().update(updated)
             loadData()
             viewModelScope.launch(Dispatchers.IO) {
@@ -275,7 +275,7 @@ class OutletControlViewModel @Inject constructor(
                     return@launch
                 }
                 val outlet = db.outletDao().getById(outletId) ?: return@launch
-                val updated = outlet.copy(currentEmployee = null, updatedAt = System.currentTimeMillis())
+                val updated = outlet.copy(currentEmployee = null, isSynced = false, updatedAt = System.currentTimeMillis())
                 db.outletDao().update(updated)
             } else {
                 val emp = activeEmployees.firstOrNull { it.name == employeeName }
@@ -300,7 +300,7 @@ class OutletControlViewModel @Inject constructor(
                     db.employeeDao().update(emp.copy(outletId = outletId, updatedAt = System.currentTimeMillis()))
                 }
                 val outlet = db.outletDao().getById(outletId) ?: return@launch
-                val updated = outlet.copy(currentEmployee = employeeName, updatedAt = System.currentTimeMillis())
+                val updated = outlet.copy(currentEmployee = employeeName, isSynced = false, updatedAt = System.currentTimeMillis())
                 db.outletDao().update(updated)
             }
             loadData()
@@ -404,6 +404,7 @@ class OutletControlViewModel @Inject constructor(
                     address = address,
                     phone = phone,
                     currentEmployee = null,
+                    isSynced = false,
                     updatedAt = System.currentTimeMillis()
                 )
                 db.outletDao().update(updated)
@@ -436,6 +437,7 @@ class OutletControlViewModel @Inject constructor(
                     address = address,
                     phone = phone,
                     currentEmployee = currentEmployee,
+                    isSynced = false,
                     updatedAt = System.currentTimeMillis()
                 )
                 db.outletDao().update(updated)

@@ -48,6 +48,6 @@ class OutletRepository @Inject constructor(
             Outlet(tenantId = tenantId, name = name, address = address, phone = phone, isDefault = isDefault)
         )
     }
-    suspend fun update(outlet: Outlet) = outletDao.update(outlet.copy(updatedAt = System.currentTimeMillis()))
+    suspend fun update(outlet: Outlet) = outletDao.update(outlet.copy(isSynced = false, updatedAt = System.currentTimeMillis()))
     suspend fun delete(id: Long) = outletDao.delete(id)
 }

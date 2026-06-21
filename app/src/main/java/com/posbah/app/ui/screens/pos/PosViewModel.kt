@@ -567,6 +567,13 @@ class PosViewModel @Inject constructor(
             }
             // Delete this pending transaction now that it is loaded back into editing
             transactionRepository.cancelTransaction(tx.id)
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 
@@ -612,6 +619,13 @@ class PosViewModel @Inject constructor(
     fun cancelQueue(txId: Long) {
         viewModelScope.launch {
             transactionRepository.cancelTransaction(txId)
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 

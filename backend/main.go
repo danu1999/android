@@ -3371,7 +3371,7 @@ var allowedSyncTables = map[string]bool{
 	"bmp_payrolls":         true,
 	"bmp_bahan_baku":       true,
 	"bmp_bahan_baku_item":  true,
-	"print_settings":       true,
+                "print_settings":       true,
 	"bmp_attendance_logs":  true,
 	"bmp_device_tenants":   true,
 }
@@ -3384,7 +3384,7 @@ func isValidColumnName(name string) bool {
 
 // validateTenantAccess checks whether the user has authorization for the requested tenant.
 // For public GET requests to login tables (local_users, employees, tenants), it allows the request
-// if the filter restricts query results to safe columns (googleSub, email, or id).
+// if the filter restricts query results to safe columns (googleSub, email, id, or ownerEmail).
 func validateTenantAccess(r *http.Request) error {
 	parts := strings.Split(r.URL.Path, "/")
 	if len(parts) < 4 {
@@ -3399,13 +3399,25 @@ func validateTenantAccess(r *http.Request) error {
 	tenantID := r.Header.Get("x-tenant-id")
 	userEmail := r.Header.Get("x-user-email")
 
+	// Allow owners to query their own tenants list via GET /api/sync/tenants?ownerEmail=eq.email
+	if r.Method == http.MethodGet && tableName == "tenants" && userEmail != "" {
+		for k, vList := range r.URL.Query() {
+			if k == "ownerEmail" && len(vList) > 0 && strings.HasPrefix(vList[0], "eq.") {
+				queriedEmail := strings.TrimPrefix(vList[0], "eq.")
+				if strings.TrimSpace(strings.ToLower(queriedEmail)) == strings.TrimSpace(strings.ToLower(userEmail)) {
+					return nil
+				}
+			}
+		}
+	}
+
 	// 1. Allow login/auth-related GET requests without headers IF they query by secure columns
 	if r.Method == http.MethodGet && (tenantID == "" || userEmail == "") {
 		if tableName == "local_users" || tableName == "employees" || tableName == "tenants" {
 			hasSecureFilter := false
 			for k, vList := range r.URL.Query() {
 				if len(vList) > 0 && strings.HasPrefix(vList[0], "eq.") {
-					if k == "googleSub" || k == "email" || k == "id" {
+					if k == "googleSub" || k == "email" || k == "id" || k == "ownerEmail" {
 						hasSecureFilter = true
 						break
 					}

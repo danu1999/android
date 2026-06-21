@@ -95,9 +95,17 @@ class SecurePreferences @Inject constructor(
             else prefs.edit().putLong(KEY_EMPLOYEE_OUTLET, value).apply()
         }
 
+    var lastActiveTenantId: String?
+        get() = prefs.getString("last_active_tenant_id", null)
+        set(value) = prefs.edit().putString("last_active_tenant_id", value).apply()
+
     /** Wipe entire encrypted session. Called on logout / tamper detection. */
     fun wipe() {
+        val lastTenant = lastActiveTenantId ?: currentTenantId
         prefs.edit().clear().apply()
+        if (lastTenant != null) {
+            prefs.edit().putString("last_active_tenant_id", lastTenant).apply()
+        }
     }
 
     fun setActiveSession(googleSub: String?, email: String?) {

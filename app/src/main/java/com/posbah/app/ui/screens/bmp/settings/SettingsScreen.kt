@@ -162,7 +162,7 @@ class SettingsViewModel @Inject constructor(
         db.bmpEmployeeDao().update(emp.copy(outletId = newOutletId, updatedAt = System.currentTimeMillis()))
         val outlet = db.outletDao().getById(newOutletId)
         if (outlet != null) {
-            db.outletDao().update(outlet.copy(currentEmployee = emp.name, updatedAt = System.currentTimeMillis()))
+            db.outletDao().update(outlet.copy(currentEmployee = emp.name, isSynced = false, updatedAt = System.currentTimeMillis()))
         }
 
         _syncStatus.value = "Outlet berhasil ditambahkan."

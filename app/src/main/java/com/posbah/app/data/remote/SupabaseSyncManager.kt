@@ -7,9 +7,11 @@ import android.util.Log
 import com.posbah.app.data.local.PosBahDatabase
 import com.posbah.app.data.local.entities.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import com.posbah.app.BuildConfig
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
@@ -29,6 +31,11 @@ object SupabaseSyncManager {
 
     @Volatile
     private var currentTenantId: String = ""
+
+    private val syncScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
+
+    @Volatile
+    private var currentUserEmail: String = ""
 
     /**
      * Mutex untuk mencegah dua coroutine menjalankan pullAll secara bersamaan
@@ -172,14 +179,37 @@ object SupabaseSyncManager {
     /**
      * Jalankan sinkronisasi penuh untuk seluruh data di database lokal.
      */
-    suspend fun syncAll(context: Context, db: PosBahDatabase, activeTenantId: String): SyncResult = withContext(Dispatchers.IO) {
+    suspend fun syncAll(
+        context: Context,
+        db: PosBahDatabase,
+        activeTenantId: String,
+        userEmail: String? = null
+    ): SyncResult = withContext(Dispatchers.IO) {
+        val email = userEmail ?: com.posbah.app.security.SecurePreferences(context).currentEmail.orEmpty()
+        val deferred = syncScope.async {
+            performSyncAll(context, db, activeTenantId, email)
+        }
+        try {
+            deferred.await()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        }
+    }
+
+    private suspend fun performSyncAll(
+        context: Context,
+        db: PosBahDatabase,
+        activeTenantId: String,
+        email: String
+    ): SyncResult {
         currentTenantId = activeTenantId
+        currentUserEmail = email
         if (!isNetworkAvailable(context)) {
             Log.w(TAG, "Sinkronisasi dibatalkan: tidak ada koneksi internet.")
-            return@withContext SyncResult.NoConnection
+            return SyncResult.NoConnection
         }
 
-        try {
+        return try {
             Log.d(TAG, "Memulai sinkronisasi ke VPS...")
 
             // PHASE 0: Push deletes ke server SEBELUM upload data baru
@@ -1002,9 +1032,9 @@ object SupabaseSyncManager {
                 readTimeout = 30_000
                 setRequestProperty("Content-Type", "application/json")
                 setRequestProperty("x-tenant-id", currentTenantId)
-                setRequestProperty("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
+                setRequestProperty("x-client-version", BuildConfig.VERSION_NAME)
                 val securePrefs = com.posbah.app.security.SecurePreferences(context)
-                val email = securePrefs.currentEmail
+                val email = currentUserEmail.takeIf { it.isNotBlank() } ?: securePrefs.currentEmail
                 if (!email.isNullOrBlank()) {
                     setRequestProperty("x-user-email", email)
                 }
@@ -1055,9 +1085,9 @@ object SupabaseSyncManager {
                 readTimeout = 15_000
                 setRequestProperty("Content-Type", "application/json")
                 setRequestProperty("x-tenant-id", tenantId)
-                setRequestProperty("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
+                setRequestProperty("x-client-version", BuildConfig.VERSION_NAME)
                 val securePrefs = com.posbah.app.security.SecurePreferences(context)
-                val email = securePrefs.currentEmail
+                val email = currentUserEmail.takeIf { it.isNotBlank() } ?: securePrefs.currentEmail
                 if (!email.isNullOrBlank()) {
                     setRequestProperty("x-user-email", email)
                 }
@@ -1193,9 +1223,9 @@ object SupabaseSyncManager {
                 readTimeout = 15_000
                 setRequestProperty("Content-Type", "application/json")
                 setRequestProperty("x-tenant-id", tenantId)
-                setRequestProperty("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
+                setRequestProperty("x-client-version", BuildConfig.VERSION_NAME)
                 val securePrefs = com.posbah.app.security.SecurePreferences(context)
-                val email = securePrefs.currentEmail
+                val email = currentUserEmail.takeIf { it.isNotBlank() } ?: securePrefs.currentEmail
                 if (!email.isNullOrBlank()) {
                     setRequestProperty("x-user-email", email)
                 }
@@ -1257,9 +1287,9 @@ object SupabaseSyncManager {
                 connectTimeout = 15_000
                 readTimeout = 30_000
                 setRequestProperty("x-tenant-id", tenantId)
-                setRequestProperty("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
+                setRequestProperty("x-client-version", BuildConfig.VERSION_NAME)
                 val securePrefs = com.posbah.app.security.SecurePreferences(context)
-                val email = securePrefs.currentEmail
+                val email = currentUserEmail.takeIf { it.isNotBlank() } ?: securePrefs.currentEmail
                 if (!email.isNullOrBlank()) {
                     setRequestProperty("x-user-email", email)
                 }
@@ -1298,9 +1328,9 @@ object SupabaseSyncManager {
                 readTimeout = 30_000
                 setRequestProperty("Accept", "application/json")
                 setRequestProperty("x-tenant-id", tenantId)
-                setRequestProperty("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
+                setRequestProperty("x-client-version", BuildConfig.VERSION_NAME)
                 val securePrefs = com.posbah.app.security.SecurePreferences(context)
-                val email = securePrefs.currentEmail
+                val email = currentUserEmail.takeIf { it.isNotBlank() } ?: securePrefs.currentEmail
                 if (!email.isNullOrBlank()) {
                     setRequestProperty("x-user-email", email)
                 }
@@ -1323,15 +1353,12 @@ object SupabaseSyncManager {
         }
     }
 
-    /**
-     * Mengecek timestamp pembaruan terakhir tenant dari server VPS.
-     */
-    fun checkServerSyncStatus(context: Context, tenantId: String): Long {
-        if (tenantId.isBlank()) return 0L
-        if (!isNetworkAvailable(context)) return 0L
+    suspend fun checkServerSyncStatus(context: Context, tenantId: String): Long = withContext(Dispatchers.IO) {
+        if (tenantId.isBlank()) return@withContext 0L
+        if (!isNetworkAvailable(context)) return@withContext 0L
 
         var conn: HttpURLConnection? = null
-        return try {
+        try {
             val endpointUrl = "$VPS_URL/api/sync/check-status?tenantId=${java.net.URLEncoder.encode(tenantId, "UTF-8")}"
             val url = URL(endpointUrl)
 
@@ -1341,9 +1368,9 @@ object SupabaseSyncManager {
                 readTimeout = 5_000
                 setRequestProperty("Accept", "application/json")
                 setRequestProperty("x-tenant-id", tenantId)
-                setRequestProperty("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
+                setRequestProperty("x-client-version", BuildConfig.VERSION_NAME)
                 val securePrefs = com.posbah.app.security.SecurePreferences(context)
-                val email = securePrefs.currentEmail
+                val email = currentUserEmail.takeIf { it.isNotBlank() } ?: securePrefs.currentEmail
                 if (!email.isNullOrBlank()) {
                     setRequestProperty("x-user-email", email)
                 }
@@ -1369,7 +1396,31 @@ object SupabaseSyncManager {
     /**
      * Jalankan sinkronisasi unduh penuh untuk data Master: outlets, employees, dan products.
      */
-    suspend fun pullAll(context: Context, db: PosBahDatabase, activeTenantId: String): SyncResult = withContext(Dispatchers.IO) {
+    suspend fun pullAll(
+        context: Context,
+        db: PosBahDatabase,
+        activeTenantId: String,
+        userEmail: String? = null
+    ): SyncResult = withContext(Dispatchers.IO) {
+        val email = userEmail ?: com.posbah.app.security.SecurePreferences(context).currentEmail.orEmpty()
+        val deferred = syncScope.async {
+            pullAllInternal(context, db, activeTenantId, email)
+        }
+        try {
+            deferred.await()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        }
+    }
+
+    private suspend fun pullAllInternal(
+        context: Context,
+        db: PosBahDatabase,
+        activeTenantId: String,
+        email: String
+    ): SyncResult = withContext(Dispatchers.IO) {
+        currentTenantId = activeTenantId
+        currentUserEmail = email
         // Anti race-condition: jika pullAll sudah berjalan, skip tanpa error
         if (!pullMutex.tryLock()) {
             Log.w(TAG, "[pullAll] Sudah berjalan di thread lain, skip untuk menghindari race condition.")
@@ -2373,10 +2424,12 @@ object SupabaseSyncManager {
                 readTimeout = 30_000
                 setRequestProperty("Accept", "application/json")
                 val securePrefs = com.posbah.app.security.SecurePreferences(context)
-                val activeTenantId = securePrefs.currentTenantId ?: "ten_premium_mulyakus84_gmail_com_FNB"
-                setRequestProperty("x-tenant-id", activeTenantId)
+                val activeTenantId = securePrefs.currentTenantId
+                if (!activeTenantId.isNullOrBlank()) {
+                    setRequestProperty("x-tenant-id", activeTenantId)
+                }
                 setRequestProperty("x-user-email", ownerEmail)
-                setRequestProperty("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
+                setRequestProperty("x-client-version", BuildConfig.VERSION_NAME)
             }
             if (conn.responseCode in 200..299) {
                 val responseText = conn.inputStream.bufferedReader().use { it.readText() }

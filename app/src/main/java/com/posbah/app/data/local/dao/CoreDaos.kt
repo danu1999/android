@@ -129,7 +129,7 @@ interface EmployeeDao {
     @Query("SELECT * FROM employees")
     suspend fun getAll(): List<Employee>
 
-    @Query("UPDATE employees SET isActive = 0 WHERE id = :id")
+    @Query("UPDATE employees SET isActive = 0, isSynced = 0 WHERE id = :id")
     suspend fun softDelete(id: Long)
 
     @Query("DELETE FROM employees WHERE email IN (:emails) AND tenantId NOT IN (:allowedTenants)")
@@ -144,7 +144,7 @@ interface EmployeeDao {
     suspend fun deleteById(id: Long)
 
     /** Update gaji dan siklus pembayaran karyawan oleh Owner. */
-    @Query("UPDATE employees SET salary = :salary, payPeriod = :payPeriod, updatedAt = :updatedAt WHERE id = :id")
+    @Query("UPDATE employees SET salary = :salary, payPeriod = :payPeriod, updatedAt = :updatedAt, isSynced = 0 WHERE id = :id")
     suspend fun updateSalaryAndPeriod(id: Long, salary: Double, payPeriod: String, updatedAt: Long = System.currentTimeMillis())
 
     @Query("UPDATE employees SET isSynced = 1 WHERE id = :id")

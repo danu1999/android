@@ -70,14 +70,14 @@ interface ProductDao {
 
     @Update suspend fun update(product: ProductEntity)
 
-    @Query("UPDATE products SET stock = :newStock, updatedAt = :ts WHERE id = :id")
+    @Query("UPDATE products SET stock = :newStock, updatedAt = :ts, isSynced = 0 WHERE id = :id")
     suspend fun updateStock(id: Long, newStock: Int, ts: Long = System.currentTimeMillis())
 
     @Query("DELETE FROM products WHERE id = :id")
     suspend fun delete(id: Long)
 
     /** Soft-delete produk POS */
-    @Query("UPDATE products SET isDeleted = 1, updatedAt = :ts WHERE id = :id")
+    @Query("UPDATE products SET isDeleted = 1, updatedAt = :ts, isSynced = 0 WHERE id = :id")
     suspend fun softDelete(id: Long, ts: Long = System.currentTimeMillis())
 
     /** Ambil ID yang sudah deleted untuk dikirim DELETE ke server */

@@ -50,7 +50,7 @@ class TenantPickerViewModel @Inject constructor(
             val activeTenantId = user?.tenantId ?: securePrefs.currentTenantId
 
             val lowerEmail = email.lowercase().trim()
-            if (lowerEmail == "muhammadmuizz8@gmail.com" || lowerEmail == "mulyakus84@gmail.com") {
+            if (user?.role == "OWNER") {
                 viewModelScope.launch {
                     try {
                         com.posbah.app.data.remote.SupabaseSyncManager.fetchAndInsertOwnerTenants(context, db, email)
@@ -63,7 +63,7 @@ class TenantPickerViewModel @Inject constructor(
                         it.copy(
                             isLoading = false, 
                             tenants = list,
-                            canAddTenant = true
+                            canAddTenant = (lowerEmail == "muhammadmuizz8@gmail.com" || lowerEmail == "mulyakus84@gmail.com")
                         ) 
                     }
                 }

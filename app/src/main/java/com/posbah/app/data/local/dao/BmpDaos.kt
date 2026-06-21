@@ -33,7 +33,7 @@ interface BmpClientDao {
     @Update suspend fun update(client: BmpClientEntity)
 
     /** Soft-delete: tandai isDeleted=1, data tidak dihapus dari DB lokal */
-    @Query("UPDATE bmp_clients SET isDeleted = 1, updatedAt = :ts WHERE id = :id")
+    @Query("UPDATE bmp_clients SET isDeleted = 1, updatedAt = :ts, isSynced = 0 WHERE id = :id")
     suspend fun softDelete(id: Long, ts: Long = System.currentTimeMillis())
 
     /** Untuk sync: ambil semua data (termasuk yang sudah dihapus) */
@@ -86,18 +86,18 @@ interface BmpInvoiceDao {
 
     @Update suspend fun update(invoice: BmpInvoiceEntity)
 
-    @Query("UPDATE bmp_invoices SET status = :status, updatedAt = :ts WHERE id = :id")
+    @Query("UPDATE bmp_invoices SET status = :status, updatedAt = :ts, isSynced = 0 WHERE id = :id")
     suspend fun setStatus(id: Long, status: String, ts: Long = System.currentTimeMillis())
 
-    @Query("UPDATE bmp_invoices SET paidAmount = :paid, status = :status, updatedAt = :ts WHERE id = :id")
+    @Query("UPDATE bmp_invoices SET paidAmount = :paid, status = :status, updatedAt = :ts, isSynced = 0 WHERE id = :id")
     suspend fun updatePaid(id: Long, paid: Double, status: String, ts: Long = System.currentTimeMillis())
 
     /** Soft-delete invoice: set isDeleted=1 */
-    @Query("UPDATE bmp_invoices SET isDeleted = 1, updatedAt = :ts WHERE id = :id")
+    @Query("UPDATE bmp_invoices SET isDeleted = 1, updatedAt = :ts, isSynced = 0 WHERE id = :id")
     suspend fun softDelete(id: Long, ts: Long = System.currentTimeMillis())
 
     /** Soft-delete semua invoice milik sebuah klien */
-    @Query("UPDATE bmp_invoices SET isDeleted = 1, updatedAt = :ts WHERE clientId = :clientId")
+    @Query("UPDATE bmp_invoices SET isDeleted = 1, updatedAt = :ts, isSynced = 0 WHERE clientId = :clientId")
     suspend fun softDeleteByClientId(clientId: Long, ts: Long = System.currentTimeMillis())
 
     /** Untuk sync: ambil semua (termasuk deleted) */
@@ -164,12 +164,12 @@ interface BmpProductDao {
     @Update suspend fun update(product: BmpProductEntity)
 
     /** Soft-delete item produk */
-    @Query("UPDATE bmp_products SET isDeleted = 1 WHERE id = :id")
-    suspend fun softDelete(id: Long)
+    @Query("UPDATE bmp_products SET isDeleted = 1, isSynced = 0, updatedAt = :ts WHERE id = :id")
+    suspend fun softDelete(id: Long, ts: Long = System.currentTimeMillis())
 
     /** Soft-delete semua produk milik sebuah invoice */
-    @Query("UPDATE bmp_products SET isDeleted = 1 WHERE invoiceId = :invoiceId")
-    suspend fun softDeleteByInvoice(invoiceId: Long)
+    @Query("UPDATE bmp_products SET isDeleted = 1, isSynced = 0, updatedAt = :ts WHERE invoiceId = :invoiceId")
+    suspend fun softDeleteByInvoice(invoiceId: Long, ts: Long = System.currentTimeMillis())
 
     @Query("SELECT * FROM bmp_products")
     suspend fun getAll(): List<BmpProductEntity>
@@ -202,7 +202,7 @@ interface BmpMasterProductDao {
     @Update suspend fun update(product: BmpMasterProductEntity)
 
     /** Soft-delete produk master */
-    @Query("UPDATE bmp_master_products SET isDeleted = 1, updatedAt = :ts WHERE id = :id")
+    @Query("UPDATE bmp_master_products SET isDeleted = 1, updatedAt = :ts, isSynced = 0 WHERE id = :id")
     suspend fun softDelete(id: Long, ts: Long = System.currentTimeMillis())
 
     @Query("SELECT * FROM bmp_master_products")
@@ -243,11 +243,11 @@ interface BmpPaymentDao {
     suspend fun update(payment: BmpInvoicePaymentEntity)
 
     /** Soft-delete pembayaran */
-    @Query("UPDATE bmp_invoice_payments SET isDeleted = 1 WHERE id = :id")
+    @Query("UPDATE bmp_invoice_payments SET isDeleted = 1, isSynced = 0 WHERE id = :id")
     suspend fun softDelete(id: Long)
 
     /** Soft-delete semua pembayaran milik sebuah invoice */
-    @Query("UPDATE bmp_invoice_payments SET isDeleted = 1 WHERE invoiceId = :invoiceId")
+    @Query("UPDATE bmp_invoice_payments SET isDeleted = 1, isSynced = 0 WHERE invoiceId = :invoiceId")
     suspend fun softDeleteByInvoice(invoiceId: Long)
 
     @Query("SELECT * FROM bmp_invoice_payments WHERE invoiceId = :invoiceId AND isDeleted = 0")
@@ -286,11 +286,11 @@ interface BmpCashFlowDao {
     suspend fun upsert(entry: BmpCashFlowEntity): Long
 
     /** Soft-delete entri cashflow */
-    @Query("UPDATE bmp_cashflow SET isDeleted = 1 WHERE id = :id")
+    @Query("UPDATE bmp_cashflow SET isDeleted = 1, isSynced = 0 WHERE id = :id")
     suspend fun softDelete(id: Long)
 
     /** Soft-delete semua cashflow yang terkait dengan pembayaran tertentu */
-    @Query("UPDATE bmp_cashflow SET isDeleted = 1 WHERE paymentRefId = :paymentRefId")
+    @Query("UPDATE bmp_cashflow SET isDeleted = 1, isSynced = 0 WHERE paymentRefId = :paymentRefId")
     suspend fun softDeleteByPaymentRefId(paymentRefId: Long)
 
     @Query("SELECT * FROM bmp_cashflow")
@@ -299,10 +299,10 @@ interface BmpCashFlowDao {
     @Query("UPDATE bmp_cashflow SET isSynced = 1 WHERE id = :id")
     suspend fun markSynced(id: Long)
 
-    @Query("UPDATE bmp_cashflow SET isDeleted = 1 WHERE paymentRefId = :paymentRefId")
+    @Query("UPDATE bmp_cashflow SET isDeleted = 1, isSynced = 0 WHERE paymentRefId = :paymentRefId")
     suspend fun deleteByPaymentRefId(paymentRefId: Long)
 
-    @Query("UPDATE bmp_cashflow SET isDeleted = 1 WHERE transactionType = 'KELUAR' AND description = 'Pembelian barang khusus untuk Faktur ' || :invoiceNumber AND isDeleted = 0")
+    @Query("UPDATE bmp_cashflow SET isDeleted = 1, isSynced = 0 WHERE transactionType = 'KELUAR' AND description = 'Pembelian barang khusus untuk Faktur ' || :invoiceNumber AND isDeleted = 0")
     suspend fun deleteExitsForInvoice(invoiceNumber: String)
 
     @Query("SELECT * FROM bmp_cashflow WHERE paymentRefId = :paymentRefId AND isDeleted = 0 LIMIT 1")
@@ -355,8 +355,8 @@ interface BmpEmployeeDao {
 
     @Update suspend fun update(employee: BmpEmployeeEntity)
 
-    @Query("UPDATE bmp_employees SET isActive = 0 WHERE id = :id")
-    suspend fun softDelete(id: Long)
+    @Query("UPDATE bmp_employees SET isActive = 0, isSynced = 0, updatedAt = :ts WHERE id = :id")
+    suspend fun softDelete(id: Long, ts: Long = System.currentTimeMillis())
 
     @Query("SELECT * FROM bmp_employees")
     suspend fun getAll(): List<BmpEmployeeEntity>
@@ -422,7 +422,7 @@ interface BmpBahanBakuDao {
     suspend fun update(entry: com.posbah.app.data.local.entities.BmpBahanBakuEntity)
 
     /** Soft-delete bahan baku header */
-    @Query("UPDATE bmp_bahan_baku SET isDeleted = 1, updatedAt = :ts WHERE id = :id")
+    @Query("UPDATE bmp_bahan_baku SET isDeleted = 1, updatedAt = :ts, isSynced = 0 WHERE id = :id")
     suspend fun softDelete(id: Long, ts: Long = System.currentTimeMillis())
 
     @Query("SELECT * FROM bmp_bahan_baku")
@@ -461,7 +461,7 @@ interface BmpBahanBakuItemDao {
     suspend fun upsert(item: com.posbah.app.data.local.entities.BmpBahanBakuItemEntity): Long
 
     /** Soft-delete semua item milik bahan baku tertentu */
-    @Query("UPDATE bmp_bahan_baku_item SET isDeleted = 1 WHERE bahanBakuId = :bahanBakuId")
+    @Query("UPDATE bmp_bahan_baku_item SET isDeleted = 1, isSynced = 0 WHERE bahanBakuId = :bahanBakuId")
     suspend fun softDeleteByBahanBaku(bahanBakuId: Long)
 
     @Query("DELETE FROM bmp_bahan_baku_item WHERE bahanBakuId = :bahanBakuId")
@@ -522,7 +522,7 @@ interface BmpProductStockDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(stock: com.posbah.app.data.local.entities.BmpProductStockEntity): Long
 
-    @Query("UPDATE bmp_product_stocks SET quantity = :quantity, updatedAt = :ts WHERE masterProductId = :productId AND tenantId = :tenantId")
+    @Query("UPDATE bmp_product_stocks SET quantity = :quantity, updatedAt = :ts, isSynced = 0 WHERE masterProductId = :productId AND tenantId = :tenantId")
     suspend fun updateQuantity(tenantId: String, productId: Long, quantity: Double, ts: Long = System.currentTimeMillis())
 
     @Query("SELECT * FROM bmp_product_stocks")
@@ -573,7 +573,7 @@ interface BmpProductionLogDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(log: com.posbah.app.data.local.entities.BmpProductionLogEntity): Long
 
-    @Query("UPDATE bmp_production_logs SET isDeleted = 1 WHERE id = :id")
+    @Query("UPDATE bmp_production_logs SET isDeleted = 1, isSynced = 0 WHERE id = :id")
     suspend fun softDelete(id: Long)
 
     @Query("""

@@ -37,7 +37,9 @@ class SplashViewModel @Inject constructor(
     private fun evaluate() {
         viewModelScope.launch {
             // 1) Device integrity guard
-            val report = DeviceIntegrityGuard.inspect(appContext)
+            val report = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                DeviceIntegrityGuard.inspect(appContext)
+            }
             if (report.rooted || report.hookFrameworkDetected) {
                 _route.value = SplashRoute.Blocked(
                     "Perangkat Anda terdeteksi rooted / memuat hook framework. " +
@@ -48,7 +50,11 @@ class SplashViewModel @Inject constructor(
 
             // 2) Best-effort Play Integrity check (non-blocking)
             //    Run async, do not gate UI on it. Just log signature SHA-256.
-            launch { integrityChecker.fetchIntegrityToken() }
+            launch {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    integrityChecker.fetchIntegrityToken()
+                }
+            }
 
             // 3) Session-based routing
             val sub = authRepository.activeUserSub()
@@ -63,37 +69,43 @@ class SplashViewModel @Inject constructor(
             if (targetRoute == SplashRoute.GoToLock && tenant != null && (tenant.startsWith("demo_tenant_") || tenant == "demo_tenant")) {
                 val email = authRepository.activeUserEmail()
                 if (!email.isNullOrBlank()) {
-                    var isUpgraded = false
-                    var checkConn: java.net.HttpURLConnection? = null
-                    try {
-                        val url = java.net.URL("https://www.zedmz.cloud/api/sync/local_users?email=eq.${java.net.URLEncoder.encode(email.lowercase().trim(), "UTF-8")}")
-                        checkConn = url.openConnection() as java.net.HttpURLConnection
-                        checkConn.requestMethod = "GET"
-                        checkConn.setRequestProperty("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
-                        checkConn.connectTimeout = 3000
-                        checkConn.readTimeout = 3000
-                        if (checkConn.responseCode in 200..299) {
-                            val response = checkConn.inputStream.bufferedReader().use { it.readText() }
-                            val array = org.json.JSONArray(response)
-                            if (array.length() > 0) {
-                                val obj = array.getJSONObject(0)
-                                isUpgraded = obj.optBoolean("isPremium", false)
+                    val isUpgraded = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        var checkUpgraded = false
+                        var checkConn: java.net.HttpURLConnection? = null
+                        try {
+                            val url = java.net.URL("https://www.zedmz.cloud/api/sync/local_users?email=eq.${java.net.URLEncoder.encode(email.lowercase().trim(), "UTF-8")}")
+                            checkConn = url.openConnection() as java.net.HttpURLConnection
+                            checkConn.requestMethod = "GET"
+                            checkConn.setRequestProperty("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
+                            checkConn.connectTimeout = 3000
+                            checkConn.readTimeout = 3000
+                            if (checkConn.responseCode in 200..299) {
+                                val response = checkConn.inputStream.bufferedReader().use { it.readText() }
+                                val array = org.json.JSONArray(response)
+                                if (array.length() > 0) {
+                                    val obj = array.getJSONObject(0)
+                                    checkUpgraded = obj.optBoolean("isPremium", false)
+                                }
                             }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        } finally {
+                            checkConn?.disconnect()
                         }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    } finally {
-                        checkConn?.disconnect()
+
+                        if (checkUpgraded) {
+                            // AUTOMATION: Upgraded to premium! Clear demo data to 0 and logout
+                            try {
+                                db.clearAllTables()
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                            authRepository.logout()
+                        }
+                        checkUpgraded
                     }
 
                     if (isUpgraded) {
-                        // AUTOMATION: Upgraded to premium! Clear demo data to 0 and logout
-                        try {
-                            db.clearAllTables()
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                        authRepository.logout()
                         targetRoute = SplashRoute.GoToLogin
                     }
                 }

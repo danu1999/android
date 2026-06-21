@@ -709,11 +709,10 @@ func initSchema() error {
 	_, _ = db.Exec(`INSERT INTO "system_admins" ("email", "passwordHash", "createdAt")
 		VALUES ('muhammadmuizz8@gmail.com', $1, $2)
 		ON CONFLICT ("email") DO UPDATE SET "passwordHash" = EXCLUDED."passwordHash";`, defaultAdminHash, time.Now().UnixNano()/int64(time.Millisecond))
-	
-	// One-time POS data cleanup on update to v2.17.29/v2.17.30/v2.17.31/v2.17.32/v2.17.33/v2.17.34/v2.17.35/v2.17.36/v2.17.37 (except bahteramulyap@gmail.com / ten_premium_bahteramulyap_gmail_com)
+	// One-time POS data cleanup on update to v2.17.29-v2.17.39 (except bahteramulyap@gmail.com / ten_premium_bahteramulyap_gmail_com)
 	var currentConfigVer string
 	_ = db.QueryRow(`SELECT "version" FROM "apk_config" WHERE "id" = 1`).Scan(&currentConfigVer)
-	if currentConfigVer != "2.17.29" && currentConfigVer != "2.17.30" && currentConfigVer != "2.17.31" && currentConfigVer != "2.17.32" && currentConfigVer != "2.17.33" && currentConfigVer != "2.17.34" && currentConfigVer != "2.17.35" && currentConfigVer != "2.17.36" && currentConfigVer != "2.17.37" {
+	if currentConfigVer != "2.17.29" && currentConfigVer != "2.17.30" && currentConfigVer != "2.17.31" && currentConfigVer != "2.17.32" && currentConfigVer != "2.17.33" && currentConfigVer != "2.17.34" && currentConfigVer != "2.17.35" && currentConfigVer != "2.17.36" && currentConfigVer != "2.17.37" && currentConfigVer != "2.17.38" && currentConfigVer != "2.17.39" {
 		log.Println("[Migration] Upgrading, performing POS data cleanup...")
 		// Delete products
 		_, errProd := db.Exec(`DELETE FROM "products" WHERE "tenantId" NOT IN ('bahteramulyap@gmail.com', 'ten_premium_bahteramulyap_gmail_com')`)
@@ -735,9 +734,9 @@ func initSchema() error {
 		log.Println("[Migration] POS data cleanup completed.")
 	}
 
-	// Seed default apk_config — v2.17.37
+	// Seed default apk_config — v2.17.39
 	_, _ = db.Exec(`INSERT INTO "apk_config" ("id", "version", "description", "downloadUrl", "updatedAt")
-		VALUES (1, '2.17.37', 'Pembaruan wajib untuk pengaktifan sinkronisasi real-time instan berbasis WebSockets dan optimalisasi konsumsi baterai POSBah Anda. Silakan unduh versi terbaru untuk melanjutkan.', '/api/download-apk', $1)
+		VALUES (1, '2.17.39', 'Pembaruan wajib untuk pengaktifan sinkronisasi real-time instan berbasis WebSockets, peningkatan performa pencegahan hang/ANR, serta perbaikan sinkronisasi outlet karyawan.', '/api/download-apk', $1)
 		ON CONFLICT ("id") DO UPDATE SET "version" = EXCLUDED."version", "description" = EXCLUDED."description", "updatedAt" = EXCLUDED."updatedAt";`, time.Now().UnixNano()/int64(time.Millisecond))
 	
 	// Protect syerlirahma7@gmail.com: mark as ACTIVE in deleted_users so she is never purged again

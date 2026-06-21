@@ -77,7 +77,7 @@ class MainActivity : FragmentActivity() {
         sessionState.setOnline(isOnlineInitial)
 
         // Periodic foreground auto-sync: pulls remote updates & pushes local changes every 30 seconds
-        lifecycleScope.launch {
+        lifecycleScope.launch(Dispatchers.IO) {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 try {
                     while (true) {
@@ -165,7 +165,9 @@ class MainActivity : FragmentActivity() {
                                             }
                                             authRepository.logout()
                                             // Recreate activity to force redirect immediately back to splash/login and clear composable states
-                                            this@MainActivity.recreate()
+                                            kotlinx.coroutines.withContext(Dispatchers.Main) {
+                                                this@MainActivity.recreate()
+                                            }
                                             break
                                         }
                                     }
@@ -224,6 +226,16 @@ class MainActivity : FragmentActivity() {
                 //WindowManager.LayoutParams.FLAG_SECURE
             //)
         //}
+
+        // Preload database on a background thread to move SQLCipher load and key derivation off main thread
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                db.openHelper.writableDatabase
+                android.util.Log.i("MainActivity", "Database preloaded successfully on background thread")
+            } catch (e: Exception) {
+                android.util.Log.e("MainActivity", "Error preloading database", e)
+            }
+        }
 
         enableEdgeToEdge()
 
