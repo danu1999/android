@@ -21,6 +21,7 @@ import com.posbah.app.data.local.entities.BmpEmployeeEntity
 import com.posbah.app.data.local.entities.BmpPayrollEntity
 import com.posbah.app.data.local.entities.BmpBahanBakuEntity
 import com.posbah.app.data.local.entities.BmpBahanBakuItemEntity
+import androidx.room.withTransaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
@@ -545,11 +546,12 @@ class LocalDataSeeder @Inject constructor(
             }
         }
 
-        // Commit seeded data to Room DB using block insert/upsert
-        if (productList.isNotEmpty()) {
-            productDao.clearTenantProducts(tenantId)
-            productDao.insertAll(productList)
-        }
+        // Commit seeded data to Room DB using block insert/upsert within a transaction
+        db.withTransaction {
+            if (productList.isNotEmpty()) {
+                productDao.clearTenantProducts(tenantId)
+                productDao.insertAll(productList)
+            }
         if (customerList.isNotEmpty()) {
             customerDao.insertAll(customerList)
         }
@@ -1533,6 +1535,7 @@ class LocalDataSeeder @Inject constructor(
                 }
             }
         }
+        } // end of db.withTransaction
 
         } catch (e: Exception) {
             android.util.Log.e("LocalDataSeeder", "Error during seedFromSqlDump execution", e)

@@ -14,6 +14,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -58,7 +60,20 @@ class OutletControlViewModel @Inject constructor(
     val uiState = _uiState.asStateFlow()
 
     init {
-        loadData()
+        // Collect DB changes and refresh data reactively
+        viewModelScope.launch {
+            combine(
+                db.outletDao().observeForTenant(tenantId),
+                db.productDao().observe(tenantId),
+                db.employeeDao().observeForTenant(tenantId),
+                db.transactionDao().observe(tenantId)
+            ) { _, _, _, _ ->
+                // Trigger reload on database change
+            }.collect {
+                loadData()
+            }
+        }
+
         // Trigger background pull sync
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             com.posbah.app.data.remote.SupabaseSyncManager.pullAll(context, db, tenantId)
