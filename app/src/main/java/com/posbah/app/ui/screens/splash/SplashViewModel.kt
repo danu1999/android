@@ -26,7 +26,8 @@ class SplashViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val authRepository: AuthRepository,
     private val integrityChecker: IntegrityChecker,
-    private val db: com.posbah.app.data.local.PosBahDatabase
+    private val db: com.posbah.app.data.local.PosBahDatabase,
+    private val sessionState: com.posbah.app.data.repository.SessionState
 ) : ViewModel() {
 
     private val _route = MutableStateFlow<SplashRoute>(SplashRoute.NotReady)
@@ -59,6 +60,31 @@ class SplashViewModel @Inject constructor(
             // 3) Session-based routing
             val sub = authRepository.activeUserSub()
             val tenant = authRepository.activeTenantId()
+            
+            // Verify server connection on startup if user is logged in
+            if (sub != null && tenant != null) {
+                val isServerOnline = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    var online = false
+                    var conn: java.net.HttpURLConnection? = null
+                    try {
+                        val url = java.net.URL("https://www.zedmz.cloud/api/sync/check-status?tenantId=${java.net.URLEncoder.encode(tenant, "UTF-8")}")
+                        conn = url.openConnection() as java.net.HttpURLConnection
+                        conn.requestMethod = "GET"
+                        conn.connectTimeout = 3000
+                        conn.readTimeout = 3000
+                        online = conn.responseCode in 200..299
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    } finally {
+                        conn?.disconnect()
+                    }
+                    online
+                }
+                if (!isServerOnline) {
+                    sessionState.setOnline(false)
+                }
+            }
+
             var targetRoute = when {
                 sub == null -> SplashRoute.GoToLogin
                 tenant == null -> SplashRoute.GoToLogin
