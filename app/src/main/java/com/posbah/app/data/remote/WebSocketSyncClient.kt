@@ -73,21 +73,25 @@ object WebSocketSyncClient {
         Log.i(TAG, "Connecting to WebSocket: $requestUrl")
         webSocket = client?.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
+                if (webSocket != this@WebSocketSyncClient.webSocket) return
                 Log.i(TAG, "WebSocket connection opened successfully.")
                 SupabaseSyncManager.onConnectionStateChanged?.invoke(true)
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
+                if (webSocket != this@WebSocketSyncClient.webSocket) return
                 Log.d(TAG, "WebSocket message received: $text")
                 handleMessage(text)
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                if (webSocket != this@WebSocketSyncClient.webSocket) return
                 Log.w(TAG, "WebSocket closing: $code / $reason")
                 webSocket.close(1000, null)
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                if (webSocket != this@WebSocketSyncClient.webSocket) return
                 Log.i(TAG, "WebSocket connection closed: $code / $reason")
                 if (!isManualDisconnect) {
                     SupabaseSyncManager.onConnectionStateChanged?.invoke(false)
@@ -96,6 +100,7 @@ object WebSocketSyncClient {
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                if (webSocket != this@WebSocketSyncClient.webSocket) return
                 Log.e(TAG, "WebSocket connection failed: ${t.message}", t)
                 SupabaseSyncManager.onConnectionStateChanged?.invoke(false)
                 triggerReconnect()
