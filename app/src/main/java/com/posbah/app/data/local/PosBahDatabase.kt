@@ -530,7 +530,26 @@ abstract class PosBahDatabase : RoomDatabase() {
 
         val MIGRATION_28_29 = object : Migration(28, 29) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE `products` ADD COLUMN `minStockAlert` INTEGER NOT NULL DEFAULT 0")
+                var exists = false
+                val cursor = db.query("PRAGMA table_info(`products`)")
+                try {
+                    val nameIndex = cursor.getColumnIndex("name")
+                    if (nameIndex >= 0) {
+                        while (cursor.moveToNext()) {
+                            if (cursor.getString(nameIndex) == "minStockAlert") {
+                                exists = true
+                                break
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                } finally {
+                    cursor.close()
+                }
+                if (!exists) {
+                    db.execSQL("ALTER TABLE `products` ADD COLUMN `minStockAlert` INTEGER NOT NULL DEFAULT 0")
+                }
             }
         }
 
