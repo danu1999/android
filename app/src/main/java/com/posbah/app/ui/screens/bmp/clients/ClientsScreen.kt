@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -287,11 +288,22 @@ private fun ClientRow(
             }
             Spacer(Modifier.size(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    client.clientName,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onBackground
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        client.clientName,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    if (!client.isSynced) {
+                        Spacer(Modifier.size(4.dp))
+                        Icon(
+                            imageVector = Icons.Outlined.Schedule,
+                            contentDescription = "Pending Sync",
+                            tint = androidx.compose.ui.graphics.Color(0xFFE08A1B),
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
                 Text(
                     client.phoneNumber ?: client.emailAddress ?: "Tanpa kontak",
                     style = MaterialTheme.typography.bodySmall,

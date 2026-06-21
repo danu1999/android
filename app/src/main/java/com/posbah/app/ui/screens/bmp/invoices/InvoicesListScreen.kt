@@ -22,6 +22,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DateRange
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.outlined.ChevronLeft
@@ -298,11 +299,22 @@ private fun InvoiceRow(invoice: BmpInvoiceEntity, onClick: () -> Unit) {
             }
             Spacer(Modifier.size(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    invoice.number,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onBackground
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        invoice.number,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    if (!invoice.isSynced) {
+                        Spacer(Modifier.width(6.dp))
+                        Icon(
+                            imageVector = Icons.Outlined.Schedule,
+                            contentDescription = "Pending Sync",
+                            tint = Color(0xFFE08A1B),
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
                 Text(
                     invoice.title,
                     style = MaterialTheme.typography.bodySmall,
