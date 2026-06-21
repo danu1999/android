@@ -27,6 +27,9 @@ class SessionState @Inject constructor(
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
 
+    private val _isOnline = MutableStateFlow(true)
+    val isOnline: StateFlow<Boolean> = _isOnline.asStateFlow()
+
     /**
      * ID outlet yang dikunci untuk karyawan non-OWNER.
      * Null = tidak dikunci (OWNER bebas ganti outlet).
@@ -65,6 +68,10 @@ class SessionState @Inject constructor(
 
     fun setSyncing(syncing: Boolean) {
         _isSyncing.value = syncing
+    }
+
+    fun setOnline(online: Boolean) {
+        _isOnline.value = online
     }
 
     fun requireTenantId(): String =

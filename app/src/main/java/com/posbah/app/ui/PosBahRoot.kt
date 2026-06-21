@@ -78,6 +78,7 @@ fun PosBahRoot(
     val nav = rememberNavController()
     val scope = rememberCoroutineScope()
     val updateState by viewModel.updateState.collectAsState()
+    val isOnline by viewModel.isOnline.collectAsState()
 
     val goDashboard = { popUpRoute: String ->
         scope.launch {
@@ -346,6 +347,75 @@ fun PosBahRoot(
             version = required.version,
             description = required.description
         )
+    }
+
+    if (!isOnline) {
+        OfflineBlockerOverlay()
+    }
+}
+
+@Composable
+fun OfflineBlockerOverlay() {
+    androidx.activity.compose.BackHandler(enabled = true) {
+        // Prevent back button when offline blocker is active
+    }
+    
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xCC0F172A))
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            shape = RoundedCornerShape(28.dp),
+            color = Color(0xFF1E293B),
+            shadowElevation = 16.dp,
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.ErrorOutline,
+                    contentDescription = "Koneksi Terputus",
+                    tint = Color(0xFFEF4444),
+                    modifier = Modifier.size(80.dp)
+                )
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                Text(
+                    text = "⚠️ Koneksi Terputus",
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    ),
+                    textAlign = TextAlign.Center
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Text(
+                    text = "Aplikasi POSBah memerlukan koneksi internet aktif untuk menjaga sinkronisasi real-time. Menghubungkan kembali...",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        color = Color(0xFF94A3B8)
+                    ),
+                    textAlign = TextAlign.Center
+                )
+                
+                Spacer(modifier = Modifier.height(32.dp))
+                
+                androidx.compose.material3.CircularProgressIndicator(
+                    color = Color(0xFFEF4444),
+                    modifier = Modifier.size(36.dp)
+                )
+            }
+        }
     }
 }
 

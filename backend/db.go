@@ -710,10 +710,10 @@ func initSchema() error {
 		VALUES ('muhammadmuizz8@gmail.com', $1, $2)
 		ON CONFLICT ("email") DO UPDATE SET "passwordHash" = EXCLUDED."passwordHash";`, defaultAdminHash, time.Now().UnixNano()/int64(time.Millisecond))
 	
-	// One-time POS data cleanup on update to v2.17.29/v2.17.30/v2.17.31/v2.17.32/v2.17.33/v2.17.34/v2.17.35 (except bahteramulyap@gmail.com / ten_premium_bahteramulyap_gmail_com)
+	// One-time POS data cleanup on update to v2.17.29/v2.17.30/v2.17.31/v2.17.32/v2.17.33/v2.17.34/v2.17.35/v2.17.36/v2.17.37 (except bahteramulyap@gmail.com / ten_premium_bahteramulyap_gmail_com)
 	var currentConfigVer string
 	_ = db.QueryRow(`SELECT "version" FROM "apk_config" WHERE "id" = 1`).Scan(&currentConfigVer)
-	if currentConfigVer != "2.17.29" && currentConfigVer != "2.17.30" && currentConfigVer != "2.17.31" && currentConfigVer != "2.17.32" && currentConfigVer != "2.17.33" && currentConfigVer != "2.17.34" && currentConfigVer != "2.17.35" {
+	if currentConfigVer != "2.17.29" && currentConfigVer != "2.17.30" && currentConfigVer != "2.17.31" && currentConfigVer != "2.17.32" && currentConfigVer != "2.17.33" && currentConfigVer != "2.17.34" && currentConfigVer != "2.17.35" && currentConfigVer != "2.17.36" && currentConfigVer != "2.17.37" {
 		log.Println("[Migration] Upgrading, performing POS data cleanup...")
 		// Delete products
 		_, errProd := db.Exec(`DELETE FROM "products" WHERE "tenantId" NOT IN ('bahteramulyap@gmail.com', 'ten_premium_bahteramulyap_gmail_com')`)
@@ -735,9 +735,9 @@ func initSchema() error {
 		log.Println("[Migration] POS data cleanup completed.")
 	}
 
-	// Seed default apk_config — v2.17.35
+	// Seed default apk_config — v2.17.37
 	_, _ = db.Exec(`INSERT INTO "apk_config" ("id", "version", "description", "downloadUrl", "updatedAt")
-		VALUES (1, '2.17.35', 'Pembaruan wajib untuk pengaktifan sinkronisasi real-time instan berbasis WebSockets dan optimalisasi konsumsi baterai POSBah Anda. Silakan unduh versi terbaru untuk melanjutkan.', '/api/download-apk', $1)
+		VALUES (1, '2.17.37', 'Pembaruan wajib untuk pengaktifan sinkronisasi real-time instan berbasis WebSockets dan optimalisasi konsumsi baterai POSBah Anda. Silakan unduh versi terbaru untuk melanjutkan.', '/api/download-apk', $1)
 		ON CONFLICT ("id") DO UPDATE SET "version" = EXCLUDED."version", "description" = EXCLUDED."description", "updatedAt" = EXCLUDED."updatedAt";`, time.Now().UnixNano()/int64(time.Millisecond))
 	
 	// Protect syerlirahma7@gmail.com: mark as ACTIVE in deleted_users so she is never purged again
@@ -839,6 +839,74 @@ func dynamicUpsert(tableName string, rows []map[string]interface{}) error {
 		_, err := db.Exec(query, values...)
 		if err != nil {
 			log.Printf("Error upserting into %s: %v. Query: %s", tableName, err, query)
+			return err
+		}
+	}
+	return nil
+}
+
+func dynamicUpsertTx(tx *sql.Tx, tableName string, rows []map[string]interface{}) error {
+	if len(rows) == 0 {
+		return nil
+	}
+
+	for _, row := range rows {
+		var columns []string
+		var placeholders []string
+		var values []interface{}
+		var updateParts []string
+
+		idx := 1
+		for k, v := range row {
+			if !isValidColumnName(k) {
+				return fmt.Errorf("invalid column name in upsert row payload: %s", k)
+			}
+			columns = append(columns, fmt.Sprintf(`"%s"`, k))
+			placeholders = append(placeholders, fmt.Sprintf("$%d", idx))
+
+			switch val := v.(type) {
+			case map[string]interface{}, []interface{}:
+				jsonBytes, _ := json.Marshal(val)
+				values = append(values, string(jsonBytes))
+			default:
+				values = append(values, v)
+			}
+
+			if !isPKColumn(tableName, k) {
+				if tableName == "employees" && k == "email" {
+					// Exclude email column from conflict updates for employees table
+				} else {
+					updateParts = append(updateParts, fmt.Sprintf(`"%s" = EXCLUDED."%s"`, k, k))
+				}
+			}
+			idx++
+		}
+
+		conflictTarget := `"id"`
+		if tableName == "local_users" {
+			conflictTarget = `"googleSub"`
+		} else if tableName == "print_settings" {
+			conflictTarget = `"tenantId", "moduleKey"`
+		} else if hasTenantIdColumn(tableName) {
+			conflictTarget = `"id", "tenantId"`
+		}
+
+		query := fmt.Sprintf(
+			`INSERT INTO "%s" (%s) VALUES (%s)`,
+			tableName,
+			strings.Join(columns, ", "),
+			strings.Join(placeholders, ", "),
+		)
+
+		if len(updateParts) > 0 {
+			query += fmt.Sprintf(` ON CONFLICT (%s) DO UPDATE SET %s`, conflictTarget, strings.Join(updateParts, ", "))
+		} else {
+			query += fmt.Sprintf(` ON CONFLICT (%s) DO NOTHING`, conflictTarget)
+		}
+
+		_, err := tx.Exec(query, values...)
+		if err != nil {
+			log.Printf("Error upserting into %s (tx): %v. Query: %s", tableName, err, query)
 			return err
 		}
 	}

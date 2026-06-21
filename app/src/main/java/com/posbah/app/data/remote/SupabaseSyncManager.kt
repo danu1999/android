@@ -1035,6 +1035,211 @@ object SupabaseSyncManager {
     }
 
     /**
+     * Upload data ke server VPS secara sinkron (Write-Through) untuk memastikan
+     * validasi stok di server berhasil sebelum disimpan secara lokal.
+     */
+    suspend fun uploadRowWriteThrough(context: Context, tableName: String, jsonArray: JSONArray, tenantId: String): SyncResult = withContext(Dispatchers.IO) {
+        currentTenantId = tenantId
+        if (!isNetworkAvailable(context)) {
+            return@withContext SyncResult.NoConnection
+        }
+        var conn: HttpURLConnection? = null
+        try {
+            val endpointUrl = "$VPS_URL/api/sync/$tableName"
+            val url = URL(endpointUrl)
+
+            conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                doOutput = true
+                connectTimeout = 10_000
+                readTimeout = 15_000
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("x-tenant-id", tenantId)
+                setRequestProperty("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
+                val securePrefs = com.posbah.app.security.SecurePreferences(context)
+                val email = securePrefs.currentEmail
+                if (!email.isNullOrBlank()) {
+                    setRequestProperty("x-user-email", email)
+                }
+            }
+
+            conn.outputStream.use { out ->
+                val body = jsonArray.toString()
+                out.bufferedWriter().use { writer ->
+                    writer.write(body)
+                }
+            }
+
+            val responseCode = conn.responseCode
+            if (responseCode in 200..299) {
+                SyncResult.Success
+            } else {
+                val errorStream = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                Log.e(TAG, "Gagal mengunggah table write-through: $tableName ($responseCode): $errorStream")
+
+                var errorMsg = "Upload failed ($responseCode)"
+                try {
+                    val errorObj = JSONObject(errorStream)
+                    val detail = errorObj.optString("message", "")
+                    if (detail.isNotEmpty()) {
+                        errorMsg = detail
+                    } else {
+                        val err = errorObj.optString("error", "")
+                        if (err.isNotEmpty()) errorMsg = err
+                    }
+                } catch (e: Exception) {
+                    if (errorStream.isNotEmpty()) {
+                        errorMsg = errorStream
+                    }
+                }
+                SyncResult.Error(errorMsg)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception saat mengunggah table write-through $tableName: ${e.message}")
+            SyncResult.Error(e.message ?: "Connection error")
+        } finally {
+            conn?.disconnect()
+        }
+    }
+
+    /**
+     * Mengirim data transaksi & item secara sinkron (Write-Through) untuk validasi stok di server.
+     */
+    suspend fun checkoutWriteThrough(
+        context: Context,
+        tenantId: String,
+        tx: TransactionEntity,
+        items: List<TransactionItemEntity>
+    ): SyncResult {
+        val txJson = JSONObject().apply {
+            put("id", tx.id)
+            put("tenantId", tenantId)
+            put("outletId", tx.outletId ?: JSONObject.NULL)
+            put("employeeId", tx.employeeId)
+            put("customerId", tx.customerId ?: JSONObject.NULL)
+            put("customerName", tx.customerName ?: JSONObject.NULL)
+            put("receiptNumber", tx.receiptNumber)
+            put("date", tx.date)
+            put("subtotal", tx.subtotal)
+            put("discountType", tx.discountType ?: JSONObject.NULL)
+            put("discountInput", tx.discountInput)
+            put("discountAmt", tx.discountAmt)
+            put("total", tx.total)
+            put("discount", tx.discount)
+            put("paymentMethod", tx.paymentMethod)
+            put("amountPaid", tx.amountPaid ?: JSONObject.NULL)
+            put("change", tx.change ?: JSONObject.NULL)
+            put("status", tx.status)
+            put("type", tx.type)
+            put("orderStatus", tx.orderStatus ?: JSONObject.NULL)
+            put("dpAmount", tx.dpAmount)
+            put("deliveryDate", tx.deliveryDate ?: JSONObject.NULL)
+            put("queueNumber", tx.queueNumber ?: JSONObject.NULL)
+            put("notes", tx.notes ?: JSONObject.NULL)
+            put("createdAt", tx.createdAt)
+            put("updatedAt", tx.updatedAt)
+        }
+
+        val itemsArray = JSONArray()
+        items.forEach { ti ->
+            itemsArray.put(JSONObject().apply {
+                put("id", ti.id)
+                put("transactionId", ti.transactionId)
+                put("productId", ti.productId)
+                put("variantId", ti.variantId ?: JSONObject.NULL)
+                put("variantName", ti.variantName ?: JSONObject.NULL)
+                put("quantity", ti.quantity)
+                put("price", ti.price)
+                put("costPrice", ti.costPrice)
+                put("discount", ti.discount)
+                put("note", ti.note ?: JSONObject.NULL)
+            })
+        }
+
+        val payload = JSONObject().apply {
+            put("transaction", txJson)
+            put("items", itemsArray)
+        }
+
+        val array = JSONArray().apply { put(payload) }
+        return uploadRowWriteThrough(context, "checkout", array, tenantId)
+    }
+
+    /**
+     * Mengirim satu baris data secara sinkron (Write-Through POST) ke server VPS.
+     */
+    suspend fun postRowDirectly(context: Context, tableName: String, row: JSONObject, tenantId: String): SyncResult {
+        val array = JSONArray().apply { put(row) }
+        return uploadRowWriteThrough(context, tableName, array, tenantId)
+    }
+
+    /**
+     * Memperbarui satu baris data secara sinkron (Write-Through PATCH) ke server VPS.
+     */
+    suspend fun patchRowDirectly(context: Context, tableName: String, id: Long, row: JSONObject, tenantId: String): SyncResult = withContext(Dispatchers.IO) {
+        currentTenantId = tenantId
+        if (!isNetworkAvailable(context)) {
+            return@withContext SyncResult.NoConnection
+        }
+        var conn: HttpURLConnection? = null
+        try {
+            val endpointUrl = "$VPS_URL/api/sync/$tableName?id=eq.$id"
+            val url = URL(endpointUrl)
+
+            conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "PATCH"
+                doOutput = true
+                connectTimeout = 10_000
+                readTimeout = 15_000
+                setRequestProperty("Content-Type", "application/json")
+                setRequestProperty("x-tenant-id", tenantId)
+                setRequestProperty("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
+                val securePrefs = com.posbah.app.security.SecurePreferences(context)
+                val email = securePrefs.currentEmail
+                if (!email.isNullOrBlank()) {
+                    setRequestProperty("x-user-email", email)
+                }
+            }
+
+            conn.outputStream.use { out ->
+                val body = row.toString()
+                out.bufferedWriter().use { writer ->
+                    writer.write(body)
+                }
+            }
+
+            val responseCode = conn.responseCode
+            if (responseCode in 200..299) {
+                SyncResult.Success
+            } else {
+                val errorStream = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                Log.e(TAG, "Gagal meng-patch table write-through: $tableName ($responseCode): $errorStream")
+                var errorMsg = "Update failed ($responseCode)"
+                try {
+                    val errorObj = JSONObject(errorStream)
+                    val detail = errorObj.optString("message", "")
+                    if (detail.isNotEmpty()) {
+                        errorMsg = detail
+                    } else {
+                        val err = errorObj.optString("error", "")
+                        if (err.isNotEmpty()) errorMsg = err
+                    }
+                } catch (e: Exception) {
+                    if (errorStream.isNotEmpty()) {
+                        errorMsg = errorStream
+                    }
+                }
+                SyncResult.Error(errorMsg)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception saat meng-patch table write-through $tableName: ${e.message}")
+            SyncResult.Error(e.message ?: "Connection error")
+        } finally {
+            conn?.disconnect()
+        }
+    }
+
+    /**
      * Hapus satu baris data dari VPS REST API.
      */
     suspend fun deleteRow(context: Context, tableName: String, id: Long, tenantId: String): Boolean = withContext(Dispatchers.IO) {

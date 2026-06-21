@@ -24,8 +24,11 @@ sealed class UpdateState {
 class PosBahRootViewModel @Inject constructor(
     private val securePrefs: SecurePreferences,
     private val tenantDao: TenantDao,
-    private val userDao: LocalUserDao
+    private val userDao: LocalUserDao,
+    private val sessionState: com.posbah.app.data.repository.SessionState
 ) : ViewModel() {
+
+    val isOnline = sessionState.isOnline
 
     private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val updateState = _updateState.asStateFlow()

@@ -3579,6 +3579,15 @@ func handleSyncRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.URL.Path == "/api/sync/checkout" {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		handleCheckout(w, r)
+		return
+	}
+
 	if r.Method == http.MethodGet {
 		handleSyncQuery(w, r)
 		return
@@ -3596,6 +3605,185 @@ func handleSyncRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+}
+
+type CheckoutPayload struct {
+	Transaction map[string]interface{}   `json:"transaction"`
+	Items       []map[string]interface{} `json:"items"`
+}
+
+func handleCheckout(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.Header.Get("x-tenant-id")
+	if tenantID == "" {
+		http.Error(w, "x-tenant-id is required", http.StatusBadRequest)
+		return
+	}
+
+	var payload CheckoutPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Invalid JSON body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		http.Error(w, "Database transaction failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	// 1. Loop through items to validate stock with FOR UPDATE lock
+	for _, item := range payload.Items {
+		prodIDVal, ok := item["productId"]
+		if !ok {
+			http.Error(w, "Missing productId in transaction item", http.StatusBadRequest)
+			return
+		}
+		var prodID int64
+		switch v := prodIDVal.(type) {
+		case float64:
+			prodID = int64(v)
+		case int64:
+			prodID = v
+		default:
+			parsed, _ := strconv.ParseInt(fmt.Sprintf("%v", v), 10, 64)
+			prodID = parsed
+		}
+
+		qtyVal, ok := item["quantity"]
+		if !ok {
+			http.Error(w, "Missing quantity in transaction item", http.StatusBadRequest)
+			return
+		}
+		var qty float64
+		switch v := qtyVal.(type) {
+		case float64:
+			qty = v
+		default:
+			parsed, _ := strconv.ParseFloat(fmt.Sprintf("%v", v), 64)
+			qty = parsed
+		}
+
+		var stock float64
+		var name string
+		err := tx.QueryRow(`SELECT "stock", "name" FROM "products" WHERE "id" = $1 AND "tenantId" = $2 FOR UPDATE`, prodID, tenantID).Scan(&stock, &name)
+		if err != nil {
+			tx.Rollback()
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error":   "product_not_found",
+				"message": fmt.Sprintf("Produk dengan ID %d tidak ditemukan di server.", prodID),
+			})
+			return
+		}
+
+		if stock < qty {
+			tx.Rollback()
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error":   "insufficient_stock",
+				"message": fmt.Sprintf("Stok tidak mencukupi untuk '%s'. Tersedia di server: %g, diminta: %g.", name, stock, qty),
+			})
+			return
+		}
+
+		// Decrement product stock in PostgreSQL
+		_, errUpdate := tx.Exec(`UPDATE "products" SET "stock" = "stock" - $1, "updatedAt" = $2 WHERE "id" = $3 AND "tenantId" = $4`, qty, time.Now().UnixNano()/1e6, prodID, tenantID)
+		if errUpdate != nil {
+			tx.Rollback()
+			http.Error(w, "Failed to update product stock: "+errUpdate.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// 2. Insert Transaction metadata
+	payload.Transaction["tenantId"] = tenantID
+	txIDVal, ok := payload.Transaction["id"]
+	if !ok {
+		tx.Rollback()
+		http.Error(w, "Missing transaction id", http.StatusBadRequest)
+		return
+	}
+	var txID int64
+	switch v := txIDVal.(type) {
+	case float64:
+		txID = int64(v)
+	case int64:
+		txID = v
+	default:
+		parsed, _ := strconv.ParseInt(fmt.Sprintf("%v", v), 10, 64)
+		txID = parsed
+	}
+
+	err = dynamicUpsertTx(tx, "transactions", []map[string]interface{}{payload.Transaction})
+	if err != nil {
+		tx.Rollback()
+		http.Error(w, "Failed to save transaction: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// 3. Insert Transaction items
+	for _, item := range payload.Items {
+		item["transactionId"] = txID
+	}
+	err = dynamicUpsertTx(tx, "transaction_items", payload.Items)
+	if err != nil {
+		tx.Rollback()
+		http.Error(w, "Failed to save transaction items: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "Transaction commit failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Broadcast WS event for real-time update
+	touchTenantSync(tenantID)
+
+	// Broadcast detailed transaction/wastage/expense event
+	var txReceipt string
+	if rNum, ok := payload.Transaction["receiptNumber"].(string); ok {
+		txReceipt = rNum
+	}
+	var txNotes string
+	if notes, ok := payload.Transaction["notes"].(string); ok {
+		txNotes = notes
+	}
+	var txCust string
+	if cust, ok := payload.Transaction["customerName"].(string); ok {
+		txCust = cust
+	}
+	var txType string
+	if tType, ok := payload.Transaction["type"].(string); ok {
+		txType = tType
+	}
+	var txTotal float64
+	if tot, ok := payload.Transaction["total"].(float64); ok {
+		txTotal = tot
+	}
+
+	eventType := "new_transaction"
+	eventMsg := fmt.Sprintf("🛒 Transaksi baru %s senilai Rp %s", txReceipt, formatRupiahGo(txTotal))
+	if txType == "EXPENSE" {
+		if txCust == "Wastage / Spoilage" {
+			eventType = "wastage_recorded"
+			eventMsg = fmt.Sprintf("🗑️ Wastage dicatat: %s", txNotes)
+		} else {
+			eventType = "expense_recorded"
+			eventMsg = fmt.Sprintf("💸 Pengeluaran dicatat: %s", txNotes)
+		}
+	}
+	detailMsg := fmt.Sprintf(`{"type":"live_feed","event":"%s","message":"%s","timestamp":%d}`, eventType, eventMsg, time.Now().UnixNano()/1e6)
+	broadcastToTenant(tenantID, detailMsg)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Checkout real-time sukses.",
+	})
 }
 
 func handleSyncPatch(w http.ResponseWriter, r *http.Request) {
@@ -4081,6 +4269,13 @@ func handleSyncTable(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.Header.Get("x-tenant-id")
 	if tenantID != "" {
 		if tableName == "transaction_items" {
+			tx, err := db.Begin()
+			if err != nil {
+				http.Error(w, "Database transaction failed: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			defer tx.Rollback()
+
 			for _, row := range rows {
 				txID, ok := row["transactionId"]
 				if ok {
@@ -4097,13 +4292,95 @@ func handleSyncTable(w http.ResponseWriter, r *http.Request) {
 						txIDVal = parsed
 					}
 					var count int
-					err := db.QueryRow(`SELECT COUNT(*) FROM "transactions" WHERE "id" = $1 AND "tenantId" = $2`, txIDVal, tenantID).Scan(&count)
+					err := tx.QueryRow(`SELECT COUNT(*) FROM "transactions" WHERE "id" = $1 AND "tenantId" = $2`, txIDVal, tenantID).Scan(&count)
 					if err != nil || count == 0 {
 						http.Error(w, fmt.Sprintf("Forbidden: transaction %d does not belong to tenant %s", txIDVal, tenantID), http.StatusForbidden)
 						return
 					}
 				}
+
+				// Validate stock if this item is new
+				var itemIDVal int64
+				if idVal, hasId := row["id"]; hasId {
+					switch v := idVal.(type) {
+					case float64:
+						itemIDVal = int64(v)
+					case int64:
+						itemIDVal = v
+					case int:
+						itemIDVal = int64(v)
+					default:
+						parsed, _ := strconv.ParseInt(fmt.Sprintf("%v", v), 10, 64)
+						itemIDVal = parsed
+					}
+				}
+
+				if itemIDVal > 0 {
+					var exists int
+					_ = tx.QueryRow(`SELECT COUNT(*) FROM "transaction_items" WHERE "id" = $1`, itemIDVal).Scan(&exists)
+					if exists == 0 {
+						prodIDVal, ok := row["productId"]
+						if ok {
+							var prodID int64
+							switch v := prodIDVal.(type) {
+							case float64:
+								prodID = int64(v)
+							case int64:
+								prodID = v
+							}
+
+							qtyVal, ok := row["quantity"]
+							var qty float64
+							if ok {
+								switch v := qtyVal.(type) {
+								case float64:
+									qty = v
+								default:
+									parsed, _ := strconv.ParseFloat(fmt.Sprintf("%v", v), 64)
+									qty = parsed
+								}
+							}
+
+							if prodID > 0 && qty > 0 {
+								var stock float64
+								var name string
+								err := tx.QueryRow(`SELECT "stock", "name" FROM "products" WHERE "id" = $1 AND "tenantId" = $2 FOR UPDATE`, prodID, tenantID).Scan(&stock, &name)
+								if err == nil {
+									if stock < qty {
+										w.Header().Set("Content-Type", "application/json")
+										w.WriteHeader(http.StatusConflict)
+										json.NewEncoder(w).Encode(map[string]string{
+											"error":   "insufficient_stock",
+											"message": fmt.Sprintf("Stok tidak mencukupi untuk '%s'. Tersedia di server: %g, diminta: %g.", name, stock, qty),
+										})
+										return
+									}
+									_, _ = tx.Exec(`UPDATE "products" SET "stock" = "stock" - $1, "updatedAt" = $2 WHERE "id" = $3 AND "tenantId" = $4`, qty, time.Now().UnixNano()/1e6, prodID, tenantID)
+								}
+							}
+						}
+					}
+				}
 			}
+
+			err = dynamicUpsertTx(tx, "transaction_items", rows)
+			if err != nil {
+				http.Error(w, "Upsert transaction_items failed: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			if err := tx.Commit(); err != nil {
+				http.Error(w, "Commit failed: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			touchTenantSync(tenantID)
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success": true,
+				"message": "Sync transaction_items sukses.",
+			})
+			return
 		} else if tableName == "tenants" {
 			userEmail := r.Header.Get("x-user-email")
 			for _, row := range rows {
@@ -4278,7 +4555,7 @@ func handleSyncTable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(rows) > 0 {
+	if len(rows) > 0 && tenantID != "" {
 		if tableName == "transactions" || tableName == "bmp_invoices" {
 			eventData := map[string]interface{}{
 				"event": "new_transaction",
@@ -4286,7 +4563,29 @@ func handleSyncTable(w http.ResponseWriter, r *http.Request) {
 				"data":  rows,
 			}
 			if eventBytes, err := json.Marshal(eventData); err == nil {
-				broadcastWSMessage(string(eventBytes))
+				broadcastToTenant(tenantID, string(eventBytes))
+			}
+		} else if tableName == "activity_logs" {
+			for _, row := range rows {
+				action, _ := row["action"].(string)
+				desc, _ := row["description"].(string)
+				empName, _ := row["employeeName"].(string)
+
+				var emoji string
+				switch action {
+				case "STOCK_TRANSFER":
+					emoji = "📦"
+				case "TAMBAH PRODUK", "EDIT PRODUK", "HAPUS PRODUK", "TAMBAH PELANGGAN":
+					emoji = "🛍️"
+				case "CATAT WASTAGE", "LUNAS PIUTANG", "CATAT PENGELUARAN":
+					emoji = "🗑️"
+				default:
+					emoji = "📝"
+				}
+
+				eventMsg := fmt.Sprintf("%s %s oleh %s: %s", emoji, action, empName, desc)
+				detailMsg := fmt.Sprintf(`{"type":"live_feed","event":"activity_log","message":"%s","timestamp":%d}`, eventMsg, time.Now().UnixNano()/1e6)
+				broadcastToTenant(tenantID, detailMsg)
 			}
 		} else {
 			eventData := map[string]interface{}{
@@ -4295,7 +4594,7 @@ func handleSyncTable(w http.ResponseWriter, r *http.Request) {
 				"data":  rows,
 			}
 			if eventBytes, err := json.Marshal(eventData); err == nil {
-				broadcastWSMessage(string(eventBytes))
+				broadcastToTenant(tenantID, string(eventBytes))
 			}
 		}
 	}
@@ -7243,5 +7542,21 @@ func handleSyncSummary(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
-
-
+func formatRupiahGo(v interface{}) string {
+	var val float64
+	switch num := v.(type) {
+	case float64:
+		val = num
+	case int64:
+		val = float64(num)
+	case int:
+		val = float64(num)
+	default:
+		parsed, _ := strconv.ParseFloat(fmt.Sprintf("%v", v), 64)
+		val = parsed
+	}
+	if val < 0 {
+		val = -val
+	}
+	return fmt.Sprintf("Rp %s", strconv.FormatFloat(val, 'f', 0, 64))
+}

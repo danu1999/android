@@ -77,7 +77,8 @@ data class PosUiState(
     val isOwner: Boolean = false,
     val isPremium: Boolean = false,
     val isSeedTenant: Boolean = false,
-    val canViewMargin: Boolean = false
+    val canViewMargin: Boolean = false,
+    val checkoutError: String? = null
 )
 
 @HiltViewModel
@@ -392,6 +393,10 @@ class PosViewModel @Inject constructor(
         }
     }
 
+    fun clearCheckoutError() {
+        _uiState.update { it.copy(checkoutError = null) }
+    }
+
     // Cart calculations
     fun getEffectivePrice(p: ProductEntity, qty: Int): Double {
         if (!p.wholesaleEnabled || p.wholesalePrices.isNullOrBlank()) return p.price
@@ -445,13 +450,17 @@ class PosViewModel @Inject constructor(
                 null
             }
 
+            val txId = System.currentTimeMillis()
+            val receiptNum = transactionRepository.generateReceiptNumberForType(tenantId, "FNB")
+
             val tx = TransactionEntity(
+                id = txId,
                 tenantId = tenantId,
                 outletId = currentOutletId,
                 employeeId = 1L,
                 customerId = currentUi.customerId,
                 customerName = currentUi.customerName ?: "Umum",
-                receiptNumber = "",
+                receiptNumber = receiptNum,
                 date = txDate,
                 subtotal = getSubtotal(),
                 discountType = if (getDiscountAmt() > 0) currentUi.discountType else null,
@@ -468,9 +477,11 @@ class PosViewModel @Inject constructor(
                 deliveryDate = dueDateMs
             )
 
-            val lines = cart.map {
+            val itemSeed = System.currentTimeMillis()
+            val lines = cart.mapIndexed { idx, it ->
                 TransactionItemEntity(
-                    transactionId = 0,
+                    id = itemSeed + idx,
+                    transactionId = txId,
                     productId = it.product.id,
                     variantId = it.variantId,
                     variantName = it.variantName,
@@ -482,32 +493,36 @@ class PosViewModel @Inject constructor(
                 )
             }
 
-            val savedTx = transactionRepository.checkout(tx, lines)
-            val savedItems = transactionRepository.listItemsForTransaction(savedTx.id)
+            val result = com.posbah.app.data.remote.SupabaseSyncManager.checkoutWriteThrough(appContext, tenantId, tx, lines)
+            when (result) {
+                is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Success -> {
+                    val savedTx = transactionRepository.checkout(tx, lines)
+                    val savedItems = transactionRepository.listItemsForTransaction(savedTx.id)
 
-            val logAction = if (isQueue) "BUAT ANTRIAN" else "CHECKOUT"
-            val logDesc = if (isQueue) {
-                "Membuat antrian #${tx.queueNumber} senilai Rp ${tx.total}"
-            } else {
-                "Transaksi ${savedTx.receiptNumber} (${tx.paymentMethod}) senilai Rp ${tx.total}"
-            }
-            logActivity(logAction, logDesc)
+                    val logAction = if (isQueue) "BUAT ANTRIAN" else "CHECKOUT"
+                    val logDesc = if (isQueue) {
+                        "Membuat antrian #${tx.queueNumber} senilai Rp ${tx.total}"
+                    } else {
+                        "Transaksi ${savedTx.receiptNumber} (${tx.paymentMethod}) senilai Rp ${tx.total}"
+                    }
+                    logActivity(logAction, logDesc)
 
-            clearCart()
-            _uiState.update {
-                it.copy(
-                    showPayModal = false,
-                    activeReceipt = savedTx,
-                    activeReceiptItems = savedItems,
-                    showReceiptDialog = !isQueue
-                )
-            }
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                sessionState.setSyncing(true)
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
-                } finally {
-                    sessionState.setSyncing(false)
+                    clearCart()
+                    _uiState.update {
+                        it.copy(
+                            showPayModal = false,
+                            activeReceipt = savedTx,
+                            activeReceiptItems = savedItems,
+                            showReceiptDialog = !isQueue,
+                            checkoutError = null
+                        )
+                    }
+                }
+                is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Error -> {
+                    _uiState.update { it.copy(checkoutError = result.message) }
+                }
+                is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.NoConnection -> {
+                    _uiState.update { it.copy(checkoutError = "Koneksi internet terputus. Silakan periksa jaringan Anda.") }
                 }
             }
         }
@@ -557,23 +572,39 @@ class PosViewModel @Inject constructor(
 
     fun completeQueue(tx: TransactionEntity, method: String) {
         viewModelScope.launch {
-            transactionRepository.completePendingTransaction(
-                id = tx.id,
-                method = method,
-                amountPaid = tx.total,
-                change = 0.0
-            )
-            val items = transactionRepository.listItemsForTransaction(tx.id)
-            _uiState.update {
-                it.copy(
-                    showQueueModal = false,
-                    activeReceipt = tx.copy(status = "COMPLETED", paymentMethod = method, amountPaid = tx.total, change = 0.0),
-                    activeReceiptItems = items,
-                    showReceiptDialog = true
-                )
+            val updateObj = org.json.JSONObject().apply {
+                put("status", "COMPLETED")
+                put("paymentMethod", method)
+                put("amountPaid", tx.total)
+                put("change", 0.0)
+                put("updatedAt", System.currentTimeMillis())
             }
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
+            val result = com.posbah.app.data.remote.SupabaseSyncManager.patchRowDirectly(appContext, "transactions", tx.id, updateObj, tenantId)
+            when (result) {
+                is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Success -> {
+                    transactionRepository.completePendingTransaction(
+                        id = tx.id,
+                        method = method,
+                        amountPaid = tx.total,
+                        change = 0.0
+                    )
+                    val items = transactionRepository.listItemsForTransaction(tx.id)
+                    _uiState.update {
+                        it.copy(
+                            showQueueModal = false,
+                            activeReceipt = tx.copy(status = "COMPLETED", paymentMethod = method, amountPaid = tx.total, change = 0.0),
+                            activeReceiptItems = items,
+                            showReceiptDialog = true,
+                            checkoutError = null
+                        )
+                    }
+                }
+                is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Error -> {
+                    _uiState.update { it.copy(checkoutError = result.message) }
+                }
+                is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.NoConnection -> {
+                    _uiState.update { it.copy(checkoutError = "Koneksi internet terputus. Silakan periksa jaringan Anda.") }
+                }
             }
         }
     }

@@ -167,7 +167,9 @@ class MarginAnalysisViewModel @Inject constructor(
                 else -> "FNB"
             }
             val receiptNumber = "EXP-$prefix-WASTAGE-$todayStr-${java.util.UUID.randomUUID().toString().take(6).uppercase()}"
+            val txId = System.currentTimeMillis()
             val tx = TransactionEntity(
+                id = txId,
                 tenantId = tenantId,
                 outletId = outletId,
                 employeeId = 1L,
@@ -181,17 +183,27 @@ class MarginAnalysisViewModel @Inject constructor(
                 type = "EXPENSE",
                 notes = "Wastage: ${product.name} (Qty: $quantity ${product.unit}) - Alasan: $reason"
             )
-            transactionRepository.checkout(tx, emptyList())
-            
-            // Deduct stock
-            val newStock = (product.stock - quantity).coerceAtLeast(0)
-            productRepository.updateStock(product.id, newStock)
-            
-            refreshItems()
-            onSuccess()
-            
-            viewModelScope.launch(Dispatchers.IO) {
-                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context.applicationContext, db, tenantId)
+
+            val resultTx = com.posbah.app.data.remote.SupabaseSyncManager.checkoutWriteThrough(context, tenantId, tx, emptyList())
+            if (resultTx is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Success) {
+                val newStock = (product.stock - quantity).coerceAtLeast(0)
+                val updateObj = org.json.JSONObject().apply {
+                    put("stock", newStock)
+                    put("updatedAt", System.currentTimeMillis())
+                }
+                com.posbah.app.data.remote.SupabaseSyncManager.patchRowDirectly(context, "products", product.id, updateObj, tenantId)
+
+                transactionRepository.checkout(tx, emptyList())
+                productRepository.updateStock(product.id, newStock)
+
+                refreshItems()
+                onSuccess()
+            } else {
+                val errMsg = when (resultTx) {
+                    is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Error -> resultTx.message
+                    else -> "Koneksi internet terputus. Silakan coba lagi nanti."
+                }
+                android.widget.Toast.makeText(context, "Gagal mencatat wastage: $errMsg", android.widget.Toast.LENGTH_LONG).show()
             }
         }
     }

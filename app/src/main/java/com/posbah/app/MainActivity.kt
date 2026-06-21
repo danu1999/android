@@ -44,9 +44,37 @@ class MainActivity : FragmentActivity() {
     @Inject
     lateinit var sessionState: SessionState
 
+    private var networkCallback: android.net.ConnectivityManager.NetworkCallback? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
+
+        // Setup active network connection guard callback
+        val connectivityManager = getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val networkRequest = android.net.NetworkRequest.Builder()
+            .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+
+        val callback = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) {
+                super.onAvailable(network)
+                sessionState.setOnline(true)
+            }
+
+            override fun onLost(network: android.net.Network) {
+                super.onLost(network)
+                sessionState.setOnline(false)
+            }
+        }
+        networkCallback = callback
+        connectivityManager.registerNetworkCallback(networkRequest, callback)
+
+        // Initial connection check
+        val activeNetwork = connectivityManager.activeNetwork
+        val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork)
+        val isOnlineInitial = capabilities != null && capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        sessionState.setOnline(isOnlineInitial)
 
         // Periodic foreground auto-sync: pulls remote updates & pushes local changes every 30 seconds
         lifecycleScope.launch {
@@ -208,6 +236,14 @@ class MainActivity : FragmentActivity() {
                     PosBahRoot()
                 }
             }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        networkCallback?.let {
+            val connectivityManager = getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+            connectivityManager.unregisterNetworkCallback(it)
         }
     }
 }
