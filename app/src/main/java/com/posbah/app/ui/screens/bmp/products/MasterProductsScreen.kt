@@ -46,6 +46,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.posbah.app.data.local.entities.BmpMasterProductEntity
 import com.posbah.app.data.local.entities.BmpSettingsEntity
+import com.posbah.app.data.local.entities.ActivityLogEntity
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpMasterProductRepository
 import com.posbah.app.ui.components.EmptyState
@@ -133,6 +134,7 @@ class MasterProductsViewModel @Inject constructor(
     fun save(imageFile: java.io.File?, keepExistingImage: Boolean) = viewModelScope.launch {
         val e = _form.value.editing ?: return@launch
         if (e.title.isBlank()) return@launch
+        val isNew = e.id == 0L
         var base64Url = if (keepExistingImage) e.image else null
         if (imageFile != null && imageFile.exists()) {
             try {
@@ -146,6 +148,11 @@ class MasterProductsViewModel @Inject constructor(
             }
         }
         repo.upsert(e.copy(image = base64Url))
+        if (isNew) {
+            logActivity("TAMBAH PRODUK BMP", "Menambahkan master produk: ${e.title} (Harga: Rp ${e.price})")
+        } else {
+            logActivity("EDIT PRODUK BMP", "Mengubah master produk: ${e.title} (Harga: Rp ${e.price})")
+        }
         _form.update { FormState() }
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -157,13 +164,33 @@ class MasterProductsViewModel @Inject constructor(
     }
 
     fun delete(id: Long) = viewModelScope.launch {
+        val p = repo.getById(id)
         repo.delete(id)
+        if (p != null) {
+            logActivity("HAPUS PRODUK BMP", "Menghapus master produk: ${p.title}")
+        }
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
             } catch (ex: Exception) {
                 ex.printStackTrace()
             }
+        }
+    }
+
+    private fun logActivity(action: String, description: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val user = authRepository.getActiveUser()
+            val employeeName = user?.displayName ?: "Owner"
+            db.activityLogDao().insertLog(
+                ActivityLogEntity(
+                    tenantId = tenantId,
+                    action = action,
+                    description = description,
+                    employeeName = employeeName,
+                    appMode = "BMP"
+                )
+            )
         }
     }
 }

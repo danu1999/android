@@ -95,6 +95,7 @@ fun OutletControlScreen(
     var showEmployeeListDialog by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var outletToDelete by remember { mutableStateOf<Outlet?>(null) }
+    var selectedOutletForProducts by remember { mutableStateOf<Outlet?>(null) }
 
     var showTransferDialog by remember { mutableStateOf(false) }
     var transferSourceOutletId by remember { mutableStateOf<Long?>(null) }
@@ -189,6 +190,9 @@ fun OutletControlScreen(
                         onDeleteClick = {
                             outletToDelete = summary.outlet
                             showDeleteConfirmDialog = true
+                        },
+                        onViewProductsClick = {
+                            selectedOutletForProducts = summary.outlet
                         }
                     )
                 }
@@ -738,6 +742,74 @@ fun OutletControlScreen(
             }
         )
     }
+
+    if (selectedOutletForProducts != null) {
+        val outlet = selectedOutletForProducts!!
+        val isDefault = outlet.isDefault
+        val outletProducts = remember(state.products, outlet.id) {
+            state.products.filter { p ->
+                !p.isDeleted && (p.outletId == outlet.id || (isDefault && p.outletId == null))
+            }
+        }
+
+        AlertDialog(
+            onDismissRequest = { selectedOutletForProducts = null },
+            title = { Text("Daftar Produk - ${outlet.name}", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    if (outletProducts.isEmpty()) {
+                        Text("Belum ada produk di outlet ini.", color = Color.Gray, modifier = Modifier.padding(vertical = 16.dp))
+                    } else {
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.heightIn(max = 400.dp)
+                        ) {
+                            items(outletProducts, key = { it.id }) { prod ->
+                                val isLowStock = prod.stock <= prod.minStockAlert
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(prod.name, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                                            Text("${prod.stock} ${prod.unit}", fontWeight = FontWeight.Black, color = if (isLowStock) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(prod.category, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                            if (isLowStock) {
+                                                Text(
+                                                    "⚠️ Stok Menipis (Min: ${prod.minStockAlert})",
+                                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                                    color = MaterialTheme.colorScheme.error
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { selectedOutletForProducts = null }) {
+                    Text("Tutup")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -747,7 +819,8 @@ fun OutletCard(
     onToggleStatus: () -> Unit,
     onAssignEmployee: (String) -> Unit,
     onEditClick: () -> Unit,
-    onDeleteClick: () -> Unit
+    onDeleteClick: () -> Unit,
+    onViewProductsClick: () -> Unit
 ) {
     var employeeMenuExpanded by remember { mutableStateOf(false) }
 
@@ -918,18 +991,34 @@ fun OutletCard(
                 }
             }
 
-            // Quick toggle button for opening/closing the outlet
+            // Quick toggle button for opening/closing the outlet and viewing products
             Spacer(modifier = Modifier.height(12.dp))
-            OutlinedButton(
-                onClick = onToggleStatus,
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(
-                    text = if (summary.outlet.isOpen) "Tutup Toko Sementara" else "Buka Toko Sekarang",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                OutlinedButton(
+                    onClick = onToggleStatus,
+                    modifier = Modifier.weight(1.2f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = if (summary.outlet.isOpen) "Tutup Toko" else "Buka Toko",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Button(
+                    onClick = onViewProductsClick,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = "Lihat Produk",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }

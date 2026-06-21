@@ -84,6 +84,14 @@ $BackendDir  = Join-Path $ProjectRoot "backend"
 $AppDir      = Join-Path $ProjectRoot "app"
 $GradleW     = Join-Path $ProjectRoot "gradlew.bat"
 
+# Set JAVA_HOME otomatis jika belum terkonfigurasi
+if (-not $env:JAVA_HOME) {
+    $fallbackJava = "C:\Program Files\Android\Android Studio\jbr"
+    if (Test-Path $fallbackJava) {
+        $env:JAVA_HOME = $fallbackJava
+    }
+}
+
 # ============================================================
 # UTILS
 # ============================================================

@@ -935,6 +935,7 @@ fun ActivityLogItem(log: com.posbah.app.data.local.entities.ActivityLogEntity) {
         "FNB" -> Color(0xFF2E7D32) // Green
         "LAUNDRY" -> Color(0xFF1565C0) // Blue
         "RENTAL" -> Color(0xFFEF6C00) // Orange
+        "BMP" -> Color(0xFF6A1B9A) // Purple
         else -> Color.Gray
     }
 
@@ -942,6 +943,7 @@ fun ActivityLogItem(log: com.posbah.app.data.local.entities.ActivityLogEntity) {
         "FNB" -> Color(0xFFE8F5E8)
         "LAUNDRY" -> Color(0xFFE3F2FD)
         "RENTAL" -> Color(0xFFFFF3E0)
+        "BMP" -> Color(0xFFF3E5F5) // Purple light
         else -> Color(0xFFF5F5F5)
     }
 
