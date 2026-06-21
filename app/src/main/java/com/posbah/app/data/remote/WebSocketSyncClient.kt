@@ -64,7 +64,8 @@ object WebSocketSyncClient {
                 .build()
         }
 
-        val requestUrl = "$WS_URL?tenantId=${URLEncoder.encode(tenantId, "UTF-8")}"
+        val email = com.posbah.app.security.SecurePreferences(context).currentEmail.orEmpty()
+        val requestUrl = "$WS_URL?tenantId=${URLEncoder.encode(tenantId, "UTF-8")}&email=${URLEncoder.encode(email, "UTF-8")}"
         val request = Request.Builder()
             .url(requestUrl)
             .build()

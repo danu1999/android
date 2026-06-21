@@ -203,7 +203,7 @@ class EmployeeViewModel @Inject constructor(
         viewModelScope.launch {
             val emp = db.employeeDao().getById(employeeId) ?: return@launch
             val hashed = PinHasher.hash(newPassword)
-            val updated = emp.copy(pinHash = hashed, updatedAt = System.currentTimeMillis())
+            val updated = emp.copy(pinHash = hashed, isSynced = false, updatedAt = System.currentTimeMillis())
             db.employeeDao().update(updated)
             checkPermissionAndLoad()
 
@@ -338,6 +338,7 @@ class EmployeeViewModel @Inject constructor(
                 // Update employee payroll status
                 val updatedEmp = employee.copy(
                     lastPaidAt = System.currentTimeMillis(),
+                    isSynced = false,
                     updatedAt = System.currentTimeMillis()
                 )
                 db.employeeDao().update(updatedEmp)

@@ -257,7 +257,7 @@ class OutletControlViewModel @Inject constructor(
             // Safe sync unlink: set outletId to null for all employees in this outlet
             val employees = db.employeeDao().getAll().filter { it.outletId == outletId }
             employees.forEach { emp ->
-                db.employeeDao().update(emp.copy(outletId = null, updatedAt = System.currentTimeMillis()))
+                db.employeeDao().update(emp.copy(outletId = null, isSynced = false, updatedAt = System.currentTimeMillis()))
             }
 
             db.outletDao().delete(outletId)
@@ -312,7 +312,7 @@ class OutletControlViewModel @Inject constructor(
                         _uiState.update { it.copy(error = "Gagal: Outlet sudah mencapai batas maksimal 10 karyawan.") }
                         return@launch
                     }
-                    db.employeeDao().update(emp.copy(outletId = outletId, updatedAt = System.currentTimeMillis()))
+                    db.employeeDao().update(emp.copy(outletId = outletId, isSynced = false, updatedAt = System.currentTimeMillis()))
                 }
                 val outlet = db.outletDao().getById(outletId) ?: return@launch
                 val updated = outlet.copy(currentEmployee = employeeName, isSynced = false, updatedAt = System.currentTimeMillis())
@@ -379,7 +379,7 @@ class OutletControlViewModel @Inject constructor(
                 isDefault = isDefault
             )
             val newOutletId = db.outletDao().insert(newOutlet)
-            db.employeeDao().update(emp.copy(outletId = newOutletId, updatedAt = System.currentTimeMillis()))
+            db.employeeDao().update(emp.copy(outletId = newOutletId, isSynced = false, updatedAt = System.currentTimeMillis()))
             
             loadData()
             viewModelScope.launch(Dispatchers.IO) {
@@ -444,7 +444,7 @@ class OutletControlViewModel @Inject constructor(
                         _uiState.update { it.copy(error = "Gagal: Outlet sudah mencapai batas maksimal 10 karyawan.") }
                         return@launch
                     }
-                    db.employeeDao().update(emp.copy(outletId = outletId, updatedAt = System.currentTimeMillis()))
+                    db.employeeDao().update(emp.copy(outletId = outletId, isSynced = false, updatedAt = System.currentTimeMillis()))
                 }
 
                 val updated = existing.copy(

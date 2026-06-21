@@ -348,6 +348,11 @@ class AuthRepository @Inject constructor(
                     businessModeLockedFromServer = obj.optBoolean("businessModeLocked", false)
                     registeredAtFromServer = obj.optLong("registeredAt", System.currentTimeMillis())
                 }
+            } else if (conn.responseCode == 409) {
+                val errorMsg = conn.errorStream?.bufferedReader()?.use { it.readText() }
+                if (!errorMsg.isNullOrBlank()) {
+                    return@withContext LoginOutcome.Error(errorMsg.replace("\"", ""))
+                }
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -653,7 +658,9 @@ class AuthRepository @Inject constructor(
                                     Outlet(
                                         tenantId = serverTenantId,
                                         name = "Outlet Utama",
-                                        isDefault = true
+                                        isDefault = true,
+                                        isSynced = true,
+                                        updatedAt = 0L
                                     )
                                 )
 
@@ -795,6 +802,7 @@ class AuthRepository @Inject constructor(
             // Check if we can fetch the latest employee details from the server (if online)
             var fetchedEmp: Employee? = null
             var networkError = false
+            var conflictMessage: String? = null
             var conn: java.net.HttpURLConnection? = null
             try {
                 val url = java.net.URL("https://www.zedmz.cloud/api/sync/employees?email=eq.$cleanEmail")
@@ -879,7 +887,9 @@ class AuthRepository @Inject constructor(
                                         id = serverOutletId,
                                         tenantId = tenantId,
                                         name = "Outlet Utama",
-                                        isDefault = true
+                                        isDefault = true,
+                                        isSynced = true,
+                                        updatedAt = 0L
                                     )
                                 )
                                 serverOutletId
@@ -888,7 +898,9 @@ class AuthRepository @Inject constructor(
                                     Outlet(
                                         tenantId = tenantId,
                                         name = "Outlet Utama",
-                                        isDefault = true
+                                        isDefault = true,
+                                        isSynced = true,
+                                        updatedAt = 0L
                                     )
                                 )
                             }
@@ -937,6 +949,13 @@ class AuthRepository @Inject constructor(
                             localDataSeeder.seedDefaultSettings(tenantId)
                         }
                     }
+                } else if (conn.responseCode == 409) {
+                    val errorResponse = conn.errorStream?.bufferedReader()?.use { it.readText() }
+                    if (!errorResponse.isNullOrBlank()) {
+                        conflictMessage = errorResponse.replace("\"", "")
+                    } else {
+                        networkError = true
+                    }
                 } else {
                     networkError = true
                 }
@@ -947,6 +966,9 @@ class AuthRepository @Inject constructor(
                 conn?.disconnect()
             }
 
+            if (conflictMessage != null) {
+                return@withContext LoginOutcome.Error(conflictMessage)
+            }
             if (networkError) {
                 return@withContext LoginOutcome.Error("Gagal masuk: Server tidak terjangkau atau Anda sedang offline.")
             }
@@ -970,6 +992,11 @@ class AuthRepository @Inject constructor(
                                 isDemo = true
                             }
                         }
+                    } else if (conn2.responseCode == 409) {
+                        val errorResponse = conn2.errorStream?.bufferedReader()?.use { it.readText() }
+                        if (!errorResponse.isNullOrBlank()) {
+                            conflictMessage = errorResponse.replace("\"", "")
+                        }
                     }
                 } catch (e: java.lang.Exception) {
                     e.printStackTrace()
@@ -977,6 +1004,9 @@ class AuthRepository @Inject constructor(
                     conn2?.disconnect()
                 }
 
+                if (conflictMessage != null) {
+                    return@withContext LoginOutcome.Error(conflictMessage)
+                }
                 if (isDemo) {
                     return@withContext LoginOutcome.Error("Akun demo wajib menggunakan Google Login. Hubungi muhammadmuizz8@gmail.com jika sudah melakukan pembayaran premium.")
                 }
@@ -1275,6 +1305,7 @@ class AuthRepository @Inject constructor(
                 pinHash = hashedNewPin,
                 passwordChangeCount = nextCount,
                 lastPasswordChangeDate = now,
+                isSynced = false,
                 updatedAt = now
             )
             employeeDao.update(updated)

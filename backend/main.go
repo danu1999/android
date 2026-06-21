@@ -3582,6 +3582,30 @@ func handleSyncRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check for active login conflicts on employees and local_users
+	parts := strings.Split(r.URL.Path, "/")
+	if r.Method == http.MethodGet && len(parts) >= 4 {
+		tableName := parts[3]
+		if tableName == "employees" || tableName == "local_users" {
+			for k, vList := range r.URL.Query() {
+				if k == "email" && len(vList) > 0 && strings.HasPrefix(vList[0], "eq.") {
+					emailVal := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(vList[0], "eq.")))
+					if emailVal != "" {
+						wsEmailsMu.Lock()
+						_, isOnline := wsEmails[emailVal]
+						wsEmailsMu.Unlock()
+						if isOnline {
+							w.Header().Set("Content-Type", "application/json")
+							w.WriteHeader(http.StatusConflict) // 409 Conflict
+							w.Write([]byte(`"Akun ini sedang aktif di perangkat lain. Silakan keluar (logout) dari perangkat tersebut atau tunggu hingga perangkat tersebut offline terlebih dahulu sebelum mencoba masuk kembali."`))
+							return
+						}
+					}
+				}
+			}
+		}
+	}
+
 	if err := validateTenantAccess(r); err != nil {
 		if strings.HasPrefix(err.Error(), "unauthorized") {
 			http.Error(w, err.Error(), http.StatusUnauthorized)
@@ -5014,12 +5038,15 @@ const landingHtmlPage = `<!DOCTYPE html>
 var (
 	wsClients    = make(map[string]map[net.Conn]bool) // tenantId -> conn -> active
 	wsClientsMu  sync.Mutex
+	wsEmails     = make(map[string]net.Conn)          // email -> conn
+	wsEmailsMu   sync.Mutex
 	qrSessions   = make(map[string]map[string]interface{})
 	qrSessionsMu sync.Mutex
 )
 
 func handleWS(w http.ResponseWriter, r *http.Request) {
 	tenantID := r.URL.Query().Get("tenantId")
+	email := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("email")))
 
 	hj, ok := w.(http.Hijacker)
 	if !ok {
@@ -5056,7 +5083,16 @@ func handleWS(w http.ResponseWriter, r *http.Request) {
 	wsClients[tenantID][conn] = true
 	wsClientsMu.Unlock()
 
-	log.Printf("[WS] Client connected for tenant '%s'.", tenantID)
+	if email != "" {
+		wsEmailsMu.Lock()
+		if oldConn, exists := wsEmails[email]; exists {
+			oldConn.Close()
+		}
+		wsEmails[email] = conn
+		wsEmailsMu.Unlock()
+	}
+
+	log.Printf("[WS] Client connected for tenant '%s' and email '%s'.", tenantID, email)
 
 	go func() {
 		defer func() {
@@ -5068,8 +5104,17 @@ func handleWS(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			wsClientsMu.Unlock()
+
+			if email != "" {
+				wsEmailsMu.Lock()
+				if wsEmails[email] == conn {
+					delete(wsEmails, email)
+				}
+				wsEmailsMu.Unlock()
+			}
+
 			conn.Close()
-			log.Printf("[WS] Client disconnected for tenant '%s'", tenantID)
+			log.Printf("[WS] Client disconnected for tenant '%s' and email '%s'", tenantID, email)
 		}()
 		buf := make([]byte, 1024)
 		for {
