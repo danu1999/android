@@ -1210,9 +1210,11 @@ class AuthRepository @Inject constructor(
         
         if (!tenantId.isNullOrBlank() && !email.isNullOrBlank()) {
             try {
-                // Ensure the sync task runs completely under NonCancellable block
+                // Ensure the sync task runs completely under NonCancellable block.
+                // Timeout 45 detik agar cukup waktu meng-upload semua tabel termasuk
+                // produk dengan base64 image yang berukuran besar.
                 withContext(kotlinx.coroutines.NonCancellable) {
-                    kotlinx.coroutines.withTimeoutOrNull(10000) {
+                    kotlinx.coroutines.withTimeoutOrNull(45_000) {
                         com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId, email)
                     }
                 }

@@ -567,13 +567,10 @@ class PosViewModel @Inject constructor(
             }
             // Delete this pending transaction now that it is loaded back into editing
             transactionRepository.cancelTransaction(tx.id)
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
+            // Push via global syncScope agar tidak ikut dibatalkan saat ViewModel di-clear.
+            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(
+                appContext, db, tenantId, authRepository.activeUserEmail()
+            )
         }
     }
 
@@ -619,13 +616,9 @@ class PosViewModel @Inject constructor(
     fun cancelQueue(txId: Long) {
         viewModelScope.launch {
             transactionRepository.cancelTransaction(txId)
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
+            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(
+                appContext, db, tenantId, authRepository.activeUserEmail()
+            )
         }
     }
 
@@ -666,16 +659,15 @@ class PosViewModel @Inject constructor(
                 image = base64Url,
                 minStockAlert = minStockAlert
             )
-            productRepository.upsert(p)
+            val newId = productRepository.upsert(p)
             logActivity("TAMBAH PRODUK", "Menambahkan produk baru: $name (Jual: Rp $price, Beli: Rp $costPrice)")
             onDone()
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
+            // Push langsung ke VPS via global syncScope (tidak ikut dibatalkan saat
+            // ViewModel di-clear / user logout). Ini memastikan produk tersimpan
+            // realtime di server meski user langsung logout / uninstall setelah simpan.
+            com.posbah.app.data.remote.SupabaseSyncManager.pushProductImmediate(
+                appContext, db, tenantId, newId, authRepository.activeUserEmail()
+            )
         }
     }
 
@@ -716,16 +708,14 @@ class PosViewModel @Inject constructor(
                 minStockAlert = minStockAlert,
                 updatedAt = System.currentTimeMillis()
             )
-            productRepository.upsert(updated)
+            val editedId = productRepository.upsert(updated)
             logActivity("EDIT PRODUK", "Mengubah produk: $name (Jual: Rp $price, Beli: Rp $costPrice)")
             onDone()
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
+            // Push langsung perubahan ke VPS via global syncScope.
+            val pushId = if (editedId > 0L) editedId else product.id
+            com.posbah.app.data.remote.SupabaseSyncManager.pushProductImmediate(
+                appContext, db, tenantId, pushId, authRepository.activeUserEmail()
+            )
         }
     }
 
@@ -734,13 +724,10 @@ class PosViewModel @Inject constructor(
             val p = productRepository.getById(productId) ?: return@launch
             productRepository.delete(productId)
             logActivity("HAPUS PRODUK", "Menghapus produk: ${p.name}")
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
+            // Hapus langsung di VPS via global syncScope.
+            com.posbah.app.data.remote.SupabaseSyncManager.deleteProductImmediate(
+                appContext, db, tenantId, productId, authRepository.activeUserEmail()
+            )
         }
     }
 
@@ -753,16 +740,13 @@ class PosViewModel @Inject constructor(
                 phone = phone.takeIf { it.isNotBlank() },
                 address = address.takeIf { it.isNotBlank() }
             )
-            customerRepository.upsert(c)
+            val newCustomerId = customerRepository.upsert(c)
             logActivity("TAMBAH PELANGGAN", "Menambahkan pelanggan baru: $name")
             onDone()
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
+            // Push langsung pelanggan baru ke VPS via global syncScope.
+            com.posbah.app.data.remote.SupabaseSyncManager.pushCustomerImmediate(
+                appContext, db, tenantId, newCustomerId, authRepository.activeUserEmail()
+            )
         }
     }
 
@@ -786,13 +770,9 @@ class PosViewModel @Inject constructor(
             )
             transactionRepository.update(updated)
             logActivity("LUNAS PIUTANG", "Melunasi piutang struk ${tx.receiptNumber} sebesar Rp ${tx.total}")
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
+            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(
+                appContext, db, tenantId, authRepository.activeUserEmail()
+            )
         }
     }
 
@@ -806,13 +786,9 @@ class PosViewModel @Inject constructor(
             val tx = transactionRepository.getById(transactionId) ?: return@launch
             transactionRepository.deleteTransaction(transactionId)
             logActivity("HAPUS TRANSAKSI", "Menghapus transaksi ${tx.receiptNumber} (${tx.paymentMethod}) senilai Rp ${tx.total}")
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
+            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(
+                appContext, db, tenantId, authRepository.activeUserEmail()
+            )
         }
     }
 
@@ -880,9 +856,9 @@ class PosViewModel @Inject constructor(
             )
             transactionRepository.update(updated)
             logActivity("EDIT STRUK", "Mengedit struk ${tx.receiptNumber} (${tx.paymentMethod} -> $paymentMethod, Total: Rp $total)")
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
-            }
+            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(
+                appContext, db, tenantId, authRepository.activeUserEmail()
+            )
         }
     }
 
@@ -908,9 +884,9 @@ class PosViewModel @Inject constructor(
             transactionRepository.checkout(expenseTx, emptyList())
             logActivity("CATAT PENGELUARAN", "Mencatat pengeluaran: $description senilai Rp $amount")
             onDone()
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
-            }
+            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(
+                appContext, db, tenantId, authRepository.activeUserEmail()
+            )
         }
     }
 }

@@ -2522,4 +2522,244 @@ object SupabaseSyncManager {
             Log.e(TAG, "Exception saat mengunduh tenants untuk owner $ownerEmail: ${e.message}", e)
         }
     }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // IMMEDIATE WRITE-THROUGH PUSH HELPERS
+    //
+    // Tujuan: Memastikan data master (produk, customer, master_product BMP)
+    // langsung ter-upload ke VPS PostgreSQL SEGERA setelah disimpan lokal,
+    // tanpa menunggu syncAll lengkap (yang berat karena meng-upload 24 tabel).
+    //
+    // Menggunakan syncScope (SupervisorJob+IO global) sehingga tidak ikut
+    // dibatalkan ketika ViewModel di-clear (mis. saat user logout/navigate).
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Push satu produk POS ke VPS secara non-blocking di global scope.
+     * Aman dipanggil dari ViewModel: tidak akan ikut dibatalkan saat ViewModel di-clear.
+     * Setelah berhasil, kolom isSynced di Room akan di-set true.
+     */
+    fun pushProductImmediate(
+        context: Context,
+        db: PosBahDatabase,
+        activeTenantId: String,
+        productId: Long,
+        userEmail: String? = null
+    ) {
+        syncScope.launch {
+            try {
+                currentTenantId = activeTenantId
+                if (!userEmail.isNullOrBlank()) currentUserEmail = userEmail
+                if (!isNetworkAvailable(context)) {
+                    Log.w(TAG, "[pushProductImmediate] Offline, akan diretry pada syncAll berikutnya")
+                    return@launch
+                }
+                val p = db.productDao().getById(productId)
+                if (p == null) {
+                    Log.w(TAG, "[pushProductImmediate] Produk id=$productId tidak ditemukan")
+                    return@launch
+                }
+                if (p.tenantId != activeTenantId) {
+                    Log.w(TAG, "[pushProductImmediate] tenantId mismatch (entity=${p.tenantId}, active=$activeTenantId)")
+                    return@launch
+                }
+                val array = JSONArray()
+                array.put(JSONObject().apply {
+                    put("id", p.id)
+                    put("tenantId", p.tenantId)
+                    put("outletId", p.outletId ?: JSONObject.NULL)
+                    put("name", p.name)
+                    put("price", p.price)
+                    put("costPrice", p.costPrice)
+                    put("stock", p.stock)
+                    put("unit", p.unit)
+                    put("barcode", p.barcode ?: JSONObject.NULL)
+                    put("category", p.category)
+                    put("wholesaleEnabled", p.wholesaleEnabled)
+                    put("wholesalePrices", p.wholesalePrices ?: JSONObject.NULL)
+                    put("variants", p.variants ?: JSONObject.NULL)
+                    put("image", p.image ?: JSONObject.NULL)
+                    put("minStockAlert", p.minStockAlert)
+                    put("isSynced", true)
+                    put("createdAt", p.createdAt)
+                    put("updatedAt", p.updatedAt)
+                })
+                if (uploadTable(context, "products", array)) {
+                    db.productDao().markSynced(productId)
+                    Log.i(TAG, "[pushProductImmediate] OK push produk id=$productId ke VPS")
+                } else {
+                    Log.w(TAG, "[pushProductImmediate] Gagal push produk id=$productId, akan diretry pada syncAll berikutnya")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "[pushProductImmediate] error: ${e.message}", e)
+            }
+        }
+    }
+
+    /**
+     * Hapus produk POS dari VPS secara non-blocking di global scope.
+     * Setelah berhasil hapus di server, baris di Room juga di-hard-delete.
+     */
+    fun deleteProductImmediate(
+        context: Context,
+        db: PosBahDatabase,
+        activeTenantId: String,
+        productId: Long,
+        userEmail: String? = null
+    ) {
+        syncScope.launch {
+            try {
+                currentTenantId = activeTenantId
+                if (!userEmail.isNullOrBlank()) currentUserEmail = userEmail
+                if (!isNetworkAvailable(context)) {
+                    Log.w(TAG, "[deleteProductImmediate] Offline, akan diretry pada syncAll berikutnya")
+                    return@launch
+                }
+                if (deleteRow(context, "products", productId, activeTenantId)) {
+                    db.productDao().hardDelete(productId)
+                    Log.i(TAG, "[deleteProductImmediate] OK delete produk id=$productId di VPS")
+                } else {
+                    Log.w(TAG, "[deleteProductImmediate] Gagal delete produk id=$productId di server, retry pada syncAll berikutnya")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "[deleteProductImmediate] error: ${e.message}", e)
+            }
+        }
+    }
+
+    /**
+     * Push satu customer POS ke VPS secara non-blocking di global scope.
+     */
+    fun pushCustomerImmediate(
+        context: Context,
+        db: PosBahDatabase,
+        activeTenantId: String,
+        customerId: Long,
+        userEmail: String? = null
+    ) {
+        syncScope.launch {
+            try {
+                currentTenantId = activeTenantId
+                if (!userEmail.isNullOrBlank()) currentUserEmail = userEmail
+                if (!isNetworkAvailable(context)) {
+                    Log.w(TAG, "[pushCustomerImmediate] Offline, akan diretry pada syncAll berikutnya")
+                    return@launch
+                }
+                val c = db.customerDao().getById(customerId) ?: return@launch
+                if (c.tenantId != activeTenantId) return@launch
+                val array = JSONArray()
+                array.put(JSONObject().apply {
+                    put("id", c.id)
+                    put("tenantId", c.tenantId)
+                    put("name", c.name)
+                    put("phone", c.phone ?: JSONObject.NULL)
+                    put("address", c.address ?: JSONObject.NULL)
+                    put("isSynced", true)
+                    put("createdAt", c.createdAt)
+                    put("updatedAt", c.updatedAt)
+                })
+                if (uploadTable(context, "customers", array)) {
+                    db.customerDao().markSynced(customerId)
+                    Log.i(TAG, "[pushCustomerImmediate] OK push customer id=$customerId ke VPS")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "[pushCustomerImmediate] error: ${e.message}", e)
+            }
+        }
+    }
+
+    /**
+     * Push satu master produk BMP ke VPS secara non-blocking di global scope.
+     */
+    fun pushBmpMasterProductImmediate(
+        context: Context,
+        db: PosBahDatabase,
+        activeTenantId: String,
+        masterProductId: Long,
+        userEmail: String? = null
+    ) {
+        syncScope.launch {
+            try {
+                currentTenantId = activeTenantId
+                if (!userEmail.isNullOrBlank()) currentUserEmail = userEmail
+                if (!isNetworkAvailable(context)) {
+                    Log.w(TAG, "[pushBmpMasterProductImmediate] Offline, akan diretry pada syncAll berikutnya")
+                    return@launch
+                }
+                val mp = db.bmpMasterProductDao().getById(masterProductId) ?: return@launch
+                if (mp.tenantId != activeTenantId) return@launch
+                val array = JSONArray()
+                array.put(JSONObject().apply {
+                    put("id", mp.id)
+                    put("tenantId", mp.tenantId)
+                    put("title", mp.title)
+                    put("description", mp.description ?: JSONObject.NULL)
+                    put("unit", mp.unit)
+                    put("price", mp.price)
+                    put("beratGram", mp.beratGram)
+                    put("cycleTime", mp.cycleTime)
+                    put("cavity", mp.cavity)
+                    put("rejectRate", mp.rejectRate)
+                    put("uniqueID", mp.uniqueID ?: JSONObject.NULL)
+                    put("slug", mp.slug ?: JSONObject.NULL)
+                    put("jenisBahanBaku", mp.jenisBahanBaku)
+                    put("image", mp.image ?: JSONObject.NULL)
+                    put("isSynced", true)
+                    put("createdAt", mp.createdAt)
+                    put("updatedAt", mp.updatedAt)
+                })
+                if (uploadTable(context, "bmp_master_products", array)) {
+                    db.bmpMasterProductDao().markSynced(masterProductId)
+                    Log.i(TAG, "[pushBmpMasterProductImmediate] OK push master produk BMP id=$masterProductId ke VPS")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "[pushBmpMasterProductImmediate] error: ${e.message}", e)
+            }
+        }
+    }
+
+    /**
+     * Hapus master produk BMP dari VPS secara non-blocking di global scope.
+     */
+    fun deleteBmpMasterProductImmediate(
+        context: Context,
+        db: PosBahDatabase,
+        activeTenantId: String,
+        masterProductId: Long,
+        userEmail: String? = null
+    ) {
+        syncScope.launch {
+            try {
+                currentTenantId = activeTenantId
+                if (!userEmail.isNullOrBlank()) currentUserEmail = userEmail
+                if (!isNetworkAvailable(context)) return@launch
+                if (deleteRow(context, "bmp_master_products", masterProductId, activeTenantId)) {
+                    db.bmpMasterProductDao().hardDelete(masterProductId)
+                    Log.i(TAG, "[deleteBmpMasterProductImmediate] OK delete master produk BMP id=$masterProductId di VPS")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "[deleteBmpMasterProductImmediate] error: ${e.message}", e)
+            }
+        }
+    }
+
+    /**
+     * Jalankan syncAll penuh di latar belakang menggunakan global scope.
+     * Cocok dipanggil dari ViewModel sebagai fallback (mis. setelah edit transaksi)
+     * tanpa khawatir dibatalkan ketika ViewModel di-clear.
+     */
+    fun enqueueFullSync(
+        context: Context,
+        db: PosBahDatabase,
+        activeTenantId: String,
+        userEmail: String? = null
+    ) {
+        syncScope.launch {
+            try {
+                syncAll(context, db, activeTenantId, userEmail)
+            } catch (e: Exception) {
+                Log.e(TAG, "[enqueueFullSync] error: ${e.message}", e)
+            }
+        }
+    }
 }

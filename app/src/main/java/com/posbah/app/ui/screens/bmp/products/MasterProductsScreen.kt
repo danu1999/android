@@ -147,20 +147,20 @@ class MasterProductsViewModel @Inject constructor(
                 ex.printStackTrace()
             }
         }
-        repo.upsert(e.copy(image = base64Url))
+        val savedId = repo.upsert(e.copy(image = base64Url))
         if (isNew) {
             logActivity("TAMBAH PRODUK BMP", "Menambahkan master produk: ${e.title} (Harga: Rp ${e.price})")
         } else {
             logActivity("EDIT PRODUK BMP", "Mengubah master produk: ${e.title} (Harga: Rp ${e.price})")
         }
         _form.update { FormState() }
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-            } catch (ex: Exception) {
-                ex.printStackTrace()
-            }
-        }
+        // Push langsung ke VPS via global syncScope (tidak ikut dibatalkan saat
+        // ViewModel di-clear / user logout). Ini memastikan produk tersimpan
+        // realtime di server meski user langsung logout / uninstall setelah simpan.
+        val pushId = if (savedId > 0L) savedId else e.id
+        com.posbah.app.data.remote.SupabaseSyncManager.pushBmpMasterProductImmediate(
+            context, db, tenantId, pushId, authRepository.activeUserEmail()
+        )
     }
 
     fun delete(id: Long) = viewModelScope.launch {
@@ -169,13 +169,9 @@ class MasterProductsViewModel @Inject constructor(
         if (p != null) {
             logActivity("HAPUS PRODUK BMP", "Menghapus master produk: ${p.title}")
         }
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-            } catch (ex: Exception) {
-                ex.printStackTrace()
-            }
-        }
+        com.posbah.app.data.remote.SupabaseSyncManager.deleteBmpMasterProductImmediate(
+            context, db, tenantId, id, authRepository.activeUserEmail()
+        )
     }
 
     private fun logActivity(action: String, description: String) {
