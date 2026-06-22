@@ -569,6 +569,31 @@ func initSchema() error {
 		// products schema updates for minStockAlert
 		`ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "minStockAlert" INT DEFAULT 0;`,
 
+		// v2.17.47: Sinkronisasi POS realtime — Android client mengirim kolom isSynced/isDeleted
+		// untuk setiap row upsert. Tabel berikut sebelumnya menolak payload karena kolom belum ada,
+		// sehingga produk yang ditambah karyawan outlet tidak pernah ter-upload ke VPS.
+		// ADD COLUMN IF NOT EXISTS aman & idempotent: tidak ada efek jika kolom sudah ada.
+		`ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT TRUE;`,
+		`ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "isDeleted" BOOLEAN NOT NULL DEFAULT FALSE;`,
+		`ALTER TABLE "customers" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT TRUE;`,
+		`ALTER TABLE "customers" ADD COLUMN IF NOT EXISTS "outletId" INT;`,
+		`ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT TRUE;`,
+		`ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "isDeleted" BOOLEAN NOT NULL DEFAULT FALSE;`,
+		`ALTER TABLE "transaction_items" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT TRUE;`,
+		`ALTER TABLE "transaction_items" ADD COLUMN IF NOT EXISTS "isDeleted" BOOLEAN NOT NULL DEFAULT FALSE;`,
+		`ALTER TABLE "activity_logs" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT TRUE;`,
+		`ALTER TABLE "bmp_master_products" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT TRUE;`,
+		`ALTER TABLE "bmp_master_products" ADD COLUMN IF NOT EXISTS "isDeleted" BOOLEAN NOT NULL DEFAULT FALSE;`,
+		`ALTER TABLE "outlets" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT TRUE;`,
+		`ALTER TABLE "outlets" ADD COLUMN IF NOT EXISTS "isDeleted" BOOLEAN NOT NULL DEFAULT FALSE;`,
+		`ALTER TABLE "employees" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT TRUE;`,
+		`ALTER TABLE "employees" ADD COLUMN IF NOT EXISTS "isDeleted" BOOLEAN NOT NULL DEFAULT FALSE;`,
+		`ALTER TABLE "tenants" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT TRUE;`,
+		`ALTER TABLE "print_settings" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT TRUE;`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT TRUE;`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "isDeleted" BOOLEAN NOT NULL DEFAULT FALSE;`,
+		`ALTER TABLE "bmp_attendance_logs" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT TRUE;`,
+
 		// bmp tables isSynced schema updates
 		`ALTER TABLE "bmp_clients" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT FALSE;`,
 		`ALTER TABLE "bmp_invoices" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT FALSE;`,
