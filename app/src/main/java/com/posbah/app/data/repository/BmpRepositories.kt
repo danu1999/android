@@ -635,9 +635,9 @@ class BmpEmployeeRepository @Inject constructor(
      * Simpan catatan penggajian. Secara otomatis membuat entri CashFlow KELUAR
      * agar saldo kas real mencerminkan pengeluaran gaji karyawan.
      */
-    suspend fun insertPayroll(p: BmpPayrollEntity): Long {
+    suspend fun insertPayroll(p: BmpPayrollEntity): String {
         return db.withTransaction {
-            val id = payrollDao.insert(p)
+            payrollDao.insert(p)
             if (p.amount > 0) {
                 cashFlowDao.insert(
                     BmpCashFlowEntity(
@@ -646,20 +646,19 @@ class BmpEmployeeRepository @Inject constructor(
                         transactionType = "KELUAR",
                         description = "Penggajian Karyawan ID ${p.employeeId}",
                         amount = p.amount,
-                        paymentRefId = id
+                        paymentRefId = null
                     )
                 )
             }
-            id
+            p.id
         }
     }
 
     /**
      * Hapus catatan penggajian beserta entri CashFlow terkait.
      */
-    suspend fun deletePayroll(id: Long) {
+    suspend fun deletePayroll(id: String) {
         db.withTransaction {
-            cashFlowDao.deleteByPaymentRefId(id)
             payrollDao.delete(id)
         }
     }

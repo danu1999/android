@@ -142,6 +142,7 @@ data class BmpInvoicePaymentEntity(
 data class BmpCashFlowEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val tenantId: String,
+    val outletId: Long? = null,             // Per-outlet cashflow isolation
     val transactionDate: Long,
     val transactionType: String, // MASUK | KELUAR
     val description: String,
@@ -201,8 +202,9 @@ data class BmpEmployeeEntity(
     indices = [Index(value = ["tenantId"]), Index(value = ["employeeId"])]
 )
 data class BmpPayrollEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    @PrimaryKey val id: String = java.util.UUID.randomUUID().toString(),
     val tenantId: String,
+    val outletId: Long? = null,             // Per-outlet payroll isolation
     val employeeId: Long,
     val paymentDate: Long,
     val amount: Double,
@@ -224,6 +226,7 @@ data class BmpPayrollEntity(
 data class BmpBahanBakuEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val tenantId: String,
+    val outletId: Long? = null,             // Lokasi gudang/outlet pembelian bahan
     val tanggal: Long = System.currentTimeMillis(),
     val noTagihan: String,                      // Nomor surat jalan/faktur dari supplier
     val totalHarga: Double = 0.0,               // Total nilai bahan baku masuk (Σ qty × rate)
@@ -369,6 +372,7 @@ data class PrintSettingsEntity(
 data class BmpProductStockEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val tenantId: String,
+    val outletId: Long? = null,             // Stok per lokasi/outlet
     val masterProductId: Long,
     val quantity: Double = 0.0,
     val minStockAlert: Double = 0.0,

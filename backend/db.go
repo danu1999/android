@@ -231,7 +231,7 @@ func initSchema() error {
 			"updatedAt" BIGINT
 		);`,
 		`CREATE TABLE IF NOT EXISTS "bmp_payrolls" (
-			"id" INT PRIMARY KEY,
+			"id" VARCHAR(100) NOT NULL,
 			"tenantId" VARCHAR(100) NOT NULL,
 			"employeeId" INT NOT NULL,
 			"paymentDate" BIGINT NOT NULL,
@@ -239,7 +239,8 @@ func initSchema() error {
 			"attendanceCount" INT DEFAULT 0,
 			"dailyRate" DOUBLE PRECISION NOT NULL,
 			"description" TEXT,
-			"createdAt" BIGINT
+			"createdAt" BIGINT,
+			PRIMARY KEY ("id", "tenantId")
 		);`,
 		`CREATE TABLE IF NOT EXISTS "bmp_bahan_baku" (
 			"id" INT PRIMARY KEY,
@@ -600,6 +601,7 @@ func initSchema() error {
 		`ALTER TABLE "bmp_invoice_payments" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT FALSE;`,
 		`ALTER TABLE "bmp_cashflow" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT FALSE;`,
 		`ALTER TABLE "bmp_payrolls" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT FALSE;`,
+		`ALTER TABLE "bmp_payrolls" ALTER COLUMN "id" TYPE VARCHAR(100);`,
 		`ALTER TABLE "bmp_bahan_baku" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT FALSE;`,
 		`ALTER TABLE "bmp_bahan_baku_item" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT FALSE;`,
 
@@ -746,6 +748,19 @@ func initSchema() error {
 		VALUES ('syerlirahma7@gmail.com', 'ACTIVE', $1)
 		ON CONFLICT ("email") DO UPDATE SET "status" = 'ACTIVE', "updatedAt" = EXCLUDED."updatedAt";`,
 		time.Now().UnixNano()/int64(time.Millisecond))
+	// Migration: tambah outletId ke tabel BMP & activity_logs untuk isolasi per-outlet
+	outletIdMigrations := []string{
+		`ALTER TABLE "bmp_cashflow"      ADD COLUMN IF NOT EXISTS "outletId" BIGINT;`,
+		`ALTER TABLE "bmp_payrolls"      ADD COLUMN IF NOT EXISTS "outletId" BIGINT;`,
+		`ALTER TABLE "bmp_bahan_baku"    ADD COLUMN IF NOT EXISTS "outletId" BIGINT;`,
+		`ALTER TABLE "bmp_product_stocks" ADD COLUMN IF NOT EXISTS "outletId" BIGINT;`,
+		`ALTER TABLE "activity_logs"     ADD COLUMN IF NOT EXISTS "outletId" BIGINT;`,
+	}
+	for _, q := range outletIdMigrations {
+		if _, err := db.Exec(q); err != nil {
+			log.Printf("[migration] outletId warning: %v", err)
+		}
+	}
 	log.Println("Database schemas verified / migrated successfully.")
 	return nil
 }

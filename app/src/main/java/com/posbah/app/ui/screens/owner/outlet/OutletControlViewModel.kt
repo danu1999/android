@@ -284,11 +284,7 @@ class OutletControlViewModel @Inject constructor(
             }
 
             if (employeeName.isBlank()) {
-                val employeesOfThisOutlet = activeEmployees.filter { it.outletId == outletId }
-                if (employeesOfThisOutlet.size <= 1) {
-                    _uiState.update { it.copy(error = "Gagal: Outlet harus memiliki minimal 1 karyawan.") }
-                    return@launch
-                }
+                // Unassign: clear currentEmployee from outlet (no minimum guard)
                 val outlet = db.outletDao().getById(outletId) ?: return@launch
                 val updated = outlet.copy(currentEmployee = null, isSynced = false, updatedAt = System.currentTimeMillis())
                 db.outletDao().update(updated)
@@ -299,19 +295,13 @@ class OutletControlViewModel @Inject constructor(
                     return@launch
                 }
                 if (emp.outletId != outletId) {
-                    if (emp.outletId != null) {
-                        val oldOutletCount = activeEmployees.count { it.outletId == emp.outletId }
-                        if (oldOutletCount <= 1) {
-                            val oldOutletName = db.outletDao().getById(emp.outletId)?.name ?: "Outlet Lain"
-                            _uiState.update { it.copy(error = "Gagal: ${emp.name} adalah karyawan terakhir di $oldOutletName.") }
-                            return@launch
-                        }
-                    }
+                    // Cek batas maksimum karyawan di outlet tujuan
                     val targetCount = activeEmployees.count { it.outletId == outletId }
                     if (targetCount >= 10) {
                         _uiState.update { it.copy(error = "Gagal: Outlet sudah mencapai batas maksimal 10 karyawan.") }
                         return@launch
                     }
+                    // Pindahkan karyawan ke outlet baru (outlet lama boleh kosong)
                     db.employeeDao().update(emp.copy(outletId = outletId, isSynced = false, updatedAt = System.currentTimeMillis()))
                 }
                 val outlet = db.outletDao().getById(outletId) ?: return@launch
@@ -409,11 +399,7 @@ class OutletControlViewModel @Inject constructor(
             }
 
             if (currentEmployee.isNullOrBlank()) {
-                val targetCount = activeEmployees.count { it.outletId == outletId }
-                if (targetCount <= 1) {
-                    _uiState.update { it.copy(error = "Gagal: Outlet harus memiliki minimal 1 karyawan.") }
-                    return@launch
-                }
+                // Unassign currentEmployee — outlet boleh kosong karyawannya
                 val updated = existing.copy(
                     name = name,
                     address = address,
@@ -431,19 +417,13 @@ class OutletControlViewModel @Inject constructor(
                 }
 
                 if (emp.outletId != outletId) {
-                    if (emp.outletId != null) {
-                        val oldOutletCount = activeEmployees.count { it.outletId == emp.outletId }
-                        if (oldOutletCount <= 1) {
-                            val oldOutletName = db.outletDao().getById(emp.outletId)?.name ?: "Outlet Lain"
-                            _uiState.update { it.copy(error = "Gagal: ${emp.name} adalah karyawan terakhir di $oldOutletName.") }
-                            return@launch
-                        }
-                    }
+                    // Cek batas maksimum outlet tujuan
                     val targetCount = activeEmployees.count { it.outletId == outletId }
                     if (targetCount >= 10) {
                         _uiState.update { it.copy(error = "Gagal: Outlet sudah mencapai batas maksimal 10 karyawan.") }
                         return@launch
                     }
+                    // Outlet lama boleh kosong — tidak ada minimum guard
                     db.employeeDao().update(emp.copy(outletId = outletId, isSynced = false, updatedAt = System.currentTimeMillis()))
                 }
 

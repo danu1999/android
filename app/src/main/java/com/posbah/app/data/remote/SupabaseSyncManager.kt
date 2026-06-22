@@ -8,6 +8,7 @@ import com.posbah.app.data.local.PosBahDatabase
 import com.posbah.app.data.local.entities.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -488,6 +489,7 @@ object SupabaseSyncManager {
                     array.put(JSONObject().apply {
                         put("id", cf.id)
                         put("tenantId", cf.tenantId)
+                        put("outletId", cf.outletId ?: JSONObject.NULL)
                         put("transactionDate", cf.transactionDate)
                         put("transactionType", cf.transactionType)
                         put("description", cf.description)
@@ -566,6 +568,7 @@ object SupabaseSyncManager {
                     array.put(JSONObject().apply {
                         put("id", p.id)
                         put("tenantId", p.tenantId)
+                        put("outletId", p.outletId ?: JSONObject.NULL)
                         put("employeeId", p.employeeId)
                         put("paymentDate", p.paymentDate)
                         put("amount", p.amount)
@@ -590,6 +593,7 @@ object SupabaseSyncManager {
                     array.put(JSONObject().apply {
                         put("id", bb.id)
                         put("tenantId", bb.tenantId)
+                        put("outletId", bb.outletId ?: JSONObject.NULL)
                         put("tanggal", bb.tanggal)
                         put("noTagihan", bb.noTagihan)
                         put("totalHarga", bb.totalHarga)
@@ -798,6 +802,7 @@ object SupabaseSyncManager {
                     array.put(JSONObject().apply {
                         put("id", l.id)
                         put("tenantId", l.tenantId)
+                        put("outletId", l.outletId ?: JSONObject.NULL)
                         put("action", l.action)
                         put("description", l.description)
                         put("date", l.date)
@@ -817,6 +822,7 @@ object SupabaseSyncManager {
                     array.put(JSONObject().apply {
                         put("id", s.id)
                         put("tenantId", s.tenantId)
+                        put("outletId", s.outletId ?: JSONObject.NULL)
                         put("masterProductId", s.masterProductId)
                         put("quantity", s.quantity)
                         put("minStockAlert", s.minStockAlert)
@@ -1459,13 +1465,90 @@ object SupabaseSyncManager {
                 Log.w(TAG, "Pull sinkronisasi dibatalkan: tidak ada koneksi internet.")
                 return@withContext SyncResult.NoConnection
             }
-            Log.d(TAG, "Memulai pull data master dari VPS...")
+            Log.d(TAG, "Memulai pull data master dari VPS (paralel)...")
 
             // Guard: push deletes dulu sebelum pull agar data yang dihapus tidak di-restore
             pushDeletedRecordsToServer(context, db, activeTenantId)
 
-            // 0. Pull tenants
-            val tenantsArray = pullTable(context, "tenants", activeTenantId)
+            // ── PHASE 1: Fetch semua tabel secara PARALEL ────────────────────────────
+            // Semua HTTP request dijalankan bersamaan, lalu hasil di-await sekaligus.
+            // Ini mengurangi waktu pull dari N×RTT menjadi ~1×RTT.
+            val tenantsArray: JSONArray?
+            val outletsArray: JSONArray?
+            val employeesArray: JSONArray?
+            val productsArray: JSONArray?
+            val customersArray: JSONArray?
+            val transactionsArray: JSONArray?
+            val bmpClientsArray: JSONArray?
+            val bmpInvoicesArray: JSONArray?
+            val bmpProductsArray: JSONArray?
+            val bmpMasterProductsArray: JSONArray?
+            val bmpPaymentsArray: JSONArray?
+            val bmpCashFlowArray: JSONArray?
+            val bmpSettingsArray: JSONArray?
+            val bmpEmployeesArray: JSONArray?
+            val bmpPayrollsArray: JSONArray?
+            val bmpBahanBakuArray: JSONArray?
+            val bmpBahanBakuItemsArray: JSONArray?
+            val bmpProductStocksArray: JSONArray?
+            val bmpStockLedgerArray: JSONArray?
+            val bmpProductionLogsArray: JSONArray?
+            val printSettingsArray: JSONArray?
+            val activityLogsArray: JSONArray?
+
+            coroutineScope {
+                val t1  = async { pullTable(context, "tenants",              activeTenantId) }
+                val t2  = async { pullTable(context, "outlets",              activeTenantId) }
+                val t3  = async { pullTable(context, "employees",            activeTenantId) }
+                val t4  = async { pullTable(context, "products",             activeTenantId) }
+                val t5  = async { pullTable(context, "customers",            activeTenantId) }
+                val t6  = async { pullTable(context, "transactions",         activeTenantId) }
+                val t7  = async { pullTable(context, "bmp_clients",          activeTenantId) }
+                val t8  = async { pullTable(context, "bmp_invoices",         activeTenantId) }
+                val t9  = async { pullTable(context, "bmp_products",         activeTenantId) }
+                val t10 = async { pullTable(context, "bmp_master_products",  activeTenantId) }
+                val t11 = async { pullTable(context, "bmp_invoice_payments", activeTenantId) }
+                val t12 = async { pullTable(context, "bmp_cashflow",         activeTenantId) }
+                val t13 = async { pullTable(context, "bmp_settings",         activeTenantId) }
+                val t14 = async { pullTable(context, "bmp_employees",        activeTenantId) }
+                val t15 = async { pullTable(context, "bmp_payrolls",         activeTenantId) }
+                val t16 = async { pullTable(context, "bmp_bahan_baku",       activeTenantId) }
+                val t17 = async { pullTable(context, "bmp_bahan_baku_item",  activeTenantId) }
+                val t18 = async { pullTable(context, "bmp_product_stocks",   activeTenantId) }
+                val t19 = async { pullTable(context, "bmp_stock_ledger",     activeTenantId) }
+                val t20 = async { pullTable(context, "bmp_production_logs",  activeTenantId) }
+                val t21 = async { pullTable(context, "print_settings",       activeTenantId) }
+                val t22 = async { pullTable(context, "activity_logs",        activeTenantId) }
+
+                tenantsArray           = t1.await()
+                outletsArray           = t2.await()
+                employeesArray         = t3.await()
+                productsArray          = t4.await()
+                customersArray         = t5.await()
+                transactionsArray      = t6.await()
+                bmpClientsArray        = t7.await()
+                bmpInvoicesArray       = t8.await()
+                bmpProductsArray       = t9.await()
+                bmpMasterProductsArray = t10.await()
+                bmpPaymentsArray       = t11.await()
+                bmpCashFlowArray       = t12.await()
+                bmpSettingsArray       = t13.await()
+                bmpEmployeesArray      = t14.await()
+                bmpPayrollsArray       = t15.await()
+                bmpBahanBakuArray      = t16.await()
+                bmpBahanBakuItemsArray = t17.await()
+                bmpProductStocksArray  = t18.await()
+                bmpStockLedgerArray    = t19.await()
+                bmpProductionLogsArray = t20.await()
+                printSettingsArray     = t21.await()
+                activityLogsArray      = t22.await()
+            }
+
+            Log.d(TAG, "[pullAll] Semua fetch paralel selesai, mulai menulis ke DB...")
+
+            // ── PHASE 2: Tulis hasil ke DB secara SEQUENTIAL ────────────────────────
+
+            // 0. Tenants
             if (tenantsArray != null && tenantsArray.length() > 0) {
                 for (i in 0 until tenantsArray.length()) {
                     val obj = tenantsArray.getJSONObject(i)
@@ -1488,8 +1571,7 @@ object SupabaseSyncManager {
                 }
             }
 
-            // 1. Pull outlets
-            val outletsArray = pullTable(context, "outlets", activeTenantId)
+            // 1. Outlets
             if (outletsArray != null) {
                 val list = mutableListOf<Outlet>()
                 val serverIds = mutableSetOf<Long>()
@@ -1532,8 +1614,7 @@ object SupabaseSyncManager {
                 }
             }
 
-            // 2. Pull employees
-            val employeesArray = pullTable(context, "employees", activeTenantId)
+            // 2. Employees
             if (employeesArray != null) {
                 val list = mutableListOf<Employee>()
                 val serverIds = mutableSetOf<Long>()
@@ -1582,8 +1663,7 @@ object SupabaseSyncManager {
                 }
             }
 
-            // 3. Pull products
-            val productsArray = pullTable(context, "products", activeTenantId)
+            // 3. Products
             if (productsArray != null) {
                 val list = mutableListOf<ProductEntity>()
                 val serverIds = mutableSetOf<Long>()
@@ -1634,8 +1714,7 @@ object SupabaseSyncManager {
                 }
             }
 
-            // 4. Pull customers
-            val customersArray = pullTable(context, "customers", activeTenantId)
+            // 4. Customers
             if (customersArray != null) {
                 val list = mutableListOf<CustomerEntity>()
                 val serverIds = mutableSetOf<Long>()
@@ -1675,8 +1754,7 @@ object SupabaseSyncManager {
                 }
             }
 
-            // 5. Pull transactions
-            val transactionsArray = pullTable(context, "transactions", activeTenantId)
+            // 5. Transactions
             val activeTxIds = mutableListOf<Long>()
             val transactionEntities = mutableListOf<TransactionEntity>()
             if (transactionsArray != null) {
@@ -1734,7 +1812,7 @@ object SupabaseSyncManager {
                 }
             }
 
-            // 6. Pull transaction_items
+            // 6. Pull transaction_items — fetch all txIds in parallel, write sequentially
             // For active Rental/Laundry: always pull items so status is current on any device
             // For FNB/BMP: pull items for all transactions from last 30 days (supports HP-ganti use case)
             val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
@@ -1745,35 +1823,44 @@ object SupabaseSyncManager {
             }.map { it.id }.toSet()
 
             val allTargetTxIds = (activeTxIds + recentFnbTxIds).toSet()
-            for (txId in allTargetTxIds) {
-                val itemsArray = pullTable(context, "transaction_items", activeTenantId, "transactionId=eq.$txId")
-                if (itemsArray != null) {
-                    val itemsList = mutableListOf<TransactionItemEntity>()
-                    for (i in 0 until itemsArray.length()) {
-                        val obj = itemsArray.getJSONObject(i)
-                        val variantId = if (obj.isNull("variantId")) null else obj.optLong("variantId")
-                        val variantName = if (obj.isNull("variantName")) null else obj.optString("variantName")
-                        itemsList.add(TransactionItemEntity(
-                            id = obj.optLong("id", 0L),
-                            transactionId = obj.optLong("transactionId", txId),
-                            productId = obj.optLong("productId", 0L),
-                            variantId = variantId,
-                            variantName = variantName,
-                            quantity = obj.optInt("quantity", 1),
-                            price = obj.optDouble("price", 0.0),
-                            costPrice = obj.optDouble("costPrice", 0.0),
-                            discount = obj.optDouble("discount", 0.0),
-                            note = if (obj.isNull("note")) null else obj.optString("note")
-                        ))
+            if (allTargetTxIds.isNotEmpty()) {
+                // Fetch semua transaction_items secara paralel berdasarkan txId
+                val txItemResults: Map<Long, JSONArray?> = coroutineScope {
+                    allTargetTxIds.map { txId ->
+                        txId to async {
+                            pullTable(context, "transaction_items", activeTenantId, "transactionId=eq.$txId")
+                        }
+                    }.associate { (txId, deferred) -> txId to deferred.await() }
+                }
+                // Tulis hasil ke DB secara sequential
+                for ((txId, itemsArray) in txItemResults) {
+                    if (itemsArray != null) {
+                        val itemsList = mutableListOf<TransactionItemEntity>()
+                        for (i in 0 until itemsArray.length()) {
+                            val obj = itemsArray.getJSONObject(i)
+                            val variantId = if (obj.isNull("variantId")) null else obj.optLong("variantId")
+                            val variantName = if (obj.isNull("variantName")) null else obj.optString("variantName")
+                            itemsList.add(TransactionItemEntity(
+                                id = obj.optLong("id", 0L),
+                                transactionId = obj.optLong("transactionId", txId),
+                                productId = obj.optLong("productId", 0L),
+                                variantId = variantId,
+                                variantName = variantName,
+                                quantity = obj.optInt("quantity", 1),
+                                price = obj.optDouble("price", 0.0),
+                                costPrice = obj.optDouble("costPrice", 0.0),
+                                discount = obj.optDouble("discount", 0.0),
+                                note = if (obj.isNull("note")) null else obj.optString("note")
+                            ))
                     }
                     if (itemsList.isNotEmpty()) {
                         db.transactionItemDao().insertAll(itemsList)
                     }
                 }
             }
+        }
 
-            // 7. Pull bmp_clients
-            val bmpClientsArray = pullTable(context, "bmp_clients", activeTenantId)
+            // 7. bmp_clients
             if (bmpClientsArray != null) {
                 val list = mutableListOf<BmpClientEntity>()
                 val serverIds = mutableSetOf<Long>()
@@ -1826,8 +1913,7 @@ object SupabaseSyncManager {
                 }
             }
 
-            // 8. Pull bmp_invoices
-            val bmpInvoicesArray = pullTable(context, "bmp_invoices", activeTenantId)
+            // 8. bmp_invoices
             if (bmpInvoicesArray != null) {
                 val list = mutableListOf<BmpInvoiceEntity>()
                 val serverIds = mutableSetOf<Long>()
@@ -1880,8 +1966,7 @@ object SupabaseSyncManager {
                 }
             }
 
-            // 9. Pull bmp_products
-            val bmpProductsArray = pullTable(context, "bmp_products", activeTenantId)
+            // 9. bmp_products
             if (bmpProductsArray != null) {
                 val list = mutableListOf<BmpProductEntity>()
                 val serverIds = mutableSetOf<Long>()
@@ -1930,8 +2015,7 @@ object SupabaseSyncManager {
                 }
             }
 
-            // 10. Pull bmp_master_products
-            val bmpMasterProductsArray = pullTable(context, "bmp_master_products", activeTenantId)
+            // 10. bmp_master_products
             if (bmpMasterProductsArray != null) {
                 val list = mutableListOf<BmpMasterProductEntity>()
                 val serverIds = mutableSetOf<Long>()
@@ -1980,8 +2064,7 @@ object SupabaseSyncManager {
                 }
             }
 
-            // 11. Pull bmp_invoice_payments
-            val bmpPaymentsArray = pullTable(context, "bmp_invoice_payments", activeTenantId)
+            // 11. bmp_invoice_payments
             if (bmpPaymentsArray != null) {
                 val list = mutableListOf<BmpInvoicePaymentEntity>()
                 val serverIds = mutableSetOf<Long>()
@@ -2013,8 +2096,7 @@ object SupabaseSyncManager {
                 }
             }
 
-            // 12. Pull bmp_cashflow
-            val bmpCashFlowArray = pullTable(context, "bmp_cashflow", activeTenantId)
+            // 12. bmp_cashflow
             if (bmpCashFlowArray != null) {
                 val list = mutableListOf<BmpCashFlowEntity>()
                 val serverIds = mutableSetOf<Long>()
@@ -2025,6 +2107,7 @@ object SupabaseSyncManager {
                     list.add(BmpCashFlowEntity(
                         id = idVal,
                         tenantId = obj.optString("tenantId", activeTenantId),
+                        outletId = if (obj.isNull("outletId")) null else obj.optLong("outletId"),
                         transactionDate = obj.optLong("transactionDate"),
                         transactionType = obj.optString("transactionType"),
                         description = obj.optString("description"),
@@ -2046,8 +2129,7 @@ object SupabaseSyncManager {
                 }
             }
 
-            // 13. Pull bmp_settings
-            val bmpSettingsArray = pullTable(context, "bmp_settings", activeTenantId)
+            // 13. bmp_settings
             if (bmpSettingsArray != null) {
                 val list = mutableListOf<BmpSettingsEntity>()
                 for (i in 0 until bmpSettingsArray.length()) {
@@ -2084,8 +2166,7 @@ object SupabaseSyncManager {
                 }
             }
 
-            // 14. Pull bmp_employees
-            val bmpEmployeesArray = pullTable(context, "bmp_employees", activeTenantId)
+            // 14. bmp_employees
             if (bmpEmployeesArray != null) {
                 val list = mutableListOf<BmpEmployeeEntity>()
                 val serverIds = mutableSetOf<Long>()
@@ -2119,18 +2200,18 @@ object SupabaseSyncManager {
                 }
             }
 
-            // 15. Pull bmp_payrolls
-            val bmpPayrollsArray = pullTable(context, "bmp_payrolls", activeTenantId)
+            // 15. bmp_payrolls
             if (bmpPayrollsArray != null) {
                 val list = mutableListOf<BmpPayrollEntity>()
-                val serverIds = mutableSetOf<Long>()
+                val serverIds = mutableSetOf<String>()
                 for (i in 0 until bmpPayrollsArray.length()) {
                     val obj = bmpPayrollsArray.getJSONObject(i)
-                    val idVal = obj.optLong("id", 0L)
+                    val idVal = obj.optString("id", "")
                     serverIds.add(idVal)
                     list.add(BmpPayrollEntity(
                         id = idVal,
                         tenantId = obj.optString("tenantId", activeTenantId),
+                        outletId = if (obj.isNull("outletId")) null else obj.optLong("outletId"),
                         employeeId = obj.optLong("employeeId"),
                         paymentDate = obj.optLong("paymentDate"),
                         amount = obj.optDouble("amount", 0.0),
@@ -2153,8 +2234,7 @@ object SupabaseSyncManager {
                 }
             }
 
-            // 16. Pull bmp_bahan_baku
-            val bmpBahanBakuArray = pullTable(context, "bmp_bahan_baku", activeTenantId)
+            // 16. bmp_bahan_baku
             if (bmpBahanBakuArray != null) {
                 val list = mutableListOf<BmpBahanBakuEntity>()
                 val serverIds = mutableSetOf<Long>()
@@ -2165,6 +2245,7 @@ object SupabaseSyncManager {
                     list.add(BmpBahanBakuEntity(
                         id = idVal,
                         tenantId = obj.optString("tenantId", activeTenantId),
+                        outletId = if (obj.isNull("outletId")) null else obj.optLong("outletId"),
                         tanggal = obj.optLong("tanggal", System.currentTimeMillis()),
                         noTagihan = obj.optString("noTagihan"),
                         totalHarga = obj.optDouble("totalHarga", 0.0),
@@ -2199,8 +2280,7 @@ object SupabaseSyncManager {
                 }
             }
 
-            // 17. Pull bmp_bahan_baku_item
-            val bmpBahanBakuItemsArray = pullTable(context, "bmp_bahan_baku_item", activeTenantId)
+            // 17. bmp_bahan_baku_item
             if (bmpBahanBakuItemsArray != null) {
                 val list = mutableListOf<BmpBahanBakuItemEntity>()
                 val serverIds = mutableSetOf<Long>()
@@ -2239,8 +2319,7 @@ object SupabaseSyncManager {
                 }
             }
 
-            // 17a. Pull bmp_product_stocks
-            val bmpProductStocksArray = pullTable(context, "bmp_product_stocks", activeTenantId)
+            // 17a. bmp_product_stocks
             if (bmpProductStocksArray != null) {
                 val list = mutableListOf<BmpProductStockEntity>()
                 val serverIds = mutableSetOf<Long>()
@@ -2251,6 +2330,7 @@ object SupabaseSyncManager {
                     list.add(BmpProductStockEntity(
                         id = idVal,
                         tenantId = obj.optString("tenantId", activeTenantId),
+                        outletId = if (obj.isNull("outletId")) null else obj.optLong("outletId"),
                         masterProductId = obj.optLong("masterProductId"),
                         quantity = obj.optDouble("quantity", 0.0),
                         minStockAlert = obj.optDouble("minStockAlert", 0.0),
@@ -2271,8 +2351,7 @@ object SupabaseSyncManager {
                 }
             }
 
-            // 17b. Pull bmp_stock_ledger
-            val bmpStockLedgerArray = pullTable(context, "bmp_stock_ledger", activeTenantId)
+            // 17b. bmp_stock_ledger
             if (bmpStockLedgerArray != null) {
                 val list = mutableListOf<BmpStockLedgerEntity>()
                 val serverIds = mutableSetOf<Long>()
@@ -2306,8 +2385,7 @@ object SupabaseSyncManager {
                 }
             }
 
-            // 17c. Pull bmp_production_logs
-            val bmpProductionLogsArray = pullTable(context, "bmp_production_logs", activeTenantId)
+            // 17c. bmp_production_logs
             if (bmpProductionLogsArray != null) {
                 val list = mutableListOf<BmpProductionLogEntity>()
                 val serverIds = mutableSetOf<Long>()
@@ -2341,8 +2419,7 @@ object SupabaseSyncManager {
                 }
             }
 
-            // 18. Pull print_settings
-            val printSettingsArray = pullTable(context, "print_settings", activeTenantId)
+            // 18. print_settings
             if (printSettingsArray != null) {
                 val list = mutableListOf<PrintSettingsEntity>()
                 for (i in 0 until printSettingsArray.length()) {
@@ -2399,8 +2476,7 @@ object SupabaseSyncManager {
                 }
             }
 
-            // 19. Pull activity_logs
-            val activityLogsArray = pullTable(context, "activity_logs", activeTenantId)
+            // 19. activity_logs
             if (activityLogsArray != null) {
                 val list = mutableListOf<com.posbah.app.data.local.entities.ActivityLogEntity>()
                 for (i in 0 until activityLogsArray.length()) {
@@ -2408,6 +2484,7 @@ object SupabaseSyncManager {
                     list.add(com.posbah.app.data.local.entities.ActivityLogEntity(
                         id = obj.optLong("id", 0L),
                         tenantId = obj.optString("tenantId", activeTenantId),
+                        outletId = if (obj.isNull("outletId")) null else obj.optLong("outletId"),
                         action = obj.optString("action"),
                         description = obj.optString("description"),
                         date = obj.optLong("date", System.currentTimeMillis()),
@@ -2901,7 +2978,7 @@ object SupabaseSyncManager {
         context: Context,
         db: PosBahDatabase,
         activeTenantId: String,
-        payrollId: Long,
+        payrollId: String,
         userEmail: String? = null
     ) {
         syncScope.launch {
@@ -2925,6 +3002,7 @@ object SupabaseSyncManager {
                 array.put(JSONObject().apply {
                     put("id", p.id)
                     put("tenantId", p.tenantId)
+                    put("outletId", p.outletId ?: JSONObject.NULL)
                     put("employeeId", p.employeeId)
                     put("paymentDate", p.paymentDate)
                     put("amount", p.amount)

@@ -356,26 +356,29 @@ class EmployeeViewModel @Inject constructor(
 
     /**
      * Hapus karyawan (soft delete) oleh Owner.
+     * Jika karyawan adalah satu-satunya di outletnya, outlet tetap ada
+     * tapi currentEmployee-nya akan di-reset ke null.
      */
     fun deleteEmployee(employeeId: Long) {
         viewModelScope.launch {
             try {
                 val emp = db.employeeDao().getById(employeeId)
+
+                // Jika karyawan ini adalah currentEmployee di outletnya,
+                // clear referensi itu agar outlet tidak menampilkan nama yang sudah dihapus
                 if (emp != null && emp.outletId != null) {
-                    val ownerEmail = authRepository.activeUserEmail()?.lowercase()?.trim()
-                    val activeEmployees = db.employeeDao().getAll().filter { e ->
-                        e.tenantId == tenantId &&
-                        e.isActive &&
-                        e.role != "OWNER" &&
-                        e.email?.lowercase()?.trim() != ownerEmail
-                    }
-                    val currentCount = activeEmployees.count { it.outletId == emp.outletId }
-                    if (currentCount <= 1) {
-                        val outletName = db.outletDao().getById(emp.outletId)?.name ?: "Outlet"
-                        _uiState.update { it.copy(error = "Gagal: $outletName harus memiliki minimal 1 karyawan.") }
-                        return@launch
+                    val outlet = db.outletDao().getById(emp.outletId)
+                    if (outlet != null && outlet.currentEmployee?.lowercase()?.trim() == emp.name.lowercase().trim()) {
+                        db.outletDao().update(
+                            outlet.copy(
+                                currentEmployee = null,
+                                isSynced = false,
+                                updatedAt = System.currentTimeMillis()
+                            )
+                        )
                     }
                 }
+
                 db.employeeDao().softDelete(employeeId)
                 checkPermissionAndLoad()
 

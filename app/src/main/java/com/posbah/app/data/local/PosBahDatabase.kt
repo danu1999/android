@@ -83,7 +83,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
         BmpStockLedgerEntity::class,
         BmpProductionLogEntity::class
     ],
-    version = 29,
+    version = 31,
     exportSchema = true
 )
 abstract class PosBahDatabase : RoomDatabase() {
@@ -553,6 +553,41 @@ abstract class PosBahDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_29_30 = object : Migration(29, 30) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS `bmp_payrolls`")
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `bmp_payrolls` (
+                        `id` TEXT NOT NULL,
+                        `tenantId` TEXT NOT NULL,
+                        `employeeId` INTEGER NOT NULL,
+                        `paymentDate` INTEGER NOT NULL,
+                        `amount` REAL NOT NULL,
+                        `attendanceCount` INTEGER NOT NULL,
+                        `dailyRate` REAL NOT NULL,
+                        `description` TEXT,
+                        `isSynced` INTEGER NOT NULL DEFAULT 0,
+                        `createdAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_bmp_payrolls_tenantId` ON `bmp_payrolls` (`tenantId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_bmp_payrolls_employeeId` ON `bmp_payrolls` (`employeeId`)")
+            }
+        }
+
+        val MIGRATION_30_31 = object : Migration(30, 31) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Tambah outletId ke tabel-tabel BMP & activity_logs untuk isolasi per-outlet
+                db.execSQL("ALTER TABLE `bmp_cashflow` ADD COLUMN `outletId` INTEGER")
+                db.execSQL("ALTER TABLE `bmp_payrolls` ADD COLUMN `outletId` INTEGER")
+                db.execSQL("ALTER TABLE `bmp_bahan_baku` ADD COLUMN `outletId` INTEGER")
+                db.execSQL("ALTER TABLE `bmp_product_stocks` ADD COLUMN `outletId` INTEGER")
+                db.execSQL("ALTER TABLE `activity_logs` ADD COLUMN `outletId` INTEGER")
+            }
+        }
+
+
         fun build(context: Context, passphrase: ByteArray): PosBahDatabase {
             // Load SQLCipher native library
             System.loadLibrary("sqlcipher")
@@ -571,7 +606,7 @@ abstract class PosBahDatabase : RoomDatabase() {
                     MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
                     MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22,
                     MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27,
-                    MIGRATION_27_28, MIGRATION_28_29
+                    MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31
                 ) // ← Data AMAN, tidak terhapus
                 .fallbackToDestructiveMigration()      // ← Fallback jika dari versi < 5 (install baru)
                 .addCallback(object : Callback() {

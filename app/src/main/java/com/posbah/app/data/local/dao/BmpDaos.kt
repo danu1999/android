@@ -377,7 +377,7 @@ interface BmpPayrollDao {
     fun observeForEmployee(employeeId: Long): Flow<List<BmpPayrollEntity>>
 
     @Query("SELECT * FROM bmp_payrolls WHERE id = :id LIMIT 1")
-    suspend fun getById(id: Long): BmpPayrollEntity?
+    suspend fun getById(id: String): BmpPayrollEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(payroll: BmpPayrollEntity): Long
@@ -387,13 +387,13 @@ interface BmpPayrollDao {
     suspend fun upsert(payroll: BmpPayrollEntity): Long
 
     @Query("DELETE FROM bmp_payrolls WHERE id = :id")
-    suspend fun delete(id: Long)
+    suspend fun delete(id: String)
 
     @Query("SELECT * FROM bmp_payrolls")
     suspend fun getAll(): List<BmpPayrollEntity>
 
     @Query("UPDATE bmp_payrolls SET isSynced = 1 WHERE id = :id")
-    suspend fun markSynced(id: Long)
+    suspend fun markSynced(id: String)
 }
 
 /**

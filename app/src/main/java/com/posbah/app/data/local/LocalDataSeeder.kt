@@ -469,7 +469,7 @@ class LocalDataSeeder @Inject constructor(
                                 )
                             }
                             "BmpPayroll" -> {
-                                val id = rowMap["id"]?.toLongOrNull() ?: continue
+                                val id = rowMap["id"]?.takeIf { it.isNotEmpty() && it != "\\N" } ?: continue
                                 val employeeId = rowMap["employeeId"]?.toLongOrNull() ?: continue
                                 val paymentDate = parseSqlTimestamp(rowMap["paymentDate"])
                                 val amount = rowMap["amount"]?.toDoubleOrNull() ?: 0.0
