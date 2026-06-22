@@ -89,6 +89,9 @@ interface OutletDao {
 
 @Dao
 interface EmployeeDao {
+    @Query("SELECT * FROM employees")
+    fun observeAll(): Flow<List<Employee>>
+
     // ── Tenant-level (owner sees all) ────────────────────────────────────────
     @Query("SELECT * FROM employees WHERE tenantId = :tenantId AND isActive = 1 ORDER BY name ASC")
     fun observeForTenant(tenantId: String): Flow<List<Employee>>

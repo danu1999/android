@@ -11,7 +11,7 @@ import javax.crypto.spec.PBEKeySpec
  */
 object PinHasher {
 
-    private const val ITERATIONS = 120_000
+    const val ITERATIONS = 7_000
     private const val KEY_LEN = 256
     private const val SALT_LEN = 16
 

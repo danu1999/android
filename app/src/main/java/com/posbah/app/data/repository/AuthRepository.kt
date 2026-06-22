@@ -1023,6 +1023,36 @@ class AuthRepository @Inject constructor(
                 return@withContext incrementFailedAttempts(now)
             }
 
+            // Auto-upgrade iteration count to 7000 if it's an old v1 hash
+            if (emp.pinHash.startsWith("v1$")) {
+                val parts = emp.pinHash.split("$")
+                if (parts.size == 4) {
+                    val currentIters = parts[1].toIntOrNull()
+                    if (currentIters != null && currentIters != PinHasher.ITERATIONS) {
+                        try {
+                            val newHash = PinHasher.hash(password)
+                            val updatedEmp = emp.copy(
+                                pinHash = newHash,
+                                isSynced = false,
+                                updatedAt = System.currentTimeMillis()
+                            )
+                            employeeDao.insert(updatedEmp)
+                            emp = updatedEmp
+                            
+                            // Trigger background immediate push so the server has the new hash too
+                            SupabaseSyncManager.pushEmployeeImmediate(
+                                context = context,
+                                db = db,
+                                activeTenantId = emp.tenantId,
+                                employeeId = emp.id
+                            )
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                }
+            }
+
             // Successful PIN -> reset attempts
             securePrefs.failedPinAttempts = 0
             securePrefs.lockoutUntil = 0L

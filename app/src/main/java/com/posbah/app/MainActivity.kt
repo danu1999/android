@@ -22,6 +22,7 @@ import com.posbah.app.data.repository.SessionState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collect
 
 /**
  * Provides the current Activity to the Compose tree so that Credential Manager
@@ -172,23 +173,6 @@ class MainActivity : FragmentActivity() {
                                     if (pullRes is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Success &&
                                         syncRes is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Success) {
                                         securePrefs.lastSyncedTimestamp = if (serverTs > 0L) serverTs else System.currentTimeMillis()
-
-                                        // Reactively monitor and update employee outlet lock if owner changed it
-                                        val activeEmail = authRepository.activeUserEmail()
-                                        if (!activeEmail.isNullOrBlank()) {
-                                            val dbUser = activeDb.localUserDao().getByEmail(activeEmail)
-                                            if (dbUser != null && dbUser.role != "OWNER") {
-                                                val empRecord = activeDb.employeeDao().findByEmail(activeEmail)
-                                                if (empRecord != null) {
-                                                    val currentLock = sessionState.lockedEmployeeOutletId.value
-                                                    if (empRecord.outletId != currentLock) {
-                                                        android.util.Log.i("MainActivity", "Dynamic outlet shift detected for employee $activeEmail: $currentLock -> ${empRecord.outletId}")
-                                                        sessionState.setEmployeeOutletLock(empRecord.outletId)
-                                                        securePrefs.currentOutletId = empRecord.outletId
-                                                    }
-                                                }
-                                            }
-                                        }
                                     }
                                 }
                             } else {
@@ -223,7 +207,35 @@ class MainActivity : FragmentActivity() {
                 android.util.Log.e("MainActivity", "Error preloading database", e)
             }
         }
-
+        // Reactively watch for employee updates (outlet lock shift, or deactivation/deletion)
+        lifecycleScope.launch {
+            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                db.employeeDao().observeAll().collect { employees ->
+                    val activeEmail = authRepository.activeUserEmail()
+                    if (!activeEmail.isNullOrBlank()) {
+                        val dbUser = db.localUserDao().getByEmail(activeEmail)
+                        if (dbUser != null && dbUser.role != "OWNER") {
+                            val empRecord = employees.find { it.email.equals(activeEmail, ignoreCase = true) }
+                            if (empRecord == null || !empRecord.isActive) {
+                                android.util.Log.w("MainActivity", "Employee deactivated or deleted. Force logout.")
+                                authRepository.logout()
+                                this@MainActivity.recreate()
+                                return@collect
+                            }
+                            
+                            val currentLock = sessionState.lockedEmployeeOutletId.value
+                            if (empRecord.outletId != currentLock) {
+                                android.util.Log.i("MainActivity", "Dynamic outlet shift detected: $currentLock -> ${empRecord.outletId}")
+                                sessionState.setEmployeeOutletLock(empRecord.outletId)
+                                val securePrefs = com.posbah.app.security.SecurePreferences(applicationContext)
+                                securePrefs.currentOutletId = empRecord.outletId
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
         enableEdgeToEdge()
 
         // Keep splash on screen until the SplashViewModel signals ready
