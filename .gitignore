@@ -112,3 +112,10 @@ backend/.posbah-env
 
 # Temporary agent files
 appDataDir/
+.env
+.env.*
+*.env
+credentials.json
+*.pem
+*.key
+.credentials
