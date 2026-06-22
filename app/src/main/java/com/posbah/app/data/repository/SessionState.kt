@@ -1,6 +1,12 @@
 package com.posbah.app.data.repository
 
 import com.posbah.app.security.SecurePreferences
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,6 +23,8 @@ import javax.inject.Singleton
 class SessionState @Inject constructor(
     private val securePrefs: SecurePreferences
 ) {
+    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private var debounceJob: Job? = null
     private val _tenantId = MutableStateFlow<String?>(securePrefs.currentTenantId)
     val tenantId: StateFlow<String?> = _tenantId.asStateFlow()
 
@@ -70,8 +78,25 @@ class SessionState @Inject constructor(
         _isSyncing.value = syncing
     }
 
+    @Synchronized
     fun setOnline(online: Boolean) {
-        _isOnline.value = online
+        if (online) {
+            debounceJob?.cancel()
+            debounceJob = null
+            _isOnline.value = true
+        } else {
+            if (_isOnline.value && debounceJob == null) {
+                debounceJob = scope.launch {
+                    delay(3000)
+                    synchronized(this@SessionState) {
+                        if (debounceJob != null) {
+                            _isOnline.value = false
+                            debounceJob = null
+                        }
+                    }
+                }
+            }
+        }
     }
 
     fun requireTenantId(): String =

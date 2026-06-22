@@ -1067,7 +1067,6 @@ object SupabaseSyncManager {
             } else {
                 val errorStream = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
                 Log.e(TAG, "Gagal mengunggah tabel: $tableName ($responseCode): $errorStream")
-                notifyConnectionState(false)
                 false
             }
         } catch (e: IOException) {
@@ -1122,7 +1121,6 @@ object SupabaseSyncManager {
             } else {
                 val errorStream = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
                 Log.e(TAG, "Gagal mengunggah table write-through: $tableName ($responseCode): $errorStream")
-                notifyConnectionState(false)
 
                 var errorMsg = "Upload failed ($responseCode)"
                 try {
@@ -1263,7 +1261,6 @@ object SupabaseSyncManager {
             } else {
                 val errorStream = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
                 Log.e(TAG, "Gagal meng-patch table write-through: $tableName ($responseCode): $errorStream")
-                notifyConnectionState(false)
                 var errorMsg = "Update failed ($responseCode)"
                 try {
                     val errorObj = JSONObject(errorStream)
@@ -1324,7 +1321,6 @@ object SupabaseSyncManager {
             } else {
                 val errorStream = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
                 Log.e(TAG, "Gagal menghapus baris dari tabel $tableName di server: ID $id ($responseCode): $errorStream")
-                notifyConnectionState(false)
                 false
             }
         } catch (e: Exception) {
@@ -1368,7 +1364,6 @@ object SupabaseSyncManager {
             } else {
                 val errorStream = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
                 Log.e(TAG, "Gagal mengunduh tabel: $tableName ($responseCode): $errorStream")
-                notifyConnectionState(false)
                 null
             }
         } catch (e: Exception) {
@@ -1411,7 +1406,6 @@ object SupabaseSyncManager {
                 json.optLong("lastUpdated", 0L)
             } else {
                 Log.w(TAG, "Gagal mengecek status sinkronisasi server ($responseCode)")
-                notifyConnectionState(false)
                 0L
             }
         } catch (e: Exception) {
