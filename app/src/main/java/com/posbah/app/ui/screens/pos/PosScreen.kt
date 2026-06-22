@@ -1911,8 +1911,6 @@ fun PosScreen(
             )
         }
 
-
-
         // Dialog: Bagikan Toko Online
         if (showStoreShareDialog && activeStoreToken != null) {
             AlertDialog(
