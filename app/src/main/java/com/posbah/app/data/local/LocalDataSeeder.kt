@@ -550,94 +550,94 @@ class LocalDataSeeder @Inject constructor(
         db.withTransaction {
             if (productList.isNotEmpty()) {
                 productDao.clearTenantProducts(tenantId)
-                productDao.insertAll(productList)
+                productDao.insertAll(productList.map { it.copy(isSynced = true) })
             }
-        if (customerList.isNotEmpty()) {
-            customerDao.insertAll(customerList)
-        }
-        if (employeeList.isNotEmpty()) {
-            for (emp in employeeList) {
-                employeeDao.insert(emp)
+            if (customerList.isNotEmpty()) {
+                customerDao.insertAll(customerList.map { it.copy(isSynced = true) })
             }
-        }
-        if (transactionList.isNotEmpty()) {
-            for (tx in transactionList) {
-                try {
-                    db.transactionDao().insert(tx)
-                } catch (e: Exception) {
-                    // REPLACE strategy handles duplicates; exception means a different error
-                }
-                // Always forcefully correct the date — guarantees stale System.currentTimeMillis()
-                // dates from the original seeding bug are overwritten with the correct SQL dates.
-                try {
-                    db.transactionDao().updateDateByReceiptNumber(tx.receiptNumber, tx.date)
-                } catch (e: Exception) {
-                    // Ignore — best-effort correction
+            if (employeeList.isNotEmpty()) {
+                for (emp in employeeList) {
+                    employeeDao.insert(emp.copy(isSynced = true))
                 }
             }
-        }
-        if (transactionItemList.isNotEmpty()) {
-            db.transactionItemDao().insertAll(transactionItemList)
-        }
+            if (transactionList.isNotEmpty()) {
+                for (tx in transactionList) {
+                    try {
+                        db.transactionDao().insert(tx)
+                    } catch (e: Exception) {
+                        // REPLACE strategy handles duplicates; exception means a different error
+                    }
+                    // Always forcefully correct the date — guarantees stale System.currentTimeMillis()
+                    // dates from the original seeding bug are overwritten with the correct SQL dates.
+                    try {
+                        db.transactionDao().updateDateByReceiptNumber(tx.receiptNumber, tx.date)
+                    } catch (e: Exception) {
+                        // Ignore — best-effort correction
+                    }
+                }
+            }
+            if (transactionItemList.isNotEmpty()) {
+                db.transactionItemDao().insertAll(transactionItemList)
+            }
 
-        // Commit BMP seeded data
-        if (bmpClientList.isNotEmpty()) {
-            for (item in bmpClientList) {
-                db.bmpClientDao().upsert(item)
+            // Commit BMP seeded data
+            if (bmpClientList.isNotEmpty()) {
+                for (item in bmpClientList) {
+                    db.bmpClientDao().upsert(item.copy(isSynced = true))
+                }
             }
-        }
-        if (bmpInvoiceList.isNotEmpty()) {
-            // Compute totalAmount and paidAmount dynamically from products and payments
-            val updatedInvoiceList = bmpInvoiceList.map { invoice ->
-                val total = bmpProductList.filter { it.invoiceId == invoice.id }.sumOf { it.price * it.quantity * it.jumlahLusin }
-                val paid = bmpInvoicePaymentList.filter { it.invoiceId == invoice.id }.sumOf { it.paymentAmount }
-                invoice.copy(totalAmount = total, paidAmount = paid)
+            if (bmpInvoiceList.isNotEmpty()) {
+                // Compute totalAmount and paidAmount dynamically from products and payments
+                val updatedInvoiceList = bmpInvoiceList.map { invoice ->
+                    val total = bmpProductList.filter { it.invoiceId == invoice.id }.sumOf { it.price * it.quantity * it.jumlahLusin }
+                    val paid = bmpInvoicePaymentList.filter { it.invoiceId == invoice.id }.sumOf { it.paymentAmount }
+                    invoice.copy(totalAmount = total, paidAmount = paid, isSynced = true)
+                }
+                for (item in updatedInvoiceList) {
+                    db.bmpInvoiceDao().insert(item)
+                }
             }
-            for (item in updatedInvoiceList) {
-                db.bmpInvoiceDao().insert(item)
+            if (bmpProductList.isNotEmpty()) {
+                db.bmpProductDao().insertAll(bmpProductList.map { it.copy(isSynced = true) })
             }
-        }
-        if (bmpProductList.isNotEmpty()) {
-            db.bmpProductDao().insertAll(bmpProductList)
-        }
-        if (bmpMasterProductList.isNotEmpty()) {
-            for (item in bmpMasterProductList) {
-                db.bmpMasterProductDao().upsert(item)
+            if (bmpMasterProductList.isNotEmpty()) {
+                for (item in bmpMasterProductList) {
+                    db.bmpMasterProductDao().upsert(item.copy(isSynced = true))
+                }
             }
-        }
-        if (bmpInvoicePaymentList.isNotEmpty()) {
-            for (item in bmpInvoicePaymentList) {
-                db.bmpPaymentDao().insert(item)
+            if (bmpInvoicePaymentList.isNotEmpty()) {
+                for (item in bmpInvoicePaymentList) {
+                    db.bmpPaymentDao().insert(item.copy(isSynced = true))
+                }
             }
-        }
-        if (bmpCashFlowList.isNotEmpty()) {
-            for (item in bmpCashFlowList) {
-                db.bmpCashFlowDao().insert(item)
+            if (bmpCashFlowList.isNotEmpty()) {
+                for (item in bmpCashFlowList) {
+                    db.bmpCashFlowDao().insert(item.copy(isSynced = true))
+                }
             }
-        }
-        if (bmpSettingsList.isNotEmpty()) {
-            for (item in bmpSettingsList) {
-                db.bmpSettingsDao().upsert(item)
+            if (bmpSettingsList.isNotEmpty()) {
+                for (item in bmpSettingsList) {
+                    db.bmpSettingsDao().upsert(item)
+                }
             }
-        }
-        if (bmpEmployeeList.isNotEmpty()) {
-            for (item in bmpEmployeeList) {
-                db.bmpEmployeeDao().upsert(item)
+            if (bmpEmployeeList.isNotEmpty()) {
+                for (item in bmpEmployeeList) {
+                    db.bmpEmployeeDao().upsert(item.copy(isSynced = true))
+                }
             }
-        }
-        if (bmpPayrollList.isNotEmpty()) {
-            for (item in bmpPayrollList) {
-                db.bmpPayrollDao().insert(item)
+            if (bmpPayrollList.isNotEmpty()) {
+                for (item in bmpPayrollList) {
+                    db.bmpPayrollDao().insert(item.copy(isSynced = true))
+                }
             }
-        }
-        if (bmpBahanBakuList.isNotEmpty()) {
-            for (item in bmpBahanBakuList) {
-                db.bmpBahanBakuDao().insert(item)
+            if (bmpBahanBakuList.isNotEmpty()) {
+                for (item in bmpBahanBakuList) {
+                    db.bmpBahanBakuDao().insert(item.copy(isSynced = true))
+                }
             }
-        }
-        if (bmpBahanBakuItemList.isNotEmpty()) {
-            db.bmpBahanBakuItemDao().insertAll(bmpBahanBakuItemList)
-        }
+            if (bmpBahanBakuItemList.isNotEmpty()) {
+                db.bmpBahanBakuItemDao().insertAll(bmpBahanBakuItemList.map { it.copy(isSynced = true) })
+            }
         }
 
         if (tenantId.startsWith("demo_tenant_") || tenantId == "demo_tenant") {
@@ -662,7 +662,7 @@ class LocalDataSeeder @Inject constructor(
                     createdAt = System.currentTimeMillis(),
                     updatedAt = System.currentTimeMillis()
                 )
-                db.bmpClientDao().upsert(bmpClient)
+                db.bmpClientDao().upsert(bmpClient.copy(isSynced = true))
 
                 // 2. Generate BMP Employees (Karyawan Kerja)
                 val emp1 = BmpEmployeeEntity(
@@ -687,8 +687,8 @@ class LocalDataSeeder @Inject constructor(
                     createdAt = System.currentTimeMillis(),
                     updatedAt = System.currentTimeMillis()
                 )
-                db.bmpEmployeeDao().upsert(emp1)
-                db.bmpEmployeeDao().upsert(emp2)
+                db.bmpEmployeeDao().upsert(emp1.copy(isSynced = true))
+                db.bmpEmployeeDao().upsert(emp2.copy(isSynced = true))
 
                 // 3. Generate Invoice of 1 Billion Rupiah (1.000.000.000)
                 val invoiceId = 888888L
@@ -710,7 +710,7 @@ class LocalDataSeeder @Inject constructor(
                     createdAt = System.currentTimeMillis(),
                     updatedAt = System.currentTimeMillis()
                 )
-                db.bmpInvoiceDao().insert(bmpInvoice)
+                db.bmpInvoiceDao().insert(bmpInvoice.copy(isSynced = true))
 
                 // 4. Products under the 1 Billion invoice
                 val prod1 = BmpProductEntity(
@@ -749,7 +749,7 @@ class LocalDataSeeder @Inject constructor(
                     createdAt = System.currentTimeMillis(),
                     updatedAt = System.currentTimeMillis()
                 )
-                db.bmpProductDao().insertAll(listOf(prod1, prod2))
+                db.bmpProductDao().insertAll(listOf(prod1.copy(isSynced = true), prod2.copy(isSynced = true)))
 
                 // 5. Payment record of 1 Billion Rupiah
                 val paymentId = 888888L
@@ -763,7 +763,7 @@ class LocalDataSeeder @Inject constructor(
                     notes = "Pelunasan via transfer Bank Mandiri",
                     createdAt = System.currentTimeMillis()
                 )
-                db.bmpPaymentDao().insert(bmpPayment)
+                db.bmpPaymentDao().insert(bmpPayment.copy(isSynced = true))
 
                 // 6. Cash flow entry of 1 Billion Rupiah
                 val cashflowId = 888888L
@@ -777,7 +777,7 @@ class LocalDataSeeder @Inject constructor(
                     paymentRefId = paymentId,
                     createdAt = System.currentTimeMillis()
                 )
-                db.bmpCashFlowDao().insert(bmpCashflow)
+                db.bmpCashFlowDao().insert(bmpCashflow.copy(isSynced = true))
 
                 // 7. Generate default BMP Settings
                 val bmpSettings = BmpSettingsEntity(
@@ -847,7 +847,7 @@ class LocalDataSeeder @Inject constructor(
                     )
                 )
                 for (item in masterProds) {
-                    db.bmpMasterProductDao().upsert(item)
+                    db.bmpMasterProductDao().upsert(item.copy(isSynced = true))
                 }
 
                 // 9. Generate default BmpBahanBaku and BmpBahanBakuItem
@@ -863,7 +863,7 @@ class LocalDataSeeder @Inject constructor(
                     createdAt = System.currentTimeMillis(),
                     updatedAt = System.currentTimeMillis()
                 )
-                db.bmpBahanBakuDao().insert(bahanBaku)
+                db.bmpBahanBakuDao().insert(bahanBaku.copy(isSynced = true))
 
                 val bbItems = listOf(
                     BmpBahanBakuItemEntity(
@@ -877,7 +877,7 @@ class LocalDataSeeder @Inject constructor(
                         createdAt = System.currentTimeMillis()
                     )
                 )
-                db.bmpBahanBakuItemDao().insertAll(bbItems)
+                db.bmpBahanBakuItemDao().insertAll(bbItems.map { it.copy(isSynced = true) })
 
             } else {
                 // POS Mode (FNB / RENTAL / LAUNDRY) -> Generate transactions > 30M
@@ -918,8 +918,8 @@ class LocalDataSeeder @Inject constructor(
                         pinHash = "123456",
                         salary = 2500000.0
                     )
-                    db.employeeDao().insert(cashier1)
-                    db.employeeDao().insert(waiter)
+                    db.employeeDao().insert(cashier1.copy(isSynced = true))
+                    db.employeeDao().insert(waiter.copy(isSynced = true))
 
                     // 2. Customers
                     val cust1 = CustomerEntity(
@@ -936,7 +936,7 @@ class LocalDataSeeder @Inject constructor(
                         phone = "08122334455",
                         address = "Kec. Gedangan, Sidoarjo"
                     )
-                    db.customerDao().insertAll(listOf(cust1, cust2))
+                    db.customerDao().insertAll(listOf(cust1.copy(isSynced = true), cust2.copy(isSynced = true)))
 
                     // 3. Products
                     val p1 = ProductEntity(
@@ -1123,8 +1123,8 @@ class LocalDataSeeder @Inject constructor(
                         pinHash = "123456",
                         salary = 2800000.0
                     )
-                    db.employeeDao().insert(cashier)
-                    db.employeeDao().insert(driver)
+                    db.employeeDao().insert(cashier.copy(isSynced = true))
+                    db.employeeDao().insert(driver.copy(isSynced = true))
 
                     // 2. Customers
                     val cust1 = CustomerEntity(
@@ -1141,7 +1141,7 @@ class LocalDataSeeder @Inject constructor(
                         phone = "08779988776",
                         address = "Kec. Buduran, Sidoarjo"
                     )
-                    db.customerDao().insertAll(listOf(cust1, cust2))
+                    db.customerDao().insertAll(listOf(cust1.copy(isSynced = true), cust2.copy(isSynced = true)))
 
                     // 3. Products (Vehicles) - Some available, some rented
                     val v1 = ProductEntity(
@@ -1324,8 +1324,8 @@ class LocalDataSeeder @Inject constructor(
                         pinHash = "123456",
                         salary = 2500000.0
                     )
-                    db.employeeDao().insert(cashier)
-                    db.employeeDao().insert(washer)
+                    db.employeeDao().insert(cashier.copy(isSynced = true))
+                    db.employeeDao().insert(washer.copy(isSynced = true))
 
                     // 2. Customers
                     val cust1 = CustomerEntity(
@@ -1342,7 +1342,7 @@ class LocalDataSeeder @Inject constructor(
                         phone = "08199887766",
                         address = "Kec. Gedangan, Sidoarjo"
                     )
-                    db.customerDao().insertAll(listOf(cust1, cust2))
+                    db.customerDao().insertAll(listOf(cust1.copy(isSynced = true), cust2.copy(isSynced = true)))
 
                     // 3. Products
                     val s1 = ProductEntity(
@@ -1529,7 +1529,7 @@ class LocalDataSeeder @Inject constructor(
             )
             for (emp in staticEmployees) {
                 try {
-                    db.employeeDao().insert(emp)
+                    db.employeeDao().insert(emp.copy(isSynced = true))
                 } catch (e: java.lang.Exception) {
                     android.util.Log.e("LocalDataSeeder", "Error inserting static employee ${emp.email}", e)
                 }
@@ -1550,7 +1550,7 @@ class LocalDataSeeder @Inject constructor(
             ProductEntity(tenantId = tenantId, outletId = outletId, name = "Yamaha NMAX 155", price = 120000.0, stock = 1, unit = "hari", barcode = "B 4912 CDE", category = "MOTOR"),
             ProductEntity(tenantId = tenantId, outletId = outletId, name = "Toyota Innova Zenix", price = 650000.0, stock = 1, unit = "hari", barcode = "D 1289 VCB", category = "MOBIL")
         )
-        productDao.insertAll(list)
+        productDao.insertAll(list.map { it.copy(isSynced = true) })
     }
 
     suspend fun seedDefaultLaundryServices(tenantId: String, outletId: Long?) = withContext(Dispatchers.IO) {
@@ -1563,7 +1563,7 @@ class LocalDataSeeder @Inject constructor(
             ProductEntity(tenantId = tenantId, outletId = outletId, name = "Cuci Selimut / Bed Cover Kecil", price = 15000.0, stock = 9999, unit = "Pcs", barcode = "LD-SRV-6", category = "SATUAN"),
             ProductEntity(tenantId = tenantId, outletId = outletId, name = "Cuci Jaket Tebal / Leather", price = 25000.0, stock = 9999, unit = "Pcs", barcode = "LD-SRV-7", category = "SATUAN")
         )
-        productDao.insertAll(list)
+        productDao.insertAll(list.map { it.copy(isSynced = true) })
     }
 
     suspend fun seedDefaultSettings(tenantId: String) = withContext(Dispatchers.IO) {

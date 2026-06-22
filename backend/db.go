@@ -734,30 +734,7 @@ func initSchema() error {
 	_, _ = db.Exec(`INSERT INTO "system_admins" ("email", "passwordHash", "createdAt")
 		VALUES ('muhammadmuizz8@gmail.com', $1, $2)
 		ON CONFLICT ("email") DO UPDATE SET "passwordHash" = EXCLUDED."passwordHash";`, defaultAdminHash, time.Now().UnixNano()/int64(time.Millisecond))
-	// One-time POS data cleanup on update to v2.17.29-v2.17.39 (except bahteramulyap@gmail.com / ten_premium_bahteramulyap_gmail_com)
-	var currentConfigVer string
-	_ = db.QueryRow(`SELECT "version" FROM "apk_config" WHERE "id" = 1`).Scan(&currentConfigVer)
-	if currentConfigVer != "2.17.29" && currentConfigVer != "2.17.30" && currentConfigVer != "2.17.31" && currentConfigVer != "2.17.32" && currentConfigVer != "2.17.33" && currentConfigVer != "2.17.34" && currentConfigVer != "2.17.35" && currentConfigVer != "2.17.36" && currentConfigVer != "2.17.37" && currentConfigVer != "2.17.38" && currentConfigVer != "2.17.39" {
-		log.Println("[Migration] Upgrading, performing POS data cleanup...")
-		// Delete products
-		_, errProd := db.Exec(`DELETE FROM "products" WHERE "tenantId" NOT IN ('bahteramulyap@gmail.com', 'ten_premium_bahteramulyap_gmail_com')`)
-		if errProd != nil {
-			log.Printf("[Migration] Warning: delete products failed: %v", errProd)
-		}
-		// Delete transaction items
-		_, errTxItems := db.Exec(`DELETE FROM "transaction_items" WHERE "transactionId" NOT IN (
-			SELECT "id" FROM "transactions" WHERE "tenantId" IN ('bahteramulyap@gmail.com', 'ten_premium_bahteramulyap_gmail_com')
-		)`)
-		if errTxItems != nil {
-			log.Printf("[Migration] Warning: delete transaction_items failed: %v", errTxItems)
-		}
-		// Delete transactions
-		_, errTx := db.Exec(`DELETE FROM "transactions" WHERE "tenantId" NOT IN ('bahteramulyap@gmail.com', 'ten_premium_bahteramulyap_gmail_com')`)
-		if errTx != nil {
-			log.Printf("[Migration] Warning: delete transactions failed: %v", errTx)
-		}
-		log.Println("[Migration] POS data cleanup completed.")
-	}
+
 
 	// Seed default apk_config — v2.17.39
 	_, _ = db.Exec(`INSERT INTO "apk_config" ("id", "version", "description", "downloadUrl", "updatedAt")

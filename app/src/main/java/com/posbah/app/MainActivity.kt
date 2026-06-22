@@ -95,25 +95,7 @@ class MainActivity : FragmentActivity() {
                                 // Connect WebSocket client for real-time push updates
                                 com.posbah.app.data.remote.WebSocketSyncClient.connect(context, tenantId, activeDb)
 
-                                // One-time local POS data wipe for POS redesign v2.17.29 (except bahteramulyap)
                                 val securePrefs = com.posbah.app.security.SecurePreferences(context)
-                                if (!securePrefs.isPosRedesignWipedV1) {
-                                    val email = authRepository.activeUserEmail()?.lowercase()?.trim().orEmpty()
-                                    if (email != "bahteramulyap@gmail.com" && tenantId != "ten_premium_bahteramulyap_gmail_com") {
-                                        try {
-                                            val writeDb = activeDb.openHelper.writableDatabase
-                                            writeDb.execSQL("DELETE FROM products WHERE tenantId = ?", arrayOf(tenantId))
-                                            writeDb.execSQL("DELETE FROM transaction_items WHERE transactionId NOT IN (SELECT id FROM transactions WHERE tenantId = ?)", arrayOf(tenantId))
-                                            writeDb.execSQL("DELETE FROM transactions WHERE tenantId = ?", arrayOf(tenantId))
-                                            writeDb.execSQL("DELETE FROM customers WHERE tenantId = ?", arrayOf(tenantId))
-                                            writeDb.execSQL("DELETE FROM activity_logs WHERE tenantId = ?", arrayOf(tenantId))
-                                            android.util.Log.i("MainActivity", "POS redesign local data wipe completed successfully for tenant: $tenantId")
-                                        } catch (e: Exception) {
-                                            android.util.Log.e("MainActivity", "Failed to run POS redesign local data wipe", e)
-                                        }
-                                    }
-                                    securePrefs.isPosRedesignWipedV1 = true
-                                }
 
                                 val email = authRepository.activeUserEmail()
                                 if (!email.isNullOrBlank()) {

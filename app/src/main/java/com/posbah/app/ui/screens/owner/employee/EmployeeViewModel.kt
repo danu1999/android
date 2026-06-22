@@ -176,13 +176,7 @@ class EmployeeViewModel @Inject constructor(
             checkPermissionAndLoad()
 
             // Trigger auto-sync to VPS with raw password
-            viewModelScope.launch(Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncEmployeeWithRawPassword(context, db, tenantId, cleanEmail, password)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
+            com.posbah.app.data.remote.SupabaseSyncManager.syncEmployeeWithRawPasswordImmediate(context, db, tenantId, cleanEmail, password)
         }
     }
 
@@ -210,21 +204,14 @@ class EmployeeViewModel @Inject constructor(
             val ownerEmail = authRepository.activeUserEmail().orEmpty()
 
             // Trigger auto-sync to VPS
-            viewModelScope.launch(Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncEmployeePasswordChange(
-                        context,
-                        db,
-                        tenantId,
-                        emp.email.orEmpty(),
-                        newPassword,
-                        ownerEmail
-                    )
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
+            com.posbah.app.data.remote.SupabaseSyncManager.syncEmployeePasswordChangeImmediate(
+                context,
+                db,
+                tenantId,
+                emp.email.orEmpty(),
+                newPassword,
+                ownerEmail
+            )
         }
     }
 
@@ -291,13 +278,9 @@ class EmployeeViewModel @Inject constructor(
             checkPermissionAndLoad()
 
             // Sync ke VPS
-            viewModelScope.launch(Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
+            val ownerEmail = authRepository.activeUserEmail()
+            com.posbah.app.data.remote.SupabaseSyncManager.pushEmployeeImmediate(context, db, tenantId, employeeId, ownerEmail)
+            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, ownerEmail)
         }
     }
 
@@ -362,13 +345,9 @@ class EmployeeViewModel @Inject constructor(
                 checkPermissionAndLoad()
 
                 // Trigger auto-sync to VPS
-                viewModelScope.launch(Dispatchers.IO) {
-                    try {
-                        com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
+                val ownerEmail = authRepository.activeUserEmail()
+                com.posbah.app.data.remote.SupabaseSyncManager.pushEmployeeImmediate(context, db, tenantId, employee.id, ownerEmail)
+                com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, ownerEmail)
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.localizedMessage ?: "Gagal memproses pembayaran gaji.") }
             }
@@ -401,13 +380,9 @@ class EmployeeViewModel @Inject constructor(
                 checkPermissionAndLoad()
 
                 // Trigger auto-sync to VPS
-                viewModelScope.launch(Dispatchers.IO) {
-                    try {
-                        com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
+                val ownerEmail = authRepository.activeUserEmail()
+                com.posbah.app.data.remote.SupabaseSyncManager.deleteEmployeeImmediate(context, db, tenantId, employeeId, ownerEmail)
+                com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, ownerEmail)
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.localizedMessage ?: "Gagal menghapus karyawan.") }
             }

@@ -2738,6 +2738,247 @@ object SupabaseSyncManager {
         }
     }
 
+    fun pushEmployeeImmediate(
+        context: Context,
+        db: PosBahDatabase,
+        activeTenantId: String,
+        employeeId: Long,
+        userEmail: String? = null
+    ) {
+        syncScope.launch {
+            try {
+                currentTenantId = activeTenantId
+                if (!userEmail.isNullOrBlank()) currentUserEmail = userEmail
+                if (!isNetworkAvailable(context)) {
+                    Log.w(TAG, "[pushEmployeeImmediate] Offline, akan diretry pada syncAll berikutnya")
+                    return@launch
+                }
+                val e = db.employeeDao().getById(employeeId)
+                if (e == null) {
+                    Log.w(TAG, "[pushEmployeeImmediate] Employee id=$employeeId tidak ditemukan")
+                    return@launch
+                }
+                if (e.tenantId != activeTenantId) {
+                    Log.w(TAG, "[pushEmployeeImmediate] tenantId mismatch (entity=${e.tenantId}, active=$activeTenantId)")
+                    return@launch
+                }
+                val array = JSONArray()
+                array.put(JSONObject().apply {
+                    put("id", e.id)
+                    put("tenantId", e.tenantId)
+                    put("outletId", e.outletId ?: JSONObject.NULL)
+                    put("name", e.name)
+                    put("email", e.email ?: JSONObject.NULL)
+                    put("role", e.role)
+                    put("pinHash", e.pinHash)
+                    put("phone", e.phone ?: JSONObject.NULL)
+                    put("salary", e.salary)
+                    put("isActive", e.isActive)
+                    put("payPeriod", e.payPeriod)
+                    put("lastPaidAt", e.lastPaidAt ?: JSONObject.NULL)
+                    put("emailVerified", e.emailVerified)
+                    put("isSynced", true)
+                    put("createdAt", e.createdAt)
+                    put("updatedAt", e.updatedAt)
+                })
+                if (uploadTable(context, "employees", array)) {
+                    db.employeeDao().markSynced(employeeId)
+                    Log.i(TAG, "[pushEmployeeImmediate] OK push employee id=$employeeId ke VPS")
+                } else {
+                    Log.w(TAG, "[pushEmployeeImmediate] Gagal push employee id=$employeeId, akan diretry pada syncAll berikutnya")
+                }
+            } catch (ex: Exception) {
+                Log.e(TAG, "[pushEmployeeImmediate] error: ${ex.message}", ex)
+            }
+        }
+    }
+
+    fun deleteEmployeeImmediate(
+        context: Context,
+        db: PosBahDatabase,
+        activeTenantId: String,
+        employeeId: Long,
+        userEmail: String? = null
+    ) {
+        syncScope.launch {
+            try {
+                currentTenantId = activeTenantId
+                if (!userEmail.isNullOrBlank()) currentUserEmail = userEmail
+                if (!isNetworkAvailable(context)) {
+                    Log.w(TAG, "[deleteEmployeeImmediate] Offline, akan diretry pada syncAll berikutnya")
+                    return@launch
+                }
+                if (deleteRow(context, "employees", employeeId, activeTenantId)) {
+                    db.employeeDao().deleteById(employeeId)
+                    Log.i(TAG, "[deleteEmployeeImmediate] OK delete employee id=$employeeId di VPS")
+                } else {
+                    Log.w(TAG, "[deleteEmployeeImmediate] Gagal delete employee id=$employeeId di server, retry pada syncAll berikutnya")
+                }
+            } catch (ex: Exception) {
+                Log.e(TAG, "[deleteEmployeeImmediate] error: ${ex.message}", ex)
+            }
+        }
+    }
+
+    fun pushBmpEmployeeImmediate(
+        context: Context,
+        db: PosBahDatabase,
+        activeTenantId: String,
+        employeeId: Long,
+        userEmail: String? = null
+    ) {
+        syncScope.launch {
+            try {
+                currentTenantId = activeTenantId
+                if (!userEmail.isNullOrBlank()) currentUserEmail = userEmail
+                if (!isNetworkAvailable(context)) {
+                    Log.w(TAG, "[pushBmpEmployeeImmediate] Offline, akan diretry pada syncAll berikutnya")
+                    return@launch
+                }
+                val e = db.bmpEmployeeDao().getById(employeeId)
+                if (e == null) {
+                    Log.w(TAG, "[pushBmpEmployeeImmediate] BMP Employee id=$employeeId tidak ditemukan")
+                    return@launch
+                }
+                if (e.tenantId != activeTenantId) {
+                    Log.w(TAG, "[pushBmpEmployeeImmediate] tenantId mismatch (entity=${e.tenantId}, active=$activeTenantId)")
+                    return@launch
+                }
+                val array = JSONArray()
+                array.put(JSONObject().apply {
+                    put("id", e.id)
+                    put("tenantId", e.tenantId)
+                    put("outletId", e.outletId ?: JSONObject.NULL)
+                    put("name", e.name)
+                    put("position", e.position ?: JSONObject.NULL)
+                    put("salaryAmount", e.salaryAmount)
+                    put("isActive", e.isActive)
+                    put("fingerprintPIN", e.fingerprintPIN ?: JSONObject.NULL)
+                    put("isSynced", true)
+                    put("createdAt", e.createdAt)
+                    put("updatedAt", e.updatedAt)
+                })
+                if (uploadTable(context, "bmp_employees", array)) {
+                    db.bmpEmployeeDao().markSynced(employeeId)
+                    Log.i(TAG, "[pushBmpEmployeeImmediate] OK push BMP employee id=$employeeId ke VPS")
+                } else {
+                    Log.w(TAG, "[pushBmpEmployeeImmediate] Gagal push BMP employee id=$employeeId, akan diretry pada syncAll berikutnya")
+                }
+            } catch (ex: Exception) {
+                Log.e(TAG, "[pushBmpEmployeeImmediate] error: ${ex.message}", ex)
+            }
+        }
+    }
+
+    fun deleteBmpEmployeeImmediate(
+        context: Context,
+        db: PosBahDatabase,
+        activeTenantId: String,
+        employeeId: Long,
+        userEmail: String? = null
+    ) {
+        syncScope.launch {
+            try {
+                currentTenantId = activeTenantId
+                if (!userEmail.isNullOrBlank()) currentUserEmail = userEmail
+                if (!isNetworkAvailable(context)) {
+                    Log.w(TAG, "[deleteBmpEmployeeImmediate] Offline, akan diretry pada syncAll berikutnya")
+                    return@launch
+                }
+                if (deleteRow(context, "bmp_employees", employeeId, activeTenantId)) {
+                    db.bmpEmployeeDao().hardDelete(employeeId)
+                    Log.i(TAG, "[deleteBmpEmployeeImmediate] OK delete BMP employee id=$employeeId di VPS")
+                } else {
+                    Log.w(TAG, "[deleteBmpEmployeeImmediate] Gagal delete BMP employee id=$employeeId di server, retry pada syncAll berikutnya")
+                }
+            } catch (ex: Exception) {
+                Log.e(TAG, "[deleteBmpEmployeeImmediate] error: ${ex.message}", ex)
+            }
+        }
+    }
+
+    fun pushBmpPayrollImmediate(
+        context: Context,
+        db: PosBahDatabase,
+        activeTenantId: String,
+        payrollId: Long,
+        userEmail: String? = null
+    ) {
+        syncScope.launch {
+            try {
+                currentTenantId = activeTenantId
+                if (!userEmail.isNullOrBlank()) currentUserEmail = userEmail
+                if (!isNetworkAvailable(context)) {
+                    Log.w(TAG, "[pushBmpPayrollImmediate] Offline, akan diretry pada syncAll berikutnya")
+                    return@launch
+                }
+                val p = db.bmpPayrollDao().getById(payrollId)
+                if (p == null) {
+                    Log.w(TAG, "[pushBmpPayrollImmediate] BMP Payroll id=$payrollId tidak ditemukan")
+                    return@launch
+                }
+                if (p.tenantId != activeTenantId) {
+                    Log.w(TAG, "[pushBmpPayrollImmediate] tenantId mismatch (entity=${p.tenantId}, active=$activeTenantId)")
+                    return@launch
+                }
+                val array = JSONArray()
+                array.put(JSONObject().apply {
+                    put("id", p.id)
+                    put("tenantId", p.tenantId)
+                    put("employeeId", p.employeeId)
+                    put("paymentDate", p.paymentDate)
+                    put("amount", p.amount)
+                    put("attendanceCount", p.attendanceCount)
+                    put("dailyRate", p.dailyRate)
+                    put("description", p.description ?: JSONObject.NULL)
+                    put("isSynced", true)
+                    put("createdAt", p.createdAt)
+                })
+                if (uploadTable(context, "bmp_payrolls", array)) {
+                    db.bmpPayrollDao().markSynced(payrollId)
+                    Log.i(TAG, "[pushBmpPayrollImmediate] OK push BMP payroll id=$payrollId ke VPS")
+                } else {
+                    Log.w(TAG, "[pushBmpPayrollImmediate] Gagal push BMP payroll id=$payrollId, akan diretry pada syncAll berikutnya")
+                }
+            } catch (ex: Exception) {
+                Log.e(TAG, "[pushBmpPayrollImmediate] error: ${ex.message}", ex)
+            }
+        }
+    }
+
+    fun syncEmployeeWithRawPasswordImmediate(
+        context: Context,
+        db: PosBahDatabase,
+        activeTenantId: String,
+        employeeEmail: String,
+        rawPass: String
+    ) {
+        syncScope.launch {
+            try {
+                syncEmployeeWithRawPassword(context, db, activeTenantId, employeeEmail, rawPass)
+            } catch (e: Exception) {
+                Log.e(TAG, "[syncEmployeeWithRawPasswordImmediate] error", e)
+            }
+        }
+    }
+
+    fun syncEmployeePasswordChangeImmediate(
+        context: Context,
+        db: PosBahDatabase,
+        activeTenantId: String,
+        employeeEmail: String,
+        rawPass: String,
+        ownerEmail: String
+    ) {
+        syncScope.launch {
+            try {
+                syncEmployeePasswordChange(context, db, activeTenantId, employeeEmail, rawPass, ownerEmail)
+            } catch (e: Exception) {
+                Log.e(TAG, "[syncEmployeePasswordChangeImmediate] error", e)
+            }
+        }
+    }
+
     /**
      * Jalankan syncAll penuh di latar belakang menggunakan global scope.
      * Cocok dipanggil dari ViewModel sebagai fallback (mis. setelah edit transaksi)

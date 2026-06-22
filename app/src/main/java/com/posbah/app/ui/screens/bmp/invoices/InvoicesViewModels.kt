@@ -121,7 +121,7 @@ class InvoicesListViewModel @Inject constructor(
 
     fun delete(id: Long) = viewModelScope.launch { 
         invoiceRepo.deleteInvoice(id) 
-        com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+        com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, authRepository.activeUserEmail())
     }
 }
 
@@ -232,7 +232,7 @@ class InvoiceDetailViewModel @Inject constructor(
         if (amt <= 0) return
         viewModelScope.launch {
             invoiceRepo.recordPayment(tenantId, invoiceId, amt, method, notes = null)
-            com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, authRepository.activeUserEmail())
             val inv = invoiceRepo.getById(invoiceId)
             _ui.update { it.copy(invoice = inv, showAddPayment = false, newPaymentAmount = "") }
         }
@@ -251,7 +251,7 @@ class InvoiceDetailViewModel @Inject constructor(
         if (amt <= 0) return
         viewModelScope.launch {
             invoiceRepo.editPayment(tenantId, editing.id, amt, method, notes = editing.notes)
-            com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, authRepository.activeUserEmail())
             val inv = invoiceRepo.getById(invoiceId)
             _ui.update { it.copy(invoice = inv, editingPayment = null, newPaymentAmount = "", newPaymentMethod = "TRANSFER") }
         }
@@ -260,7 +260,7 @@ class InvoiceDetailViewModel @Inject constructor(
     fun deletePayment(paymentId: Long) {
         viewModelScope.launch {
             invoiceRepo.deletePayment(paymentId)
-            com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, authRepository.activeUserEmail())
             val inv = invoiceRepo.getById(invoiceId)
             _ui.update { it.copy(invoice = inv) }
         }
@@ -285,7 +285,7 @@ class InvoiceDetailViewModel @Inject constructor(
             }
             if (path != null) {
                 invoiceRepo.saveReceiverSignature(invoiceId, path, null, receiverName)
-                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+                com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, authRepository.activeUserEmail())
                 val inv = invoiceRepo.getById(invoiceId)
                 _ui.update { it.copy(invoice = inv, isPollingSignature = false) }
             } else {
@@ -303,7 +303,7 @@ class InvoiceDetailViewModel @Inject constructor(
                 }
             }
             invoiceRepo.saveReceiverSignature(invoiceId, null, null, "")
-            com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, authRepository.activeUserEmail())
             val updated = invoiceRepo.getById(invoiceId)
             _ui.update { it.copy(invoice = updated) }
         }
@@ -314,7 +314,7 @@ class InvoiceDetailViewModel @Inject constructor(
         _ui.update { it.copy(isPollingSignature = true, pollingCountdown = 600, pollingError = null) }
         pollingJob = viewModelScope.launch {
             invoiceRepo.markAsUnsynced(invoiceId)
-            com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, authRepository.activeUserEmail())
             var secondsLeft = 600
             while (secondsLeft > 0) {
                 kotlinx.coroutines.delay(5000) // check every 5s
@@ -378,7 +378,7 @@ class InvoiceDetailViewModel @Inject constructor(
     fun deleteInvoice(onDone: () -> Unit) {
         viewModelScope.launch {
             invoiceRepo.deleteInvoice(invoiceId)
-            com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, authRepository.activeUserEmail())
             onDone()
         }
     }
@@ -508,7 +508,7 @@ class InvoiceFormViewModel @Inject constructor(
             } else {
                 invoiceRepo.updateInvoice(inv, _ui.value.productLines)
             }
-            com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, authRepository.activeUserEmail())
             _ui.update { it.copy(isLoading = false, saved = true) }
         }
     }

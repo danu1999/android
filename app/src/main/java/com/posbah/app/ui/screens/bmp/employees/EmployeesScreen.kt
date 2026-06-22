@@ -105,14 +105,11 @@ class EmployeesViewModel @Inject constructor(
             }
         }
 
-        repo.upsert(e)
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-            } catch (ex: Exception) {
-                ex.printStackTrace()
-            }
-        }
+        val generatedId = repo.upsert(e)
+        val targetId = if (e.id != 0L) e.id else generatedId
+        val email = authRepository.activeUserEmail()
+        com.posbah.app.data.remote.SupabaseSyncManager.pushBmpEmployeeImmediate(context, db, tenantId, targetId, email)
+        com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, email)
     }
 
     fun softDelete(id: Long) = viewModelScope.launch {
@@ -128,18 +125,14 @@ class EmployeesViewModel @Inject constructor(
         }
 
         repo.softDelete(id)
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-            } catch (ex: Exception) {
-                ex.printStackTrace()
-            }
-        }
+        val email = authRepository.activeUserEmail()
+        com.posbah.app.data.remote.SupabaseSyncManager.deleteBmpEmployeeImmediate(context, db, tenantId, id, email)
+        com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, email)
     }
 
     fun payEmployee(emp: BmpEmployeeEntity, amount: Double, attendance: Int) = viewModelScope.launch {
         if (amount <= 0) return@launch
-        repo.insertPayroll(
+        val generatedPayrollId = repo.insertPayroll(
             BmpPayrollEntity(
                 tenantId = tenantId,
                 employeeId = emp.id,
@@ -149,13 +142,9 @@ class EmployeesViewModel @Inject constructor(
                 dailyRate = if (attendance > 0) amount / attendance else 0.0
             )
         )
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-            } catch (ex: Exception) {
-                ex.printStackTrace()
-            }
-        }
+        val email = authRepository.activeUserEmail()
+        com.posbah.app.data.remote.SupabaseSyncManager.pushBmpPayrollImmediate(context, db, tenantId, generatedPayrollId, email)
+        com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, email)
     }
 }
 

@@ -376,6 +376,9 @@ interface BmpPayrollDao {
     @Query("SELECT * FROM bmp_payrolls WHERE employeeId = :employeeId ORDER BY paymentDate DESC")
     fun observeForEmployee(employeeId: Long): Flow<List<BmpPayrollEntity>>
 
+    @Query("SELECT * FROM bmp_payrolls WHERE id = :id LIMIT 1")
+    suspend fun getById(id: Long): BmpPayrollEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(payroll: BmpPayrollEntity): Long
 
