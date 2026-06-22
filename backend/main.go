@@ -3779,42 +3779,6 @@ func handleCheckout(w http.ResponseWriter, r *http.Request) {
 	// Broadcast WS event for real-time update
 	touchTenantSync(tenantID)
 
-	// Broadcast detailed transaction/wastage/expense event
-	var txReceipt string
-	if rNum, ok := payload.Transaction["receiptNumber"].(string); ok {
-		txReceipt = rNum
-	}
-	var txNotes string
-	if notes, ok := payload.Transaction["notes"].(string); ok {
-		txNotes = notes
-	}
-	var txCust string
-	if cust, ok := payload.Transaction["customerName"].(string); ok {
-		txCust = cust
-	}
-	var txType string
-	if tType, ok := payload.Transaction["type"].(string); ok {
-		txType = tType
-	}
-	var txTotal float64
-	if tot, ok := payload.Transaction["total"].(float64); ok {
-		txTotal = tot
-	}
-
-	eventType := "new_transaction"
-	eventMsg := fmt.Sprintf("🛒 Transaksi baru %s senilai Rp %s", txReceipt, formatRupiahGo(txTotal))
-	if txType == "EXPENSE" {
-		if txCust == "Wastage / Spoilage" {
-			eventType = "wastage_recorded"
-			eventMsg = fmt.Sprintf("🗑️ Wastage dicatat: %s", txNotes)
-		} else {
-			eventType = "expense_recorded"
-			eventMsg = fmt.Sprintf("💸 Pengeluaran dicatat: %s", txNotes)
-		}
-	}
-	detailMsg := fmt.Sprintf(`{"type":"live_feed","event":"%s","message":"%s","timestamp":%d}`, eventType, eventMsg, time.Now().UnixNano()/1e6)
-	broadcastToTenant(tenantID, detailMsg)
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
@@ -4601,29 +4565,7 @@ func handleSyncTable(w http.ResponseWriter, r *http.Request) {
 			if eventBytes, err := json.Marshal(eventData); err == nil {
 				broadcastToTenant(tenantID, string(eventBytes))
 			}
-		} else if tableName == "activity_logs" {
-			for _, row := range rows {
-				action, _ := row["action"].(string)
-				desc, _ := row["description"].(string)
-				empName, _ := row["employeeName"].(string)
-
-				var emoji string
-				switch action {
-				case "STOCK_TRANSFER":
-					emoji = "📦"
-				case "TAMBAH PRODUK", "EDIT PRODUK", "HAPUS PRODUK", "TAMBAH PELANGGAN":
-					emoji = "🛍️"
-				case "CATAT WASTAGE", "LUNAS PIUTANG", "CATAT PENGELUARAN":
-					emoji = "🗑️"
-				default:
-					emoji = "📝"
-				}
-
-				eventMsg := fmt.Sprintf("%s %s oleh %s: %s", emoji, action, empName, desc)
-				detailMsg := fmt.Sprintf(`{"type":"live_feed","event":"activity_log","message":"%s","timestamp":%d}`, eventMsg, time.Now().UnixNano()/1e6)
-				broadcastToTenant(tenantID, detailMsg)
-			}
-		} else {
+		} else if tableName != "activity_logs" {
 			eventData := map[string]interface{}{
 				"event": "data_synced",
 				"table": tableName,

@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.Log
 import com.posbah.app.data.local.PosBahDatabase
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.asStateFlow
 import okhttp3.*
 import org.json.JSONObject
 import java.net.URLEncoder
@@ -23,24 +22,7 @@ object WebSocketSyncClient {
     private var reconnectJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-    data class LiveFeedEvent(
-        val id: String = java.util.UUID.randomUUID().toString(),
-        val type: String,
-        val message: String,
-        val timestamp: Long
-    )
 
-    private val _liveEvents = kotlinx.coroutines.flow.MutableStateFlow<List<LiveFeedEvent>>(emptyList())
-    val liveEvents = _liveEvents.asStateFlow()
-
-    private fun addLiveEvent(event: LiveFeedEvent) {
-        val current = _liveEvents.value.toMutableList()
-        current.add(0, event)
-        if (current.size > 50) {
-            current.removeAt(current.size - 1)
-        }
-        _liveEvents.value = current
-    }
 
     @Synchronized
     fun connect(context: Context, tenantId: String, db: PosBahDatabase) {
@@ -137,11 +119,6 @@ object WebSocketSyncClient {
                         Log.e(TAG, "Error in running WebSocket triggered sync: ${e.message}", e)
                     }
                 }
-            } else if (type == "live_feed") {
-                val event = json.optString("event")
-                val msg = json.optString("message")
-                val ts = json.optLong("timestamp", System.currentTimeMillis())
-                addLiveEvent(LiveFeedEvent(type = event, message = msg, timestamp = ts))
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error parsing WebSocket message: ${e.message}", e)

@@ -192,7 +192,6 @@ fun PosScreen(
     var editChange by remember { mutableStateOf("") }
     var editNotes by remember { mutableStateOf("") }
     var showLogsDialog by remember { mutableStateOf(false) }
-    var showLiveMonitorDialog by remember { mutableStateOf(false) }
     var showAddExpenseDialog by remember { mutableStateOf(false) }
     var expenseName by remember { mutableStateOf("") }
     var expenseAmount by remember { mutableStateOf("") }
@@ -244,7 +243,6 @@ fun PosScreen(
 
     val transactionHistoryList by viewModel.transactions.collectAsState()
     val activityLogsList by viewModel.activityLogs.collectAsState()
-    val liveEvents by com.posbah.app.data.remote.WebSocketSyncClient.liveEvents.collectAsState()
     val tenantId = viewModel.activeTenantId
 
     val outletList by viewModel.availableOutlets.collectAsState()
@@ -379,13 +377,6 @@ fun PosScreen(
                                     icon = Icons.Outlined.Notes,
                                     label = "Log Aktivitas",
                                     onClick = { showLogsDialog = true }
-                                )
-                            }
-                            item {
-                                FooterButton(
-                                    icon = Icons.Outlined.History,
-                                    label = "Live Monitor",
-                                    onClick = { showLiveMonitorDialog = true }
                                 )
                             }
                         }
@@ -1920,83 +1911,7 @@ fun PosScreen(
             )
         }
 
-        // Dialog: Live Activity Feed / Monitor (Owner Only)
-        if (showLiveMonitorDialog) {
-            AlertDialog(
-                onDismissRequest = { showLiveMonitorDialog = false },
-                title = { Text("Live Activity Monitor (Real-Time)") },
-                text = {
-                    Column(modifier = Modifier.fillMaxWidth().height(450.dp)) {
-                        Text(
-                            text = "Menampilkan aktivitas operasional toko secara real-time.",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                        if (liveEvents.isEmpty()) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    CircularProgressIndicator(
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Text("Menunggu aktivitas real-time...", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                            }
-                        } else {
-                            LazyColumn(
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                items(liveEvents, key = { it.id }) { event ->
-                                    val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                                    val dateStr = sdf.format(Date(event.timestamp))
-                                    Surface(
-                                        shape = RoundedCornerShape(12.dp),
-                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Column(modifier = Modifier.padding(12.dp)) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween
-                                            ) {
-                                                Text(
-                                                    text = when(event.type) {
-                                                        "new_transaction" -> "NEW TRANSACTION"
-                                                        "wastage_recorded" -> "WASTAGE"
-                                                        "expense_recorded" -> "EXPENSE"
-                                                        else -> "ACTIVITY"
-                                                    },
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 11.sp,
-                                                    color = when(event.type) {
-                                                        "new_transaction" -> Color(0xFF10B981) // emerald
-                                                        "wastage_recorded" -> Color(0xFFEF4444) // red
-                                                        else -> MaterialTheme.colorScheme.primary
-                                                    }
-                                                )
-                                                Text(
-                                                    text = dateStr,
-                                                    fontSize = 9.sp,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                            Spacer(Modifier.height(4.dp))
-                                            Text(event.message, fontSize = 12.sp)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = { showLiveMonitorDialog = false }) { Text("Tutup") }
-                }
-            )
-        }
+
 
         // Dialog: Bagikan Toko Online
         if (showStoreShareDialog && activeStoreToken != null) {
