@@ -116,10 +116,13 @@ class OutletControlViewModel @Inject constructor(
                     }
                     val stockCount = outletProducts.sumOf { it.stock }
 
-                    // Find active employee name
-                    val employeeName = outlet.currentEmployee 
-                        ?: allEmployees.firstOrNull { it.outletId == outlet.id }?.name 
-                        ?: "-"
+                    // Find active employee names
+                    val assignedEmployees = allEmployees.filter { it.outletId == outlet.id }
+                    val employeeName = if (assignedEmployees.isNotEmpty()) {
+                        assignedEmployees.joinToString(", ") { it.name }
+                    } else {
+                        outlet.currentEmployee ?: "-"
+                    }
 
                     // Calculate total margin for this outlet
                     val outletTxs = completedTransactions.filter { tx ->
@@ -273,41 +276,45 @@ class OutletControlViewModel @Inject constructor(
         }
     }
 
-    fun assignEmployee(outletId: Long, employeeName: String) {
+    fun assignEmployeesToOutlet(outletId: Long, employeeIds: List<Long>) {
         viewModelScope.launch {
+            if (employeeIds.size > 10) {
+                _uiState.update { it.copy(error = "Maksimal 10 karyawan per outlet.") }
+                return@launch
+            }
+            
+            // Get all active employees for this tenant
             val ownerEmail = authRepository.activeUserEmail()?.lowercase()?.trim()
-            val activeEmployees = db.employeeDao().getAll().filter { emp ->
+            val allActiveEmployees = db.employeeDao().getAll().filter { emp ->
                 emp.tenantId == tenantId &&
                 emp.isActive &&
                 emp.role != "OWNER" &&
                 emp.email?.lowercase()?.trim() != ownerEmail
             }
 
-            if (employeeName.isBlank()) {
-                // Unassign: clear currentEmployee from outlet (no minimum guard)
-                val outlet = db.outletDao().getById(outletId) ?: return@launch
-                val updated = outlet.copy(currentEmployee = null, isSynced = false, updatedAt = System.currentTimeMillis())
-                db.outletDao().update(updated)
-            } else {
-                val emp = activeEmployees.firstOrNull { it.name == employeeName }
-                if (emp == null) {
-                    _uiState.update { it.copy(error = "Karyawan tidak ditemukan.") }
-                    return@launch
+            // For all employees currently assigned to this outlet: if not in employeeIds, unassign them
+            val currentAssigned = allActiveEmployees.filter { it.outletId == outletId }
+            currentAssigned.forEach { emp ->
+                if (emp.id !in employeeIds) {
+                    db.employeeDao().update(emp.copy(outletId = null, isSynced = false, updatedAt = System.currentTimeMillis()))
                 }
-                if (emp.outletId != outletId) {
-                    // Cek batas maksimum karyawan di outlet tujuan
-                    val targetCount = activeEmployees.count { it.outletId == outletId }
-                    if (targetCount >= 10) {
-                        _uiState.update { it.copy(error = "Gagal: Outlet sudah mencapai batas maksimal 10 karyawan.") }
-                        return@launch
-                    }
-                    // Pindahkan karyawan ke outlet baru (outlet lama boleh kosong)
+            }
+
+            // For all selected employeeIds: update their outletId to this outletId
+            employeeIds.forEach { empId ->
+                val emp = allActiveEmployees.firstOrNull { it.id == empId }
+                if (emp != null && emp.outletId != outletId) {
                     db.employeeDao().update(emp.copy(outletId = outletId, isSynced = false, updatedAt = System.currentTimeMillis()))
                 }
-                val outlet = db.outletDao().getById(outletId) ?: return@launch
-                val updated = outlet.copy(currentEmployee = employeeName, isSynced = false, updatedAt = System.currentTimeMillis())
-                db.outletDao().update(updated)
             }
+
+            // Update outlet's currentEmployee field with the joined names
+            val outlet = db.outletDao().getById(outletId) ?: return@launch
+            val updatedNames = allActiveEmployees.filter { it.id in employeeIds || (it.outletId == outletId && it.id !in currentAssigned.map { c -> c.id }) }.joinToString(", ") { it.name }
+            val updatedEmployeeText = if (updatedNames.isNotBlank()) updatedNames else null
+            val updatedOutlet = outlet.copy(currentEmployee = updatedEmployeeText, isSynced = false, updatedAt = System.currentTimeMillis())
+            db.outletDao().update(updatedOutlet)
+
             loadData()
             viewModelScope.launch(Dispatchers.IO) {
                 try {
@@ -319,7 +326,37 @@ class OutletControlViewModel @Inject constructor(
         }
     }
 
-    fun createOutlet(name: String, address: String?, phone: String?, currentEmployee: String?) {
+    fun assignEmployee(outletId: Long, employeeName: String) {
+        viewModelScope.launch {
+            val ownerEmail = authRepository.activeUserEmail()?.lowercase()?.trim()
+            val activeEmployees = db.employeeDao().getAll().filter { emp ->
+                emp.tenantId == tenantId &&
+                emp.isActive &&
+                emp.role != "OWNER" &&
+                emp.email?.lowercase()?.trim() != ownerEmail
+            }
+            if (employeeName.isBlank()) {
+                val currentAssigned = activeEmployees.filter { it.outletId == outletId }
+                currentAssigned.forEach { emp ->
+                    db.employeeDao().update(emp.copy(outletId = null, isSynced = false, updatedAt = System.currentTimeMillis()))
+                }
+                val outlet = db.outletDao().getById(outletId) ?: return@launch
+                val updated = outlet.copy(currentEmployee = null, isSynced = false, updatedAt = System.currentTimeMillis())
+                db.outletDao().update(updated)
+            } else {
+                val emp = activeEmployees.firstOrNull { it.name == employeeName }
+                if (emp == null) return@launch
+                val currentAssigned = activeEmployees.filter { it.outletId == outletId }.map { it.id }.toMutableList()
+                if (emp.id !in currentAssigned) {
+                    if (currentAssigned.size >= 10) return@launch
+                    currentAssigned.add(emp.id)
+                }
+                assignEmployeesToOutlet(outletId, currentAssigned)
+            }
+        }
+    }
+
+    fun createOutlet(name: String, address: String?, phone: String?, employeeIds: List<Long>) {
         viewModelScope.launch {
             val existing = db.outletDao().listForTenant(tenantId)
             if (existing.size >= 3) {
@@ -330,8 +367,12 @@ class OutletControlViewModel @Inject constructor(
                 _uiState.update { it.copy(error = "Nama outlet tidak boleh kosong.") }
                 return@launch
             }
-            if (currentEmployee.isNullOrBlank()) {
+            if (employeeIds.isEmpty()) {
                 _uiState.update { it.copy(error = "Gagal: Outlet baru harus memiliki minimal 1 karyawan.") }
+                return@launch
+            }
+            if (employeeIds.size > 10) {
+                _uiState.update { it.copy(error = "Gagal: Maksimal 10 karyawan per outlet.") }
                 return@launch
             }
 
@@ -343,33 +384,39 @@ class OutletControlViewModel @Inject constructor(
                 emp.email?.lowercase()?.trim() != ownerEmail
             }
 
-            val emp = activeEmployees.firstOrNull { it.name == currentEmployee }
-            if (emp == null) {
-                _uiState.update { it.copy(error = "Karyawan tidak ditemukan.") }
-                return@launch
-            }
-
-            if (emp.outletId != null) {
-                val oldOutletCount = activeEmployees.count { it.outletId == emp.outletId }
-                if (oldOutletCount <= 1) {
-                    val oldOutletName = db.outletDao().getById(emp.outletId)?.name ?: "Outlet Lain"
-                    _uiState.update { it.copy(error = "Gagal: ${emp.name} adalah karyawan terakhir di $oldOutletName.") }
-                    return@launch
+            // Check if any of these employee IDs are the last employee at their current outlet
+            for (empId in employeeIds) {
+                val emp = activeEmployees.firstOrNull { it.id == empId }
+                if (emp != null && emp.outletId != null) {
+                    val oldOutletCount = activeEmployees.count { it.outletId == emp.outletId }
+                    if (oldOutletCount <= 1) {
+                        val oldOutletName = db.outletDao().getById(emp.outletId)?.name ?: "Outlet Lain"
+                        _uiState.update { it.copy(error = "Gagal: ${emp.name} adalah karyawan terakhir di $oldOutletName.") }
+                        return@launch
+                    }
                 }
             }
 
+            val selectedEmployeeNames = activeEmployees.filter { it.id in employeeIds }.joinToString(", ") { it.name }
             val isDefault = existing.isEmpty()
             val newOutlet = Outlet(
                 tenantId = tenantId,
                 name = name,
                 address = address,
                 phone = phone,
-                currentEmployee = currentEmployee,
+                currentEmployee = if (selectedEmployeeNames.isNotBlank()) selectedEmployeeNames else null,
                 isOpen = true,
                 isDefault = isDefault
             )
             val newOutletId = db.outletDao().insert(newOutlet)
-            db.employeeDao().update(emp.copy(outletId = newOutletId, isSynced = false, updatedAt = System.currentTimeMillis()))
+
+            // Update outletId for all selected employees
+            employeeIds.forEach { empId ->
+                val emp = activeEmployees.firstOrNull { it.id == empId }
+                if (emp != null) {
+                    db.employeeDao().update(emp.copy(outletId = newOutletId, isSynced = false, updatedAt = System.currentTimeMillis()))
+                }
+            }
             
             loadData()
             viewModelScope.launch(Dispatchers.IO) {
@@ -382,10 +429,14 @@ class OutletControlViewModel @Inject constructor(
         }
     }
 
-    fun updateOutlet(outletId: Long, name: String, address: String?, phone: String?, currentEmployee: String?) {
+    fun updateOutlet(outletId: Long, name: String, address: String?, phone: String?, employeeIds: List<Long>) {
         viewModelScope.launch {
             if (name.isBlank()) {
                 _uiState.update { it.copy(error = "Nama outlet tidak boleh kosong.") }
+                return@launch
+            }
+            if (employeeIds.size > 10) {
+                _uiState.update { it.copy(error = "Gagal: Maksimal 10 karyawan per outlet.") }
                 return@launch
             }
             val existing = db.outletDao().getById(outletId) ?: return@launch
@@ -398,45 +449,32 @@ class OutletControlViewModel @Inject constructor(
                 emp.email?.lowercase()?.trim() != ownerEmail
             }
 
-            if (currentEmployee.isNullOrBlank()) {
-                // Unassign currentEmployee — outlet boleh kosong karyawannya
-                val updated = existing.copy(
-                    name = name,
-                    address = address,
-                    phone = phone,
-                    currentEmployee = null,
-                    isSynced = false,
-                    updatedAt = System.currentTimeMillis()
-                )
-                db.outletDao().update(updated)
-            } else {
-                val emp = activeEmployees.firstOrNull { it.name == currentEmployee }
-                if (emp == null) {
-                    _uiState.update { it.copy(error = "Karyawan tidak ditemukan.") }
-                    return@launch
+            // Unassign employees currently at this outlet who are not in the new selection
+            val currentlyAssigned = activeEmployees.filter { it.outletId == outletId }
+            currentlyAssigned.forEach { emp ->
+                if (emp.id !in employeeIds) {
+                    db.employeeDao().update(emp.copy(outletId = null, isSynced = false, updatedAt = System.currentTimeMillis()))
                 }
+            }
 
-                if (emp.outletId != outletId) {
-                    // Cek batas maksimum outlet tujuan
-                    val targetCount = activeEmployees.count { it.outletId == outletId }
-                    if (targetCount >= 10) {
-                        _uiState.update { it.copy(error = "Gagal: Outlet sudah mencapai batas maksimal 10 karyawan.") }
-                        return@launch
-                    }
-                    // Outlet lama boleh kosong — tidak ada minimum guard
+            // Assign newly selected employees
+            employeeIds.forEach { empId ->
+                val emp = activeEmployees.firstOrNull { it.id == empId }
+                if (emp != null && emp.outletId != outletId) {
                     db.employeeDao().update(emp.copy(outletId = outletId, isSynced = false, updatedAt = System.currentTimeMillis()))
                 }
-
-                val updated = existing.copy(
-                    name = name,
-                    address = address,
-                    phone = phone,
-                    currentEmployee = currentEmployee,
-                    isSynced = false,
-                    updatedAt = System.currentTimeMillis()
-                )
-                db.outletDao().update(updated)
             }
+
+            val selectedEmployeeNames = activeEmployees.filter { it.id in employeeIds }.joinToString(", ") { it.name }
+            val updated = existing.copy(
+                name = name,
+                address = address,
+                phone = phone,
+                currentEmployee = if (selectedEmployeeNames.isNotBlank()) selectedEmployeeNames else null,
+                isSynced = false,
+                updatedAt = System.currentTimeMillis()
+            )
+            db.outletDao().update(updated)
 
             loadData()
             viewModelScope.launch(Dispatchers.IO) {

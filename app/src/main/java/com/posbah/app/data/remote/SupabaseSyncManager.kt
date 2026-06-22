@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import androidx.room.withTransaction
 import com.posbah.app.BuildConfig
 import org.json.JSONArray
 import org.json.JSONObject
@@ -1544,9 +1545,84 @@ object SupabaseSyncManager {
                 activityLogsArray      = t22.await()
             }
 
+            // Parse transactionsArray and fetch transaction items in parallel before entering the DB transaction
+            val activeTxIds = mutableListOf<Long>()
+            val transactionEntities = mutableListOf<TransactionEntity>()
+            if (transactionsArray != null) {
+                for (i in 0 until transactionsArray.length()) {
+                    val obj = transactionsArray.getJSONObject(i)
+                    val idVal = obj.optLong("id", 0L)
+                    val outletId = if (obj.isNull("outletId")) null else obj.optLong("outletId")
+                    val customerId = if (obj.isNull("customerId")) null else obj.optLong("customerId")
+                    val amountPaid = if (obj.isNull("amountPaid")) null else obj.optDouble("amountPaid")
+                    val change = if (obj.isNull("change")) null else obj.optDouble("change")
+                    
+                    val status = obj.optString("status", "COMPLETED")
+                    val orderStatus = if (obj.isNull("orderStatus")) null else obj.optString("orderStatus")
+                    val receiptNumber = obj.optString("receiptNumber")
+                    val paymentMethod = obj.optString("paymentMethod", "CASH")
+                    
+                    val isRentalActive = receiptNumber.startsWith("RN-") && (orderStatus == "ACTIVE" || paymentMethod != "CASH" || status == "PENDING")
+                    val isLaundryActive = receiptNumber.startsWith("LD-") && (orderStatus != "DIAMBIL" || paymentMethod != "CASH" || status == "PENDING")
+                    if (isRentalActive || isLaundryActive) {
+                        activeTxIds.add(idVal)
+                    }
+
+                    transactionEntities.add(TransactionEntity(
+                        id = idVal,
+                        tenantId = obj.optString("tenantId", activeTenantId),
+                        outletId = outletId,
+                        employeeId = obj.optLong("employeeId", 1L),
+                        customerId = customerId,
+                        customerName = if (obj.isNull("customerName")) null else obj.optString("customerName"),
+                        receiptNumber = receiptNumber,
+                        date = obj.optLong("date", System.currentTimeMillis()),
+                        subtotal = obj.optDouble("subtotal", 0.0),
+                        discountType = if (obj.isNull("discountType")) null else obj.optString("discountType"),
+                        discountInput = obj.optDouble("discountInput", 0.0),
+                        discountAmt = obj.optDouble("discountAmt", 0.0),
+                        total = obj.optDouble("total", 0.0),
+                        discount = obj.optDouble("discount", 0.0),
+                        paymentMethod = paymentMethod,
+                        amountPaid = amountPaid,
+                        change = change,
+                        status = status,
+                        type = obj.optString("type", "SALES"),
+                        orderStatus = orderStatus,
+                        dpAmount = obj.optDouble("dpAmount", 0.0),
+                        deliveryDate = if (obj.isNull("deliveryDate")) null else obj.optLong("deliveryDate"),
+                        queueNumber = if (obj.isNull("queueNumber")) null else obj.optInt("queueNumber"),
+                        notes = if (obj.isNull("notes")) null else obj.optString("notes"),
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                    ))
+                }
+            }
+
+            val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
+            val recentFnbTxIds = transactionEntities.filter { tx ->
+                val isRental = tx.receiptNumber.startsWith("RN-")
+                val isLaundry = tx.receiptNumber.startsWith("LD-")
+                !isRental && !isLaundry && tx.createdAt >= thirtyDaysAgo
+            }.map { it.id }.toSet()
+
+            val allTargetTxIds = (activeTxIds + recentFnbTxIds).toSet()
+            val txItemResults: Map<Long, JSONArray?> = if (allTargetTxIds.isNotEmpty()) {
+                coroutineScope {
+                    allTargetTxIds.map { txId ->
+                        txId to async {
+                            pullTable(context, "transaction_items", activeTenantId, "transactionId=eq.$txId")
+                        }
+                    }.associate { (txId, deferred) -> txId to deferred.await() }
+                }
+            } else {
+                emptyMap()
+            }
+
             Log.d(TAG, "[pullAll] Semua fetch paralel selesai, mulai menulis ke DB...")
 
             // ── PHASE 2: Tulis hasil ke DB secara SEQUENTIAL ────────────────────────
+            db.withTransaction {
 
             // 0. Tenants
             if (tenantsArray != null && tenantsArray.length() > 0) {
@@ -1755,110 +1831,36 @@ object SupabaseSyncManager {
             }
 
             // 5. Transactions
-            val activeTxIds = mutableListOf<Long>()
-            val transactionEntities = mutableListOf<TransactionEntity>()
-            if (transactionsArray != null) {
-                for (i in 0 until transactionsArray.length()) {
-                    val obj = transactionsArray.getJSONObject(i)
-                    val idVal = obj.optLong("id", 0L)
-                    val outletId = if (obj.isNull("outletId")) null else obj.optLong("outletId")
-                    val customerId = if (obj.isNull("customerId")) null else obj.optLong("customerId")
-                    val amountPaid = if (obj.isNull("amountPaid")) null else obj.optDouble("amountPaid")
-                    val change = if (obj.isNull("change")) null else obj.optDouble("change")
-                    
-                    val status = obj.optString("status", "COMPLETED")
-                    val orderStatus = if (obj.isNull("orderStatus")) null else obj.optString("orderStatus")
-                    val receiptNumber = obj.optString("receiptNumber")
-                    val paymentMethod = obj.optString("paymentMethod", "CASH")
-                    
-                    // Identify active or unpaid (BELUM LUNAS) transactions to pull their items
-                    val isRentalActive = receiptNumber.startsWith("RN-") && (orderStatus == "ACTIVE" || paymentMethod != "CASH" || status == "PENDING")
-                    val isLaundryActive = receiptNumber.startsWith("LD-") && (orderStatus != "DIAMBIL" || paymentMethod != "CASH" || status == "PENDING")
-                    if (isRentalActive || isLaundryActive) {
-                        activeTxIds.add(idVal)
-                    }
-
-                    transactionEntities.add(TransactionEntity(
-                        id = idVal,
-                        tenantId = obj.optString("tenantId", activeTenantId),
-                        outletId = outletId,
-                        employeeId = obj.optLong("employeeId", 1L),
-                        customerId = customerId,
-                        customerName = if (obj.isNull("customerName")) null else obj.optString("customerName"),
-                        receiptNumber = receiptNumber,
-                        date = obj.optLong("date", System.currentTimeMillis()),
-                        subtotal = obj.optDouble("subtotal", 0.0),
-                        discountType = if (obj.isNull("discountType")) null else obj.optString("discountType"),
-                        discountInput = obj.optDouble("discountInput", 0.0),
-                        discountAmt = obj.optDouble("discountAmt", 0.0),
-                        total = obj.optDouble("total", 0.0),
-                        discount = obj.optDouble("discount", 0.0),
-                        paymentMethod = obj.optString("paymentMethod", "CASH"),
-                        amountPaid = amountPaid,
-                        change = change,
-                        status = status,
-                        type = obj.optString("type", "SALES"),
-                        orderStatus = orderStatus,
-                        dpAmount = obj.optDouble("dpAmount", 0.0),
-                        deliveryDate = if (obj.isNull("deliveryDate")) null else obj.optLong("deliveryDate"),
-                        queueNumber = if (obj.isNull("queueNumber")) null else obj.optInt("queueNumber"),
-                        notes = if (obj.isNull("notes")) null else obj.optString("notes"),
-                        createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
-                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
-                    ))
-                }
-                if (transactionEntities.isNotEmpty()) {
-                    transactionEntities.forEach { db.transactionDao().insert(it) }
-                }
+            if (transactionEntities.isNotEmpty()) {
+                transactionEntities.forEach { db.transactionDao().insert(it) }
             }
 
-            // 6. Pull transaction_items — fetch all txIds in parallel, write sequentially
-            // For active Rental/Laundry: always pull items so status is current on any device
-            // For FNB/BMP: pull items for all transactions from last 30 days (supports HP-ganti use case)
-            val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
-            val recentFnbTxIds = transactionEntities.filter { tx ->
-                val isRental = tx.receiptNumber.startsWith("RN-")
-                val isLaundry = tx.receiptNumber.startsWith("LD-")
-                !isRental && !isLaundry && tx.createdAt >= thirtyDaysAgo
-            }.map { it.id }.toSet()
-
-            val allTargetTxIds = (activeTxIds + recentFnbTxIds).toSet()
-            if (allTargetTxIds.isNotEmpty()) {
-                // Fetch semua transaction_items secara paralel berdasarkan txId
-                val txItemResults: Map<Long, JSONArray?> = coroutineScope {
-                    allTargetTxIds.map { txId ->
-                        txId to async {
-                            pullTable(context, "transaction_items", activeTenantId, "transactionId=eq.$txId")
-                        }
-                    }.associate { (txId, deferred) -> txId to deferred.await() }
-                }
-                // Tulis hasil ke DB secara sequential
-                for ((txId, itemsArray) in txItemResults) {
-                    if (itemsArray != null) {
-                        val itemsList = mutableListOf<TransactionItemEntity>()
-                        for (i in 0 until itemsArray.length()) {
-                            val obj = itemsArray.getJSONObject(i)
-                            val variantId = if (obj.isNull("variantId")) null else obj.optLong("variantId")
-                            val variantName = if (obj.isNull("variantName")) null else obj.optString("variantName")
-                            itemsList.add(TransactionItemEntity(
-                                id = obj.optLong("id", 0L),
-                                transactionId = obj.optLong("transactionId", txId),
-                                productId = obj.optLong("productId", 0L),
-                                variantId = variantId,
-                                variantName = variantName,
-                                quantity = obj.optInt("quantity", 1),
-                                price = obj.optDouble("price", 0.0),
-                                costPrice = obj.optDouble("costPrice", 0.0),
-                                discount = obj.optDouble("discount", 0.0),
-                                note = if (obj.isNull("note")) null else obj.optString("note")
-                            ))
+            // 6. Pull transaction_items (pre-fetched outside transaction)
+            for ((txId, itemsArray) in txItemResults) {
+                if (itemsArray != null) {
+                    val itemsList = mutableListOf<TransactionItemEntity>()
+                    for (i in 0 until itemsArray.length()) {
+                        val obj = itemsArray.getJSONObject(i)
+                        val variantId = if (obj.isNull("variantId")) null else obj.optLong("variantId")
+                        val variantName = if (obj.isNull("variantName")) null else obj.optString("variantName")
+                        itemsList.add(TransactionItemEntity(
+                            id = obj.optLong("id", 0L),
+                            transactionId = obj.optLong("transactionId", txId),
+                            productId = obj.optLong("productId", 0L),
+                            variantId = variantId,
+                            variantName = variantName,
+                            quantity = obj.optInt("quantity", 1),
+                            price = obj.optDouble("price", 0.0),
+                            costPrice = obj.optDouble("costPrice", 0.0),
+                            discount = obj.optDouble("discount", 0.0),
+                            note = if (obj.isNull("note")) null else obj.optString("note")
+                        ))
                     }
                     if (itemsList.isNotEmpty()) {
                         db.transactionItemDao().insertAll(itemsList)
                     }
                 }
             }
-        }
 
             // 7. bmp_clients
             if (bmpClientsArray != null) {
@@ -2496,6 +2498,7 @@ object SupabaseSyncManager {
                     list.forEach { db.activityLogDao().insertLog(it) }
                 }
             }
+            } // end of db.withTransaction
 
             Log.d(TAG, "Pull sinkronisasi selesai dengan sukses.")
             SyncResult.Success

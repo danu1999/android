@@ -98,18 +98,19 @@ class MarginAnalysisViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val userRole = flow {
-        emit(authRepository.getActiveUser()?.role ?: "KASIR")
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, "KASIR")
+    private val _userRole = MutableStateFlow("KASIR")
+    val userRole = _userRole.asStateFlow()
 
     private val _transactionItems = MutableStateFlow<List<TransactionItemEntity>>(emptyList())
     val transactionItems = _transactionItems.asStateFlow()
 
     init {
-        // For non-OWNER: lock filter to their outlet
+        // Load active user role and enforce outlet lock for non-OWNER
         viewModelScope.launch {
             val user = authRepository.getActiveUser()
-            if (user?.role != "OWNER") {
+            val role = user?.role ?: "KASIR"
+            _userRole.value = role
+            if (role != "OWNER") {
                 val lockedOutlet = sessionState.lockedEmployeeOutletId.value
                 _selectedOutletId.value = lockedOutlet
             }

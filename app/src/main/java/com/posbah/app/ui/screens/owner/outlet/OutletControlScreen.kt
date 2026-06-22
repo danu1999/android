@@ -72,6 +72,10 @@ import com.posbah.app.ui.components.PosBahTopBar
 import com.posbah.app.util.Formatters
 import com.posbah.app.data.local.entities.Outlet
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.Checkbox
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.CompareArrows
 import androidx.compose.foundation.text.KeyboardOptions
@@ -92,6 +96,7 @@ fun OutletControlScreen(
     var outletAddress by remember { mutableStateOf("") }
     var outletPhone by remember { mutableStateOf("") }
     var outletEmployee by remember { mutableStateOf("") }
+    val selectedEmployeeIds = remember { mutableStateListOf<Long>() }
     var showEmployeeListDialog by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var outletToDelete by remember { mutableStateOf<Outlet?>(null) }
@@ -136,6 +141,7 @@ fun OutletControlScreen(
                             outletAddress = ""
                             outletPhone = ""
                             outletEmployee = ""
+                            selectedEmployeeIds.clear()
                             showOutletDialog = true
                         }) {
                             Icon(Icons.Outlined.Add, contentDescription = "Tambah Outlet")
@@ -178,13 +184,15 @@ fun OutletControlScreen(
                         summary = summary,
                         allEmployees = state.employees,
                         onToggleStatus = { viewModel.toggleOutletStatus(summary.outlet.id) },
-                        onAssignEmployee = { empName -> viewModel.assignEmployee(summary.outlet.id, empName) },
+                        onAssignEmployees = { empIds -> viewModel.assignEmployeesToOutlet(summary.outlet.id, empIds) },
                         onEditClick = {
                             editingOutlet = summary.outlet
                             outletName = summary.outlet.name
                             outletAddress = summary.outlet.address.orEmpty()
                             outletPhone = summary.outlet.phone.orEmpty()
                             outletEmployee = summary.activeEmployeeName.takeIf { it != "-" }.orEmpty()
+                            selectedEmployeeIds.clear()
+                            selectedEmployeeIds.addAll(state.employees.filter { it.outletId == summary.outlet.id }.map { it.id })
                             showOutletDialog = true
                         },
                         onDeleteClick = {
@@ -207,6 +215,7 @@ fun OutletControlScreen(
                                 outletAddress = ""
                                 outletPhone = ""
                                 outletEmployee = ""
+                                selectedEmployeeIds.clear()
                                 showOutletDialog = true
                             },
                             colors = CardDefaults.cardColors(
@@ -364,41 +373,73 @@ fun OutletControlScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    // Employee assignment selector
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        OutlinedTextField(
-                            value = if (outletEmployee.isBlank()) "- Kosong -" else outletEmployee,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Karyawan Outlet") },
-                            trailingIcon = {
-                                IconButton(onClick = { employeeDropdownExpanded = true }) {
-                                    Text("▾", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                                }
-                            },
+                    // Employee assignment selector with checkboxes
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Pilih Karyawan Outlet (Maks 10):",
+                        fontWeight = FontWeight.SemiBold,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    if (state.employees.isEmpty()) {
+                        Text(
+                            text = "Belum ada karyawan terdaftar.",
+                            color = Color.Gray,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    } else {
+                        val scrollState = rememberScrollState()
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { employeeDropdownExpanded = true }
-                        )
-                        DropdownMenu(
-                            expanded = employeeDropdownExpanded,
-                            onDismissRequest = { employeeDropdownExpanded = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("- Kosong -") },
-                                onClick = {
-                                    outletEmployee = ""
-                                    employeeDropdownExpanded = false
-                                }
-                            )
-                            state.employees.forEach { emp ->
-                                DropdownMenuItem(
-                                    text = { Text(emp.name) },
-                                    onClick = {
-                                        outletEmployee = emp.name
-                                        employeeDropdownExpanded = false
-                                    }
+                                .heightIn(max = 160.dp)
+                                .verticalScroll(scrollState)
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                    RoundedCornerShape(8.dp)
                                 )
+                                .padding(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            state.employees.forEach { emp ->
+                                val isChecked = selectedEmployeeIds.contains(emp.id)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            if (isChecked) {
+                                                selectedEmployeeIds.remove(emp.id)
+                                            } else {
+                                                if (selectedEmployeeIds.size >= 10) {
+                                                    Toast.makeText(context, "Maksimal 10 karyawan per outlet.", Toast.LENGTH_SHORT).show()
+                                                } else {
+                                                    selectedEmployeeIds.add(emp.id)
+                                                }
+                                            }
+                                        }
+                                        .padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = isChecked,
+                                        onCheckedChange = { checked ->
+                                            if (checked) {
+                                                if (selectedEmployeeIds.size >= 10) {
+                                                    Toast.makeText(context, "Maksimal 10 karyawan per outlet.", Toast.LENGTH_SHORT).show()
+                                                } else {
+                                                    selectedEmployeeIds.add(emp.id)
+                                                }
+                                            } else {
+                                                selectedEmployeeIds.remove(emp.id)
+                                            }
+                                        }
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(emp.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                        Text(emp.role, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                    }
+                                }
                             }
                         }
                     }
@@ -429,15 +470,15 @@ fun OutletControlScreen(
                             Toast.makeText(context, "Nama outlet tidak boleh kosong.", Toast.LENGTH_SHORT).show()
                             return@Button
                         }
-                        if (editingOutlet == null && outletEmployee.isBlank()) {
+                        if (editingOutlet == null && selectedEmployeeIds.isEmpty()) {
                             Toast.makeText(context, "Silakan pilih karyawan untuk outlet baru.", Toast.LENGTH_SHORT).show()
                             return@Button
                         }
                         val currentEditing = editingOutlet
                         if (currentEditing == null) {
-                            viewModel.createOutlet(outletName, outletAddress, outletPhone, outletEmployee)
+                            viewModel.createOutlet(outletName, outletAddress, outletPhone, selectedEmployeeIds.toList())
                         } else {
-                            viewModel.updateOutlet(currentEditing.id, outletName, outletAddress, outletPhone, outletEmployee)
+                            viewModel.updateOutlet(currentEditing.id, outletName, outletAddress, outletPhone, selectedEmployeeIds.toList())
                         }
                         showOutletDialog = false
                     }
@@ -817,12 +858,13 @@ fun OutletCard(
     summary: OutletSummary,
     allEmployees: List<Employee>,
     onToggleStatus: () -> Unit,
-    onAssignEmployee: (String) -> Unit,
+    onAssignEmployees: (List<Long>) -> Unit,
     onEditClick: () -> Unit,
     onDeleteClick: () -> Unit,
     onViewProductsClick: () -> Unit
 ) {
-    var employeeMenuExpanded by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    var showAssignEmployeesDialog by remember { mutableStateOf(false) }
 
     Card(
         onClick = onEditClick,
@@ -943,7 +985,7 @@ fun OutletCard(
                     Box {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.clickable { employeeMenuExpanded = true }
+                            modifier = Modifier.clickable { showAssignEmployeesDialog = true }
                         ) {
                             Text(
                                 summary.activeEmployeeName,
@@ -953,28 +995,6 @@ fun OutletCard(
                             )
                             Spacer(modifier = Modifier.width(2.dp))
                             Text("▾", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
-                        }
-
-                        DropdownMenu(
-                            expanded = employeeMenuExpanded,
-                            onDismissRequest = { employeeMenuExpanded = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("- Kosong -") },
-                                onClick = {
-                                    onAssignEmployee("")
-                                    employeeMenuExpanded = false
-                                }
-                            )
-                            allEmployees.forEach { emp ->
-                                DropdownMenuItem(
-                                    text = { Text(emp.name) },
-                                    onClick = {
-                                        onAssignEmployee(emp.name)
-                                        employeeMenuExpanded = false
-                                    }
-                                )
-                            }
                         }
                     }
                 }
@@ -1021,6 +1041,96 @@ fun OutletCard(
                 }
             }
         }
+    }
+
+    if (showAssignEmployeesDialog) {
+        val cardSelectedEmployeeIds = remember {
+            mutableStateListOf<Long>().apply {
+                addAll(allEmployees.filter { it.outletId == summary.outlet.id }.map { it.id })
+            }
+        }
+        AlertDialog(
+            onDismissRequest = { showAssignEmployeesDialog = false },
+            title = { Text("Tugaskan Karyawan ke ${summary.outlet.name}", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Pilih Karyawan (Maks 10):", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                    if (allEmployees.isEmpty()) {
+                        Text("Belum ada karyawan terdaftar untuk ditugaskan.", color = Color.Gray)
+                    } else {
+                        val scrollState = rememberScrollState()
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 240.dp)
+                                .verticalScroll(scrollState)
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .padding(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            allEmployees.forEach { emp ->
+                                val isChecked = cardSelectedEmployeeIds.contains(emp.id)
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            if (isChecked) {
+                                                cardSelectedEmployeeIds.remove(emp.id)
+                                            } else {
+                                                if (cardSelectedEmployeeIds.size >= 10) {
+                                                    Toast.makeText(context, "Maksimal 10 karyawan per outlet.", Toast.LENGTH_SHORT).show()
+                                                } else {
+                                                    cardSelectedEmployeeIds.add(emp.id)
+                                                }
+                                            }
+                                        }
+                                        .padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = isChecked,
+                                        onCheckedChange = { checked ->
+                                            if (checked) {
+                                                if (cardSelectedEmployeeIds.size >= 10) {
+                                                    Toast.makeText(context, "Maksimal 10 karyawan per outlet.", Toast.LENGTH_SHORT).show()
+                                                } else {
+                                                    cardSelectedEmployeeIds.add(emp.id)
+                                                }
+                                            } else {
+                                                cardSelectedEmployeeIds.remove(emp.id)
+                                            }
+                                        }
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(emp.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                        Text(emp.role, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onAssignEmployees(cardSelectedEmployeeIds.toList())
+                        showAssignEmployeesDialog = false
+                    }
+                ) {
+                    Text("Simpan")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAssignEmployeesDialog = false }) {
+                    Text("Batal")
+                }
+            }
+        )
     }
 }
 

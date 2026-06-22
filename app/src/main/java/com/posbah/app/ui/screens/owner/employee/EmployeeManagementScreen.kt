@@ -510,7 +510,8 @@ fun EmployeeManagementScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        val sal = salaryInput.toDoubleOrNull() ?: 0.0
+                        val cleanSalary = salaryInput.replace(Regex("[^0-9]"), "")
+                        val sal = cleanSalary.toDoubleOrNull() ?: 0.0
                         viewModel.startAddEmployee(
                             name = nameInput,
                             email = emailInput,
@@ -685,7 +686,7 @@ fun EmployeeManagementScreen(
                     )
                     OutlinedTextField(
                         value = newSalaryInput,
-                        onValueChange = { newSalaryInput = it.filter { c -> c.isDigit() } },
+                        onValueChange = { newSalaryInput = it },
                         label = { Text("Gaji Pokok Baru (Rp)") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
@@ -729,7 +730,8 @@ fun EmployeeManagementScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        val newSal = newSalaryInput.toDoubleOrNull() ?: 0.0
+                        val cleanSalary = newSalaryInput.replace(Regex("[^0-9]"), "")
+                        val newSal = cleanSalary.toDoubleOrNull() ?: 0.0
                         activeEmployeeForSalaryChange?.let { emp ->
                             viewModel.changeSalary(emp.id, newSal, newPayPeriodInput)
                         }
