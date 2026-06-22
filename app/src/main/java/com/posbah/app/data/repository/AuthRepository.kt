@@ -687,7 +687,180 @@ class AuthRepository @Inject constructor(
 
         val staticInfo = staticPremiumUsers[cleanEmail]
         val staticDemoInfo = staticDemoUsers[cleanEmail]
-        if (staticInfo != null || staticDemoInfo != null) {
+        val isStatic = staticInfo != null || staticDemoInfo != null
+
+        // Fetch employee details from server first if online (including static users)
+        var fetchedEmp: Employee? = null
+        var networkError = false
+        var conflictMessage: String? = null
+        var conn: java.net.HttpURLConnection? = null
+        try {
+            val url = java.net.URL("https://www.zedmz.cloud/api/sync/employees?email=eq.$cleanEmail")
+            conn = url.openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.setRequestProperty("x-client-version", BuildConfig.VERSION_NAME)
+            conn.connectTimeout = 5000
+            conn.readTimeout = 5000
+            if (conn.responseCode in 200..299) {
+                val response = conn.inputStream.bufferedReader().use { it.readText() }
+                val array = org.json.JSONArray(response)
+                if (array.length() > 0) {
+                    val obj = array.getJSONObject(0)
+                    val tenantId = obj.getString("tenantId")
+
+                    // Tenant switch detection
+                    val lastTenant = securePrefs.lastActiveTenantId ?: securePrefs.currentTenantId
+                    if (!tenantId.isNullOrBlank() && !lastTenant.isNullOrBlank() && tenantId != lastTenant) {
+                        try {
+                            db.clearAllTables()
+                            android.util.Log.i("AuthRepository", "Cleared all tables in loginWithEmailPassword due to tenant switch: $lastTenant -> $tenantId")
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                    
+                    // Check if transitioned from demo to premium
+                    val localEmp = employeeDao.findByEmail(cleanEmail)
+                    val transitioned = localEmp != null && 
+                                       localEmp.tenantId.startsWith("demo_tenant_") && 
+                                       tenantId.startsWith("ten_premium_")
+                                       
+                    if (transitioned) {
+                        // Clear all local SQLite tables (Room)
+                        try {
+                            db.clearAllTables()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                    
+                    // Let's first make sure the Tenant exists locally! If not, create it or query from VPS.
+                    var tenantName = "CV. Premium Owner (Premium)"
+                    var tenantBusinessMode = "BMP"
+                    var tenantConn: java.net.HttpURLConnection? = null
+                    try {
+                        val tUrl = java.net.URL("https://www.zedmz.cloud/api/sync/tenants?id=eq.$tenantId")
+                        tenantConn = tUrl.openConnection() as java.net.HttpURLConnection
+                        tenantConn.requestMethod = "GET"
+                        tenantConn.setRequestProperty("x-client-version", BuildConfig.VERSION_NAME)
+                        if (tenantConn.responseCode in 200..299) {
+                            val tResponse = tenantConn.inputStream.bufferedReader().use { it.readText() }
+                            val tArray = org.json.JSONArray(tResponse)
+                            if (tArray.length() > 0) {
+                                val tObj = tArray.getJSONObject(0)
+                                tenantName = tObj.getString("name")
+                                tenantBusinessMode = tObj.getString("businessMode")
+                            }
+                        }
+                    } catch (e: java.lang.Exception) {
+                        e.printStackTrace()
+                    } finally {
+                        tenantConn?.disconnect()
+                    }
+
+                    // Upsert the tenant locally
+                    val tenant = Tenant(
+                        id = tenantId,
+                        name = tenantName,
+                        ownerEmail = cleanEmail,
+                        businessMode = tenantBusinessMode
+                    )
+                    tenantDao.upsert(tenant)
+
+                    // Ensure an outlet exists locally for this tenant
+                    val outlets = outletDao.listForTenant(tenantId)
+                    val serverOutletId = if (obj.isNull("outletId")) null else obj.optLong("outletId")
+                    val outletId = if (outlets.isEmpty()) {
+                        if (serverOutletId != null && serverOutletId > 0) {
+                            outletDao.insert(
+                                Outlet(
+                                    id = serverOutletId,
+                                    tenantId = tenantId,
+                                    name = "Outlet Utama",
+                                    isDefault = true,
+                                    isSynced = true,
+                                    updatedAt = 0L
+                                )
+                            )
+                            serverOutletId
+                        } else {
+                            outletDao.insert(
+                                Outlet(
+                                    tenantId = tenantId,
+                                    name = "Outlet Utama",
+                                    isDefault = true,
+                                    isSynced = true,
+                                    updatedAt = 0L
+                                )
+                            )
+                        }
+                    } else {
+                        if (serverOutletId != null && outlets.any { it.id == serverOutletId }) {
+                            serverOutletId
+                        } else {
+                            outlets.first().id
+                        }
+                    }
+
+                    val fetchedEmpEntity = Employee(
+                        id = obj.getLong("id"),
+                        tenantId = tenantId,
+                        outletId = outletId,
+                        name = obj.getString("name"),
+                        email = cleanEmail,
+                        role = obj.getString("role"),
+                        pinHash = obj.getString("pinHash"),
+                        salary = obj.optDouble("salary", 0.0),
+                        isActive = obj.optBoolean("isActive", true),
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                    )
+                    // Save to local database
+                    employeeDao.insert(fetchedEmpEntity)
+                    if (fetchedEmpEntity.isActive) {
+                        fetchedEmp = fetchedEmpEntity
+
+                        // Update/Upsert the local user record as premium
+                        val existingUser = userDao.getByEmail(cleanEmail)
+                        val updatedUser = (existingUser ?: LocalUser(
+                            googleSub = obj.optString("googleSub", "emp:${fetchedEmpEntity.id}"),
+                            email = cleanEmail,
+                            displayName = fetchedEmpEntity.name,
+                            photoUrl = null,
+                            role = fetchedEmpEntity.role
+                        )).copy(
+                            isPremium = tenantId.startsWith("ten_premium_"),
+                            businessModeLocked = true,
+                            tenantId = tenantId
+                        )
+                        userDao.upsert(updatedUser)
+
+                        // Seed default configurations/settings for this tenant
+                        localDataSeeder.seedDefaultSettings(tenantId)
+                    }
+                }
+            } else if (conn.responseCode == 409) {
+                val errorResponse = conn.errorStream?.bufferedReader()?.use { it.readText() }
+                if (!errorResponse.isNullOrBlank()) {
+                    conflictMessage = errorResponse.replace("\"", "")
+                } else {
+                    networkError = true
+                }
+            } else {
+                networkError = true
+            }
+        } catch (e: java.lang.Exception) {
+            e.printStackTrace()
+            networkError = true
+        } finally {
+            conn?.disconnect()
+        }
+
+        if (conflictMessage != null) {
+            return@withContext LoginOutcome.Error(conflictMessage)
+        }
+
+        if (isStatic) {
             val isPremiumUser = staticInfo != null
             val (hash, displayName, tenantId) = staticInfo ?: staticDemoInfo!!
 
@@ -702,8 +875,41 @@ class AuthRepository @Inject constructor(
             }
             securePrefs.lastActiveTenantId = tenantId
             
-            // Check if there is an employee record in DB (e.g. they changed password)
-            val dbEmp = employeeDao.findByEmail(cleanEmail)
+            // Check if there is an employee record in DB (e.g. they changed password, or fetched above)
+            var dbEmp = employeeDao.findByEmail(cleanEmail)
+            
+            // Auto-upgrade iteration count to 7000 if it's an old v1 hash
+            if (dbEmp != null && dbEmp.pinHash.startsWith("v1$")) {
+                val parts = dbEmp.pinHash.split("$")
+                if (parts.size == 4) {
+                    val currentIters = parts[1].toIntOrNull()
+                    if (currentIters != null && currentIters != PinHasher.ITERATIONS) {
+                        try {
+                            if (PinHasher.verify(password, dbEmp.pinHash)) {
+                                val newHash = PinHasher.hash(password)
+                                val updatedEmp = dbEmp.copy(
+                                    pinHash = newHash,
+                                    isSynced = false,
+                                    updatedAt = System.currentTimeMillis()
+                                )
+                                employeeDao.insert(updatedEmp)
+                                dbEmp = updatedEmp
+                                
+                                // Trigger background immediate push so the server has the new hash too
+                                SupabaseSyncManager.pushEmployeeImmediate(
+                                    context = context,
+                                    db = db,
+                                    activeTenantId = dbEmp.tenantId,
+                                    employeeId = dbEmp.id
+                                )
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                }
+            }
+
             val isPasswordValid = if (dbEmp != null) {
                 if (dbEmp.pinHash.startsWith("v1$")) {
                     PinHasher.verify(password, dbEmp.pinHash)
@@ -799,176 +1005,6 @@ class AuthRepository @Inject constructor(
                 securePrefs.currentOutletId = lockedOutletId
             }
         } else {
-            // Check if we can fetch the latest employee details from the server (if online)
-            var fetchedEmp: Employee? = null
-            var networkError = false
-            var conflictMessage: String? = null
-            var conn: java.net.HttpURLConnection? = null
-            try {
-                val url = java.net.URL("https://www.zedmz.cloud/api/sync/employees?email=eq.$cleanEmail")
-                conn = url.openConnection() as java.net.HttpURLConnection
-                conn.requestMethod = "GET"
-                conn.setRequestProperty("x-client-version", BuildConfig.VERSION_NAME)
-                conn.connectTimeout = 5000
-                conn.readTimeout = 5000
-                if (conn.responseCode in 200..299) {
-                    val response = conn.inputStream.bufferedReader().use { it.readText() }
-                    val array = org.json.JSONArray(response)
-                    if (array.length() > 0) {
-                        val obj = array.getJSONObject(0)
-                        val tenantId = obj.getString("tenantId")
-
-                        // Tenant switch detection
-                        val lastTenant = securePrefs.lastActiveTenantId ?: securePrefs.currentTenantId
-                        if (!tenantId.isNullOrBlank() && !lastTenant.isNullOrBlank() && tenantId != lastTenant) {
-                            try {
-                                db.clearAllTables()
-                                android.util.Log.i("AuthRepository", "Cleared all tables in loginWithEmailPassword due to tenant switch: $lastTenant -> $tenantId")
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                            }
-                        }
-                        
-                        // Check if transitioned from demo to premium
-                        val localEmp = employeeDao.findByEmail(cleanEmail)
-                        val transitioned = localEmp != null && 
-                                           localEmp.tenantId.startsWith("demo_tenant_") && 
-                                           tenantId.startsWith("ten_premium_")
-                                           
-                        if (transitioned) {
-                            // Clear all local SQLite tables (Room)
-                            try {
-                                db.clearAllTables()
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                            }
-                        }
-                        
-                        // Let's first make sure the Tenant exists locally! If not, create it or query from VPS.
-                        var tenantName = "CV. Premium Owner (Premium)"
-                        var tenantBusinessMode = "BMP"
-                        var tenantConn: java.net.HttpURLConnection? = null
-                        try {
-                            val tUrl = java.net.URL("https://www.zedmz.cloud/api/sync/tenants?id=eq.$tenantId")
-                            tenantConn = tUrl.openConnection() as java.net.HttpURLConnection
-                            tenantConn.requestMethod = "GET"
-                            tenantConn.setRequestProperty("x-client-version", BuildConfig.VERSION_NAME)
-                            if (tenantConn.responseCode in 200..299) {
-                                val tResponse = tenantConn.inputStream.bufferedReader().use { it.readText() }
-                                val tArray = org.json.JSONArray(tResponse)
-                                if (tArray.length() > 0) {
-                                    val tObj = tArray.getJSONObject(0)
-                                    tenantName = tObj.getString("name")
-                                    tenantBusinessMode = tObj.getString("businessMode")
-                                }
-                            }
-                        } catch (e: java.lang.Exception) {
-                            e.printStackTrace()
-                        } finally {
-                            tenantConn?.disconnect()
-                        }
-
-                        // Upsert the tenant locally
-                        val tenant = Tenant(
-                            id = tenantId,
-                            name = tenantName,
-                            ownerEmail = cleanEmail,
-                            businessMode = tenantBusinessMode
-                        )
-                        tenantDao.upsert(tenant)
-
-                        // Ensure an outlet exists locally for this tenant
-                        val outlets = outletDao.listForTenant(tenantId)
-                        val serverOutletId = if (obj.isNull("outletId")) null else obj.optLong("outletId")
-                        val outletId = if (outlets.isEmpty()) {
-                            if (serverOutletId != null && serverOutletId > 0) {
-                                outletDao.insert(
-                                    Outlet(
-                                        id = serverOutletId,
-                                        tenantId = tenantId,
-                                        name = "Outlet Utama",
-                                        isDefault = true,
-                                        isSynced = true,
-                                        updatedAt = 0L
-                                    )
-                                )
-                                serverOutletId
-                            } else {
-                                outletDao.insert(
-                                    Outlet(
-                                        tenantId = tenantId,
-                                        name = "Outlet Utama",
-                                        isDefault = true,
-                                        isSynced = true,
-                                        updatedAt = 0L
-                                    )
-                                )
-                            }
-                        } else {
-                            if (serverOutletId != null && outlets.any { it.id == serverOutletId }) {
-                                serverOutletId
-                            } else {
-                                outlets.first().id
-                            }
-                        }
-
-                        val fetchedEmpEntity = Employee(
-                            id = obj.getLong("id"),
-                            tenantId = tenantId,
-                            outletId = outletId,
-                            name = obj.getString("name"),
-                            email = cleanEmail,
-                            role = obj.getString("role"),
-                            pinHash = obj.getString("pinHash"),
-                            salary = obj.optDouble("salary", 0.0),
-                            isActive = obj.optBoolean("isActive", true),
-                            createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
-                            updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
-                        )
-                        // Save to local database
-                        employeeDao.insert(fetchedEmpEntity)
-                        if (fetchedEmpEntity.isActive) {
-                            fetchedEmp = fetchedEmpEntity
-
-                            // Update/Upsert the local user record as premium
-                            val existingUser = userDao.getByEmail(cleanEmail)
-                            val updatedUser = (existingUser ?: LocalUser(
-                                googleSub = obj.optString("googleSub", "emp:${fetchedEmpEntity.id}"),
-                                email = cleanEmail,
-                                displayName = fetchedEmpEntity.name,
-                                photoUrl = null,
-                                role = fetchedEmpEntity.role
-                            )).copy(
-                                isPremium = tenantId.startsWith("ten_premium_"),
-                                businessModeLocked = true,
-                                tenantId = tenantId
-                            )
-                            userDao.upsert(updatedUser)
-
-                            // Seed default configurations/settings for this tenant
-                            localDataSeeder.seedDefaultSettings(tenantId)
-                        }
-                    }
-                } else if (conn.responseCode == 409) {
-                    val errorResponse = conn.errorStream?.bufferedReader()?.use { it.readText() }
-                    if (!errorResponse.isNullOrBlank()) {
-                        conflictMessage = errorResponse.replace("\"", "")
-                    } else {
-                        networkError = true
-                    }
-                } else {
-                    networkError = true
-                }
-            } catch (e: java.lang.Exception) {
-                e.printStackTrace()
-                networkError = true
-            } finally {
-                conn?.disconnect()
-            }
-
-            if (conflictMessage != null) {
-                return@withContext LoginOutcome.Error(conflictMessage)
-            }
             if (networkError) {
                 return@withContext LoginOutcome.Error("Gagal masuk: Server tidak terjangkau atau Anda sedang offline.")
             }
