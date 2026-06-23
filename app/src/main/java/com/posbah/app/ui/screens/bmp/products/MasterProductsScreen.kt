@@ -82,6 +82,7 @@ import kotlinx.coroutines.launch
 
 import android.content.Context
 import com.posbah.app.data.local.PosBahDatabase
+import com.posbah.app.data.remote.SupabaseSyncManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 
@@ -161,6 +162,7 @@ class MasterProductsViewModel @Inject constructor(
                 } else {
                     logActivity("EDIT PRODUK BMP", "Mengubah master produk: ${e.title} (Harga: Rp ${e.price})")
                 }
+                SupabaseSyncManager.enqueueFullSync(context, db, tenantId, null)
                 _form.update { FormState() }
             }
             is OnlineWriteResult.Error -> {
@@ -181,6 +183,7 @@ class MasterProductsViewModel @Inject constructor(
                 if (p != null) {
                     logActivity("HAPUS PRODUK BMP", "Menghapus master produk: ${p.title}")
                 }
+                SupabaseSyncManager.enqueueFullSync(context, db, tenantId, null)
             }
             is OnlineWriteResult.Error -> {
                 _error.value = result.message

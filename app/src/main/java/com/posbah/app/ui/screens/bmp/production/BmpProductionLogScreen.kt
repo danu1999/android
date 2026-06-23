@@ -62,6 +62,7 @@ class BmpProductionLogViewModel @Inject constructor(
     private val logRepo: BmpProductionLogRepository,
     private val masterProductRepo: BmpMasterProductRepository,
     private val authRepository: AuthRepository,
+    private val db: com.posbah.app.data.local.PosBahDatabase,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
@@ -103,6 +104,8 @@ class BmpProductionLogViewModel @Inject constructor(
             _error.value = result.message
         } else if (result is OnlineWriteResult.NoConnection) {
             _error.value = "Tidak ada koneksi internet. Data tidak tersimpan."
+        } else {
+            SupabaseSyncManager.enqueueFullSync(context, db, tenantId, null)
         }
     }
 
@@ -112,6 +115,8 @@ class BmpProductionLogViewModel @Inject constructor(
             _error.value = result.message
         } else if (result is OnlineWriteResult.NoConnection) {
             _error.value = "Tidak ada koneksi internet. Hapus dibatalkan."
+        } else {
+            SupabaseSyncManager.enqueueFullSync(context, db, tenantId, null)
         }
     }
 }

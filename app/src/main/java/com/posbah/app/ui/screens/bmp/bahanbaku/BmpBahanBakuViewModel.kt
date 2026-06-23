@@ -96,6 +96,8 @@ class BahanBakuListViewModel @Inject constructor(
             _error.value = result.message
         } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
             _error.value = "Tidak ada koneksi internet. Hapus dibatalkan."
+        } else {
+            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, null)
         }
     }
 
@@ -105,6 +107,8 @@ class BahanBakuListViewModel @Inject constructor(
             _error.value = result.message
         } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
             _error.value = "Tidak ada koneksi internet."
+        } else {
+            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, null)
         }
     }
 }
@@ -413,6 +417,7 @@ class BahanBakuFormViewModel @Inject constructor(
             } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
                 _ui.update { it.copy(isLoading = false, saveError = "Tidak ada koneksi internet. Data tidak tersimpan.") }
             } else {
+                com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, null)
                 _ui.update { it.copy(isLoading = false, saved = true) }
             }
         }

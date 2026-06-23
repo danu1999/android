@@ -1547,6 +1547,7 @@ object SupabaseSyncManager {
             val bmpProductionLogsArray: JSONArray?
             val printSettingsArray: JSONArray?
             val activityLogsArray: JSONArray?
+            val transactionItemsArray: JSONArray?
 
             coroutineScope {
                 val t1  = async { pullTable(context, "tenants",              activeTenantId) }
@@ -1571,6 +1572,7 @@ object SupabaseSyncManager {
                 val t20 = async { pullTable(context, "bmp_production_logs",  activeTenantId) }
                 val t21 = async { pullTable(context, "print_settings",       activeTenantId) }
                 val t22 = async { pullTable(context, "activity_logs",        activeTenantId) }
+                val t23 = async { pullTable(context, "transaction_items",    activeTenantId) }
 
                 tenantsArray           = t1.await()
                 outletsArray           = t2.await()
@@ -1594,6 +1596,7 @@ object SupabaseSyncManager {
                 bmpProductionLogsArray = t20.await()
                 printSettingsArray     = t21.await()
                 activityLogsArray      = t22.await()
+                transactionItemsArray  = t23.await()
             }
 
             // Parse transactionsArray and fetch transaction items in parallel before entering the DB transaction
@@ -1648,26 +1651,6 @@ object SupabaseSyncManager {
                         updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
                     ))
                 }
-            }
-
-            val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
-            val recentFnbTxIds = transactionEntities.filter { tx ->
-                val isRental = tx.receiptNumber.startsWith("RN-")
-                val isLaundry = tx.receiptNumber.startsWith("LD-")
-                !isRental && !isLaundry && tx.createdAt >= thirtyDaysAgo
-            }.map { it.id }.toSet()
-
-            val allTargetTxIds = (activeTxIds + recentFnbTxIds).toSet()
-            val txItemResults: Map<Long, JSONArray?> = if (allTargetTxIds.isNotEmpty()) {
-                coroutineScope {
-                    allTargetTxIds.map { txId ->
-                        txId to async {
-                            pullTable(context, "transaction_items", activeTenantId, "transactionId=eq.$txId")
-                        }
-                    }.associate { (txId, deferred) -> txId to deferred.await() }
-                }
-            } else {
-                emptyMap()
             }
 
             Log.d(TAG, "[pullAll] Semua fetch paralel selesai, mulai menulis ke DB...")
@@ -1886,17 +1869,25 @@ object SupabaseSyncManager {
                 transactionEntities.forEach { db.transactionDao().insert(it) }
             }
 
-            // 6. Pull transaction_items (pre-fetched outside transaction)
-            for ((txId, itemsArray) in txItemResults) {
-                if (itemsArray != null) {
-                    val itemsList = mutableListOf<TransactionItemEntity>()
-                    for (i in 0 until itemsArray.length()) {
-                        val obj = itemsArray.getJSONObject(i)
+            // 6. Pull transaction_items
+            if (transactionItemsArray != null && transactionItemsArray.length() > 0) {
+                val tenantTxIds = transactionEntities.map { it.id }.toSet()
+                if (tenantTxIds.isNotEmpty()) {
+                    tenantTxIds.forEach { txId ->
+                        db.transactionItemDao().deleteForTransaction(txId)
+                    }
+                }
+
+                val itemsList = mutableListOf<TransactionItemEntity>()
+                for (i in 0 until transactionItemsArray.length()) {
+                    val obj = transactionItemsArray.getJSONObject(i)
+                    val txId = obj.optLong("transactionId", 0L)
+                    if (txId in tenantTxIds) {
                         val variantId = if (obj.isNull("variantId")) null else obj.optLong("variantId")
                         val variantName = if (obj.isNull("variantName")) null else obj.optString("variantName")
                         itemsList.add(TransactionItemEntity(
                             id = obj.optLong("id", 0L),
-                            transactionId = obj.optLong("transactionId", txId),
+                            transactionId = txId,
                             productId = obj.optLong("productId", 0L),
                             variantId = variantId,
                             variantName = variantName,
@@ -1907,9 +1898,9 @@ object SupabaseSyncManager {
                             note = if (obj.isNull("note")) null else obj.optString("note")
                         ))
                     }
-                    if (itemsList.isNotEmpty()) {
-                        db.transactionItemDao().insertAll(itemsList)
-                    }
+                }
+                if (itemsList.isNotEmpty()) {
+                    db.transactionItemDao().insertAll(itemsList)
                 }
             }
 

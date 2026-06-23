@@ -4129,8 +4129,9 @@ func handleSyncQuery(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			} else {
-				http.Error(w, "Bad Request: transactionId filter required for transaction_items", http.StatusBadRequest)
-				return
+				whereClauses = append(whereClauses, fmt.Sprintf(`"transactionId" IN (SELECT "id" FROM "transactions" WHERE "tenantId" = $%d)`, idx))
+				args = append(args, tenantID)
+				idx++
 			}
 		} else if tableName == "tenants" {
 			hasIdFilter := false

@@ -178,10 +178,10 @@ class BmpInvoiceRepository @Inject constructor(
         if (vpsResult !is OnlineWriteResult.Success) return Pair(-1L, vpsResult)
 
         // ── 2. VPS berhasil → simpan ke Room ─────────────────────────────────
-        val id = db.withTransaction {
+        val (id, paymentIds, cashflowIds) = db.withTransaction {
             val newId = invoiceDao.insert(final)
             val mappedProducts = products.map {
-                it.copy(invoiceId = newId, isSynced = true)
+                it.copy(invoiceId = newId, isSynced = false)
             }
             productDao.insertAll(mappedProducts)
 
@@ -200,6 +200,9 @@ class BmpInvoiceRepository @Inject constructor(
                 }
             }
 
+            val payIds = mutableListOf<Long>()
+            val cfIds = mutableListOf<Long>()
+
             if (totalPaid > 0) {
                 val payment = BmpInvoicePaymentEntity(
                     tenantId = invoice.tenantId,
@@ -208,9 +211,11 @@ class BmpInvoiceRepository @Inject constructor(
                     paymentAmount = totalPaid,
                     paymentMethod = "CASH",
                     notes = "Uang muka saat pembuatan Invoice",
-                    isSynced = true
+                    isSynced = false
                 )
                 val paymentId = paymentDao.insert(payment)
+                payIds.add(paymentId)
+
                 val cf = BmpCashFlowEntity(
                     tenantId = invoice.tenantId,
                     transactionDate = System.currentTimeMillis(),
@@ -218,32 +223,64 @@ class BmpInvoiceRepository @Inject constructor(
                     description = "Pembayaran Invoice ${final.number}",
                     amount = totalPaid,
                     paymentRefId = paymentId,
-                    isSynced = true
+                    isSynced = false
                 )
-                cashFlowDao.insert(cf)
+                val cfId = cashFlowDao.insert(cf)
+                cfIds.add(cfId)
             }
 
             // Check for isKhusus items with hargaBeli > 0
             for (prod in mappedProducts) {
                 if (prod.isKhusus && prod.hargaBeli > 0) {
-                    cashFlowDao.insert(
-                        BmpCashFlowEntity(
-                            tenantId = prod.tenantId,
-                            transactionDate = System.currentTimeMillis(),
-                            transactionType = "KELUAR",
-                            description = "Pembelian barang khusus untuk Faktur ${final.number}",
-                            amount = prod.hargaBeli,
-                            isSynced = true
-                        )
+                    val cf = BmpCashFlowEntity(
+                        tenantId = prod.tenantId,
+                        transactionDate = System.currentTimeMillis(),
+                        transactionType = "KELUAR",
+                        description = "Pembelian barang khusus untuk Faktur ${final.number}",
+                        amount = prod.hargaBeli,
+                        isSynced = false
                     )
+                    val cfId = cashFlowDao.insert(cf)
+                    cfIds.add(cfId)
                 }
             }
-            newId
+            Triple(newId, payIds, cfIds)
         }
 
         // Upload products ke VPS dengan invoiceId yang sudah benar
         val productsForVps = productDao.listByInvoice(id)
-        BmpOnlineWriter.upsertProducts(context, final.tenantId, productsForVps)
+        if (productsForVps.isNotEmpty()) {
+            val prodRes = BmpOnlineWriter.upsertProducts(context, final.tenantId, productsForVps)
+            if (prodRes is SupabaseSyncManager.SyncResult.Success) {
+                productsForVps.forEach { productDao.markSynced(it.id) }
+            }
+        }
+
+        // Upload payments if any
+        if (paymentIds.isNotEmpty()) {
+            val paymentsForVps = paymentIds.mapNotNull { paymentDao.getById(it) }
+            if (paymentsForVps.isNotEmpty()) {
+                paymentsForVps.forEach { pay ->
+                    val payRes = BmpOnlineWriter.upsertPayment(context, final.tenantId, pay)
+                    if (payRes is SupabaseSyncManager.SyncResult.Success) {
+                        paymentDao.markSynced(pay.id)
+                    }
+                }
+            }
+        }
+
+        // Upload cashflows if any
+        if (cashflowIds.isNotEmpty()) {
+            cashflowIds.forEach { cfId ->
+                val savedCf = cashFlowDao.getAll().find { it.id == cfId }
+                if (savedCf != null) {
+                    val cfRes = BmpOnlineWriter.upsertCashFlow(context, final.tenantId, savedCf)
+                    if (cfRes is SupabaseSyncManager.SyncResult.Success) {
+                        cashFlowDao.markSynced(cfId)
+                    }
+                }
+            }
+        }
 
         return Pair(id, OnlineWriteResult.Success)
     }
@@ -284,7 +321,7 @@ class BmpInvoiceRepository @Inject constructor(
         if (vpsResult !is OnlineWriteResult.Success) return vpsResult
 
         // ── 2. VPS berhasil → update Room ─────────────────────────────────────
-        db.withTransaction {
+        val cashflowIds = db.withTransaction {
             // Restore stock of old products before deleting them
             val oldProducts = productDao.listByInvoice(invoice.id)
             for (prod in oldProducts) {
@@ -304,7 +341,7 @@ class BmpInvoiceRepository @Inject constructor(
             productDao.deleteByInvoice(invoice.id)
             invoiceDao.update(finalInvoice)
 
-            val mappedProducts = products.map { it.copy(invoiceId = invoice.id, isSynced = true) }
+            val mappedProducts = products.map { it.copy(invoiceId = invoice.id, isSynced = false) }
             productDao.insertAll(mappedProducts)
 
             // Deduct stock of new products
@@ -324,25 +361,45 @@ class BmpInvoiceRepository @Inject constructor(
 
             // Re-sync cash flow exits for this invoice
             cashFlowDao.deleteExitsForInvoice(invoice.number)
+            val cfIds = mutableListOf<Long>()
             for (prod in mappedProducts) {
                 if (prod.isKhusus && prod.hargaBeli > 0) {
-                    cashFlowDao.insert(
-                        BmpCashFlowEntity(
-                            tenantId = prod.tenantId,
-                            transactionDate = System.currentTimeMillis(),
-                            transactionType = "KELUAR",
-                            description = "Pembelian barang khusus untuk Faktur ${invoice.number}",
-                            amount = prod.hargaBeli,
-                            isSynced = true
-                        )
+                    val cf = BmpCashFlowEntity(
+                        tenantId = prod.tenantId,
+                        transactionDate = System.currentTimeMillis(),
+                        transactionType = "KELUAR",
+                        description = "Pembelian barang khusus untuk Faktur ${invoice.number}",
+                        amount = prod.hargaBeli,
+                        isSynced = false
                     )
+                    val cfId = cashFlowDao.insert(cf)
+                    cfIds.add(cfId)
                 }
             }
+            cfIds
         }
 
         // Upload updated products to VPS
         val updatedProducts = productDao.listByInvoice(invoice.id)
-        BmpOnlineWriter.upsertProducts(context, finalInvoice.tenantId, updatedProducts)
+        if (updatedProducts.isNotEmpty()) {
+            val prodRes = BmpOnlineWriter.upsertProducts(context, finalInvoice.tenantId, updatedProducts)
+            if (prodRes is SupabaseSyncManager.SyncResult.Success) {
+                updatedProducts.forEach { productDao.markSynced(it.id) }
+            }
+        }
+
+        // Upload new cashflows if any
+        if (cashflowIds.isNotEmpty()) {
+            cashflowIds.forEach { cfId ->
+                val savedCf = cashFlowDao.getAll().find { it.id == cfId }
+                if (savedCf != null) {
+                    val cfRes = BmpOnlineWriter.upsertCashFlow(context, finalInvoice.tenantId, savedCf)
+                    if (cfRes is SupabaseSyncManager.SyncResult.Success) {
+                        cashFlowDao.markSynced(cfId)
+                    }
+                }
+            }
+        }
 
         return OnlineWriteResult.Success
     }
@@ -484,7 +541,7 @@ class BmpInvoiceRepository @Inject constructor(
             paymentAmount = paymentAmount,
             paymentMethod = paymentMethod,
             notes = notes,
-            isSynced = true
+            isSynced = false
         )
 
         // Insert to Room first to get the real id, then upsert to VPS
@@ -496,6 +553,7 @@ class BmpInvoiceRepository @Inject constructor(
             paymentDao.softDelete(paymentId)
             return vpsPayment
         }
+        paymentDao.markSynced(paymentId)
 
         val totalPaid = paymentDao.sumForInvoice(invoiceId)
         val newStatus = when {
@@ -512,10 +570,14 @@ class BmpInvoiceRepository @Inject constructor(
             description = "Pembayaran Invoice ${invoice.number}",
             amount = paymentAmount,
             paymentRefId = paymentId,
-            isSynced = true
+            isSynced = false
         )
-        cashFlowDao.insert(cf)
-        BmpOnlineWriter.upsertCashFlow(context, tenantId, cf)
+        val cfId = cashFlowDao.insert(cf)
+        val finalCf = cf.copy(id = cfId)
+        val cfRes = BmpOnlineWriter.upsertCashFlow(context, tenantId, finalCf)
+        if (cfRes is SupabaseSyncManager.SyncResult.Success) {
+            cashFlowDao.markSynced(cfId)
+        }
 
         return OnlineWriteResult.Success
     }
@@ -538,12 +600,13 @@ class BmpInvoiceRepository @Inject constructor(
             paymentMethod = paymentMethod,
             notes = notes,
             paymentDate = paymentDate,
-            isSynced = true
+            isSynced = false
         )
         val vpsResult = BmpOnlineWriter.upsertPayment(context, tenantId, updatedPayment).toOnlineWriteResult()
         if (vpsResult !is OnlineWriteResult.Success) return vpsResult
 
         paymentDao.update(updatedPayment)
+        paymentDao.markSynced(paymentId)
 
         val existingCf = cashFlowDao.getByPaymentRefId(paymentId)
         if (existingCf != null) {
@@ -551,10 +614,13 @@ class BmpInvoiceRepository @Inject constructor(
                 amount = newAmount,
                 transactionDate = paymentDate,
                 description = "Pembayaran Invoice ${invoice.number}",
-                isSynced = true
+                isSynced = false
             )
             cashFlowDao.update(updatedCf)
-            BmpOnlineWriter.upsertCashFlow(context, tenantId, updatedCf)
+            val cfRes = BmpOnlineWriter.upsertCashFlow(context, tenantId, updatedCf)
+            if (cfRes is SupabaseSyncManager.SyncResult.Success) {
+                cashFlowDao.markSynced(updatedCf.id)
+            }
         } else {
             val newCf = BmpCashFlowEntity(
                 tenantId = tenantId,
@@ -563,10 +629,14 @@ class BmpInvoiceRepository @Inject constructor(
                 description = "Pembayaran Invoice ${invoice.number}",
                 amount = newAmount,
                 paymentRefId = paymentId,
-                isSynced = true
+                isSynced = false
             )
-            cashFlowDao.insert(newCf)
-            BmpOnlineWriter.upsertCashFlow(context, tenantId, newCf)
+            val newCfId = cashFlowDao.insert(newCf)
+            val finalCf = newCf.copy(id = newCfId)
+            val cfRes = BmpOnlineWriter.upsertCashFlow(context, tenantId, finalCf)
+            if (cfRes is SupabaseSyncManager.SyncResult.Success) {
+                cashFlowDao.markSynced(newCfId)
+            }
         }
 
         recalculateInvoiceStatus(invoiceId)
@@ -816,30 +886,44 @@ class BmpBahanBakuRepository @Inject constructor(
         if (vpsHeader !is OnlineWriteResult.Success) return Pair(-1L, vpsHeader)
 
         // Save to Room
-        val id = db.withTransaction {
+        val (id, cfId) = db.withTransaction {
             val newId = bahanBakuDao.insert(finalHeader)
-            val mappedItems = items.map { it.copy(bahanBakuId = newId, isSynced = true) }
+            val mappedItems = items.map { it.copy(bahanBakuId = newId, isSynced = false) }
             itemDao.insertAll(mappedItems)
 
+            var newCfId: Long? = null
             if (finalHeader.nominal > 0) {
-                cashFlowDao.insert(
-                    BmpCashFlowEntity(
-                        tenantId = finalHeader.tenantId,
-                        transactionDate = finalHeader.tanggal,
-                        transactionType = "KELUAR",
-                        description = "Pembayaran Bahan Baku - Tagihan: ${finalHeader.noTagihan}",
-                        amount = finalHeader.nominal,
-                        paymentRefId = newId,
-                        isSynced = true
-                    )
+                val cf = BmpCashFlowEntity(
+                    tenantId = finalHeader.tenantId,
+                    transactionDate = finalHeader.tanggal,
+                    transactionType = "KELUAR",
+                    description = "Pembayaran Bahan Baku - Tagihan: ${finalHeader.noTagihan}",
+                    amount = finalHeader.nominal,
+                    paymentRefId = newId,
+                    isSynced = false
                 )
+                newCfId = cashFlowDao.insert(cf)
             }
-            newId
+            Pair(newId, newCfId)
         }
 
         // Push items to VPS with correct bahanBakuId
         val savedItems = itemDao.listByBahanBaku(id)
-        BmpOnlineWriter.upsertBahanBakuItems(context, finalHeader.tenantId, savedItems)
+        val itemsRes = BmpOnlineWriter.upsertBahanBakuItems(context, finalHeader.tenantId, savedItems)
+        if (itemsRes is SupabaseSyncManager.SyncResult.Success) {
+            savedItems.forEach { itemDao.markSynced(it.id) }
+        }
+
+        // Push cashflow if any
+        if (cfId != null) {
+            val savedCf = cashFlowDao.getByPaymentRefId(id)
+            if (savedCf != null) {
+                val cfRes = BmpOnlineWriter.upsertCashFlow(context, finalHeader.tenantId, savedCf)
+                if (cfRes is SupabaseSyncManager.SyncResult.Success) {
+                    cashFlowDao.markSynced(cfId)
+                }
+            }
+        }
 
         return Pair(id, OnlineWriteResult.Success)
     }
@@ -860,30 +944,45 @@ class BmpBahanBakuRepository @Inject constructor(
         val vpsResult = BmpOnlineWriter.upsertBahanBaku(context, finalHeader.tenantId, finalHeader).toOnlineWriteResult()
         if (vpsResult !is OnlineWriteResult.Success) return vpsResult
 
-        db.withTransaction {
+        val cfId = db.withTransaction {
             bahanBakuDao.update(finalHeader)
             itemDao.deleteByBahanBaku(finalHeader.id)
-            val mappedItems = items.map { it.copy(bahanBakuId = finalHeader.id, isSynced = true) }
+            val mappedItems = items.map { it.copy(bahanBakuId = finalHeader.id, isSynced = false) }
             itemDao.insertAll(mappedItems)
 
+            var insertedCfId: Long? = null
             val diff = finalHeader.nominal - oldNominal
             if (diff > 0) {
-                cashFlowDao.insert(
-                    BmpCashFlowEntity(
-                        tenantId = finalHeader.tenantId,
-                        transactionDate = System.currentTimeMillis(),
-                        transactionType = "KELUAR",
-                        description = "Penyesuaian Bahan Baku - Tagihan: ${finalHeader.noTagihan}",
-                        amount = diff,
-                        paymentRefId = finalHeader.id,
-                        isSynced = true
-                    )
+                val cf = BmpCashFlowEntity(
+                    tenantId = finalHeader.tenantId,
+                    transactionDate = System.currentTimeMillis(),
+                    transactionType = "KELUAR",
+                    description = "Penyesuaian Bahan Baku - Tagihan: ${finalHeader.noTagihan}",
+                    amount = diff,
+                    paymentRefId = finalHeader.id,
+                    isSynced = false
                 )
+                insertedCfId = cashFlowDao.insert(cf)
             }
+            insertedCfId
         }
 
         val savedItems = itemDao.listByBahanBaku(finalHeader.id)
-        BmpOnlineWriter.upsertBahanBakuItems(context, finalHeader.tenantId, savedItems)
+        val itemsRes = BmpOnlineWriter.upsertBahanBakuItems(context, finalHeader.tenantId, savedItems)
+        if (itemsRes is SupabaseSyncManager.SyncResult.Success) {
+            savedItems.forEach { itemDao.markSynced(it.id) }
+        }
+
+        if (cfId != null) {
+            val savedCf = cashFlowDao.getAll().find { it.id == cfId }
+            if (savedCf != null) {
+                val cfRes = BmpOnlineWriter.upsertCashFlow(context, finalHeader.tenantId, savedCf)
+                if (cfRes is SupabaseSyncManager.SyncResult.Success) {
+                    cashFlowDao.markSynced(cfId)
+                }
+            }
+        }
+
         return OnlineWriteResult.Success
     }
 
@@ -895,17 +994,21 @@ class BmpBahanBakuRepository @Inject constructor(
         if (vpsResult !is OnlineWriteResult.Success) return vpsResult
 
         bahanBakuDao.update(updatedHeader)
-        cashFlowDao.insert(
-            BmpCashFlowEntity(
-                tenantId = header.tenantId,
-                transactionDate = System.currentTimeMillis(),
-                transactionType = "KELUAR",
-                description = "Pembayaran Hutang Supplier - Tagihan: ${header.noTagihan}",
-                amount = amountPaidNow,
-                paymentRefId = id,
-                isSynced = true
-            )
+        val cf = BmpCashFlowEntity(
+            tenantId = header.tenantId,
+            transactionDate = System.currentTimeMillis(),
+            transactionType = "KELUAR",
+            description = "Pembayaran Hutang Supplier - Tagihan: ${header.noTagihan}",
+            amount = amountPaidNow,
+            paymentRefId = id,
+            isSynced = false
         )
+        val cfId = cashFlowDao.insert(cf)
+        val finalCf = cf.copy(id = cfId)
+        val cfRes = BmpOnlineWriter.upsertCashFlow(context, tenantId, finalCf)
+        if (cfRes is SupabaseSyncManager.SyncResult.Success) {
+            cashFlowDao.markSynced(cfId)
+        }
         return OnlineWriteResult.Success
     }
 
@@ -969,7 +1072,7 @@ class BmpStockRepository @Inject constructor(
         referenceId: Long,
         notes: String? = null
     ) {
-        db.withTransaction {
+        val (stockEntity, ledger) = db.withTransaction {
             val existing = stockDao.getByProductId(tenantId, productId)
             val newQty = (existing?.quantity ?: 0.0) + change
             val stockEntity: BmpProductStockEntity = if (existing == null) {
@@ -978,14 +1081,14 @@ class BmpStockRepository @Inject constructor(
                     masterProductId = productId,
                     quantity = newQty,
                     minStockAlert = 0.0,
-                    isSynced = true,
+                    isSynced = false,
                     updatedAt = System.currentTimeMillis()
                 )
-                stockDao.upsert(newStock)
-                newStock
+                val idVal = stockDao.upsert(newStock)
+                newStock.copy(id = idVal)
             } else {
                 stockDao.updateQuantity(tenantId, productId, newQty)
-                existing.copy(quantity = newQty, isSynced = true)
+                existing.copy(quantity = newQty, isSynced = false, updatedAt = System.currentTimeMillis())
             }
 
             val ledger = BmpStockLedgerEntity(
@@ -996,21 +1099,26 @@ class BmpStockRepository @Inject constructor(
                 quantityChange = change,
                 finalStock = newQty,
                 notes = notes,
-                isSynced = true,
+                isSynced = false,
                 createdAt = System.currentTimeMillis()
             )
-            ledgerDao.insert(ledger)
+            val ledgerId = ledgerDao.insert(ledger)
+            val finalLedger = ledger.copy(id = ledgerId)
+            Pair(stockEntity, finalLedger)
+        }
 
-            // Push to VPS in background (non-blocking, best-effort after room commit)
-            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                try {
-                    BmpOnlineWriter.upsertProductStock(context, tenantId, stockEntity)
-                    val savedLedger = ledgerDao.getLatest(tenantId, productId)
-                    if (savedLedger != null) {
-                        BmpOnlineWriter.upsertStockLedger(context, tenantId, savedLedger)
-                    }
-                } catch (_: Exception) {}
-            }
+        // Push to VPS in background (non-blocking, best-effort after room commit)
+        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val stockRes = BmpOnlineWriter.upsertProductStock(context, tenantId, stockEntity)
+                if (stockRes is SupabaseSyncManager.SyncResult.Success) {
+                    stockDao.markSynced(stockEntity.id)
+                }
+                val ledgerRes = BmpOnlineWriter.upsertStockLedger(context, tenantId, ledger)
+                if (ledgerRes is SupabaseSyncManager.SyncResult.Success) {
+                    ledgerDao.markSynced(ledger.id)
+                }
+            } catch (_: Exception) {}
         }
     }
 }
