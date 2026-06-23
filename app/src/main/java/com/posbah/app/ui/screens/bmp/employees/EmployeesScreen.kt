@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -78,11 +80,18 @@ class EmployeesViewModel @Inject constructor(
     val employees = repo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val payrolls = repo.observePayrolls(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val outlets = db.outletDao().observeForTenant(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val posEmployees = db.employeeDao().observeForTenant(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val error = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     fun dismissError() { error.value = null }
 
-    fun upsert(e: BmpEmployeeEntity) = viewModelScope.launch {
+    fun upsert(
+        e: BmpEmployeeEntity,
+        addToPos: Boolean,
+        posEmail: String,
+        posPin: String,
+        posRole: String
+    ) = viewModelScope.launch {
         val currentEmployees = employees.value.filter { it.isActive }
         
         if (e.outletId != null) {
@@ -105,9 +114,64 @@ class EmployeesViewModel @Inject constructor(
             }
         }
 
-        val generatedId = repo.upsert(e)
-        val targetId = if (e.id != 0L) e.id else generatedId
+        var finalEmployeeId = e.employeeId
         val email = authRepository.activeUserEmail()
+
+        if (addToPos) {
+            if (posEmail.isBlank()) {
+                error.value = "Gagal: Email POS tidak boleh kosong."
+                return@launch
+            }
+            val hashedPassword = if (posPin.isNotBlank()) com.posbah.app.security.PinHasher.hash(posPin) else ""
+
+            if (e.employeeId != null) {
+                val existing = db.employeeDao().getById(e.employeeId)
+                if (existing != null) {
+                    val updatedPos = existing.copy(
+                        name = e.name,
+                        email = posEmail,
+                        role = posRole,
+                        pinHash = if (posPin.isNotBlank()) hashedPassword else existing.pinHash,
+                        outletId = e.outletId,
+                        salary = e.salaryAmount,
+                        isSynced = false,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                    db.employeeDao().update(updatedPos)
+                    com.posbah.app.data.remote.SupabaseSyncManager.pushEmployeeImmediate(context, db, tenantId, existing.id, email)
+                }
+            } else {
+                if (posPin.isBlank()) {
+                    error.value = "Gagal: PIN POS wajib diisi untuk karyawan baru."
+                    return@launch
+                }
+                val alreadyUsed = db.employeeDao().findByEmail(posEmail)
+                if (alreadyUsed != null && alreadyUsed.tenantId == tenantId) {
+                    error.value = "Gagal: Email POS sudah terdaftar."
+                    return@launch
+                }
+                val newPos = com.posbah.app.data.local.entities.Employee(
+                    tenantId = tenantId,
+                    outletId = e.outletId,
+                    name = e.name,
+                    email = posEmail,
+                    role = posRole,
+                    pinHash = hashedPassword,
+                    salary = e.salaryAmount,
+                    isActive = true,
+                    isSynced = false
+                )
+                val newId = db.employeeDao().insert(newPos)
+                finalEmployeeId = newId
+                com.posbah.app.data.remote.SupabaseSyncManager.pushEmployeeImmediate(context, db, tenantId, newId, email)
+            }
+        } else {
+            finalEmployeeId = null
+        }
+
+        val toSave = e.copy(employeeId = finalEmployeeId)
+        val generatedId = repo.upsert(toSave)
+        val targetId = if (e.id != 0L) e.id else generatedId
         com.posbah.app.data.remote.SupabaseSyncManager.pushBmpEmployeeImmediate(context, db, tenantId, targetId, email)
         com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, email)
     }
@@ -247,11 +311,22 @@ fun EmployeesScreen(
         }
         var outletDropdownExpanded by remember { mutableStateOf(false) }
 
+        val posEmployees by viewModel.posEmployees.collectAsState()
+        var addToPos by remember { mutableStateOf(editing.employeeId != null) }
+        val linkedPosEmp = remember(editing.employeeId, posEmployees) {
+            posEmployees.firstOrNull { it.id == editing.employeeId }
+        }
+        var posEmail by remember { mutableStateOf(linkedPosEmp?.email.orEmpty()) }
+        var posPin by remember { mutableStateOf("") }
+        var posRole by remember { mutableStateOf(linkedPosEmp?.role ?: "KASIR") }
+        var posRoleDropdownExpanded by remember { mutableStateOf(false) }
+
         AlertDialog(
             onDismissRequest = { formEdit = null },
             title = { Text(if (editing.id == 0L) "Karyawan Baru" else "Edit Karyawan") },
             text = {
-                Column {
+                val scrollState = androidx.compose.foundation.rememberScrollState()
+                Column(modifier = Modifier.fillMaxWidth().verticalScroll(scrollState)) {
                     OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nama / ID Karyawan") },
                         modifier = Modifier.fillMaxWidth().testTag("emp-name"))
                     Spacer(Modifier.size(8.dp))
@@ -311,19 +386,93 @@ fun EmployeesScreen(
                             }
                         }
                     }
+                    Spacer(Modifier.size(8.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable { addToPos = !addToPos }.padding(vertical = 4.dp)
+                    ) {
+                        androidx.compose.material3.Checkbox(
+                            checked = addToPos,
+                            onCheckedChange = { addToPos = it }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Daftarkan ke Karyawan Outlet (POS)", fontSize = 14.sp)
+                    }
+                    if (addToPos) {
+                        Spacer(Modifier.size(8.dp))
+                        OutlinedTextField(
+                            value = posEmail,
+                            onValueChange = { posEmail = it },
+                            label = { Text("Email POS (G-Mail)") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.size(8.dp))
+                        OutlinedTextField(
+                            value = posPin,
+                            onValueChange = { posPin = it.filter { c -> c.isDigit() } },
+                            label = { Text(if (editing.employeeId != null) "Ganti PIN POS (Numerik, Opsional)" else "PIN POS Baru (Numerik)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.size(8.dp))
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            OutlinedTextField(
+                                value = if (posRole == "ADMIN") "Administrator" else "Kasir",
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Role POS") },
+                                trailingIcon = {
+                                    IconButton(onClick = { posRoleDropdownExpanded = true }) {
+                                        Text("▾", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { posRoleDropdownExpanded = true }
+                            )
+                            DropdownMenu(
+                                expanded = posRoleDropdownExpanded,
+                                onDismissRequest = { posRoleDropdownExpanded = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Kasir") },
+                                    onClick = {
+                                        posRole = "KASIR"
+                                        posRoleDropdownExpanded = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Administrator") },
+                                    onClick = {
+                                        posRole = "ADMIN"
+                                        posRoleDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
             },
             confirmButton = {
                 TextButton(
                     onClick = {
                         if (name.isNotBlank()) {
-                            viewModel.upsert(editing.copy(
-                                name = name,
-                                position = position.ifBlank { null },
-                                salaryAmount = salary.replace(",", "").toDoubleOrNull() ?: 0.0,
-                                fingerprintPIN = pin.ifBlank { null },
-                                outletId = selectedOutletId
-                            ))
+                            viewModel.upsert(
+                                editing.copy(
+                                    name = name,
+                                    position = position.ifBlank { null },
+                                    salaryAmount = salary.replace(",", "").toDoubleOrNull() ?: 0.0,
+                                    fingerprintPIN = pin.ifBlank { null },
+                                    outletId = selectedOutletId
+                                ),
+                                addToPos = addToPos,
+                                posEmail = posEmail,
+                                posPin = posPin,
+                                posRole = posRole
+                            )
                             formEdit = null
                         }
                     },

@@ -67,15 +67,23 @@ class BmpClientRepository @Inject constructor(
      * Mengembalikan [OnlineWriteResult] agar caller dapat menampilkan error ke UI.
      */
     suspend fun upsert(context: Context, client: BmpClientEntity): OnlineWriteResult {
-        val final = client.copy(
+        val isNew = client.id == 0L
+        val clientDraft = client.copy(
             uniqueID = client.uniqueID ?: UUID.randomUUID().toString(),
             slug = client.slug ?: client.clientName.toSlug(),
-            isSynced = true,
+            isSynced = false,
             updatedAt = System.currentTimeMillis()
         )
+        val localId = dao.upsert(clientDraft)
+        val final = clientDraft.copy(id = if (isNew) localId else clientDraft.id, isSynced = true)
+
         val result = BmpOnlineWriter.upsertClient(context, final.tenantId, final).toOnlineWriteResult()
         if (result is OnlineWriteResult.Success) {
             dao.upsert(final)
+        } else {
+            if (isNew) {
+                dao.hardDelete(localId)
+            }
         }
         return result
     }
@@ -169,15 +177,10 @@ class BmpInvoiceRepository @Inject constructor(
             status = newStatus,
             dueDate = computedDueDate,
             slug = invoice.slug.ifBlank { autoSlug(invoice.number) },
-            isSynced = true
+            isSynced = false
         )
 
-        // ── 1. Tulis ke VPS dulu ─────────────────────────────────────────────
-        // Buat placeholder products dengan id=0 dulu untuk upsert invoice header
-        val vpsResult = BmpOnlineWriter.upsertInvoice(context, final.tenantId, final).toOnlineWriteResult()
-        if (vpsResult !is OnlineWriteResult.Success) return Pair(-1L, vpsResult)
-
-        // ── 2. VPS berhasil → simpan ke Room ─────────────────────────────────
+        // ── 1. Save to Room first to generate true IDs ───────────────────────
         val (id, paymentIds, cashflowIds) = db.withTransaction {
             val newId = invoiceDao.insert(final)
             val mappedProducts = products.map { prod ->
@@ -254,7 +257,44 @@ class BmpInvoiceRepository @Inject constructor(
             Triple(newId, payIds, cfIds)
         }
 
-        // Upload products ke VPS dengan invoiceId yang sudah benar
+        // ── 2. Get saved invoice with Room-generated ID and push header to VPS ──
+        val savedInvoice = invoiceDao.getById(id) ?: return Pair(-1L, OnlineWriteResult.Error("Gagal simpan invoice lokal"))
+        val finalInvoiceWithId = savedInvoice.copy(isSynced = true)
+
+        val vpsResult = BmpOnlineWriter.upsertInvoice(context, final.tenantId, finalInvoiceWithId).toOnlineWriteResult()
+        if (vpsResult !is OnlineWriteResult.Success) {
+            // Rollback/delete the inserted local data
+            db.withTransaction {
+                val insertedProducts = productDao.listByInvoice(id)
+                for (prod in insertedProducts) {
+                    if (prod.masterItemID != null) {
+                        stockRepo.adjustStock(
+                            context = context,
+                            tenantId = invoice.tenantId,
+                            productId = prod.masterItemID,
+                            change = (prod.quantity * prod.jumlahLusin), // add back the stock
+                            mutationType = "PENJUALAN",
+                            referenceId = id,
+                            notes = "Batal Penjualan Invoice #${final.number}"
+                        )
+                    }
+                }
+                productDao.deleteByInvoice(id)
+                for (payId in paymentIds) {
+                    paymentDao.hardDelete(payId)
+                }
+                for (cfId in cashflowIds) {
+                    cashFlowDao.hardDelete(cfId)
+                }
+                invoiceDao.hardDelete(id)
+            }
+            return Pair(-1L, vpsResult)
+        }
+
+        // Mark invoice header as synced in Room
+        invoiceDao.markSynced(id)
+
+        // ── 3. VPS header successful → upload products, payments, cashflows ──
         val productsForVps = productDao.listByInvoice(id)
         if (productsForVps.isNotEmpty()) {
             val prodRes = BmpOnlineWriter.upsertProducts(context, final.tenantId, productsForVps)
@@ -263,7 +303,6 @@ class BmpInvoiceRepository @Inject constructor(
             }
         }
 
-        // Upload payments if any
         if (paymentIds.isNotEmpty()) {
             val paymentsForVps = paymentIds.mapNotNull { paymentDao.getById(it) }
             if (paymentsForVps.isNotEmpty()) {
@@ -276,7 +315,6 @@ class BmpInvoiceRepository @Inject constructor(
             }
         }
 
-        // Upload cashflows if any
         if (cashflowIds.isNotEmpty()) {
             cashflowIds.forEach { cfId ->
                 val savedCf = cashFlowDao.getAll().find { it.id == cfId }
@@ -806,9 +844,19 @@ class BmpMasterProductRepository @Inject constructor(
     suspend fun getById(id: Long) = dao.getById(id)
 
     suspend fun upsert(ctx: Context, p: BmpMasterProductEntity): OnlineWriteResult {
-        val final = p.copy(isSynced = true, updatedAt = System.currentTimeMillis())
+        val isNew = p.id == 0L
+        val draft = p.copy(isSynced = false, updatedAt = System.currentTimeMillis())
+        val localId = dao.upsert(draft)
+        val final = draft.copy(id = if (isNew) localId else draft.id, isSynced = true)
+
         val result = BmpOnlineWriter.upsertMasterProduct(ctx, final.tenantId, final).toOnlineWriteResult()
-        if (result is OnlineWriteResult.Success) dao.upsert(final)
+        if (result is OnlineWriteResult.Success) {
+            dao.upsert(final)
+        } else {
+            if (isNew) {
+                dao.hardDelete(localId)
+            }
+        }
         return result
     }
 
@@ -922,14 +970,11 @@ class BmpBahanBakuRepository @Inject constructor(
         val total = items.sumOf { it.kuantitas * it.rate }
         val finalHeader = header.copy(
             totalHarga = total,
-            isSynced = true,
+            isSynced = false,
             updatedAt = System.currentTimeMillis()
         )
-        // Push header to VPS first
-        val vpsHeader = BmpOnlineWriter.upsertBahanBaku(context, finalHeader.tenantId, finalHeader).toOnlineWriteResult()
-        if (vpsHeader !is OnlineWriteResult.Success) return Pair(-1L, vpsHeader)
 
-        // Save to Room
+        // Save to Room first
         val (id, cfId) = db.withTransaction {
             val newId = bahanBakuDao.insert(finalHeader)
             val mappedItems = items.map { it.copy(bahanBakuId = newId, isSynced = false) }
@@ -950,6 +995,27 @@ class BmpBahanBakuRepository @Inject constructor(
             }
             Pair(newId, newCfId)
         }
+
+        // Get saved header with Room-generated ID
+        val savedHeader = bahanBakuDao.getById(id) ?: return Pair(-1L, OnlineWriteResult.Error("Gagal simpan bahan baku lokal"))
+        val finalHeaderWithId = savedHeader.copy(isSynced = true)
+
+        // Push header to VPS
+        val vpsHeader = BmpOnlineWriter.upsertBahanBaku(context, finalHeaderWithId.tenantId, finalHeaderWithId).toOnlineWriteResult()
+        if (vpsHeader !is OnlineWriteResult.Success) {
+            // Rollback/delete
+            db.withTransaction {
+                itemDao.deleteByBahanBaku(id)
+                if (cfId != null) {
+                    cashFlowDao.hardDelete(cfId)
+                }
+                bahanBakuDao.hardDelete(id)
+            }
+            return Pair(-1L, vpsHeader)
+        }
+
+        // Mark header synced
+        bahanBakuDao.markSynced(id)
 
         // Push items to VPS with correct bahanBakuId
         val savedItems = itemDao.listByBahanBaku(id)
@@ -1178,22 +1244,42 @@ class BmpProductionLogRepository @Inject constructor(
     suspend fun getById(id: Long) = logDao.getById(id)
 
     suspend fun addProductionLog(context: Context, log: BmpProductionLogEntity): OnlineWriteResult {
-        // Push to VPS first
-        val vpsResult = BmpOnlineWriter.upsertProductionLog(context, log.tenantId, log).toOnlineWriteResult()
-        if (vpsResult !is OnlineWriteResult.Success) return vpsResult
-
-        db.withTransaction {
-            val insertedId = logDao.upsert(log)
+        val logDraft = log.copy(isSynced = false, createdAt = System.currentTimeMillis())
+        val insertedId = db.withTransaction {
+            val idVal = logDao.upsert(logDraft)
             stockRepo.adjustStock(
                 context = context,
                 tenantId = log.tenantId,
                 productId = log.masterProductId,
                 change = log.quantityProduced,
                 mutationType = "PRODUKSI",
-                referenceId = insertedId,
+                referenceId = idVal,
                 notes = "Hasil Produksi Harian"
             )
+            idVal
         }
+
+        val savedLog = logDao.getById(insertedId) ?: return OnlineWriteResult.Error("Gagal menyimpan log produksi lokal")
+        val finalLogWithId = savedLog.copy(isSynced = true)
+
+        val vpsResult = BmpOnlineWriter.upsertProductionLog(context, finalLogWithId.tenantId, finalLogWithId).toOnlineWriteResult()
+        if (vpsResult !is OnlineWriteResult.Success) {
+            db.withTransaction {
+                stockRepo.adjustStock(
+                    context = context,
+                    tenantId = log.tenantId,
+                    productId = log.masterProductId,
+                    change = -log.quantityProduced,
+                    mutationType = "PRODUKSI",
+                    referenceId = insertedId,
+                    notes = "Batal Produksi (VPS Gagal)"
+                )
+                logDao.hardDelete(insertedId)
+            }
+            return vpsResult
+        }
+
+        logDao.markSynced(insertedId)
         return OnlineWriteResult.Success
     }
 

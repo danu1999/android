@@ -9,6 +9,8 @@ import com.posbah.app.data.local.entities.PrintSettingsEntity
 import com.posbah.app.data.local.entities.Tenant
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.PrintSettingsRepository
+import com.posbah.app.data.repository.toOnlineWriteResult
+import com.posbah.app.data.repository.OnlineWriteResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -149,7 +151,16 @@ class PrintSettingsViewModel @Inject constructor(
             }
         }
 
-        printSettingsRepo.upsert(d.copy(updatedAt = System.currentTimeMillis()))
+        val updateWithTime = d.copy(updatedAt = System.currentTimeMillis())
+        printSettingsRepo.upsert(updateWithTime)
+
+        // Write-through ke VPS
+        val vpsResult = com.posbah.app.data.remote.BmpOnlineWriter.upsertPrintSettings(context, tenantId, updateWithTime).toOnlineWriteResult()
+        if (vpsResult !is OnlineWriteResult.Success) {
+            onError(if (vpsResult is OnlineWriteResult.Error) vpsResult.message else "Tidak ada koneksi internet. Pengaturan tidak tersimpan.")
+            return@launch
+        }
+
         if (t != null) {
             db.tenantDao().upsert(t.copy(updatedAt = System.currentTimeMillis()))
             // Sync BmpSettingsEntity if exists, to keep it consistent
@@ -163,13 +174,6 @@ class PrintSettingsViewModel @Inject constructor(
             }
         }
 
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
         onDone()
     }
 }

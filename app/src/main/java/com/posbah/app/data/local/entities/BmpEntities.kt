@@ -195,6 +195,7 @@ data class BmpEmployeeEntity(
     val salaryAmount: Double,
     val isActive: Boolean = true,
     val fingerprintPIN: String? = null,
+    val employeeId: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val isSynced: Boolean = false

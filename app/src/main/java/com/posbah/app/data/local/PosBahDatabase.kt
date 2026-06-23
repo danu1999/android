@@ -83,7 +83,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
         BmpStockLedgerEntity::class,
         BmpProductionLogEntity::class
     ],
-    version = 33,
+    version = 34,
     exportSchema = true
 )
 abstract class PosBahDatabase : RoomDatabase() {
@@ -601,6 +601,13 @@ abstract class PosBahDatabase : RoomDatabase() {
         }
 
 
+        val MIGRATION_33_34 = object : Migration(33, 34) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `bmp_employees` ADD COLUMN `employeeId` INTEGER")
+            }
+        }
+
+
         fun build(context: Context, passphrase: ByteArray): PosBahDatabase {
             // Load SQLCipher native library
             System.loadLibrary("sqlcipher")
@@ -620,7 +627,7 @@ abstract class PosBahDatabase : RoomDatabase() {
                     MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22,
                     MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27,
                     MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32,
-                    MIGRATION_32_33
+                    MIGRATION_32_33, MIGRATION_33_34
                 ) // ← Data AMAN, tidak terhapus
                 .fallbackToDestructiveMigration()      // ← Fallback jika dari versi < 5 (install baru)
                 .addCallback(object : Callback() {

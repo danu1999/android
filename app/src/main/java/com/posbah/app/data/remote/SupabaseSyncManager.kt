@@ -558,6 +558,7 @@ object SupabaseSyncManager {
                         put("salaryAmount", e.salaryAmount)
                         put("isActive", e.isActive)
                         put("fingerprintPIN", e.fingerprintPIN ?: JSONObject.NULL)
+                        put("employeeId", e.employeeId ?: JSONObject.NULL)
                         put("isSynced", true)
                         put("createdAt", e.createdAt)
                         put("updatedAt", e.updatedAt)
@@ -2251,6 +2252,7 @@ object SupabaseSyncManager {
                         salaryAmount = obj.optDouble("salaryAmount", 0.0),
                         isActive = obj.optBoolean("isActive", true),
                         fingerprintPIN = if (obj.isNull("fingerprintPIN")) null else obj.optString("fingerprintPIN"),
+                        employeeId = if (obj.isNull("employeeId")) null else obj.optLong("employeeId"),
                         createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
                         updatedAt = obj.optLong("updatedAt", System.currentTimeMillis()),
                         isSynced = true
@@ -3004,6 +3006,7 @@ object SupabaseSyncManager {
                     put("salaryAmount", e.salaryAmount)
                     put("isActive", e.isActive)
                     put("fingerprintPIN", e.fingerprintPIN ?: JSONObject.NULL)
+                    put("employeeId", e.employeeId ?: JSONObject.NULL)
                     put("isSynced", true)
                     put("createdAt", e.createdAt)
                     put("updatedAt", e.updatedAt)

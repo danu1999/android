@@ -55,6 +55,7 @@ import coil.compose.AsyncImage
 import com.posbah.app.data.local.entities.BmpSettingsEntity
 import com.posbah.app.data.local.entities.Outlet
 import com.posbah.app.data.local.entities.Tenant
+import com.posbah.app.data.local.entities.Employee
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpSettingsRepository
 import com.posbah.app.data.repository.OutletRepository
@@ -95,7 +96,7 @@ class SettingsViewModel @Inject constructor(
     val outlets = outletRepo.observe(tenantId)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val bmpEmployees = db.bmpEmployeeDao().observe(tenantId)
+    val posEmployees = db.employeeDao().observeForTenant(tenantId)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     init {
@@ -141,7 +142,7 @@ class SettingsViewModel @Inject constructor(
             _syncStatus.value = "Nama outlet tidak boleh kosong."
             return@launch
         }
-        val activeEmployees = db.bmpEmployeeDao().getAll().filter { it.tenantId == tenantId && it.isActive }
+        val activeEmployees = db.employeeDao().getAll().filter { it.tenantId == tenantId && it.isActive }
         val emp = activeEmployees.firstOrNull { it.id == employeeId }
         if (emp == null) {
             _syncStatus.value = "Karyawan tidak ditemukan."
@@ -159,7 +160,10 @@ class SettingsViewModel @Inject constructor(
         }
 
         val newOutletId = outletRepo.create(tenantId, name, address, phone)
-        db.bmpEmployeeDao().update(emp.copy(outletId = newOutletId, updatedAt = System.currentTimeMillis()))
+        db.employeeDao().update(emp.copy(outletId = newOutletId, updatedAt = System.currentTimeMillis(), isSynced = false))
+        val email = getActiveUserEmail().orEmpty()
+        com.posbah.app.data.remote.SupabaseSyncManager.pushEmployeeImmediate(context, db, tenantId, emp.id, email)
+
         val outlet = db.outletDao().getById(newOutletId)
         if (outlet != null) {
             db.outletDao().update(outlet.copy(currentEmployee = emp.name, isSynced = false, updatedAt = System.currentTimeMillis()))
@@ -189,10 +193,19 @@ class SettingsViewModel @Inject constructor(
     fun deleteOutlet(id: Long) = viewModelScope.launch {
         val outlet = db.outletDao().getById(id) ?: return@launch
 
+        // Safe unlink for POS employees
+        val email = getActiveUserEmail().orEmpty()
+        val posEmployees = db.employeeDao().getAll().filter { it.outletId == id }
+        posEmployees.forEach { emp ->
+            db.employeeDao().update(emp.copy(outletId = null, updatedAt = System.currentTimeMillis(), isSynced = false))
+            com.posbah.app.data.remote.SupabaseSyncManager.pushEmployeeImmediate(context, db, tenantId, emp.id, email)
+        }
+
         // Safe unlink for BMP employees
-        val employees = db.bmpEmployeeDao().getAll().filter { it.outletId == id }
-        employees.forEach { emp ->
+        val bmpEmployees = db.bmpEmployeeDao().getAll().filter { it.outletId == id }
+        bmpEmployees.forEach { emp ->
             db.bmpEmployeeDao().update(emp.copy(outletId = null, updatedAt = System.currentTimeMillis()))
+            com.posbah.app.data.remote.SupabaseSyncManager.pushBmpEmployeeImmediate(context, db, tenantId, emp.id, email)
         }
 
         outletRepo.delete(id)
@@ -279,7 +292,7 @@ fun SettingsScreen(
     var outletAddress by remember { mutableStateOf("") }
     var outletPhone by remember { mutableStateOf("") }
     val context = androidx.compose.ui.platform.LocalContext.current
-    val bmpEmployees by viewModel.bmpEmployees.collectAsState()
+    val posEmployees by viewModel.posEmployees.collectAsState()
     var selectedEmployeeId by remember { mutableStateOf<Long?>(null) }
     var selectedEmployeeName by remember { mutableStateOf("") }
     var employeeDropdownExpanded by remember { mutableStateOf(false) }
@@ -669,7 +682,7 @@ fun SettingsScreen(
             text = {
                 Column {
                     // Employee warning banner if empty
-                    if (bmpEmployees.isEmpty()) {
+                    if (posEmployees.isEmpty()) {
                         androidx.compose.material3.Card(
                             colors = androidx.compose.material3.CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.errorContainer
@@ -681,7 +694,7 @@ fun SettingsScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Tambahkan karyawan BMP terlebih dahulu sebelum membuat outlet.",
+                                    text = "Tambahkan karyawan outlet terlebih dahulu sebelum membuat outlet.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onErrorContainer,
                                     fontWeight = FontWeight.Medium
@@ -722,7 +735,7 @@ fun SettingsScreen(
                             expanded = employeeDropdownExpanded,
                             onDismissRequest = { employeeDropdownExpanded = false }
                         ) {
-                            bmpEmployees.forEach { emp ->
+                            posEmployees.forEach { emp ->
                                 androidx.compose.material3.DropdownMenuItem(
                                     text = { Text(emp.name) },
                                     onClick = {

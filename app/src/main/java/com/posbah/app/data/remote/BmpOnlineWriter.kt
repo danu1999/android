@@ -387,4 +387,57 @@ object BmpOnlineWriter {
         }
         return SupabaseSyncManager.uploadRowWriteThrough(context, "bmp_stock_ledger", array, tenantId)
     }
+
+    // ── Print Settings ────────────────────────────────────────────────────────
+
+    suspend fun upsertPrintSettings(
+        context: Context,
+        tenantId: String,
+        settings: PrintSettingsEntity
+    ): SupabaseSyncManager.SyncResult {
+        val array = JSONArray().apply {
+            put(JSONObject().apply {
+                put("id", settings.id)
+                put("tenantId", settings.tenantId)
+                put("moduleKey", settings.moduleKey)
+                put("jpgUseLogo", settings.jpgUseLogo)
+                put("jpgHeaderAlign", settings.jpgHeaderAlign)
+                put("jpgUseSignature", settings.jpgUseSignature)
+                put("jpgSignatureSenderName", settings.jpgSignatureSenderName)
+                put("jpgSignatureReceiverName", settings.jpgSignatureReceiverName)
+                put("jpgSignatureDrawnBase64", settings.jpgSignatureDrawnBase64 ?: JSONObject.NULL)
+                put("jpgIsColor", settings.jpgIsColor)
+                put("sjUseLogo", settings.sjUseLogo)
+                put("sjHeaderAlign", settings.sjHeaderAlign)
+                put("sjUseSignature", settings.sjUseSignature)
+                put("sjSignatureSenderName", settings.sjSignatureSenderName)
+                put("sjSignatureReceiverName", settings.sjSignatureReceiverName)
+                put("sjSignatureDrawnBase64", settings.sjSignatureDrawnBase64 ?: JSONObject.NULL)
+                put("sjIsColor", settings.sjIsColor)
+                put("invoiceUseLogo", settings.invoiceUseLogo)
+                put("invoiceHeaderAlign", settings.invoiceHeaderAlign)
+                put("invoiceUseSignature", settings.invoiceUseSignature)
+                put("invoiceSignatureSenderName", settings.invoiceSignatureSenderName)
+                put("invoiceSignatureReceiverName", settings.invoiceSignatureReceiverName)
+                put("invoiceSignatureDrawnBase64", settings.invoiceSignatureDrawnBase64 ?: JSONObject.NULL)
+                put("invoiceIsColor", settings.invoiceIsColor)
+                put("receiptPaperWidth", settings.receiptPaperWidth)
+                put("receiptUseLogo", settings.receiptUseLogo)
+                put("receiptHeaderAlign", settings.receiptHeaderAlign)
+                put("receiptIsColor", settings.receiptIsColor)
+                put("receiptShowItemPrice", settings.receiptShowItemPrice)
+                put("receiptFooterText", settings.receiptFooterText)
+                put("jpgTemplateType", settings.jpgTemplateType)
+                put("sjTemplateType", settings.sjTemplateType)
+                put("invoiceTemplateType", settings.invoiceTemplateType)
+                put("bankOwnerName", settings.bankOwnerName)
+                put("bankName", settings.bankName)
+                put("bankAccountNumber", settings.bankAccountNumber)
+                put("logoPath", settings.logoPath ?: JSONObject.NULL)
+                put("createdAt", settings.createdAt)
+                put("updatedAt", settings.updatedAt)
+            })
+        }
+        return SupabaseSyncManager.uploadRowWriteThrough(context, "print_settings", array, tenantId)
+    }
 }

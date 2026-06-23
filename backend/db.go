@@ -230,6 +230,7 @@ func initSchema() error {
 			"salaryAmount" DOUBLE PRECISION DEFAULT 0,
 			"isActive" BOOLEAN DEFAULT TRUE,
 			"fingerprintPIN" VARCHAR(50),
+			"employeeId" INT,
 			"createdAt" BIGINT,
 			"updatedAt" BIGINT
 		);`,
@@ -596,6 +597,7 @@ func initSchema() error {
 		`ALTER TABLE "print_settings" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT TRUE;`,
 		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT TRUE;`,
 		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "isDeleted" BOOLEAN NOT NULL DEFAULT FALSE;`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "employeeId" INT;`,
 		`ALTER TABLE "bmp_attendance_logs" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT TRUE;`,
 
 		// bmp tables isSynced schema updates
