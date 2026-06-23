@@ -88,6 +88,7 @@ class BmpStockViewModel @Inject constructor(
 
     fun adjustStockManual(productId: Long, change: Double, notes: String) = viewModelScope.launch {
         stockRepo.adjustStock(
+            context = context,
             tenantId = tenantId,
             productId = productId,
             change = change,

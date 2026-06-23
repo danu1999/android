@@ -44,8 +44,48 @@ object DatabaseModule {
         @ApplicationContext context: Context,
         keystore: KeystoreManager
     ): PosBahDatabase {
+        // 1. Back up database before building/opening Room
+        com.posbah.app.data.local.DatabaseBackupHelper.backupDatabase(context)
+
         val passphrase = keystore.deriveDatabaseKey(context)
-        return PosBahDatabase.build(context, passphrase)
+        val db = PosBahDatabase.build(context, passphrase)
+
+        // 2. Clear the wiped flag in preferences first
+        context.getSharedPreferences("db_flags", Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean("db_wiped_by_migration", false)
+            .apply()
+
+        // 3. Force database opening to trigger migrations
+        try {
+            db.openHelper.writableDatabase
+        } catch (e: Exception) {
+            android.util.Log.e("DatabaseModule", "Error opening database: ${e.message}", e)
+        }
+
+        // 4. Check if destructive migration wiped the database
+        val wasWiped = context.getSharedPreferences("db_flags", Context.MODE_PRIVATE)
+            .getBoolean("db_wiped_by_migration", false)
+
+        if (wasWiped) {
+            android.util.Log.e("DatabaseModule", "CRITICAL: Destructive migration occurred! Restoring backup...")
+            try {
+                db.close()
+            } catch (e: Exception) {
+                android.util.Log.e("DatabaseModule", "Error closing database: ${e.message}", e)
+            }
+            // Restore the backup database files
+            com.posbah.app.data.local.DatabaseBackupHelper.restoreDatabase(context)
+            // Clean up the flag
+            context.getSharedPreferences("db_flags", Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean("db_wiped_by_migration", false)
+                .apply()
+            
+            throw IllegalStateException("Database migration failed. Destructive migration was intercepted and data was restored. Please contact developer for a migration fix.")
+        }
+
+        return db
     }
 
     @Provides fun localUserDao(db: PosBahDatabase): LocalUserDao = db.localUserDao()

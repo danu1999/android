@@ -108,7 +108,7 @@ class PaymentsListViewModel @Inject constructor(
         val amt = state.newPaymentAmount.replace(",", ".").toDoubleOrNull() ?: return
         if (amt <= 0) return
         viewModelScope.launch {
-            invoiceRepo.editPayment(tenantId, editing.id, amt, state.newPaymentMethod, notes = editing.notes)
+            invoiceRepo.editPayment(context, tenantId, editing.id, amt, state.newPaymentMethod, notes = editing.notes)
             SupabaseSyncManager.syncAll(context, db, tenantId)
             cancelEditPayment()
         }
@@ -125,7 +125,7 @@ class PaymentsListViewModel @Inject constructor(
     fun confirmDeletePayment() {
         val paymentId = _uiState.value.confirmDeletePaymentId ?: return
         viewModelScope.launch {
-            invoiceRepo.deletePayment(paymentId)
+            invoiceRepo.deletePayment(context, tenantId, paymentId)
             SupabaseSyncManager.syncAll(context, db, tenantId)
             cancelDeletePayment()
         }

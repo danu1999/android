@@ -8,6 +8,7 @@ import com.posbah.app.data.local.PosBahDatabase
 import com.posbah.app.data.local.entities.BmpClientEntity
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpClientRepository
+import com.posbah.app.data.repository.OnlineWriteResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -54,15 +55,18 @@ class ClientsViewModel @Inject constructor(
         _query.value = q
     }
 
+    private val _deleteError = MutableStateFlow<String?>(null)
+    val deleteError = _deleteError.asStateFlow()
+    fun clearDeleteError() { _deleteError.value = null }
+
     fun delete(id: Long) {
         viewModelScope.launch {
-            repo.delete(id)
-            viewModelScope.launch(Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+            _deleteError.value = null
+            val result = repo.delete(context, tenantId, id)
+            if (result is OnlineWriteResult.Error) {
+                _deleteError.value = result.message
+            } else if (result is OnlineWriteResult.NoConnection) {
+                _deleteError.value = "Tidak ada koneksi internet. Hapus dibatalkan."
             }
         }
     }
@@ -146,15 +150,23 @@ class ClientEditViewModel @Inject constructor(
         _form.update(transform)
     }
 
+    private val _saveError = MutableStateFlow<String?>(null)
+    val saveError = _saveError.asStateFlow()
+    fun clearSaveError() { _saveError.value = null }
+
     fun save() {
         viewModelScope.launch {
-            repo.upsert(_form.value)
-            _saved.value = true
-            viewModelScope.launch(Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
+            _saveError.value = null
+            val result = repo.upsert(context, _form.value)
+            when (result) {
+                is OnlineWriteResult.Success -> {
+                    _saved.value = true
+                }
+                is OnlineWriteResult.Error -> {
+                    _saveError.value = result.message
+                }
+                is OnlineWriteResult.NoConnection -> {
+                    _saveError.value = "Tidak ada koneksi internet. Data tidak tersimpan."
                 }
             }
         }

@@ -37,6 +37,7 @@ import com.posbah.app.data.remote.SupabaseSyncManager
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpMasterProductRepository
 import com.posbah.app.data.repository.BmpProductionLogRepository
+import com.posbah.app.data.repository.OnlineWriteResult
 import com.posbah.app.ui.components.EmptyState
 import com.posbah.app.ui.components.PosBahTopBar
 import com.posbah.app.util.Formatters
@@ -45,6 +46,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -60,7 +62,6 @@ class BmpProductionLogViewModel @Inject constructor(
     private val logRepo: BmpProductionLogRepository,
     private val masterProductRepo: BmpMasterProductRepository,
     private val authRepository: AuthRepository,
-    private val db: PosBahDatabase,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
@@ -76,6 +77,10 @@ class BmpProductionLogViewModel @Inject constructor(
             ProductionLogItem(l, p)
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val _error = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    val error = _error.asStateFlow()
+    fun clearError() { _error.value = null }
 
     fun addLog(
         productId: Long,
@@ -93,22 +98,20 @@ class BmpProductionLogViewModel @Inject constructor(
             operatorName = operatorName.ifBlank { null },
             productionDate = System.currentTimeMillis()
         )
-        logRepo.addProductionLog(log)
-        sync()
+        val result = logRepo.addProductionLog(context, log)
+        if (result is OnlineWriteResult.Error) {
+            _error.value = result.message
+        } else if (result is OnlineWriteResult.NoConnection) {
+            _error.value = "Tidak ada koneksi internet. Data tidak tersimpan."
+        }
     }
 
     fun deleteLog(log: BmpProductionLogEntity) = viewModelScope.launch {
-        logRepo.deleteProductionLog(log)
-        sync()
-    }
-
-    private fun sync() {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                SupabaseSyncManager.syncAll(context, db, tenantId)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+        val result = logRepo.deleteProductionLog(context, tenantId, log)
+        if (result is OnlineWriteResult.Error) {
+            _error.value = result.message
+        } else if (result is OnlineWriteResult.NoConnection) {
+            _error.value = "Tidak ada koneksi internet. Hapus dibatalkan."
         }
     }
 }
@@ -121,6 +124,14 @@ fun BmpProductionLogScreen(
     val logs by viewModel.logItems.collectAsState()
     val products by viewModel.products.collectAsState()
     val context = LocalContext.current
+    val error by viewModel.error.collectAsState()
+
+    LaunchedEffect(error) {
+        error?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            viewModel.clearError()
+        }
+    }
 
     var showAddDialog by remember { mutableStateOf(false) }
     var selectedProduct by remember { mutableStateOf<BmpMasterProductEntity?>(null) }

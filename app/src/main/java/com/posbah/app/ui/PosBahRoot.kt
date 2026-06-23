@@ -82,6 +82,7 @@ fun PosBahRoot(
     val scope = rememberCoroutineScope()
     val updateState by viewModel.updateState.collectAsState()
     val isOnline by viewModel.isOnline.collectAsState()
+    val backupSyncState by viewModel.backupSyncState.collectAsState()
 
     val goDashboard = { popUpRoute: String ->
         scope.launch {
@@ -378,7 +379,9 @@ fun PosBahRoot(
         val required = updateState as UpdateState.UpdateRequired
         ForcedUpdateOverlay(
             version = required.version,
-            description = required.description
+            description = required.description,
+            backupSyncState = backupSyncState,
+            onRetrySync = { viewModel.triggerBackupSync() }
         )
     }
 }
@@ -451,7 +454,9 @@ fun OfflineBlockerOverlay() {
 @Composable
 fun ForcedUpdateOverlay(
     version: String,
-    description: String
+    description: String,
+    backupSyncState: BackupSyncState,
+    onRetrySync: () -> Unit
 ) {
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
     
@@ -472,11 +477,11 @@ fun ForcedUpdateOverlay(
             shadowElevation = 8.dp,
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.85f)
+                .fillMaxHeight(0.95f) // Slightly increased to fit warning card and status
         ) {
             Column(
                 modifier = Modifier
-                    .padding(32.dp)
+                    .padding(24.dp)
                     .fillMaxSize(),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Top
@@ -485,10 +490,10 @@ fun ForcedUpdateOverlay(
                     imageVector = Icons.Outlined.ErrorOutline,
                     contentDescription = "Pembaruan Wajib",
                     tint = Color(0xFFF97316),
-                    modifier = Modifier.size(72.dp)
+                    modifier = Modifier.size(64.dp)
                 )
                 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
                 
                 Text(
                     text = "Pembaruan Wajib!",
@@ -509,7 +514,127 @@ fun ForcedUpdateOverlay(
                     textAlign = TextAlign.Center
                 )
                 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Warning Card: Jangan uninstall
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF451A03), // Dark amber/brown
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFD97706)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ErrorOutline,
+                            contentDescription = "Peringatan",
+                            tint = Color(0xFFF59E0B),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "PENTING: Jangan hapus (uninstall) aplikasi lama Anda! Cukup unduh APK baru dan pasang langsung untuk menimpa versi lama agar seluruh data transaksi lokal Anda tetap aman.",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = Color(0xFFFDE68A),
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 11.sp
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Backup / Sync Status Section
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF1E293B),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        when (backupSyncState) {
+                            is BackupSyncState.Syncing -> {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    androidx.compose.material3.CircularProgressIndicator(
+                                        color = Color(0xFF3B82F6),
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Menyinkronkan data lokal Anda ke cloud...",
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            color = Color(0xFF60A5FA),
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    )
+                                }
+                            }
+                            is BackupSyncState.Success -> {
+                                Text(
+                                    text = "✓ Semua data lokal Anda telah berhasil dicadangkan ke server cloud.",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = Color(0xFF34D399),
+                                        fontWeight = FontWeight.Bold
+                                    ),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                            is BackupSyncState.Error -> {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = "⚠️ Gagal mencadangkan data ke cloud: ${backupSyncState.message}",
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            color = Color(0xFFF87171),
+                                            fontWeight = FontWeight.Medium
+                                        ),
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Button(
+                                        onClick = onRetrySync,
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Color(0xFF374151),
+                                            contentColor = Color.White
+                                        ),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.height(32.dp)
+                                    ) {
+                                        Text(
+                                            text = "Coba Sinkronkan Lagi",
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                            else -> {
+                                Text(
+                                    text = "Tidak ada data lokal yang perlu disinkronkan.",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = Color(0xFF94A3B8),
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
 
                 Button(
                     onClick = {
@@ -530,7 +655,7 @@ fun ForcedUpdateOverlay(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
                 
                 Surface(
                     shape = RoundedCornerShape(16.dp),

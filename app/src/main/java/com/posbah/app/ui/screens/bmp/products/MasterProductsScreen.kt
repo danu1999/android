@@ -49,6 +49,7 @@ import com.posbah.app.data.local.entities.BmpSettingsEntity
 import com.posbah.app.data.local.entities.ActivityLogEntity
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpMasterProductRepository
+import com.posbah.app.data.repository.OnlineWriteResult
 import com.posbah.app.ui.components.EmptyState
 import com.posbah.app.ui.components.PosBahTopBar
 import com.posbah.app.ui.components.PrimaryButton
@@ -102,6 +103,10 @@ class MasterProductsViewModel @Inject constructor(
     private val _distinctMaterials = MutableStateFlow<List<String>>(emptyList())
     val distinctMaterials = _distinctMaterials.asStateFlow()
 
+    private val _error = MutableStateFlow<String?>(null)
+    val error = _error.asStateFlow()
+    fun clearError() { _error.value = null }
+
     init {
         viewModelScope.launch(Dispatchers.IO) {
             val materials = db.bmpBahanBakuItemDao().getDistinctBahanBaku(tenantId)
@@ -147,31 +152,43 @@ class MasterProductsViewModel @Inject constructor(
                 ex.printStackTrace()
             }
         }
-        val savedId = repo.upsert(e.copy(image = base64Url))
-        if (isNew) {
-            logActivity("TAMBAH PRODUK BMP", "Menambahkan master produk: ${e.title} (Harga: Rp ${e.price})")
-        } else {
-            logActivity("EDIT PRODUK BMP", "Mengubah master produk: ${e.title} (Harga: Rp ${e.price})")
+        _error.value = null
+        val result = repo.upsert(context, e.copy(image = base64Url))
+        when (result) {
+            is OnlineWriteResult.Success -> {
+                if (isNew) {
+                    logActivity("TAMBAH PRODUK BMP", "Menambahkan master produk: ${e.title} (Harga: Rp ${e.price})")
+                } else {
+                    logActivity("EDIT PRODUK BMP", "Mengubah master produk: ${e.title} (Harga: Rp ${e.price})")
+                }
+                _form.update { FormState() }
+            }
+            is OnlineWriteResult.Error -> {
+                _error.value = result.message
+            }
+            is OnlineWriteResult.NoConnection -> {
+                _error.value = "Tidak ada koneksi internet. Data tidak tersimpan."
+            }
         }
-        _form.update { FormState() }
-        // Push langsung ke VPS via global syncScope (tidak ikut dibatalkan saat
-        // ViewModel di-clear / user logout). Ini memastikan produk tersimpan
-        // realtime di server meski user langsung logout / uninstall setelah simpan.
-        val pushId = if (savedId > 0L) savedId else e.id
-        com.posbah.app.data.remote.SupabaseSyncManager.pushBmpMasterProductImmediate(
-            context, db, tenantId, pushId, authRepository.activeUserEmail()
-        )
     }
 
     fun delete(id: Long) = viewModelScope.launch {
         val p = repo.getById(id)
-        repo.delete(id)
-        if (p != null) {
-            logActivity("HAPUS PRODUK BMP", "Menghapus master produk: ${p.title}")
+        _error.value = null
+        val result = repo.delete(context, tenantId, id)
+        when (result) {
+            is OnlineWriteResult.Success -> {
+                if (p != null) {
+                    logActivity("HAPUS PRODUK BMP", "Menghapus master produk: ${p.title}")
+                }
+            }
+            is OnlineWriteResult.Error -> {
+                _error.value = result.message
+            }
+            is OnlineWriteResult.NoConnection -> {
+                _error.value = "Tidak ada koneksi internet. Hapus dibatalkan."
+            }
         }
-        com.posbah.app.data.remote.SupabaseSyncManager.deleteBmpMasterProductImmediate(
-            context, db, tenantId, id, authRepository.activeUserEmail()
-        )
     }
 
     private fun logActivity(action: String, description: String) {
@@ -207,6 +224,14 @@ fun MasterProductsScreen(
     val list by viewModel.products.collectAsState()
     val form by viewModel.form.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
+    val error by viewModel.error.collectAsState()
+
+    LaunchedEffect(error) {
+        error?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            viewModel.clearError()
+        }
+    }
 
     var tempPhotoFile by remember { mutableStateOf<java.io.File?>(null) }
     var capturedPhotoFile by remember { mutableStateOf<java.io.File?>(null) }

@@ -119,9 +119,18 @@ class InvoicesListViewModel @Inject constructor(
         _filterPartial.value = enabled
     }
 
-    fun delete(id: Long) = viewModelScope.launch { 
-        invoiceRepo.deleteInvoice(id) 
-        com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, authRepository.activeUserEmail())
+    private val _deleteError = MutableStateFlow<String?>(null)
+    val deleteError = _deleteError.asStateFlow()
+
+    fun clearDeleteError() { _deleteError.value = null }
+
+    fun delete(id: Long) = viewModelScope.launch {
+        val result = invoiceRepo.deleteInvoice(context, tenantId, id)
+        if (result is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+            _deleteError.value = result.message
+        } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
+            _deleteError.value = "Tidak ada koneksi internet. Hapus dibatalkan."
+        }
     }
 }
 
@@ -175,18 +184,17 @@ class InvoiceDetailViewModel @Inject constructor(
                     hasUrl && !fileExists -> {
                         val localPath = downloadSignatureToLocal(context, inv.receiverSignatureUrl!!, invoiceId)
                         if (localPath != null) {
-                            invoiceRepo.saveReceiverSignature(invoiceId, localPath, inv.receiverSignatureUrl, inv.receiverNameActual ?: "")
+                            invoiceRepo.saveReceiverSignature(context, tenantId, invoiceId, localPath, inv.receiverSignatureUrl, inv.receiverNameActual ?: "")
                             val updated = invoiceRepo.getById(invoiceId)
                             _ui.update { it.copy(invoice = updated) }
                         }
                     }
                     // Skenario B: Tidak ada URL di Room DB sama sekali
-                    // → cek VPS langsung (polling mungkin dibatalkan/timeout sebelum detect)
                     !hasUrl -> {
                         val remoteResult = invoiceRepo.checkReceiverSignatureRemote(tenantId, invoiceId)
                         if (remoteResult is BmpInvoiceRepository.RemoteSignatureResult.Success) {
                             val localPath = downloadSignatureToLocal(context, remoteResult.url, invoiceId)
-                            invoiceRepo.saveReceiverSignature(invoiceId, localPath, remoteResult.url, remoteResult.name)
+                            invoiceRepo.saveReceiverSignature(context, tenantId, invoiceId, localPath, remoteResult.url, remoteResult.name)
                             val updated = invoiceRepo.getById(invoiceId)
                             _ui.update { it.copy(invoice = updated) }
                         }
@@ -231,8 +239,14 @@ class InvoiceDetailViewModel @Inject constructor(
         val method = _ui.value.newPaymentMethod
         if (amt <= 0) return
         viewModelScope.launch {
-            invoiceRepo.recordPayment(tenantId, invoiceId, amt, method, notes = null)
-            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, authRepository.activeUserEmail())
+            val result = invoiceRepo.recordPayment(context, tenantId, invoiceId, amt, method, notes = null)
+            if (result is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+                _ui.update { it.copy(pollingError = result.message) }
+                return@launch
+            } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
+                _ui.update { it.copy(pollingError = "Tidak ada koneksi internet.") }
+                return@launch
+            }
             val inv = invoiceRepo.getById(invoiceId)
             _ui.update { it.copy(invoice = inv, showAddPayment = false, newPaymentAmount = "") }
         }
@@ -250,8 +264,14 @@ class InvoiceDetailViewModel @Inject constructor(
         val method = _ui.value.newPaymentMethod
         if (amt <= 0) return
         viewModelScope.launch {
-            invoiceRepo.editPayment(tenantId, editing.id, amt, method, notes = editing.notes)
-            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, authRepository.activeUserEmail())
+            val result = invoiceRepo.editPayment(context, tenantId, editing.id, amt, method, notes = editing.notes)
+            if (result is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+                _ui.update { it.copy(pollingError = result.message) }
+                return@launch
+            } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
+                _ui.update { it.copy(pollingError = "Tidak ada koneksi internet.") }
+                return@launch
+            }
             val inv = invoiceRepo.getById(invoiceId)
             _ui.update { it.copy(invoice = inv, editingPayment = null, newPaymentAmount = "", newPaymentMethod = "TRANSFER") }
         }
@@ -259,8 +279,14 @@ class InvoiceDetailViewModel @Inject constructor(
 
     fun deletePayment(paymentId: Long) {
         viewModelScope.launch {
-            invoiceRepo.deletePayment(paymentId)
-            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, authRepository.activeUserEmail())
+            val result = invoiceRepo.deletePayment(context, tenantId, paymentId)
+            if (result is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+                _ui.update { it.copy(pollingError = result.message) }
+                return@launch
+            } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
+                _ui.update { it.copy(pollingError = "Tidak ada koneksi internet.") }
+                return@launch
+            }
             val inv = invoiceRepo.getById(invoiceId)
             _ui.update { it.copy(invoice = inv) }
         }
@@ -284,8 +310,14 @@ class InvoiceDetailViewModel @Inject constructor(
                 }
             }
             if (path != null) {
-                invoiceRepo.saveReceiverSignature(invoiceId, path, null, receiverName)
-                com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, authRepository.activeUserEmail())
+                val result = invoiceRepo.saveReceiverSignature(context, tenantId, invoiceId, path, null, receiverName)
+                if (result is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+                    _ui.update { it.copy(isPollingSignature = false, pollingError = result.message) }
+                    return@launch
+                } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
+                    _ui.update { it.copy(isPollingSignature = false, pollingError = "Tidak ada koneksi internet.") }
+                    return@launch
+                }
                 val inv = invoiceRepo.getById(invoiceId)
                 _ui.update { it.copy(invoice = inv, isPollingSignature = false) }
             } else {
@@ -302,8 +334,11 @@ class InvoiceDetailViewModel @Inject constructor(
                     try { File(path).delete() } catch (_: Exception) {}
                 }
             }
-            invoiceRepo.saveReceiverSignature(invoiceId, null, null, "")
-            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, authRepository.activeUserEmail())
+            val result = invoiceRepo.saveReceiverSignature(context, tenantId, invoiceId, null, null, "")
+            if (result is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+                _ui.update { it.copy(pollingError = result.message) }
+                return@launch
+            }
             val updated = invoiceRepo.getById(invoiceId)
             _ui.update { it.copy(invoice = updated) }
         }
@@ -314,17 +349,16 @@ class InvoiceDetailViewModel @Inject constructor(
         _ui.update { it.copy(isPollingSignature = true, pollingCountdown = 600, pollingError = null) }
         pollingJob = viewModelScope.launch {
             invoiceRepo.markAsUnsynced(invoiceId)
-            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, authRepository.activeUserEmail())
             var secondsLeft = 600
             while (secondsLeft > 0) {
-                kotlinx.coroutines.delay(5000) // check every 5s
+                kotlinx.coroutines.delay(5000)
                 secondsLeft -= 5
                 _ui.update { it.copy(pollingCountdown = secondsLeft) }
-                
+
                 val result = invoiceRepo.checkReceiverSignatureRemote(tenantId, invoiceId)
                 if (result is BmpInvoiceRepository.RemoteSignatureResult.Success) {
                     val localPath = downloadSignatureToLocal(context, result.url, invoiceId)
-                    invoiceRepo.saveReceiverSignature(invoiceId, localPath, result.url, result.name)
+                    invoiceRepo.saveReceiverSignature(context, tenantId, invoiceId, localPath, result.url, result.name)
                     val updated = invoiceRepo.getById(invoiceId)
                     _ui.update { it.copy(invoice = updated, isPollingSignature = false, signatureReceivedRemotely = true) }
                     break
@@ -377,8 +411,14 @@ class InvoiceDetailViewModel @Inject constructor(
 
     fun deleteInvoice(onDone: () -> Unit) {
         viewModelScope.launch {
-            invoiceRepo.deleteInvoice(invoiceId)
-            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, authRepository.activeUserEmail())
+            val result = invoiceRepo.deleteInvoice(context, tenantId, invoiceId)
+            if (result is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+                _ui.update { it.copy(pollingError = result.message) }
+                return@launch
+            } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
+                _ui.update { it.copy(pollingError = "Tidak ada koneksi internet. Hapus dibatalkan.") }
+                return@launch
+            }
             onDone()
         }
     }
@@ -397,7 +437,8 @@ data class InvoiceFormUi(
     val showClientSheet: Boolean = false,
     val showProductSheet: Boolean = false,
     val isLoading: Boolean = false,
-    val saved: Boolean = false
+    val saved: Boolean = false,
+    val saveError: String? = null
 )
 
 @HiltViewModel
@@ -503,16 +544,24 @@ class InvoiceFormViewModel @Inject constructor(
     fun save() {
         val inv = _ui.value.invoice ?: return
         viewModelScope.launch {
-            _ui.update { it.copy(isLoading = true) }
-            if (inv.id == 0L) {
-                invoiceRepo.createInvoice(inv, _ui.value.productLines)
+            _ui.update { it.copy(isLoading = true, saveError = null) }
+            val result = if (inv.id == 0L) {
+                val (_, r) = invoiceRepo.createInvoice(context, inv, _ui.value.productLines)
+                r
             } else {
-                invoiceRepo.updateInvoice(inv, _ui.value.productLines)
+                invoiceRepo.updateInvoice(context, inv, _ui.value.productLines)
             }
-            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, authRepository.activeUserEmail())
-            _ui.update { it.copy(isLoading = false, saved = true) }
+            if (result is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+                _ui.update { it.copy(isLoading = false, saveError = result.message) }
+            } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
+                _ui.update { it.copy(isLoading = false, saveError = "Tidak ada koneksi internet. Data tidak tersimpan.") }
+            } else {
+                _ui.update { it.copy(isLoading = false, saved = true) }
+            }
         }
     }
+
+    fun clearSaveError() { _ui.update { it.copy(saveError = null) } }
 
     private fun generateNumber(): String =
         "INV-" + System.currentTimeMillis().toString().takeLast(8)

@@ -489,6 +489,9 @@ interface BmpBahanBakuItemDao {
     @Query("SELECT id FROM bmp_bahan_baku_item WHERE tenantId = :tenantId AND isDeleted = 1")
     suspend fun getDeletedIds(tenantId: String): List<Long>
 
+    @Query("SELECT * FROM bmp_bahan_baku_item WHERE bahanBakuId = :bahanBakuId AND isDeleted = 0 ORDER BY id ASC")
+    suspend fun listByBahanBaku(bahanBakuId: Long): List<com.posbah.app.data.local.entities.BmpBahanBakuItemEntity>
+
     @Query("DELETE FROM bmp_bahan_baku_item WHERE id = :id")
     suspend fun hardDelete(id: Long)
 }
@@ -560,6 +563,9 @@ interface BmpStockLedgerDao {
 
     @Query("SELECT id FROM bmp_stock_ledger WHERE tenantId = :tenantId AND isDeleted = 1")
     suspend fun getDeletedIds(tenantId: String): List<Long>
+
+    @Query("SELECT * FROM bmp_stock_ledger WHERE tenantId = :tenantId AND masterProductId = :productId AND isDeleted = 0 ORDER BY createdAt DESC LIMIT 1")
+    suspend fun getLatest(tenantId: String, productId: Long): com.posbah.app.data.local.entities.BmpStockLedgerEntity?
 
     @Query("DELETE FROM bmp_stock_ledger WHERE id = :id")
     suspend fun hardDelete(id: Long)

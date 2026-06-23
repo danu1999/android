@@ -1,11 +1,15 @@
 package com.posbah.app.ui
 
+import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
+import com.posbah.app.data.local.PosBahDatabase
 import com.posbah.app.data.local.dao.LocalUserDao
 import com.posbah.app.data.local.dao.TenantDao
 import com.posbah.app.security.SecurePreferences
 import com.posbah.app.ui.navigation.Screen
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 
 import androidx.lifecycle.viewModelScope
@@ -20,8 +24,17 @@ sealed class UpdateState {
     object UpToDate : UpdateState()
 }
 
+sealed class BackupSyncState {
+    object Idle : BackupSyncState()
+    object Syncing : BackupSyncState()
+    object Success : BackupSyncState()
+    data class Error(val message: String) : BackupSyncState()
+}
+
 @HiltViewModel
 class PosBahRootViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val db: PosBahDatabase,
     private val securePrefs: SecurePreferences,
     private val tenantDao: TenantDao,
     private val userDao: LocalUserDao,
@@ -33,8 +46,44 @@ class PosBahRootViewModel @Inject constructor(
     private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val updateState = _updateState.asStateFlow()
 
+    private val _backupSyncState = MutableStateFlow<BackupSyncState>(BackupSyncState.Idle)
+    val backupSyncState = _backupSyncState.asStateFlow()
+
     init {
         checkForForcedUpdate()
+    }
+
+    fun triggerBackupSync() {
+        val tenantId = securePrefs.currentTenantId
+        if (tenantId.isNullOrEmpty()) {
+            _backupSyncState.value = BackupSyncState.Success
+            return
+        }
+
+        _backupSyncState.value = BackupSyncState.Syncing
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                Log.i("PosBahRootViewModel", "Auto-syncing data for tenant $tenantId before update...")
+                val result = com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+                when (result) {
+                    is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Success -> {
+                        Log.i("PosBahRootViewModel", "Auto-sync before update succeeded.")
+                        _backupSyncState.value = BackupSyncState.Success
+                    }
+                    is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.NoConnection -> {
+                        Log.w("PosBahRootViewModel", "Auto-sync failed: No connection.")
+                        _backupSyncState.value = BackupSyncState.Error("Tidak ada koneksi internet")
+                    }
+                    is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Error -> {
+                        Log.e("PosBahRootViewModel", "Auto-sync failed: ${result.message}")
+                        _backupSyncState.value = BackupSyncState.Error(result.message)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("PosBahRootViewModel", "Auto-sync failed with exception", e)
+                _backupSyncState.value = BackupSyncState.Error(e.message ?: "Error tidak diketahui")
+            }
+        }
     }
 
     fun checkForForcedUpdate() {
@@ -75,6 +124,7 @@ class PosBahRootViewModel @Inject constructor(
                     
                     if (hasUpdate) {
                         _updateState.value = UpdateState.UpdateRequired(version, description)
+                        triggerBackupSync()
                     } else {
                         _updateState.value = UpdateState.UpToDate
                     }

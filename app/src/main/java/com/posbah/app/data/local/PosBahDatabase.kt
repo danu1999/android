@@ -620,6 +620,14 @@ abstract class PosBahDatabase : RoomDatabase() {
                         // Run secure pragmas
                         db.execSQL("PRAGMA cipher_memory_security = ON")
                     }
+
+                    override fun onDestructiveMigration(db: SupportSQLiteDatabase) {
+                        super.onDestructiveMigration(db)
+                        context.getSharedPreferences("db_flags", Context.MODE_PRIVATE)
+                            .edit()
+                            .putBoolean("db_wiped_by_migration", true)
+                            .commit()
+                    }
                 })
                 .build()
         }

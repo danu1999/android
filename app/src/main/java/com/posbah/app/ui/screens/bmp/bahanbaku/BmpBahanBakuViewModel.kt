@@ -86,14 +86,26 @@ class BahanBakuListViewModel @Inject constructor(
         _filterDibayar.value = enabled
     }
 
-    fun delete(id: Long) = viewModelScope.launch { 
-        repo.delete(id) 
-        com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+    private val _error = MutableStateFlow<String?>(null)
+    val error = _error.asStateFlow()
+    fun clearError() { _error.value = null }
+
+    fun delete(id: Long) = viewModelScope.launch {
+        val result = repo.delete(context, tenantId, id)
+        if (result is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+            _error.value = result.message
+        } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
+            _error.value = "Tidak ada koneksi internet. Hapus dibatalkan."
+        }
     }
- 
-    fun payDebt(id: Long, amount: Double) = viewModelScope.launch { 
-        repo.payDebt(id, amount) 
-        com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+
+    fun payDebt(id: Long, amount: Double) = viewModelScope.launch {
+        val result = repo.payDebt(context, tenantId, id, amount)
+        if (result is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+            _error.value = result.message
+        } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
+            _error.value = "Tidak ada koneksi internet."
+        }
     }
 }
 
@@ -129,6 +141,7 @@ data class BahanBakuFormUiState(
     val items: List<BahanBakuItemDraft> = listOf(BahanBakuItemDraft()),
     val isLoading: Boolean = false,
     val saved: Boolean = false,
+    val saveError: String? = null,
     // ── Foto Nota ──────────────────────────────────────────────
     val notaFotoPath: String? = null,           // path lokal JPEG ≤100 KB
     val notaFotoUrl: String? = null,            // URL Cloudinary (jika sudah upload)
@@ -341,8 +354,8 @@ class BahanBakuFormViewModel @Inject constructor(
                                 updatedAt = System.currentTimeMillis()
                             )
                             repo.updateHeaderOnly(updated)
-                            // Trigger background sync agar data server terupdate
-                            com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
+                            // Push ke VPS langsung
+                            com.posbah.app.data.remote.BmpOnlineWriter.upsertBahanBaku(context, tenantId, updated)
                         }
                     }
                 }
@@ -388,14 +401,22 @@ class BahanBakuFormViewModel @Inject constructor(
         )
 
         viewModelScope.launch {
-            _ui.update { it.copy(isLoading = true) }
-            if (finalHeader.id == 0L) {
-                repo.save(finalHeader, entities)
+            _ui.update { it.copy(isLoading = true, saveError = null) }
+            val result = if (finalHeader.id == 0L) {
+                val (_, r) = repo.save(context, finalHeader, entities)
+                r
             } else {
-                repo.update(originalNominal, finalHeader, entities)
+                repo.update(context, originalNominal, finalHeader, entities)
             }
-            com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-            _ui.update { it.copy(isLoading = false, saved = true) }
+            if (result is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+                _ui.update { it.copy(isLoading = false, saveError = result.message) }
+            } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
+                _ui.update { it.copy(isLoading = false, saveError = "Tidak ada koneksi internet. Data tidak tersimpan.") }
+            } else {
+                _ui.update { it.copy(isLoading = false, saved = true) }
+            }
         }
     }
+
+    fun clearSaveError() { _ui.update { it.copy(saveError = null) } }
 }

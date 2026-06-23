@@ -1341,6 +1341,56 @@ object SupabaseSyncManager {
     }
 
     /**
+     * Hapus satu baris dari VPS secara synchronous dan mengembalikan [SyncResult].
+     * Digunakan oleh write-through operations (berbeda dari [deleteRow] yang mengembalikan Boolean).
+     */
+    suspend fun deleteRowWriteThrough(context: Context, tableName: String, id: Long, tenantId: String): SyncResult = withContext(Dispatchers.IO) {
+        if (!isNetworkAvailable(context)) {
+            return@withContext SyncResult.NoConnection
+        }
+        var conn: HttpURLConnection? = null
+        try {
+            val endpointUrl = "$VPS_URL/api/sync/$tableName?id=eq.$id"
+            val url = URL(endpointUrl)
+            conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "DELETE"
+                connectTimeout = 10_000
+                readTimeout = 15_000
+                setRequestProperty("x-tenant-id", tenantId)
+                setRequestProperty("x-client-version", BuildConfig.VERSION_NAME)
+                val securePrefs = com.posbah.app.security.SecurePreferences(context)
+                val email = currentUserEmail.takeIf { it.isNotBlank() } ?: securePrefs.currentEmail
+                if (!email.isNullOrBlank()) {
+                    setRequestProperty("x-user-email", email)
+                }
+            }
+            val responseCode = conn.responseCode
+            if (responseCode in 200..299) {
+                notifyConnectionState(true)
+                SyncResult.Success
+            } else {
+                val errorStream = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                Log.e(TAG, "[deleteRowWriteThrough] Gagal hapus $tableName id=$id ($responseCode): $errorStream")
+                var errorMsg = "Hapus gagal ($responseCode)"
+                try {
+                    val obj = org.json.JSONObject(errorStream)
+                    val detail = obj.optString("message", "").ifEmpty { obj.optString("error", "") }
+                    if (detail.isNotEmpty()) errorMsg = detail
+                } catch (_: Exception) {
+                    if (errorStream.isNotEmpty()) errorMsg = errorStream
+                }
+                SyncResult.Error(errorMsg)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "[deleteRowWriteThrough] Exception $tableName id=$id: ${e.message}")
+            notifyConnectionState(false)
+            SyncResult.Error(e.message ?: "Connection error")
+        } finally {
+            conn?.disconnect()
+        }
+    }
+
+    /**
      * Download data dari VPS REST API.
      */
     private fun pullTable(context: Context, tableName: String, tenantId: String, queryParams: String = ""): JSONArray? {
