@@ -350,11 +350,8 @@ private fun ProductLineEditor(
 ) {
     var showProductPicker by remember { mutableStateOf(false) }
     val matchedMaster = masterProducts.find { it.id == line.masterItemID }
-    val saranModal = if (line.isKhusus && matchedMaster != null) {
-        val masterPrice = matchedMaster.price
-        val costTotal = masterPrice * line.jumlahLusin * line.quantity
-        val sellTotal = line.price * line.jumlahLusin * line.quantity
-        maxOf(0.0, costTotal - sellTotal)
+    val saranModal = if (matchedMaster != null) {
+        matchedMaster.hppTotalPcs * line.quantity * line.jumlahLusin
     } else 0.0
 
     Surface(

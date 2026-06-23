@@ -1281,7 +1281,12 @@ class AuthRepository @Inject constructor(
                 // produk dengan base64 image yang berukuran besar.
                 withContext(kotlinx.coroutines.NonCancellable) {
                     kotlinx.coroutines.withTimeoutOrNull(45_000) {
-                        com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId, email)
+                        if (com.posbah.app.data.remote.SupabaseSyncManager.hasUnsyncedOrDeletedChanges(db, tenantId)) {
+                            android.util.Log.i("AuthRepository", "Logout: Unsynced/deleted changes found, running syncAll...")
+                            com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId, email)
+                        } else {
+                            android.util.Log.i("AuthRepository", "Logout: No unsynced/deleted changes, skipping syncAll.")
+                        }
                     }
                 }
             } catch (e: Exception) {

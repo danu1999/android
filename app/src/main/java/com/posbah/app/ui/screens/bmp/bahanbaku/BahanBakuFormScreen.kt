@@ -349,7 +349,9 @@ private fun FotoNotaSection(
                 // Preview foto
                 Box(modifier = Modifier.fillMaxWidth()) {
                     AsyncImage(
-                        model = uiState.notaFotoUrl ?: uiState.notaFotoPath,
+                        model = uiState.notaFotoPath?.takeIf { path ->
+                            if (path.startsWith("content://")) true else File(path).exists()
+                        } ?: uiState.notaFotoUrl,
                         contentDescription = "Foto nota bahan baku",
                         contentScale = ContentScale.Fit,
                         modifier = Modifier

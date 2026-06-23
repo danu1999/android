@@ -90,7 +90,9 @@ data class BmpMasterProductEntity(
     val image: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
-    val isSynced: Boolean = false
+    val isSynced: Boolean = false,
+    val hppTotalPcs: Double = 0.0,
+    val hppLusin: Double = 0.0
 )
 
 @Entity(

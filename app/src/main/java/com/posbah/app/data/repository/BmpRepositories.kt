@@ -180,8 +180,15 @@ class BmpInvoiceRepository @Inject constructor(
         // ── 2. VPS berhasil → simpan ke Room ─────────────────────────────────
         val (id, paymentIds, cashflowIds) = db.withTransaction {
             val newId = invoiceDao.insert(final)
-            val mappedProducts = products.map {
-                it.copy(invoiceId = newId, isSynced = false)
+            val mappedProducts = products.map { prod ->
+                var finalHargaBeli = prod.hargaBeli
+                if (!prod.isKhusus && prod.masterItemID != null) {
+                    val mp = db.bmpMasterProductDao().getById(prod.masterItemID)
+                    if (mp != null) {
+                        finalHargaBeli = mp.hppTotalPcs * prod.quantity * prod.jumlahLusin
+                    }
+                }
+                prod.copy(invoiceId = newId, hargaBeli = finalHargaBeli, isSynced = false)
             }
             productDao.insertAll(mappedProducts)
 
@@ -317,6 +324,10 @@ class BmpInvoiceRepository @Inject constructor(
         )
 
         // ── 1. VPS dulu ───────────────────────────────────────────────────────
+        val oldProducts = productDao.listByInvoice(invoice.id)
+        if (oldProducts.isNotEmpty()) {
+            BmpOnlineWriter.deleteProducts(context, invoice.tenantId, oldProducts.map { it.id })
+        }
         val vpsResult = BmpOnlineWriter.upsertInvoice(context, finalInvoice.tenantId, finalInvoice).toOnlineWriteResult()
         if (vpsResult !is OnlineWriteResult.Success) return vpsResult
 
@@ -341,7 +352,16 @@ class BmpInvoiceRepository @Inject constructor(
             productDao.deleteByInvoice(invoice.id)
             invoiceDao.update(finalInvoice)
 
-            val mappedProducts = products.map { it.copy(invoiceId = invoice.id, isSynced = false) }
+            val mappedProducts = products.map { prod ->
+                var finalHargaBeli = prod.hargaBeli
+                if (!prod.isKhusus && prod.masterItemID != null) {
+                    val mp = db.bmpMasterProductDao().getById(prod.masterItemID)
+                    if (mp != null) {
+                        finalHargaBeli = mp.hppTotalPcs * prod.quantity * prod.jumlahLusin
+                    }
+                }
+                prod.copy(invoiceId = invoice.id, hargaBeli = finalHargaBeli, isSynced = false)
+            }
             productDao.insertAll(mappedProducts)
 
             // Deduct stock of new products
@@ -408,6 +428,10 @@ class BmpInvoiceRepository @Inject constructor(
      * Hapus invoice: VPS dulu → soft-delete Room jika berhasil.
      */
     suspend fun deleteInvoice(context: Context, tenantId: String, id: Long): OnlineWriteResult {
+        val products = productDao.listByInvoice(id)
+        if (products.isNotEmpty()) {
+            BmpOnlineWriter.deleteProducts(context, tenantId, products.map { it.id })
+        }
         val vpsResult = BmpOnlineWriter.deleteInvoice(context, tenantId, id).toOnlineWriteResult()
         if (vpsResult !is OnlineWriteResult.Success) return vpsResult
 
@@ -561,7 +585,17 @@ class BmpInvoiceRepository @Inject constructor(
             totalPaid > 0 -> if (invoice.dueDate != null && System.currentTimeMillis() > invoice.dueDate) "OVERDUE" else "PARTIAL"
             else -> if (invoice.dueDate != null && System.currentTimeMillis() > invoice.dueDate) "OVERDUE" else "UNPAID"
         }
-        invoiceDao.updatePaid(invoiceId, totalPaid, newStatus)
+        val updatedInvoice = invoice.copy(
+            paidAmount = totalPaid,
+            status = newStatus,
+            isSynced = false,
+            updatedAt = System.currentTimeMillis()
+        )
+        invoiceDao.update(updatedInvoice)
+        val vpsInv = BmpOnlineWriter.upsertInvoice(context, tenantId, updatedInvoice).toOnlineWriteResult()
+        if (vpsInv is OnlineWriteResult.Success) {
+            invoiceDao.markSynced(invoiceId)
+        }
 
         val cf = BmpCashFlowEntity(
             tenantId = tenantId,
@@ -639,7 +673,7 @@ class BmpInvoiceRepository @Inject constructor(
             }
         }
 
-        recalculateInvoiceStatus(invoiceId)
+        recalculateInvoiceStatus(context, invoiceId)
         return OnlineWriteResult.Success
     }
 
@@ -652,11 +686,11 @@ class BmpInvoiceRepository @Inject constructor(
 
         cashFlowDao.softDeleteByPaymentRefId(paymentId)
         paymentDao.softDelete(paymentId)
-        recalculateInvoiceStatus(invoiceId)
+        recalculateInvoiceStatus(context, invoiceId)
         return OnlineWriteResult.Success
     }
 
-    private suspend fun recalculateInvoiceStatus(invoiceId: Long) {
+    private suspend fun recalculateInvoiceStatus(context: Context, invoiceId: Long) {
         val invoice = invoiceDao.getById(invoiceId) ?: return
         val totalPaid = paymentDao.sumForInvoice(invoiceId)
         val newStatus = when {
@@ -668,7 +702,17 @@ class BmpInvoiceRepository @Inject constructor(
                 if (invoice.dueDate != null && System.currentTimeMillis() > invoice.dueDate) "OVERDUE" else "UNPAID"
             }
         }
-        invoiceDao.updatePaid(invoiceId, totalPaid, newStatus)
+        val updatedInvoice = invoice.copy(
+            paidAmount = totalPaid,
+            status = newStatus,
+            isSynced = false,
+            updatedAt = System.currentTimeMillis()
+        )
+        invoiceDao.update(updatedInvoice)
+        val vpsInv = BmpOnlineWriter.upsertInvoice(context, invoice.tenantId, updatedInvoice).toOnlineWriteResult()
+        if (vpsInv is OnlineWriteResult.Success) {
+            invoiceDao.markSynced(invoiceId)
+        }
     }
 
     suspend fun payMassal(

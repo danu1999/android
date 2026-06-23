@@ -235,6 +235,8 @@ object BmpOnlineWriter {
                 put("isSynced", true)
                 put("createdAt", mp.createdAt)
                 put("updatedAt", mp.updatedAt)
+                put("hppTotalPcs", mp.hppTotalPcs)
+                put("hppLusin", mp.hppLusin)
             })
         }
         return SupabaseSyncManager.uploadRowWriteThrough(context, "bmp_master_products", array, tenantId)

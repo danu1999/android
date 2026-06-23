@@ -17,6 +17,7 @@ import androidx.room.withTransaction
 import com.posbah.app.BuildConfig
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
@@ -226,6 +227,9 @@ object SupabaseSyncManager {
         return try {
             Log.d(TAG, "Memulai sinkronisasi ke VPS...")
 
+            val tenant = db.tenantDao().getById(activeTenantId)
+            val isBmp = tenant?.businessMode == "BMP"
+
             // PHASE 0: Push deletes ke server SEBELUM upload data baru
             // Penting: data yang dihapus harus dikonfirmasi server terlebih dahulu
             // agar pullAll tidak me-restore kembali data yang sudah dihapus.
@@ -329,6 +333,7 @@ object SupabaseSyncManager {
                 }
             }
 
+            if (isBmp) {
             // 5. bmp_clients (Operational - filter unsynced)
             val clients = db.bmpClientDao().getAll().filter { it.tenantId == activeTenantId }
             val unsyncedClients = clients.filter { !it.isSynced }
@@ -452,6 +457,8 @@ object SupabaseSyncManager {
                         put("isSynced", true)
                         put("createdAt", mp.createdAt)
                         put("updatedAt", mp.updatedAt)
+                        put("hppTotalPcs", mp.hppTotalPcs)
+                        put("hppLusin", mp.hppLusin)
                     })
                 }
                 if (uploadTable(context, "bmp_master_products", array)) {
@@ -635,6 +642,7 @@ object SupabaseSyncManager {
                     unsyncedBahanBakuItems.forEach { db.bmpBahanBakuItemDao().markSynced(it.id) }
                 }
             }
+            }
  
             // 16. print_settings (Metadata - upload all)
             val printSettings = db.printSettingsDao().getAll().filter { it.tenantId == activeTenantId }
@@ -683,6 +691,7 @@ object SupabaseSyncManager {
                 uploadTable(context, "print_settings", array)
             }
  
+            if (!isBmp) {
             // 17. products (Metadata - filter unsynced)
             val productsList = db.productDao().getAll().filter { it.tenantId == activeTenantId && !it.isDeleted }
             val unsyncedProducts = productsList.filter { !it.isSynced }
@@ -814,7 +823,9 @@ object SupabaseSyncManager {
                 }
                 uploadTable(context, "activity_logs", array)
             }
+            }
 
+            if (isBmp) {
             // 22. bmp_product_stocks (Operational - filter unsynced)
             val bmpProductStocks = db.bmpProductStockDao().getAll().filter { it.tenantId == activeTenantId }
             val unsyncedBmpProductStocks = bmpProductStocks.filter { !it.isSynced }
@@ -884,7 +895,10 @@ object SupabaseSyncManager {
                     unsyncedBmpProductionLogs.forEach { db.bmpProductionLogDao().markSynced(it.id) }
                 }
             }
+            }
  
+            downloadMissingBahanBakuPhotos(context, db, activeTenantId, email)
+
             Log.d(TAG, "Sinkronisasi selesai dengan sukses.")
             SyncResult.Success
         } catch (e: Exception) {
@@ -908,10 +922,14 @@ object SupabaseSyncManager {
         if (!isNetworkAvailable(context)) return
 
         try {
-            // ── BMP: urutan child → parent ──────────────────────────────────
+            val tenant = db.tenantDao().getById(tenantId)
+            val isBmp = tenant?.businessMode == "BMP"
 
-            // 1. bmp_products (child invoice)
-            val deletedProductIds = db.bmpProductDao().getDeletedIds(tenantId)
+            if (isBmp) {
+                // ── BMP: urutan child → parent ──────────────────────────────────
+
+                // 1. bmp_products (child invoice)
+                val deletedProductIds = db.bmpProductDao().getDeletedIds(tenantId)
             for (id in deletedProductIds) {
                 if (deleteRow(context, "bmp_products", id, tenantId)) {
                     db.bmpProductDao().hardDelete(id)
@@ -999,11 +1017,13 @@ object SupabaseSyncManager {
                     db.bmpProductionLogDao().hardDelete(id)
                 }
             }
+            }
 
-            // ── POS: transactions ──────────────────────────────────────────
+            if (!isBmp) {
+                // ── POS: transactions ──────────────────────────────────────────
 
-            // 9. POS products (catalog) yang di-soft-delete
-            val deletedPosProductIds = db.productDao().getDeletedIds(tenantId)
+                // 9. POS products (catalog) yang di-soft-delete
+                val deletedPosProductIds = db.productDao().getDeletedIds(tenantId)
             for (id in deletedPosProductIds) {
                 if (deleteRow(context, "products", id, tenantId)) {
                     db.productDao().hardDelete(id)
@@ -1027,6 +1047,7 @@ object SupabaseSyncManager {
                 if (deleteRow(context, "transactions", txId, tenantId)) {
                     db.transactionDao().delete(txId)
                 }
+            }
             }
 
             Log.d(TAG, "[DeletePush] Selesai push deletes ke server.")
@@ -2085,7 +2106,9 @@ object SupabaseSyncManager {
                         image = if (obj.isNull("image")) null else obj.optString("image"),
                         createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
                         updatedAt = obj.optLong("updatedAt", System.currentTimeMillis()),
-                        isSynced = true
+                        isSynced = true,
+                        hppTotalPcs = obj.optDouble("hppTotalPcs", 0.0),
+                        hppLusin = obj.optDouble("hppLusin", 0.0)
                     ))
                 }
                 if (list.isNotEmpty()) {
@@ -2543,6 +2566,8 @@ object SupabaseSyncManager {
             }
             } // end of db.withTransaction
 
+            downloadMissingBahanBakuPhotos(context, db, activeTenantId, email)
+
             Log.d(TAG, "Pull sinkronisasi selesai dengan sukses.")
             SyncResult.Success
         } catch (e: Exception) {
@@ -2825,6 +2850,8 @@ object SupabaseSyncManager {
                     put("isSynced", true)
                     put("createdAt", mp.createdAt)
                     put("updatedAt", mp.updatedAt)
+                    put("hppTotalPcs", mp.hppTotalPcs)
+                    put("hppLusin", mp.hppLusin)
                 })
                 if (uploadTable(context, "bmp_master_products", array)) {
                     db.bmpMasterProductDao().markSynced(masterProductId)
@@ -3119,6 +3146,144 @@ object SupabaseSyncManager {
                 syncAll(context, db, activeTenantId, userEmail)
             } catch (e: Exception) {
                 Log.e(TAG, "[enqueueFullSync] error: ${e.message}", e)
+            }
+        }
+    }
+
+    suspend fun hasUnsyncedOrDeletedChanges(db: PosBahDatabase, tenantId: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val tenant = db.tenantDao().getById(tenantId)
+            val isBmp = tenant?.businessMode == "BMP"
+
+            // Check common tables first
+            val hasCommonUnsynced = db.outletDao().getAll().any { it.tenantId == tenantId && !it.isSynced } ||
+                    db.employeeDao().getAll().any { it.tenantId == tenantId && !it.isSynced }
+            if (hasCommonUnsynced) return@withContext true
+
+            if (isBmp) {
+                // Check BMP deleted records
+                val hasBmpDeleted = db.bmpProductDao().getDeletedIds(tenantId).isNotEmpty() ||
+                        db.bmpCashFlowDao().getDeletedIds(tenantId).isNotEmpty() ||
+                        db.bmpPaymentDao().getDeletedIds(tenantId).isNotEmpty() ||
+                        db.bmpInvoiceDao().getDeletedIds(tenantId).isNotEmpty() ||
+                        db.bmpClientDao().getDeletedIds(tenantId).isNotEmpty() ||
+                        db.bmpBahanBakuItemDao().getDeletedIds(tenantId).isNotEmpty() ||
+                        db.bmpBahanBakuDao().getDeletedIds(tenantId).isNotEmpty() ||
+                        db.bmpMasterProductDao().getDeletedIds(tenantId).isNotEmpty() ||
+                        db.bmpProductStockDao().getDeletedIds(tenantId).isNotEmpty() ||
+                        db.bmpStockLedgerDao().getDeletedIds(tenantId).isNotEmpty() ||
+                        db.bmpProductionLogDao().getDeletedIds(tenantId).isNotEmpty()
+                if (hasBmpDeleted) return@withContext true
+
+                // Check BMP unsynced records
+                val hasBmpUnsynced = db.bmpClientDao().getAll().any { it.tenantId == tenantId && !it.isSynced } ||
+                        db.bmpInvoiceDao().getAll().any { it.tenantId == tenantId && !it.isSynced } ||
+                        db.bmpProductDao().getAll().any { it.tenantId == tenantId && !it.isSynced } ||
+                        db.bmpMasterProductDao().getAll().any { it.tenantId == tenantId && !it.isSynced } ||
+                        db.bmpPaymentDao().getAll().any { it.tenantId == tenantId && !it.isSynced } ||
+                        db.bmpCashFlowDao().getAll().any { it.tenantId == tenantId && !it.isSynced } ||
+                        db.bmpEmployeeDao().getAll().any { it.tenantId == tenantId && !it.isSynced } ||
+                        db.bmpPayrollDao().getAll().any { it.tenantId == tenantId && !it.isSynced } ||
+                        db.bmpBahanBakuDao().getAll().any { it.tenantId == tenantId && !it.isSynced } ||
+                        db.bmpBahanBakuItemDao().getAll().any { it.tenantId == tenantId && !it.isSynced } ||
+                        db.bmpProductStockDao().getAll().any { it.tenantId == tenantId && !it.isSynced } ||
+                        db.bmpStockLedgerDao().getAll().any { it.tenantId == tenantId && !it.isSynced } ||
+                        db.bmpProductionLogDao().getAll().any { it.tenantId == tenantId && !it.isSynced }
+                if (hasBmpUnsynced) return@withContext true
+            } else {
+                // FNB mode
+                val hasFnbDeleted = db.productDao().getDeletedIds(tenantId).isNotEmpty() ||
+                        db.transactionDao().getDeletedIds(tenantId).isNotEmpty()
+                if (hasFnbDeleted) return@withContext true
+
+                val hasFnbUnsynced = db.productDao().getAll().any { it.tenantId == tenantId && !it.isSynced } ||
+                        db.customerDao().getAll().any { it.tenantId == tenantId && !it.isSynced }
+                if (hasFnbUnsynced) return@withContext true
+            }
+
+            return@withContext false
+        } catch (e: Exception) {
+            Log.e(TAG, "[hasUnsyncedOrDeletedChanges] error checking changes, fallback to true", e)
+            return@withContext true
+        }
+    }
+
+    private fun downloadMissingBahanBakuPhotos(
+        context: Context,
+        db: PosBahDatabase,
+        activeTenantId: String,
+        email: String
+    ) {
+        val sanitizedEmail = email.trim().lowercase()
+        if (sanitizedEmail.isEmpty()) return
+
+        syncScope.launch(Dispatchers.IO) {
+            try {
+                val folderName = "bahanbaku_$sanitizedEmail"
+                val accountDir = File(context.filesDir, folderName)
+                if (!accountDir.exists()) {
+                    accountDir.mkdirs()
+                }
+
+                val list = db.bmpBahanBakuDao().getAll()
+                    .filter { it.tenantId == activeTenantId && !it.notaFotoUrl.isNullOrBlank() }
+
+                for (item in list) {
+                    val urlStr = item.notaFotoUrl!!
+                    val ext = when {
+                        urlStr.endsWith(".png", ignoreCase = true) -> "png"
+                        urlStr.endsWith(".webp", ignoreCase = true) -> "webp"
+                        else -> "jpg"
+                    }
+                    val fileName = "nota_${item.id}.$ext"
+                    val targetFile = File(accountDir, fileName)
+
+                    var downloadSuccess = false
+                    if (targetFile.exists()) {
+                        downloadSuccess = true
+                    } else {
+                        try {
+                            val tempFile = File(accountDir, "$fileName.tmp")
+                            val url = URL(urlStr)
+                            val conn = url.openConnection() as HttpURLConnection
+                            conn.connectTimeout = 10000
+                            conn.readTimeout = 10000
+                            conn.requestMethod = "GET"
+
+                            val responseCode = conn.responseCode
+                            if (responseCode == HttpURLConnection.HTTP_OK) {
+                                conn.inputStream.use { input ->
+                                    tempFile.outputStream().use { output ->
+                                        input.copyTo(output)
+                                    }
+                                }
+                                if (tempFile.renameTo(targetFile)) {
+                                    downloadSuccess = true
+                                    Log.d(TAG, "Successfully downloaded: ${targetFile.absolutePath}")
+                                } else {
+                                    tempFile.delete()
+                                    Log.e(TAG, "Failed to rename temp file to ${targetFile.absolutePath}")
+                                }
+                            } else {
+                                Log.w(TAG, "Failed to download image from $urlStr, response code: $responseCode")
+                            }
+                            conn.disconnect()
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error downloading photo for bahanbaku ${item.id}: ${e.message}")
+                        }
+                    }
+
+                    if (downloadSuccess) {
+                        val localPath = targetFile.absolutePath
+                        if (item.notaFotoPath != localPath) {
+                            val updated = item.copy(notaFotoPath = localPath)
+                            db.bmpBahanBakuDao().update(updated)
+                            Log.d(TAG, "Updated database notaFotoPath for ID ${item.id} to: $localPath")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in downloadMissingBahanBakuPhotos: ${e.message}", e)
             }
         }
     }

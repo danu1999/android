@@ -829,6 +829,10 @@ func dynamicUpsert(tableName string, rows []map[string]interface{}) error {
 			if !isPKColumn(tableName, k) {
 				if tableName == "employees" && k == "email" {
 					// Exclude email column from conflict updates for employees table
+				} else if (tableName == "bmp_invoices" || tableName == "bmp_clients") &&
+					(k == "receiverSignatureUrl" || k == "receiverSignaturePath" || k == "receiverNameActual") {
+					// Protect signature columns from being overwritten with NULL/empty during sync upsert
+					updateParts = append(updateParts, fmt.Sprintf(`"%s" = COALESCE(NULLIF(EXCLUDED."%s", ''), "%s"."%s")`, k, k, tableName, k))
 				} else {
 					updateParts = append(updateParts, fmt.Sprintf(`"%s" = EXCLUDED."%s"`, k, k))
 				}
@@ -897,6 +901,10 @@ func dynamicUpsertTx(tx *sql.Tx, tableName string, rows []map[string]interface{}
 			if !isPKColumn(tableName, k) {
 				if tableName == "employees" && k == "email" {
 					// Exclude email column from conflict updates for employees table
+				} else if (tableName == "bmp_invoices" || tableName == "bmp_clients") &&
+					(k == "receiverSignatureUrl" || k == "receiverSignaturePath" || k == "receiverNameActual") {
+					// Protect signature columns from being overwritten with NULL/empty during sync upsert
+					updateParts = append(updateParts, fmt.Sprintf(`"%s" = COALESCE(NULLIF(EXCLUDED."%s", ''), "%s"."%s")`, k, k, tableName, k))
 				} else {
 					updateParts = append(updateParts, fmt.Sprintf(`"%s" = EXCLUDED."%s"`, k, k))
 				}

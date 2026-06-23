@@ -153,8 +153,36 @@ class MasterProductsViewModel @Inject constructor(
                 ex.printStackTrace()
             }
         }
+        val s = settings.value
+        val rates = latestRates.value
+        val computed = if (s != null) {
+            val totalGaji = s.jumlahKaryawan * s.gajiHarian * s.hariKerjaSebulan
+            val overheadBulanan = s.listrikBulanan + totalGaji
+            val totalDetikSebulan = s.jumlahMesin * s.hariKerjaSebulan * s.hoursPerDay * 3600.0
+            val biayaPerDetik = if (totalDetikSebulan > 0) overheadBulanan / totalDetikSebulan else 0.0
+            val biayaMesin = e.cycleTime * biayaPerDetik
+            
+            val bahanRate = if (e.jenisBahanBaku.isNotEmpty()) {
+                rates[e.jenisBahanBaku] ?: e.price
+            } else {
+                e.price
+            }
+
+            val hppSatuan = (e.beratGram * (bahanRate / 1000.0) + biayaMesin) * (1.0 + (e.rejectRate / 100.0))
+            val biayaKemasanPcs = s.biayaKarungPer1000 / 1000.0
+            val hppTotalPcs = hppSatuan + biayaKemasanPcs
+            val hppLusin = hppTotalPcs * 12.0
+            Pair(hppTotalPcs, hppLusin)
+        } else {
+            Pair(0.0, 0.0)
+        }
+        val finalProduct = e.copy(
+            image = base64Url,
+            hppTotalPcs = computed.first,
+            hppLusin = computed.second
+        )
         _error.value = null
-        val result = repo.upsert(context, e.copy(image = base64Url))
+        val result = repo.upsert(context, finalProduct)
         when (result) {
             is OnlineWriteResult.Success -> {
                 if (isNew) {

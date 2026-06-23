@@ -389,7 +389,9 @@ private fun BahanBakuCard(
                         }
                     }
                 }
-                val photo = entry.notaFotoUrl ?: entry.notaFotoPath
+                val photo = entry.notaFotoPath?.takeIf { path ->
+                    if (path.startsWith("content://")) true else java.io.File(path).exists()
+                } ?: entry.notaFotoUrl
                 photo?.takeIf { it.isNotBlank() }?.let { nonNullPhoto ->
                     Spacer(Modifier.width(12.dp))
                     AsyncImage(
