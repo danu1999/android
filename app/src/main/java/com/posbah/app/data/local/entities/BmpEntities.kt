@@ -103,6 +103,7 @@ data class BmpProductEntity(
     val invoiceId: Long? = null,
     val masterItemID: Long? = null,
     val title: String,
+    val description: String? = null,
     val unit: String = "pcs",
     val price: Double = 0.0,
     val jumlahLusin: Double = 1.0,

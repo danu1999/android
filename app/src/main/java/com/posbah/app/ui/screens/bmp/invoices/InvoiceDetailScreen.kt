@@ -605,6 +605,14 @@ private fun ProductLineRow(p: BmpProductEntity) {
         Row(modifier = Modifier.padding(12.dp)) {
             Column(Modifier.weight(1f)) {
                 Text(p.title, style = MaterialTheme.typography.titleSmall)
+                if (!p.description.isNullOrBlank()) {
+                    Text(
+                        p.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(2.dp))
+                }
                 Text(
                     "${Formatters.number(p.quantity)} ${p.unit} × ${Formatters.rupiah(p.price)}" +
                         if (p.jumlahLusin > 1.0) " × ${Formatters.number(p.jumlahLusin)} lusin" else "",
@@ -684,10 +692,11 @@ private fun generateInvoiceHtml(
     products.forEachIndexed { index, p ->
         val subtotal = p.price * p.quantity * p.jumlahLusin
         val satuanVal = "${Formatters.number(p.jumlahLusin)} ${if (p.unit.lowercase() == "lusin" || p.unit == "-") "Lusin" else p.unit}"
+        val descHtml = if (!p.description.isNullOrBlank()) "<br/><span style=\"font-size: 11px; color: #555; font-weight: normal;\">${p.description}</span>" else ""
         itemsHtml.append("""
             <tr>
                 <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${index + 1}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;"><strong>${p.title}</strong></td>
+                <td style="border: 1px solid #ddd; padding: 8px;"><strong>${p.title}</strong>$descHtml</td>
                 <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${Formatters.number(p.quantity)}</td>
                 <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">$satuanVal</td>
                 <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${Formatters.rupiah(p.price)}</td>
@@ -977,10 +986,11 @@ private fun generateSuratJalanHtml(
     val itemsHtml = StringBuilder()
     products.forEachIndexed { index, p ->
         val satuanVal = "${Formatters.number(p.jumlahLusin)} ${if (p.unit.lowercase() == "lusin" || p.unit == "-") "Lusin" else p.unit}"
+        val descHtml = if (!p.description.isNullOrBlank()) "<br/><span style=\"font-size: 11px; color: #555; font-weight: normal;\">${p.description}</span>" else ""
         itemsHtml.append("""
             <tr>
                 <td style="border: 1px solid #333; padding: 8px; text-align: center;">${index + 1}</td>
-                <td style="border: 1px solid #333; padding: 8px;"><strong>${p.title}</strong></td>
+                <td style="border: 1px solid #333; padding: 8px;"><strong>${p.title}</strong>$descHtml</td>
                 <td style="border: 1px solid #333; padding: 8px; text-align: center;">$satuanVal</td>
                 <td style="border: 1px solid #333; padding: 8px; text-align: center;">${Formatters.number(p.quantity)}</td>
             </tr>

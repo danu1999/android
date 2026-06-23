@@ -462,6 +462,7 @@ class InvoiceFormViewModel @Inject constructor(
                 tenantId = tenantId,
                 masterItemID = masterProduct.id,
                 title = masterProduct.title,
+                description = masterProduct.description,
                 quantity = 1.0,
                 jumlahLusin = 1.0,
                 unit = masterProduct.unit,

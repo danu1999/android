@@ -408,6 +408,7 @@ object SupabaseSyncManager {
                         put("invoiceId", p.invoiceId ?: JSONObject.NULL)
                         put("masterItemID", p.masterItemID ?: JSONObject.NULL)
                         put("title", p.title)
+                        put("description", p.description ?: JSONObject.NULL)
                         put("unit", p.unit)
                         put("price", p.price)
                         put("jumlahLusin", p.jumlahLusin)
@@ -1982,6 +1983,7 @@ object SupabaseSyncManager {
                         invoiceId = if (obj.isNull("invoiceId")) null else obj.optLong("invoiceId"),
                         masterItemID = if (obj.isNull("masterItemID")) null else obj.optLong("masterItemID"),
                         title = obj.optString("title"),
+                        description = if (obj.isNull("description")) null else obj.optString("description"),
                         unit = obj.optString("unit", "pcs"),
                         price = obj.optDouble("price", 0.0),
                         jumlahLusin = obj.optDouble("jumlahLusin", 1.0),

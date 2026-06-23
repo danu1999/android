@@ -147,6 +147,7 @@ func initSchema() error {
 			"invoiceId" INT,
 			"masterItemID" INT,
 			"title" VARCHAR(255) NOT NULL,
+			"description" TEXT,
 			"unit" VARCHAR(50) DEFAULT 'pcs',
 			"price" DOUBLE PRECISION DEFAULT 0,
 			"jumlahLusin" DOUBLE PRECISION DEFAULT 1,
@@ -755,6 +756,7 @@ func initSchema() error {
 		`ALTER TABLE "bmp_bahan_baku"    ADD COLUMN IF NOT EXISTS "outletId" BIGINT;`,
 		`ALTER TABLE "bmp_product_stocks" ADD COLUMN IF NOT EXISTS "outletId" BIGINT;`,
 		`ALTER TABLE "activity_logs"     ADD COLUMN IF NOT EXISTS "outletId" BIGINT;`,
+		`ALTER TABLE "bmp_products"      ADD COLUMN IF NOT EXISTS "description" TEXT;`,
 	}
 	for _, q := range outletIdMigrations {
 		if _, err := db.Exec(q); err != nil {

@@ -374,6 +374,15 @@ private fun ProductLineEditor(
                         modifier = Modifier.fillMaxWidth().testTag("$testTagPrefix-title")
                     )
                     Spacer(Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = line.description ?: "",
+                        onValueChange = { v -> onChange { it.copy(description = if (v.isBlank()) null else v) } },
+                        label = { Text("Deskripsi (Opsional)") },
+                        singleLine = false,
+                        maxLines = 2,
+                        modifier = Modifier.fillMaxWidth().testTag("$testTagPrefix-description")
+                    )
+                    Spacer(Modifier.height(4.dp))
                     TextButton(
                         onClick = { showProductPicker = true },
                         contentPadding = PaddingValues(0.dp),
@@ -489,6 +498,7 @@ private fun ProductLineEditor(
                                             it.copy(
                                                 masterItemID = mp.id,
                                                 title = mp.title,
+                                                description = mp.description,
                                                 unit = mp.unit,
                                                 price = mp.price
                                             )

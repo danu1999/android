@@ -266,7 +266,7 @@ async function refreshData() {
 
         // Fetch Print Settings
         try {
-            const resPrint = await fetch(`${BASE_URL}/api/sync/print_settings?tenantId=eq.${tenantId}`, { headers });
+            const resPrint = await fetch(`${BASE_URL}/api/sync/print_settings?tenantId=eq.${tenantId}&moduleKey=eq.BMP`, { headers });
             if (resPrint.ok) {
                 const printData = await resPrint.json();
                 printSettings = printData.length > 0 ? printData[0] : null;
@@ -1092,9 +1092,10 @@ window.showInvoiceDetails = function (invoiceId) {
     } else {
         items.forEach(item => {
             const tr = document.createElement("tr");
-            const sub = item.price * item.quantity;
+            const sub = item.price * item.quantity * (item.jumlahLusin || 1);
+            const descriptionHtml = item.description ? `<br/><span style="font-size: 11px; color: #666; font-weight: normal;">${item.description}</span>` : "";
             tr.innerHTML = `
-                <td><strong>${item.title}</strong></td>
+                <td><strong>${item.title}</strong>${descriptionHtml}</td>
                 <td>${item.quantity} ${item.unit}</td>
                 <td>${formatRupiah(item.price)}</td>
                 <td>${formatRupiah(sub)}</td>
@@ -1170,6 +1171,7 @@ async function saveBankInfo() {
     const payload = [{
         id: printSettings && printSettings.id ? printSettings.id : Date.now(),
         tenantId: tenantId,
+        moduleKey: "BMP",
         bankName: bankName,
         bankAccountNumber: bankAccount,
         bankOwnerName: bankOwner,
@@ -1314,10 +1316,11 @@ function triggerInvoicePrint() {
     items.forEach((p, index) => {
         const subtotal = p.price * p.quantity * p.jumlahLusin;
         const satuanVal = `${p.jumlahLusin} ${p.unit.toLowerCase() === "lusin" || p.unit === "-" ? "Lusin" : p.unit}`;
+        const descriptionHtml = p.description ? `<br/><span style="font-size: 11px; color: #555; font-weight: normal;">${p.description}</span>` : "";
         itemsHtml += `
             <tr>
                 <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${index + 1}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;"><strong>${p.title}</strong></td>
+                <td style="border: 1px solid #ddd; padding: 8px;"><strong>${p.title}</strong>${descriptionHtml}</td>
                 <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${p.quantity}</td>
                 <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${satuanVal}</td>
                 <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${formatRupiah(p.price)}</td>
@@ -1529,10 +1532,11 @@ function triggerSjPrint() {
     let itemsHtml = "";
     items.forEach((p, index) => {
         const satuanVal = `${p.jumlahLusin} ${p.unit.toLowerCase() === "lusin" || p.unit === "-" ? "Lusin" : p.unit}`;
+        const descriptionHtml = p.description ? `<br/><span style="font-size: 11px; color: #555; font-weight: normal;">${p.description}</span>` : "";
         itemsHtml += `
             <tr>
                 <td style="border: 1px solid #333; padding: 8px; text-align: center;">${index + 1}</td>
-                <td style="border: 1px solid #333; padding: 8px;"><strong>${p.title}</strong></td>
+                <td style="border: 1px solid #333; padding: 8px;"><strong>${p.title}</strong>${descriptionHtml}</td>
                 <td style="border: 1px solid #333; padding: 8px; text-align: center;">${satuanVal}</td>
                 <td style="border: 1px solid #333; padding: 8px; text-align: center;">${p.quantity}</td>
             </tr>
