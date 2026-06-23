@@ -122,9 +122,21 @@ class BmpInvoiceRepository @Inject constructor(
             totalPaid > 0 -> "PARTIAL"
             else -> "UNPAID"
         }
+        val days = try {
+            val clean = invoice.paymentTerms.trim().lowercase()
+            if (clean.contains("cash") || clean.contains("tunai") || clean.contains("cod")) {
+                0L
+            } else {
+                invoice.paymentTerms.split(" ").firstOrNull()?.toLongOrNull() ?: 14L
+            }
+        } catch (e: Exception) {
+            14L
+        }
+        val computedDueDate = invoice.dueDate ?: (invoice.createdAt + days * 24 * 60 * 60 * 1000L)
         val final = invoice.copy(
             totalAmount = total,
             status = newStatus,
+            dueDate = computedDueDate,
             slug = invoice.slug.ifBlank { autoSlug(invoice.number) }
         )
         return db.withTransaction {
@@ -208,13 +220,24 @@ class BmpInvoiceRepository @Inject constructor(
             val total = products.sumOf { it.price * it.quantity * it.jumlahLusin }
             
             val totalPaid = paymentDao.sumForInvoice(invoice.id)
+            val days = try {
+                val clean = invoice.paymentTerms.trim().lowercase()
+                if (clean.contains("cash") || clean.contains("tunai") || clean.contains("cod")) {
+                    0L
+                } else {
+                    invoice.paymentTerms.split(" ").firstOrNull()?.toLongOrNull() ?: 14L
+                }
+            } catch (e: Exception) {
+                14L
+            }
+            val computedDueDate = invoice.dueDate ?: (invoice.createdAt + days * 24 * 60 * 60 * 1000L)
             val newStatus = when {
                 totalPaid >= total - 0.01 -> "PAID"
                 totalPaid > 0 -> {
-                    if (invoice.dueDate != null && System.currentTimeMillis() > invoice.dueDate) "OVERDUE" else "PARTIAL"
+                    if (computedDueDate != null && System.currentTimeMillis() > computedDueDate) "OVERDUE" else "PARTIAL"
                 }
                 else -> {
-                    if (invoice.dueDate != null && System.currentTimeMillis() > invoice.dueDate) "OVERDUE" else "UNPAID"
+                    if (computedDueDate != null && System.currentTimeMillis() > computedDueDate) "OVERDUE" else "UNPAID"
                 }
             }
             
@@ -223,6 +246,8 @@ class BmpInvoiceRepository @Inject constructor(
                     totalAmount = total,
                     paidAmount = totalPaid,
                     status = newStatus,
+                    dueDate = computedDueDate,
+                    isSynced = false,
                     updatedAt = System.currentTimeMillis()
                 )
             )
@@ -324,6 +349,7 @@ class BmpInvoiceRepository @Inject constructor(
                 receiverSignaturePath = signaturePath,
                 receiverSignatureUrl = signatureUrl,
                 receiverNameActual = receiverName,
+                isSynced = false,
                 updatedAt = System.currentTimeMillis()
             )
         )

@@ -157,6 +157,8 @@ func initSchema() error {
 			"currency" VARCHAR(10) DEFAULT 'Rp',
 			"uniqueID" VARCHAR(100),
 			"slug" VARCHAR(255),
+			"isSynced" BOOLEAN NOT NULL DEFAULT TRUE,
+			"isDeleted" BOOLEAN NOT NULL DEFAULT FALSE,
 			"createdAt" BIGINT,
 			"updatedAt" BIGINT
 		);`,
@@ -757,6 +759,8 @@ func initSchema() error {
 		`ALTER TABLE "bmp_product_stocks" ADD COLUMN IF NOT EXISTS "outletId" BIGINT;`,
 		`ALTER TABLE "activity_logs"     ADD COLUMN IF NOT EXISTS "outletId" BIGINT;`,
 		`ALTER TABLE "bmp_products"      ADD COLUMN IF NOT EXISTS "description" TEXT;`,
+		`ALTER TABLE "bmp_products"      ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT TRUE;`,
+		`ALTER TABLE "bmp_products"      ADD COLUMN IF NOT EXISTS "isDeleted" BOOLEAN NOT NULL DEFAULT FALSE;`,
 	}
 	for _, q := range outletIdMigrations {
 		if _, err := db.Exec(q); err != nil {
