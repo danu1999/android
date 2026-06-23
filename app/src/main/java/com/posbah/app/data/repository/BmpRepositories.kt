@@ -29,6 +29,9 @@ import com.posbah.app.data.remote.BmpOnlineWriter
 import com.posbah.app.data.remote.SupabaseSyncManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -56,6 +59,7 @@ class BmpClientRepository @Inject constructor(
     private val paymentDao: BmpPaymentDao,
     private val cashFlowDao: BmpCashFlowDao,
     private val productDao: BmpProductDao,
+    private val stockRepo: BmpStockRepository,
     private val db: com.posbah.app.data.local.PosBahDatabase
 ) {
     fun observe(tenantId: String): Flow<List<BmpClientEntity>> = dao.observe(tenantId)
@@ -93,21 +97,60 @@ class BmpClientRepository @Inject constructor(
      * Operasi VPS dulu, lalu soft-delete lokal.
      */
     suspend fun delete(context: Context, tenantId: String, id: Long): OnlineWriteResult {
+        val invoices = invoiceDao.getByClientId(id)
+        
+        // VPS deletion of client's invoices, products, payments, cashflows in parallel
+        kotlinx.coroutines.coroutineScope {
+            val jobs = invoices.map { invoice ->
+                async {
+                    // Delete products of invoice on VPS in one batch call
+                    SupabaseSyncManager.deleteRowsWriteThrough(context, "bmp_products", "invoiceId=eq.${invoice.id}", tenantId)
+                    // Delete payments of invoice on VPS in one batch call
+                    SupabaseSyncManager.deleteRowsWriteThrough(context, "bmp_invoice_payments", "invoiceId=eq.${invoice.id}", tenantId)
+                    // Delete associated payment cashflows on VPS
+                    val payments = paymentDao.listAllForInvoice(invoice.id)
+                    for (pay in payments) {
+                        SupabaseSyncManager.deleteRowsWriteThrough(context, "bmp_cashflow", "paymentRefId=eq.${pay.id}", tenantId)
+                    }
+                    // Delete isKhusus purchase cashflows on VPS
+                    val encodedDesc = java.net.URLEncoder.encode("Pembelian barang khusus untuk Faktur ${invoice.number}", "UTF-8")
+                    SupabaseSyncManager.deleteRowsWriteThrough(context, "bmp_cashflow", "transactionType=eq.KELUAR&description=eq.$encodedDesc", tenantId)
+                    // Delete invoice on VPS
+                    BmpOnlineWriter.deleteInvoice(context, tenantId, invoice.id)
+                }
+            }
+            jobs.awaitAll()
+        }
+
         val result = BmpOnlineWriter.deleteClient(context, tenantId, id).toOnlineWriteResult()
         if (result is OnlineWriteResult.Success) {
             db.withTransaction {
-                val invoices = invoiceDao.getByClientId(id)
-                for (invoice in invoices) {
+                val currentInvoices = invoiceDao.getByClientId(id)
+                for (invoice in currentInvoices) {
+                    val products = productDao.listByInvoice(invoice.id)
+                    for (prod in products) {
+                        if (prod.masterItemID != null) {
+                            stockRepo.adjustStock(
+                                context = context,
+                                tenantId = invoice.tenantId,
+                                productId = prod.masterItemID,
+                                change = prod.quantity * prod.jumlahLusin,
+                                mutationType = "PENJUALAN",
+                                referenceId = invoice.id,
+                                notes = "Batal (Klien Dihapus)"
+                            )
+                        }
+                    }
+                    productDao.deleteByInvoice(invoice.id)
+                    paymentDao.deleteByInvoice(invoice.id)
                     val payments = paymentDao.listAllForInvoice(invoice.id)
                     for (payment in payments) {
-                        cashFlowDao.softDeleteByPaymentRefId(payment.id)
+                        cashFlowDao.hardDeleteByPaymentRefId(payment.id)
                     }
-                    paymentDao.softDeleteByInvoice(invoice.id)
-                    productDao.softDeleteByInvoice(invoice.id)
-                    cashFlowDao.deleteExitsForInvoice(invoice.number)
+                    cashFlowDao.hardDeleteExitsForInvoice(invoice.number)
                 }
-                invoiceDao.softDeleteByClientId(id)
-                dao.softDelete(id)
+                invoiceDao.hardDeleteByClientId(id)
+                dao.hardDelete(id)
             }
         }
         return result
@@ -463,43 +506,50 @@ class BmpInvoiceRepository @Inject constructor(
     }
 
     /**
-     * Hapus invoice: VPS dulu → soft-delete Room jika berhasil.
+     * Hapus invoice: VPS dulu → hard-delete Room jika berhasil.
      */
     suspend fun deleteInvoice(context: Context, tenantId: String, id: Long): OnlineWriteResult {
-        val products = productDao.listByInvoice(id)
-        if (products.isNotEmpty()) {
-            BmpOnlineWriter.deleteProducts(context, tenantId, products.map { it.id })
+        val invoice = invoiceDao.getById(id) ?: return OnlineWriteResult.Success
+        val payments = paymentDao.listAllForInvoice(id)
+
+        // 1. Delete products of invoice on VPS in one batch query
+        SupabaseSyncManager.deleteRowsWriteThrough(context, "bmp_products", "invoiceId=eq.$id", tenantId)
+        // 2. Delete payments of invoice on VPS in one batch query
+        SupabaseSyncManager.deleteRowsWriteThrough(context, "bmp_invoice_payments", "invoiceId=eq.$id", tenantId)
+        // 3. Delete cashflows of these payments on VPS
+        for (pay in payments) {
+            SupabaseSyncManager.deleteRowsWriteThrough(context, "bmp_cashflow", "paymentRefId=eq.${pay.id}", tenantId)
         }
+        // 4. Delete isKhusus purchase cashflows on VPS
+        val encodedDesc = java.net.URLEncoder.encode("Pembelian barang khusus untuk Faktur ${invoice.number}", "UTF-8")
+        SupabaseSyncManager.deleteRowsWriteThrough(context, "bmp_cashflow", "transactionType=eq.KELUAR&description=eq.$encodedDesc", tenantId)
+        
+        // 5. Delete invoice on VPS
         val vpsResult = BmpOnlineWriter.deleteInvoice(context, tenantId, id).toOnlineWriteResult()
         if (vpsResult !is OnlineWriteResult.Success) return vpsResult
 
         db.withTransaction {
-            val invoice = invoiceDao.getById(id)
-                ?: invoiceDao.getAllForTenant("").find { it.id == id }
-            if (invoice != null) {
-                cashFlowDao.deleteExitsForInvoice(invoice.number)
-                val products = productDao.listByInvoice(id)
-                for (prod in products) {
-                    if (prod.masterItemID != null) {
-                        stockRepo.adjustStock(
-                            context = context,
-                            tenantId = invoice.tenantId,
-                            productId = prod.masterItemID,
-                            change = prod.quantity * prod.jumlahLusin,
-                            mutationType = "PENJUALAN",
-                            referenceId = id,
-                            notes = "Pembatalan Invoice #${invoice.number} (Kembalikan)"
-                        )
-                    }
+            val products = productDao.listByInvoice(id)
+            for (prod in products) {
+                if (prod.masterItemID != null) {
+                    stockRepo.adjustStock(
+                        context = context,
+                        tenantId = invoice.tenantId,
+                        productId = prod.masterItemID,
+                        change = prod.quantity * prod.jumlahLusin,
+                        mutationType = "PENJUALAN",
+                        referenceId = id,
+                        notes = "Pembatalan Invoice #${invoice.number} (Kembalikan)"
+                    )
                 }
             }
-            val payments = paymentDao.listAllForInvoice(id)
+            productDao.deleteByInvoice(id)
+            paymentDao.deleteByInvoice(id)
             for (payment in payments) {
-                cashFlowDao.softDeleteByPaymentRefId(payment.id)
+                cashFlowDao.hardDeleteByPaymentRefId(payment.id)
             }
-            paymentDao.softDeleteByInvoice(id)
-            productDao.softDeleteByInvoice(id)
-            invoiceDao.softDelete(id)
+            cashFlowDao.hardDeleteExitsForInvoice(invoice.number)
+            invoiceDao.hardDelete(id)
         }
         return OnlineWriteResult.Success
     }
@@ -719,12 +769,18 @@ class BmpInvoiceRepository @Inject constructor(
         val payment = paymentDao.getById(paymentId) ?: return OnlineWriteResult.Error("Pembayaran tidak ditemukan")
         val invoiceId = payment.invoiceId
 
+        // 1. Delete payment on VPS
         val vpsResult = BmpOnlineWriter.deletePayment(context, tenantId, paymentId).toOnlineWriteResult()
         if (vpsResult !is OnlineWriteResult.Success) return vpsResult
 
-        cashFlowDao.softDeleteByPaymentRefId(paymentId)
-        paymentDao.softDelete(paymentId)
-        recalculateInvoiceStatus(context, invoiceId)
+        // 2. Delete payment cashflow on VPS
+        SupabaseSyncManager.deleteRowsWriteThrough(context, "bmp_cashflow", "paymentRefId=eq.$paymentId", tenantId)
+
+        db.withTransaction {
+            cashFlowDao.hardDeleteByPaymentRefId(paymentId)
+            paymentDao.hardDelete(paymentId)
+            recalculateInvoiceStatus(context, invoiceId)
+        }
         return OnlineWriteResult.Success
     }
 
@@ -862,7 +918,7 @@ class BmpMasterProductRepository @Inject constructor(
 
     suspend fun delete(ctx: Context, tenantId: String, id: Long): OnlineWriteResult {
         val result = BmpOnlineWriter.deleteMasterProduct(ctx, tenantId, id).toOnlineWriteResult()
-        if (result is OnlineWriteResult.Success) dao.softDelete(id)
+        if (result is OnlineWriteResult.Success) dao.hardDelete(id)
         return result
     }
 }
@@ -1122,14 +1178,21 @@ class BmpBahanBakuRepository @Inject constructor(
         return OnlineWriteResult.Success
     }
 
-    /** Soft-delete transaksi beserta semua item dan entri kas terkait: VPS dulu. */
+    /** Hard-delete transaksi beserta semua item dan entri kas terkait: VPS dulu. */
     suspend fun delete(context: Context, tenantId: String, id: Long): OnlineWriteResult {
+        // 1. Delete items of bahan baku on VPS in one batch call
+        SupabaseSyncManager.deleteRowsWriteThrough(context, "bmp_bahan_baku_item", "bahanBakuId=eq.$id", tenantId)
+        // 2. Delete cashflows of bahan baku on VPS
+        SupabaseSyncManager.deleteRowsWriteThrough(context, "bmp_cashflow", "paymentRefId=eq.$id", tenantId)
+
+        // 3. Delete bahan baku header on VPS
         val result = BmpOnlineWriter.deleteBahanBaku(context, tenantId, id).toOnlineWriteResult()
         if (result !is OnlineWriteResult.Success) return result
+
         db.withTransaction {
-            cashFlowDao.softDeleteByPaymentRefId(id)
-            itemDao.softDeleteByBahanBaku(id)
-            bahanBakuDao.softDelete(id)
+            cashFlowDao.hardDeleteByPaymentRefId(id)
+            itemDao.deleteByBahanBaku(id)
+            bahanBakuDao.hardDelete(id)
         }
         return OnlineWriteResult.Success
     }
@@ -1288,7 +1351,7 @@ class BmpProductionLogRepository @Inject constructor(
         if (vpsResult !is OnlineWriteResult.Success) return vpsResult
 
         db.withTransaction {
-            logDao.softDelete(log.id)
+            logDao.hardDelete(log.id)
             stockRepo.adjustStock(
                 context = context,
                 tenantId = log.tenantId,

@@ -136,6 +136,9 @@ interface BmpInvoiceDao {
     @Query("DELETE FROM bmp_invoices WHERE id = :id")
     suspend fun hardDelete(id: Long)
 
+    @Query("DELETE FROM bmp_invoices WHERE clientId = :clientId")
+    suspend fun hardDeleteByClientId(clientId: Long)
+
     /** Ambil semua invoice milik klien tertentu (termasuk yang belum deleted) */
     @Query("SELECT * FROM bmp_invoices WHERE clientId = :clientId")
     suspend fun getByClientId(clientId: Long): List<BmpInvoiceEntity>
@@ -322,6 +325,12 @@ interface BmpCashFlowDao {
 
     @Query("DELETE FROM bmp_cashflow WHERE id = :id")
     suspend fun hardDelete(id: Long)
+
+    @Query("DELETE FROM bmp_cashflow WHERE paymentRefId = :paymentRefId")
+    suspend fun hardDeleteByPaymentRefId(paymentRefId: Long)
+
+    @Query("DELETE FROM bmp_cashflow WHERE transactionType = 'KELUAR' AND description = 'Pembelian barang khusus untuk Faktur ' || :invoiceNumber")
+    suspend fun hardDeleteExitsForInvoice(invoiceNumber: String)
 }
 
 @Dao

@@ -1413,6 +1413,57 @@ object SupabaseSyncManager {
     }
 
     /**
+     * Hapus beberapa baris dari VPS secara synchronous menggunakan parameter query kustom.
+     * Mengembalikan [SyncResult].
+     */
+    suspend fun deleteRowsWriteThrough(context: Context, tableName: String, queryString: String, tenantId: String): SyncResult = withContext(Dispatchers.IO) {
+        if (!isNetworkAvailable(context)) {
+            return@withContext SyncResult.NoConnection
+        }
+        var conn: HttpURLConnection? = null
+        try {
+            val endpointUrl = "$VPS_URL/api/sync/$tableName?$queryString"
+            val url = URL(endpointUrl)
+            conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "DELETE"
+                connectTimeout = 10_000
+                readTimeout = 15_000
+                setRequestProperty("x-tenant-id", tenantId)
+                setRequestProperty("x-client-version", BuildConfig.VERSION_NAME)
+                val securePrefs = com.posbah.app.security.SecurePreferences(context)
+                val email = currentUserEmail.takeIf { it.isNotBlank() } ?: securePrefs.currentEmail
+                if (!email.isNullOrBlank()) {
+                    setRequestProperty("x-user-email", email)
+                }
+            }
+            val responseCode = conn.responseCode
+            if (responseCode in 200..299) {
+                notifyConnectionState(true)
+                SyncResult.Success
+            } else {
+                val errorStream = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                Log.e(TAG, "[deleteRowsWriteThrough] Gagal hapus $tableName query=$queryString ($responseCode): $errorStream")
+                var errorMsg = "Hapus gagal ($responseCode)"
+                try {
+                    val obj = org.json.JSONObject(errorStream)
+                    val detail = obj.optString("message", "").ifEmpty { obj.optString("error", "") }
+                    if (detail.isNotEmpty()) errorMsg = detail
+                } catch (_: Exception) {
+                    if (errorStream.isNotEmpty()) errorMsg = errorStream
+                }
+                SyncResult.Error(errorMsg)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "[deleteRowsWriteThrough] Exception $tableName query=$queryString: ${e.message}")
+            notifyConnectionState(false)
+            SyncResult.Error(e.message ?: "Connection error")
+        } finally {
+            conn?.disconnect()
+        }
+    }
+
+
+    /**
      * Download data dari VPS REST API.
      */
     private fun pullTable(context: Context, tableName: String, tenantId: String, queryParams: String = ""): JSONArray? {
@@ -2032,57 +2083,7 @@ object SupabaseSyncManager {
                 }
             }
 
-            // 9. bmp_products
-            if (bmpProductsArray != null) {
-                val list = mutableListOf<BmpProductEntity>()
-                val serverIds = mutableSetOf<Long>()
-                for (i in 0 until bmpProductsArray.length()) {
-                    val obj = bmpProductsArray.getJSONObject(i)
-                    val idVal = obj.optLong("id", 0L)
-                    serverIds.add(idVal)
-                    list.add(BmpProductEntity(
-                        id = idVal,
-                        tenantId = obj.optString("tenantId", activeTenantId),
-                        invoiceId = if (obj.isNull("invoiceId")) null else obj.optLong("invoiceId"),
-                        masterItemID = if (obj.isNull("masterItemID")) null else obj.optLong("masterItemID"),
-                        title = obj.optString("title"),
-                        description = if (obj.isNull("description")) null else obj.optString("description"),
-                        unit = obj.optString("unit", "pcs"),
-                        price = obj.optDouble("price", 0.0),
-                        jumlahLusin = obj.optDouble("jumlahLusin", 1.0),
-                        quantity = obj.optDouble("quantity", 0.0),
-                        isKhusus = obj.optBoolean("isKhusus", false),
-                        hargaBeli = obj.optDouble("hargaBeli", 0.0),
-                        currency = obj.optString("currency", "Rp"),
-                        uniqueID = if (obj.isNull("uniqueID")) null else obj.optString("uniqueID"),
-                        slug = if (obj.isNull("slug")) null else obj.optString("slug"),
-                        isSynced = true,
-                        createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
-                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
-                    ))
-                }
-                if (list.isNotEmpty()) {
-                    list.forEach { serverProd ->
-                        val localProd = db.bmpProductDao().getById(serverProd.id)
-                        if (localProd == null) {
-                            db.bmpProductDao().upsert(serverProd)
-                        } else if (localProd.isSynced) {
-                            if (serverProd.updatedAt >= localProd.updatedAt) {
-                                db.bmpProductDao().upsert(serverProd)
-                            }
-                        }
-                    }
-                }
-                // Local pruning
-                val localProducts = db.bmpProductDao().getAll().filter { it.tenantId == activeTenantId }
-                localProducts.forEach { local ->
-                    if (local.isSynced && local.id !in serverIds) {
-                        db.bmpProductDao().hardDelete(local.id)
-                    }
-                }
-            }
-
-            // 10. bmp_master_products
+            // 9. bmp_master_products
             if (bmpMasterProductsArray != null) {
                 val list = mutableListOf<BmpMasterProductEntity>()
                 val serverIds = mutableSetOf<Long>()
@@ -2129,6 +2130,64 @@ object SupabaseSyncManager {
                 localMasterProducts.forEach { local ->
                     if (local.isSynced && local.id !in serverIds) {
                         db.bmpMasterProductDao().hardDelete(local.id)
+                    }
+                }
+            }
+
+            // 10. bmp_products
+            if (bmpProductsArray != null) {
+                val list = mutableListOf<BmpProductEntity>()
+                val serverIds = mutableSetOf<Long>()
+                for (i in 0 until bmpProductsArray.length()) {
+                    val obj = bmpProductsArray.getJSONObject(i)
+                    val idVal = obj.optLong("id", 0L)
+                    serverIds.add(idVal)
+                    val masterItemID = if (obj.isNull("masterItemID")) null else obj.optLong("masterItemID")
+                    // Backfill: jika description dari server null tapi masterItemID ada,
+                    // ambil description dari bmp_master_products yang sudah ada di Room.
+                    // Ini memperbaiki data lama yang dibuat sebelum kolom description ditambahkan.
+                    val serverDescription = if (obj.isNull("description")) null else obj.optString("description")
+                    val resolvedDescription = serverDescription ?: masterItemID?.let {
+                        db.bmpMasterProductDao().getById(it)?.description
+                    }
+                    list.add(BmpProductEntity(
+                        id = idVal,
+                        tenantId = obj.optString("tenantId", activeTenantId),
+                        invoiceId = if (obj.isNull("invoiceId")) null else obj.optLong("invoiceId"),
+                        masterItemID = masterItemID,
+                        title = obj.optString("title"),
+                        description = resolvedDescription,
+                        unit = obj.optString("unit", "pcs"),
+                        price = obj.optDouble("price", 0.0),
+                        jumlahLusin = obj.optDouble("jumlahLusin", 1.0),
+                        quantity = obj.optDouble("quantity", 0.0),
+                        isKhusus = obj.optBoolean("isKhusus", false),
+                        hargaBeli = obj.optDouble("hargaBeli", 0.0),
+                        currency = obj.optString("currency", "Rp"),
+                        uniqueID = if (obj.isNull("uniqueID")) null else obj.optString("uniqueID"),
+                        slug = if (obj.isNull("slug")) null else obj.optString("slug"),
+                        isSynced = true,
+                        createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
+                        updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
+                    ))
+                }
+                if (list.isNotEmpty()) {
+                    list.forEach { serverProd ->
+                        val localProd = db.bmpProductDao().getById(serverProd.id)
+                        if (localProd == null) {
+                            db.bmpProductDao().upsert(serverProd)
+                        } else if (localProd.isSynced) {
+                            if (serverProd.updatedAt >= localProd.updatedAt) {
+                                db.bmpProductDao().upsert(serverProd)
+                            }
+                        }
+                    }
+                }
+                // Local pruning
+                val localProducts = db.bmpProductDao().getAll().filter { it.tenantId == activeTenantId }
+                localProducts.forEach { local ->
+                    if (local.isSynced && local.id !in serverIds) {
+                        db.bmpProductDao().hardDelete(local.id)
                     }
                 }
             }

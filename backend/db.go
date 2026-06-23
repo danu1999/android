@@ -769,6 +769,19 @@ func initSchema() error {
 			log.Printf("[migration] outletId warning: %v", err)
 		}
 	}
+
+	// Backfill: isi kolom description pada bmp_products lama yang NULL
+	// dengan description dari bmp_master_products berdasarkan masterItemID.
+	// Query ini idempotent (WHERE description IS NULL) dan aman dijalankan berkali-kali.
+	_, _ = db.Exec(`
+		UPDATE "bmp_products" bp
+		SET "description" = mp."description"
+		FROM "bmp_master_products" mp
+		WHERE bp."masterItemID" = mp."id"
+		  AND bp."tenantId" = mp."tenantId"
+		  AND bp."description" IS NULL
+		  AND mp."description" IS NOT NULL
+	`)
 	log.Println("Database schemas verified / migrated successfully.")
 	return nil
 }
