@@ -144,23 +144,21 @@ if (-not $SkipBuild) {
     Write-Info "Build dilewati (-SkipBuild)"
 }
 
-# Verifikasi APK ada jika akan di-upload
-if (-not $SkipApkUpload) {
-    if (-not (Test-Path $apkLocalPath)) {
-        # Coba fallback nama lama
-        $fallback = Join-Path $AppDir "build\outputs\apk\$BuildType\app-$BuildType.apk"
-        if (Test-Path $fallback) {
-            $apkLocalPath = $fallback
-            Write-Info "APK ditemukan dengan nama lama: $fallback"
-        } else {
-            Write-Fail "APK tidak ditemukan: $apkLocalPath"
-            Write-Info "Jalankan tanpa -SkipBuild, atau periksa hasil build"
-            exit 1
-        }
+# Verifikasi APK ada
+if (-not (Test-Path $apkLocalPath)) {
+    # Coba fallback nama lama
+    $fallback = Join-Path $AppDir "build\outputs\apk\$BuildType\app-$BuildType.apk"
+    if (Test-Path $fallback) {
+        $apkLocalPath = $fallback
+        Write-Info "APK ditemukan dengan nama lama: $fallback"
+    } else {
+        Write-Fail "APK tidak ditemukan: $apkLocalPath"
+        Write-Info "Jalankan tanpa -SkipBuild, atau periksa hasil build"
+        exit 1
     }
-    $apkSizeMB = '{0:N1}' -f ((Get-Item $apkLocalPath).Length / 1MB)
-    Write-OK "APK ditemukan: $apkLocalPath ($apkSizeMB MB)"
 }
+$apkSizeMB = '{0:N1}' -f ((Get-Item $apkLocalPath).Length / 1MB)
+Write-OK "APK ditemukan: $apkLocalPath ($apkSizeMB MB)"
 
 # ============================================================
 # STEP 2: CROSS-COMPILE BACKEND GO UNTUK LINUX

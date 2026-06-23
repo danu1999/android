@@ -14,7 +14,6 @@ let wsConn = null;
 let invoices = [];
 let clients = [];
 let bmpProducts = [];
-let bmpMasterProducts = [];
 let printSettings = null;
 let currentInvoice = null;
 
@@ -256,7 +255,6 @@ async function refreshData() {
         // 3. Fetch raw materials (bmp_master_products)
         const resBahan = await fetch(`${BASE_URL}/api/sync/bmp_master_products?tenantId=eq.${tenantId}`, { headers });
         const bahanBaku = resBahan.ok ? await resBahan.json() : [];
-        bmpMasterProducts = bahanBaku;
 
         // 4. Fetch employees
         const resEmp = await fetch(`${BASE_URL}/api/sync/bmp_employees?tenantId=eq.${tenantId}`, { headers });
@@ -1095,10 +1093,8 @@ window.showInvoiceDetails = function (invoiceId) {
         items.forEach(item => {
             const tr = document.createElement("tr");
             const sub = item.price * item.quantity;
-            const master = bmpMasterProducts.find(mp => mp.id === item.masterItemID);
-            const descHtml = master && master.description ? `<br><small style="color: #999; font-weight: normal; white-space: pre-wrap;">${master.description}</small>` : "";
             tr.innerHTML = `
-                <td><strong>${item.title}</strong>${descHtml}</td>
+                <td><strong>${item.title}</strong></td>
                 <td>${item.quantity} ${item.unit}</td>
                 <td>${formatRupiah(item.price)}</td>
                 <td>${formatRupiah(sub)}</td>
@@ -1318,12 +1314,10 @@ function triggerInvoicePrint() {
     items.forEach((p, index) => {
         const subtotal = p.price * p.quantity * p.jumlahLusin;
         const satuanVal = `${p.jumlahLusin} ${p.unit.toLowerCase() === "lusin" || p.unit === "-" ? "Lusin" : p.unit}`;
-        const master = bmpMasterProducts.find(mp => mp.id === p.masterItemID);
-        const descHtml = master && master.description ? `<br><span style="font-size: 11px; color: #555; font-weight: normal; white-space: pre-wrap;">${master.description}</span>` : "";
         itemsHtml += `
             <tr>
                 <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${index + 1}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;"><strong>${p.title}</strong>${descHtml}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;"><strong>${p.title}</strong></td>
                 <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${p.quantity}</td>
                 <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${satuanVal}</td>
                 <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${formatRupiah(p.price)}</td>
@@ -1338,7 +1332,7 @@ function triggerInvoicePrint() {
     const statusColor = currentInvoice.status === "PAID" ? "#10B981" : (currentInvoice.status === "PARTIAL" ? "#3B82F6" : "#6B7280");
 
     const bankInfoHtmlContent = (printSettings && printSettings.bankOwnerName && printSettings.bankAccountNumber) ? `
-        <div style="font-size: 13px; margin-bottom: 15px; color: #000; text-align: left; margin-right: 15px; padding-top: 6px;">
+        <div style="font-size: 13px; margin-bottom: 15px; color: #000; text-align: left; margin-right: 15px;">
             <strong>Info Pembayaran :</strong><br>
             bank : ${printSettings.bankName} : ${printSettings.bankAccountNumber}<br>
             atas nama : ${printSettings.bankOwnerName}
@@ -1535,12 +1529,10 @@ function triggerSjPrint() {
     let itemsHtml = "";
     items.forEach((p, index) => {
         const satuanVal = `${p.jumlahLusin} ${p.unit.toLowerCase() === "lusin" || p.unit === "-" ? "Lusin" : p.unit}`;
-        const master = bmpMasterProducts.find(mp => mp.id === p.masterItemID);
-        const descHtml = master && master.description ? `<br><span style="font-size: 11px; color: #555; font-weight: normal; white-space: pre-wrap;">${master.description}</span>` : "";
         itemsHtml += `
             <tr>
                 <td style="border: 1px solid #333; padding: 8px; text-align: center;">${index + 1}</td>
-                <td style="border: 1px solid #333; padding: 8px;"><strong>${p.title}</strong>${descHtml}</td>
+                <td style="border: 1px solid #333; padding: 8px;"><strong>${p.title}</strong></td>
                 <td style="border: 1px solid #333; padding: 8px; text-align: center;">${satuanVal}</td>
                 <td style="border: 1px solid #333; padding: 8px; text-align: center;">${p.quantity}</td>
             </tr>
@@ -1646,8 +1638,7 @@ function triggerSjPrint() {
                 <td style="text-align: right; vertical-align: top;">
                     <span class="doc-title">Surat Jalan</span><br>
                     No. SJ: <strong>SJ-${currentInvoice.number}</strong><br>
-                    Tanggal: ${new Date().toLocaleDateString("id-ID", { year: 'numeric', month: 'long', day: 'numeric' })}<br>
-                    Jatuh Tempo: ${currentInvoice.dueDate ? new Date(Number(currentInvoice.dueDate)).toLocaleDateString("id-ID", { year: 'numeric', month: 'long', day: 'numeric' }) : "-"}
+                    Tanggal: ${new Date().toLocaleDateString("id-ID", { year: 'numeric', month: 'long', day: 'numeric' })}
                 </td>
             </tr>
         </table>
@@ -1668,8 +1659,7 @@ function triggerSjPrint() {
                     <div class="info-box-right">
                         <strong>Keterangan:</strong><br>
                         Dokumen ini adalah bukti penyerahan barang secara sah.<br>
-                        No. Faktur Rujukan: <strong>${currentInvoice.number}</strong><br>
-                        Jatuh Tempo Faktur: <strong>${currentInvoice.dueDate ? new Date(Number(currentInvoice.dueDate)).toLocaleDateString("id-ID", { year: 'numeric', month: 'long', day: 'numeric' }) : "-"}</strong>
+                        No. Faktur Rujukan: <strong>${currentInvoice.number}</strong>
                     </div>
                 </td>
             </tr>
