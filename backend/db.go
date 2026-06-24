@@ -730,6 +730,18 @@ func initSchema() error {
 		`UPDATE "bmp_stock_ledger" SET "tenantId" = 'ten_premium_mulyakus84_gmail_com_LAUNDRY' WHERE "tenantId" = 'demo_tenant_mulyakus84_gmail_com_LAUNDRY';`,
 		`UPDATE "bmp_production_logs" SET "tenantId" = 'ten_premium_mulyakus84_gmail_com_LAUNDRY' WHERE "tenantId" = 'demo_tenant_mulyakus84_gmail_com_LAUNDRY';`,
 		`DELETE FROM "tenants" WHERE "id" = 'demo_tenant_mulyakus84_gmail_com_LAUNDRY';`,
+
+		// Real-time optimization performance indexes
+		`CREATE INDEX IF NOT EXISTS idx_products_tenant_outlet   ON "products"       ("tenantId", "outletId");`,
+		`CREATE INDEX IF NOT EXISTS idx_customers_tenant_outlet  ON "customers"       ("tenantId", "outletId");`,
+		`CREATE INDEX IF NOT EXISTS idx_transactions_tenant_date ON "transactions"    ("tenantId", "date" DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_bmp_invoices_tenant_date ON "bmp_invoices"   ("tenantId", "createdAt" DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_bmp_clients_tenant       ON "bmp_clients"    ("tenantId");`,
+		`CREATE INDEX IF NOT EXISTS idx_bmp_cashflow_tenant_date ON "bmp_cashflow"   ("tenantId", "transactionDate" DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_bmp_products_invoice     ON "bmp_products"   ("invoiceId", "tenantId");`,
+		`CREATE INDEX IF NOT EXISTS idx_bmp_payrolls_employee    ON "bmp_payrolls"   ("employeeId", "tenantId");`,
+		`CREATE INDEX IF NOT EXISTS idx_bmp_bahan_tenant_date    ON "bmp_bahan_baku" ("tenantId", "tanggal" DESC);`,
+		`CREATE INDEX IF NOT EXISTS idx_employees_tenant_outlet  ON "employees"      ("tenantId", "outletId");`,
 	}
 
 	for _, q := range migrationQueries {

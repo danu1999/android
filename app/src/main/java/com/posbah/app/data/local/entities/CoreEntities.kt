@@ -1,23 +1,18 @@
 package com.posbah.app.data.local.entities
 
-import androidx.room.Entity
-import androidx.room.Index
-import androidx.room.PrimaryKey
+// ─────────────────────────────────────────────────────────────────────────────
+// CoreEntities.kt — Full Online mode
+// Room @Entity annotations dihapus. Data classes sekarang plain Kotlin classes.
+// Semua data disimpan di VPS, tidak ada SQLite lokal.
+// File ini dipertahankan agar ViewModel yang belum direfactor tetap compile.
+// ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Maps a verified Google account to a local user record. Acts as the root of
- * the tenant tree: each LocalUser may own one Tenant.
- */
-@Entity(
-    tableName = "local_users",
-    indices = [Index(value = ["email"], unique = true)]
-)
 data class LocalUser(
-    @PrimaryKey val googleSub: String,
+    val googleSub: String,
     val email: String,
     val displayName: String?,
     val photoUrl: String?,
-    val role: String = "OWNER", // OWNER | ADMIN | KASIR
+    val role: String = "OWNER",
     val tenantId: String? = null,
     val whatsapp: String? = null,
     val isPremium: Boolean = false,
@@ -26,33 +21,21 @@ data class LocalUser(
     val updatedAt: Long = System.currentTimeMillis(),
     val lastLoginAt: Long = System.currentTimeMillis(),
     val isActive: Boolean = true,
-    val apkVersion: String = "2.4.0"
+    val apkVersion: String = "3.0.0"
 )
 
-/**
- * A Tenant is the multi-tenant boundary. Every data row carries tenantId.
- * Each Google user/owner gets a default tenant on first login.
- */
-@Entity(tableName = "tenants")
 data class Tenant(
-    @PrimaryKey val id: String,
+    val id: String,
     val name: String,
     val ownerEmail: String,
-    val businessMode: String = "BMP", // BMP | FNB | RENTAL | LAUNDRY
+    val businessMode: String = "BMP",
     val isActive: Boolean = true,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
 
-/**
- * Multi-outlet: a single Tenant can run multiple physical outlets.
- */
-@Entity(
-    tableName = "outlets",
-    indices = [Index(value = ["tenantId"]), Index(value = ["name", "tenantId"], unique = true)]
-)
 data class Outlet(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val id: Long = 0,
     val tenantId: String,
     val name: String,
     val address: String? = null,
@@ -65,16 +48,8 @@ data class Outlet(
     val isSynced: Boolean = false
 )
 
-/**
- * Cross-tenant employee directory (PIN-based fallback login).
- * Stored PIN is PBKDF2-hashed via PinHasher.
- */
-@Entity(
-    tableName = "employees",
-    indices = [Index(value = ["tenantId"]), Index(value = ["email", "tenantId"], unique = true)]
-)
 data class Employee(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val id: Long = 0,
     val tenantId: String,
     val outletId: Long?,
     val name: String,

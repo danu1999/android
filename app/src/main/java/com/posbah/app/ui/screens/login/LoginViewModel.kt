@@ -3,8 +3,8 @@ package com.posbah.app.ui.screens.login
 import android.app.Activity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.posbah.app.data.local.entities.LocalUser
-import com.posbah.app.data.local.entities.Tenant
+import com.posbah.app.data.repository.UserSession
+import com.posbah.app.data.repository.TenantSession
 import com.posbah.app.data.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -22,8 +22,8 @@ data class LoginUiState(
     val errorMessage: String? = null,
     val errorEmail: String? = null,
     val rejoinMessage: String? = null,
-    val signedInUser: LocalUser? = null,
-    val needsTenantPicker: Pair<LocalUser, List<Tenant>>? = null,
+    val signedInUser: UserSession? = null,
+    val needsTenantPicker: Pair<UserSession, List<TenantSession>>? = null,
     val locked: Boolean = false
 )
 

@@ -188,13 +188,30 @@ class MarginAnalysisViewModel @Inject constructor(
             val resultTx = com.posbah.app.data.remote.SupabaseSyncManager.checkoutWriteThrough(context, tenantId, tx, emptyList())
             if (resultTx is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Success) {
                 val newStock = (product.stock - quantity).coerceAtLeast(0)
-                val updateObj = org.json.JSONObject().apply {
-                    put("stock", newStock)
-                    put("updatedAt", System.currentTimeMillis())
-                }
+                val updateObj = mapOf<String, Any?>(
+                    "stock" to newStock,
+                    "updatedAt" to System.currentTimeMillis()
+                )
                 com.posbah.app.data.remote.SupabaseSyncManager.patchRowDirectly(context, "products", product.id, updateObj, tenantId)
 
-                transactionRepository.checkout(tx, emptyList())
+                val txData = com.posbah.app.data.repository.TransactionData(
+                    id = tx.id,
+                    tenantId = tx.tenantId,
+                    outletId = tx.outletId,
+                    receiptNumber = tx.receiptNumber,
+                    type = tx.type,
+                    status = tx.status,
+                    totalAmount = tx.total,
+                    paymentMethod = tx.paymentMethod,
+                    amountPaid = tx.amountPaid,
+                    change = tx.change,
+                    customerId = tx.customerId,
+                    notes = tx.notes,
+                    date = tx.date,
+                    isDeleted = tx.isDeleted,
+                    updatedAt = tx.updatedAt
+                )
+                transactionRepository.checkout(txData, emptyList<com.posbah.app.data.repository.TransactionItemData>(), productRepository)
                 productRepository.updateStock(product.id, newStock)
 
                 refreshItems()

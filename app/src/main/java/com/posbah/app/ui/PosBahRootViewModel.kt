@@ -3,9 +3,6 @@ package com.posbah.app.ui
 import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
-import com.posbah.app.data.local.PosBahDatabase
-import com.posbah.app.data.local.dao.LocalUserDao
-import com.posbah.app.data.local.dao.TenantDao
 import com.posbah.app.security.SecurePreferences
 import com.posbah.app.ui.navigation.Screen
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -34,10 +31,7 @@ sealed class BackupSyncState {
 @HiltViewModel
 class PosBahRootViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val db: PosBahDatabase,
     private val securePrefs: SecurePreferences,
-    private val tenantDao: TenantDao,
-    private val userDao: LocalUserDao,
     private val sessionState: com.posbah.app.data.repository.SessionState
 ) : ViewModel() {
 
@@ -54,36 +48,8 @@ class PosBahRootViewModel @Inject constructor(
     }
 
     fun triggerBackupSync() {
-        val tenantId = securePrefs.currentTenantId
-        if (tenantId.isNullOrEmpty()) {
-            _backupSyncState.value = BackupSyncState.Success
-            return
-        }
-
-        _backupSyncState.value = BackupSyncState.Syncing
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            try {
-                Log.i("PosBahRootViewModel", "Auto-syncing data for tenant $tenantId before update...")
-                val result = com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-                when (result) {
-                    is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Success -> {
-                        Log.i("PosBahRootViewModel", "Auto-sync before update succeeded.")
-                        _backupSyncState.value = BackupSyncState.Success
-                    }
-                    is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.NoConnection -> {
-                        Log.w("PosBahRootViewModel", "Auto-sync failed: No connection.")
-                        _backupSyncState.value = BackupSyncState.Error("Tidak ada koneksi internet")
-                    }
-                    is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Error -> {
-                        Log.e("PosBahRootViewModel", "Auto-sync failed: ${result.message}")
-                        _backupSyncState.value = BackupSyncState.Error(result.message)
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("PosBahRootViewModel", "Auto-sync failed with exception", e)
-                _backupSyncState.value = BackupSyncState.Error(e.message ?: "Error tidak diketahui")
-            }
-        }
+        // Full online mode: tidak perlu sync karena semua data sudah real-time di VPS.
+        _backupSyncState.value = BackupSyncState.Success
     }
 
     fun checkForForcedUpdate() {
@@ -96,14 +62,14 @@ class PosBahRootViewModel @Inject constructor(
                 conn.requestMethod = "GET"
                 conn.connectTimeout = 5000
                 conn.readTimeout = 5000
-                
+
                 val currentVersion = com.posbah.app.BuildConfig.VERSION_NAME
                 if (conn.responseCode in 200..299) {
                     val response = conn.inputStream.bufferedReader().use { it.readText() }
                     val obj = org.json.JSONObject(response)
                     val version = obj.optString("version", "")
                     val description = obj.optString("description", "")
-                    
+
                     val hasUpdate = version.isNotEmpty() && run {
                         val parts1 = version.split(".")
                         val parts2 = currentVersion.split(".")
@@ -112,16 +78,12 @@ class PosBahRootViewModel @Inject constructor(
                         for (i in 0 until length) {
                             val n1 = parts1.getOrNull(i)?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 0
                             val n2 = parts2.getOrNull(i)?.takeWhile { it.isDigit() }?.toIntOrNull() ?: 0
-                            if (n1 > n2) {
-                                isNewer = true
-                                break
-                            } else if (n1 < n2) {
-                                break
-                            }
+                            if (n1 > n2) { isNewer = true; break }
+                            else if (n1 < n2) break
                         }
                         isNewer
                     }
-                    
+
                     if (hasUpdate) {
                         _updateState.value = UpdateState.UpdateRequired(version, description)
                         triggerBackupSync()
@@ -140,24 +102,24 @@ class PosBahRootViewModel @Inject constructor(
     }
 
     /**
-     * Inspects the active tenant's businessMode to return the correct dashboard route path.
-     * Redirects to SystemSelection if a demo user hasn't locked their POS system choice.
+     * Menentukan route dashboard berdasarkan session aktif.
+     * Full online mode: baca dari SecurePreferences (set saat login).
      */
-    suspend fun getDashboardRoute(): String {
-        val sub = securePrefs.currentGoogleSub
-        if (sub != null) {
-            val user = userDao.getBySub(sub)
-            if (user != null && !user.businessModeLocked) {
-                return Screen.SystemSelection.route
-            }
+    fun getDashboardRouteSync(): String {
+        val isMigrationNeeded = context.getDatabasePath("posbah.db").exists() && !securePrefs.migrationCompleted
+        if (isMigrationNeeded) {
+            return Screen.Migration.route
         }
         val tenantId = securePrefs.currentTenantId ?: return Screen.Login.route
-        val tenant = tenantDao.getById(tenantId) ?: return Screen.Login.route
-        return when (tenant.businessMode) {
+        val businessMode = securePrefs.currentBusinessMode ?: return Screen.Login.route
+        return when (businessMode) {
             "FNB" -> Screen.PosDashboard.route
             "RENTAL" -> Screen.RentalDashboard.route
             "LAUNDRY" -> Screen.LaundryDashboard.route
             else -> Screen.BmpDashboard.route
         }
     }
+
+    /** Async wrapper — untuk backward compat dengan caller yang pakai suspend */
+    suspend fun getDashboardRoute(): String = getDashboardRouteSync()
 }

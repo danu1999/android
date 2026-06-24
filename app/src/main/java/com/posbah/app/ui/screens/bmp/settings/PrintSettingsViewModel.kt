@@ -9,8 +9,8 @@ import com.posbah.app.data.local.entities.PrintSettingsEntity
 import com.posbah.app.data.local.entities.Tenant
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.PrintSettingsRepository
-import com.posbah.app.data.repository.toOnlineWriteResult
 import com.posbah.app.data.repository.OnlineWriteResult
+import com.posbah.app.data.repository.PrintSettingsData
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -48,7 +48,26 @@ class PrintSettingsViewModel @Inject constructor(
         // Guard: jangan query database jika tenantId kosong (race condition saat login)
         if (tenantId.isNotBlank()) {
             viewModelScope.launch {
-                val existing = printSettingsRepo.get(tenantId, moduleKey)
+                val data = printSettingsRepo.get(moduleKey)
+                val existing = data?.let { d ->
+                    PrintSettingsEntity(
+                        id = d.id,
+                        tenantId = tenantId,
+                        moduleKey = moduleKey,
+                        receiptPaperWidth = d.paperWidth,
+                        receiptUseLogo = d.useLogo,
+                        receiptHeaderAlign = d.headerAlign,
+                        receiptIsColor = d.isColor,
+                        receiptShowItemPrice = d.showItemPrice,
+                        receiptFooterText = d.footerText,
+                        bankOwnerName = d.bankOwnerName,
+                        bankName = d.bankName,
+                        bankAccountNumber = d.bankAccountNumber,
+                        logoUrl = d.logoUrl,
+                        logoPath = d.logoUrl,
+                        updatedAt = d.updatedAt
+                    )
+                }
                 _draft.value = existing ?: PrintSettingsEntity(
                     tenantId = tenantId,
                     moduleKey = moduleKey
@@ -233,10 +252,23 @@ class PrintSettingsViewModel @Inject constructor(
         }
 
         val updateWithTime = entity.copy(updatedAt = System.currentTimeMillis())
-        printSettingsRepo.upsert(updateWithTime)
-
-        // Write-through ke VPS
-        val vpsResult = com.posbah.app.data.remote.BmpOnlineWriter.upsertPrintSettings(context, tenantId, updateWithTime).toOnlineWriteResult()
+        val dataToSave = PrintSettingsData(
+            id = updateWithTime.id,
+            tenantId = tenantId,
+            moduleKey = updateWithTime.moduleKey,
+            paperWidth = updateWithTime.receiptPaperWidth,
+            useLogo = updateWithTime.receiptUseLogo,
+            headerAlign = updateWithTime.receiptHeaderAlign,
+            isColor = updateWithTime.receiptIsColor,
+            showItemPrice = updateWithTime.receiptShowItemPrice,
+            footerText = updateWithTime.receiptFooterText,
+            bankOwnerName = updateWithTime.bankOwnerName,
+            bankName = updateWithTime.bankName,
+            bankAccountNumber = updateWithTime.bankAccountNumber,
+            logoUrl = updateWithTime.logoUrl ?: updateWithTime.logoPath,
+            updatedAt = updateWithTime.updatedAt
+        )
+        val vpsResult = printSettingsRepo.save(dataToSave)
         if (vpsResult !is OnlineWriteResult.Success) {
             onError(if (vpsResult is OnlineWriteResult.Error) vpsResult.message else "Tidak ada koneksi internet. Pengaturan tidak tersimpan.")
             return@launch
@@ -246,7 +278,7 @@ class PrintSettingsViewModel @Inject constructor(
             db.tenantDao().upsert(t.copy(updatedAt = System.currentTimeMillis()))
             // Sync BmpSettingsEntity if exists, to keep it consistent
             try {
-                val existingBmpSettings = db.bmpSettingsDao().get(t.id)
+                val existingBmpSettings = db.bmpSettingsDao().getByTenantId(t.id)
                 if (existingBmpSettings != null) {
                     db.bmpSettingsDao().upsert(existingBmpSettings.copy(clientName = t.name, updatedAt = System.currentTimeMillis()))
                 }

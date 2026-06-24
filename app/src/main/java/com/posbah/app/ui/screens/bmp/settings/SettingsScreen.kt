@@ -94,14 +94,27 @@ class SettingsViewModel @Inject constructor(
     val draftTenant = _draftTenant.asStateFlow()
 
     val outlets = outletRepo.observe(tenantId)
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<com.posbah.app.data.local.entities.Outlet>())
 
     val posEmployees = db.employeeDao().observeForTenant(tenantId)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     init {
         viewModelScope.launch {
-            val existing = settingsRepo.get(tenantId)
+            val data = settingsRepo.get()
+            val existing = data?.let { d ->
+                BmpSettingsEntity(
+                    id = d.id,
+                    tenantId = d.tenantId,
+                    clientName = d.companyName,
+                    clientLogo = d.logoUrl,
+                    addressLine1 = d.address,
+                    phoneNumber = d.phone,
+                    emailAddress = d.email,
+                    taxNumber = d.npwp,
+                    updatedAt = d.updatedAt
+                )
+            }
             _draft.value = existing ?: BmpSettingsEntity(
                 tenantId = tenantId,
                 clientName = "Perusahaan Saya"
@@ -124,7 +137,18 @@ class SettingsViewModel @Inject constructor(
     fun save() = viewModelScope.launch {
         val d = _draft.value ?: return@launch
         val t = _draftTenant.value
-        settingsRepo.upsert(d)
+        val dataToSave = com.posbah.app.data.repository.BmpSettingsData(
+            id = d.id,
+            tenantId = d.tenantId,
+            companyName = d.clientName,
+            logoUrl = d.clientLogo,
+            address = d.addressLine1,
+            phone = d.phoneNumber,
+            email = d.emailAddress,
+            npwp = d.taxNumber,
+            updatedAt = System.currentTimeMillis()
+        )
+        settingsRepo.save(dataToSave)
         if (t != null) {
             db.tenantDao().upsert(t.copy(updatedAt = System.currentTimeMillis()))
         }
@@ -159,7 +183,7 @@ class SettingsViewModel @Inject constructor(
             }
         }
 
-        val newOutletId = outletRepo.create(tenantId, name, address, phone)
+        val newOutletId = outletRepo.create(name, address, phone)
         db.employeeDao().update(emp.copy(outletId = newOutletId, updatedAt = System.currentTimeMillis(), isSynced = false))
         val email = getActiveUserEmail().orEmpty()
         com.posbah.app.data.remote.SupabaseSyncManager.pushEmployeeImmediate(context, db, tenantId, emp.id, email)
@@ -180,7 +204,16 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun updateOutlet(o: Outlet) = viewModelScope.launch {
-        outletRepo.update(o)
+        val data = com.posbah.app.data.repository.OutletData(
+            id = o.id,
+            tenantId = o.tenantId,
+            name = o.name,
+            address = o.address,
+            phone = o.phone,
+            isDefault = o.isDefault,
+            isOpen = o.isOpen
+        )
+        outletRepo.update(data)
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)

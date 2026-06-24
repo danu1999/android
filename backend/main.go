@@ -156,6 +156,52 @@ func main() {
 	// Reports API
 	http.HandleFunc("/api/reports/outlet-margin", handleOutletMarginReport)
 
+	// ─── Migration API (One-Time Drain: offline-first → full online) ──────────
+	http.HandleFunc("/api/migration/verify-table", handleMigrationVerifyTable)
+	http.HandleFunc("/api/migration/check-readiness", handleMigrationCheckReadiness)
+
+	// ─── Real-time CRUD API (Full Online mode) ────────────────────────────────
+	// Core POS (FnB / Laundry / Rental)
+	http.HandleFunc("/api/rt/products", handleRtProducts)
+	http.HandleFunc("/api/rt/products/", handleRtProductsById)
+	http.HandleFunc("/api/rt/customers", handleRtCustomers)
+	http.HandleFunc("/api/rt/customers/", handleRtCustomersById)
+	http.HandleFunc("/api/rt/transactions", handleRtTransactions)
+	http.HandleFunc("/api/rt/transactions/", handleRtTransactionsById)
+	http.HandleFunc("/api/rt/transaction-items", handleRtTransactionItems)
+	http.HandleFunc("/api/rt/employees", handleRtEmployees)
+	http.HandleFunc("/api/rt/employees/", handleRtEmployeesById)
+	http.HandleFunc("/api/rt/outlets", handleRtOutlets)
+	http.HandleFunc("/api/rt/outlets/", handleRtOutletsById)
+
+	// BMP — Invoice & Manufaktur
+	http.HandleFunc("/api/rt/bmp/clients", handleRtBmpClients)
+	http.HandleFunc("/api/rt/bmp/clients/", handleRtBmpClientsById)
+	http.HandleFunc("/api/rt/bmp/invoices", handleRtBmpInvoices)
+	http.HandleFunc("/api/rt/bmp/invoices/", handleRtBmpInvoicesById)
+	http.HandleFunc("/api/rt/bmp/products", handleRtBmpProducts)
+	http.HandleFunc("/api/rt/bmp/products/", handleRtBmpProductsById)
+	http.HandleFunc("/api/rt/bmp/master-products", handleRtBmpMasterProducts)
+	http.HandleFunc("/api/rt/bmp/master-products/", handleRtBmpMasterProductsById)
+	http.HandleFunc("/api/rt/bmp/cashflow", handleRtBmpCashflow)
+	http.HandleFunc("/api/rt/bmp/cashflow/", handleRtBmpCashflowById)
+	http.HandleFunc("/api/rt/bmp/payments", handleRtBmpPayments)
+	http.HandleFunc("/api/rt/bmp/payments/", handleRtBmpPaymentsById)
+	http.HandleFunc("/api/rt/bmp/employees", handleRtBmpEmployees)
+	http.HandleFunc("/api/rt/bmp/employees/", handleRtBmpEmployeesById)
+	http.HandleFunc("/api/rt/bmp/payrolls", handleRtBmpPayrolls)
+	http.HandleFunc("/api/rt/bmp/bahan-baku", handleRtBmpBahanBaku)
+	http.HandleFunc("/api/rt/bmp/bahan-baku/", handleRtBmpBahanBakuById)
+	http.HandleFunc("/api/rt/bmp/bahan-baku-items", handleRtBmpBahanBakuItems)
+	http.HandleFunc("/api/rt/bmp/production-logs", handleRtBmpProductionLogs)
+	http.HandleFunc("/api/rt/bmp/product-stocks", handleRtBmpProductStocks)
+	http.HandleFunc("/api/rt/bmp/stock-ledger", handleRtBmpStockLedger)
+	http.HandleFunc("/api/rt/bmp/settings", handleRtBmpSettings)
+	http.HandleFunc("/api/rt/print-settings", handleRtPrintSettings)
+
+	// PIN Login for kasir (full online)
+	http.HandleFunc("/api/auth/pin-login", handlePinLogin)
+
 	log.Printf("Server listening on port %s", port)
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		log.Fatalf("Server failed to start: %v", err)

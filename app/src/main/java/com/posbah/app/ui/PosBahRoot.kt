@@ -342,6 +342,14 @@ fun PosBahRoot(
                 onBack = { nav.popBackStack() }
             )
         }
+
+        composable(Screen.Migration.route) {
+            com.posbah.app.ui.screens.migration.MigrationScreen(
+                onMigrationDone = {
+                    goDashboard(Screen.Migration.route)
+                }
+            )
+        }
     }
 
     // Real-time Non-blocking Connection status bar (like WhatsApp)

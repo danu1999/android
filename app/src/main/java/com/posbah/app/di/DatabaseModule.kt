@@ -1,36 +1,16 @@
 package com.posbah.app.di
 
-import android.content.Context
+// ─────────────────────────────────────────────────────────────────────────────
+// DatabaseModule.kt — Full Online mode
+// Room dihapus. Module ini sekarang hanya menyediakan stub DAO instances
+// via constructor injection. Tidak ada SQLite, tidak ada SQLCipher.
+// ─────────────────────────────────────────────────────────────────────────────
+
 import com.posbah.app.data.local.PosBahDatabase
-import com.posbah.app.data.local.dao.BmpBahanBakuDao
-import com.posbah.app.data.local.dao.BmpBahanBakuItemDao
-import com.posbah.app.data.local.dao.BmpCashFlowDao
-import com.posbah.app.data.local.dao.BmpClientDao
-import com.posbah.app.data.local.dao.BmpEmployeeDao
-import com.posbah.app.data.local.dao.BmpInvoiceDao
-import com.posbah.app.data.local.dao.BmpMasterProductDao
-import com.posbah.app.data.local.dao.BmpPaymentDao
-import com.posbah.app.data.local.dao.BmpPayrollDao
-import com.posbah.app.data.local.dao.BmpProductDao
-import com.posbah.app.data.local.dao.BmpSettingsDao
-import com.posbah.app.data.local.dao.PrintSettingsDao
-import com.posbah.app.data.local.dao.BmpProductStockDao
-import com.posbah.app.data.local.dao.BmpStockLedgerDao
-import com.posbah.app.data.local.dao.BmpProductionLogDao
-import com.posbah.app.data.local.dao.EmployeeDao
-import com.posbah.app.data.local.dao.LocalUserDao
-import com.posbah.app.data.local.dao.OutletDao
-import com.posbah.app.data.local.dao.TenantDao
-import com.posbah.app.data.local.dao.ProductDao
-import com.posbah.app.data.local.dao.CustomerDao
-import com.posbah.app.data.local.dao.TransactionDao
-import com.posbah.app.data.local.dao.TransactionItemDao
-import com.posbah.app.data.local.dao.ActivityLogDao
-import com.posbah.app.security.KeystoreManager
+import com.posbah.app.data.local.dao.*
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
@@ -38,80 +18,73 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
 
-    @Provides
-    @Singleton
+    // ── Core DAOs ──────────────────────────────────────────────────────────────
+
+    @Provides @Singleton fun provideLocalUserDao(): LocalUserDao = LocalUserDao()
+    @Provides @Singleton fun provideTenantDao(): TenantDao = TenantDao()
+    @Provides @Singleton fun provideOutletDao(): OutletDao = OutletDao()
+    @Provides @Singleton fun provideEmployeeDao(): EmployeeDao = EmployeeDao()
+
+    // ── FnB DAOs ───────────────────────────────────────────────────────────────
+
+    @Provides @Singleton fun provideProductDao(): ProductDao = ProductDao()
+    @Provides @Singleton fun provideCustomerDao(): CustomerDao = CustomerDao()
+    @Provides @Singleton fun provideTransactionDao(): TransactionDao = TransactionDao()
+    @Provides @Singleton fun provideTransactionItemDao(): TransactionItemDao = TransactionItemDao()
+    @Provides @Singleton fun provideActivityLogDao(): ActivityLogDao = ActivityLogDao()
+
+    // ── BMP DAOs ───────────────────────────────────────────────────────────────
+
+    @Provides @Singleton fun provideBmpClientDao(): BmpClientDao = BmpClientDao()
+    @Provides @Singleton fun provideBmpInvoiceDao(): BmpInvoiceDao = BmpInvoiceDao()
+    @Provides @Singleton fun provideBmpProductDao(): BmpProductDao = BmpProductDao()
+    @Provides @Singleton fun provideBmpMasterProductDao(): BmpMasterProductDao = BmpMasterProductDao()
+    @Provides @Singleton fun provideBmpPaymentDao(): BmpPaymentDao = BmpPaymentDao()
+    @Provides @Singleton fun provideBmpCashFlowDao(): BmpCashFlowDao = BmpCashFlowDao()
+    @Provides @Singleton fun provideBmpSettingsDao(): BmpSettingsDao = BmpSettingsDao()
+    @Provides @Singleton fun providePrintSettingsDao(): PrintSettingsDao = PrintSettingsDao()
+    @Provides @Singleton fun provideBmpEmployeeDao(): BmpEmployeeDao = BmpEmployeeDao()
+    @Provides @Singleton fun provideBmpPayrollDao(): BmpPayrollDao = BmpPayrollDao()
+    @Provides @Singleton fun provideBmpBahanBakuDao(): BmpBahanBakuDao = BmpBahanBakuDao()
+    @Provides @Singleton fun provideBmpBahanBakuItemDao(): BmpBahanBakuItemDao = BmpBahanBakuItemDao()
+    @Provides @Singleton fun provideBmpProductStockDao(): BmpProductStockDao = BmpProductStockDao()
+    @Provides @Singleton fun provideBmpStockLedgerDao(): BmpStockLedgerDao = BmpStockLedgerDao()
+    @Provides @Singleton fun provideBmpProductionLogDao(): BmpProductionLogDao = BmpProductionLogDao()
+
+    // ── PosBahDatabase wrapper (stub) ──────────────────────────────────────────
+
+    @Provides @Singleton
     fun provideDatabase(
-        @ApplicationContext context: Context,
-        keystore: KeystoreManager
-    ): PosBahDatabase {
-        // 1. Back up database before building/opening Room
-        com.posbah.app.data.local.DatabaseBackupHelper.backupDatabase(context)
-
-        val passphrase = keystore.deriveDatabaseKey(context)
-        val db = PosBahDatabase.build(context, passphrase)
-
-        // 2. Clear the wiped flag in preferences first
-        context.getSharedPreferences("db_flags", Context.MODE_PRIVATE)
-            .edit()
-            .putBoolean("db_wiped_by_migration", false)
-            .apply()
-
-        // 3. Force database opening to trigger migrations
-        try {
-            db.openHelper.writableDatabase
-        } catch (e: Exception) {
-            android.util.Log.e("DatabaseModule", "Error opening database: ${e.message}", e)
-        }
-
-        // 4. Check if destructive migration wiped the database
-        val wasWiped = context.getSharedPreferences("db_flags", Context.MODE_PRIVATE)
-            .getBoolean("db_wiped_by_migration", false)
-
-        if (wasWiped) {
-            android.util.Log.e("DatabaseModule", "CRITICAL: Destructive migration occurred! Restoring backup...")
-            try {
-                db.close()
-            } catch (e: Exception) {
-                android.util.Log.e("DatabaseModule", "Error closing database: ${e.message}", e)
-            }
-            // Restore the backup database files
-            com.posbah.app.data.local.DatabaseBackupHelper.restoreDatabase(context)
-            // Clean up the flag
-            context.getSharedPreferences("db_flags", Context.MODE_PRIVATE)
-                .edit()
-                .putBoolean("db_wiped_by_migration", false)
-                .apply()
-            
-            throw IllegalStateException("Database migration failed. Destructive migration was intercepted and data was restored. Please contact developer for a migration fix.")
-        }
-
-        return db
-    }
-
-    @Provides fun localUserDao(db: PosBahDatabase): LocalUserDao = db.localUserDao()
-    @Provides fun tenantDao(db: PosBahDatabase): TenantDao = db.tenantDao()
-    @Provides fun outletDao(db: PosBahDatabase): OutletDao = db.outletDao()
-    @Provides fun employeeDao(db: PosBahDatabase): EmployeeDao = db.employeeDao()
-
-    @Provides fun bmpClientDao(db: PosBahDatabase): BmpClientDao = db.bmpClientDao()
-    @Provides fun bmpInvoiceDao(db: PosBahDatabase): BmpInvoiceDao = db.bmpInvoiceDao()
-    @Provides fun bmpProductDao(db: PosBahDatabase): BmpProductDao = db.bmpProductDao()
-    @Provides fun bmpMasterProductDao(db: PosBahDatabase): BmpMasterProductDao = db.bmpMasterProductDao()
-    @Provides fun bmpPaymentDao(db: PosBahDatabase): BmpPaymentDao = db.bmpPaymentDao()
-    @Provides fun bmpCashFlowDao(db: PosBahDatabase): BmpCashFlowDao = db.bmpCashFlowDao()
-    @Provides fun bmpSettingsDao(db: PosBahDatabase): BmpSettingsDao = db.bmpSettingsDao()
-    @Provides fun bmpEmployeeDao(db: PosBahDatabase): BmpEmployeeDao = db.bmpEmployeeDao()
-    @Provides fun bmpPayrollDao(db: PosBahDatabase): BmpPayrollDao = db.bmpPayrollDao()
-    @Provides fun bmpBahanBakuDao(db: PosBahDatabase): BmpBahanBakuDao = db.bmpBahanBakuDao()
-    @Provides fun bmpBahanBakuItemDao(db: PosBahDatabase): BmpBahanBakuItemDao = db.bmpBahanBakuItemDao()
-    @Provides fun printSettingsDao(db: PosBahDatabase): PrintSettingsDao = db.printSettingsDao()
-    @Provides fun bmpProductStockDao(db: PosBahDatabase): BmpProductStockDao = db.bmpProductStockDao()
-    @Provides fun bmpStockLedgerDao(db: PosBahDatabase): BmpStockLedgerDao = db.bmpStockLedgerDao()
-    @Provides fun bmpProductionLogDao(db: PosBahDatabase): BmpProductionLogDao = db.bmpProductionLogDao()
-
-    @Provides fun productDao(db: PosBahDatabase): ProductDao = db.productDao()
-    @Provides fun customerDao(db: PosBahDatabase): CustomerDao = db.customerDao()
-    @Provides fun transactionDao(db: PosBahDatabase): TransactionDao = db.transactionDao()
-    @Provides fun transactionItemDao(db: PosBahDatabase): TransactionItemDao = db.transactionItemDao()
-    @Provides fun activityLogDao(db: PosBahDatabase): ActivityLogDao = db.activityLogDao()
+        localUserDao: LocalUserDao,
+        tenantDao: TenantDao,
+        outletDao: OutletDao,
+        employeeDao: EmployeeDao,
+        productDao: ProductDao,
+        customerDao: CustomerDao,
+        transactionDao: TransactionDao,
+        transactionItemDao: TransactionItemDao,
+        activityLogDao: ActivityLogDao,
+        bmpClientDao: BmpClientDao,
+        bmpInvoiceDao: BmpInvoiceDao,
+        bmpProductDao: BmpProductDao,
+        bmpMasterProductDao: BmpMasterProductDao,
+        bmpPaymentDao: BmpPaymentDao,
+        bmpCashFlowDao: BmpCashFlowDao,
+        bmpSettingsDao: BmpSettingsDao,
+        printSettingsDao: PrintSettingsDao,
+        bmpEmployeeDao: BmpEmployeeDao,
+        bmpPayrollDao: BmpPayrollDao,
+        bmpBahanBakuDao: BmpBahanBakuDao,
+        bmpBahanBakuItemDao: BmpBahanBakuItemDao,
+        bmpProductStockDao: BmpProductStockDao,
+        bmpStockLedgerDao: BmpStockLedgerDao,
+        bmpProductionLogDao: BmpProductionLogDao
+    ): PosBahDatabase = PosBahDatabase(
+        localUserDao, tenantDao, outletDao, employeeDao,
+        productDao, customerDao, transactionDao, transactionItemDao, activityLogDao,
+        bmpClientDao, bmpInvoiceDao, bmpProductDao, bmpMasterProductDao,
+        bmpPaymentDao, bmpCashFlowDao, bmpSettingsDao, printSettingsDao,
+        bmpEmployeeDao, bmpPayrollDao, bmpBahanBakuDao, bmpBahanBakuItemDao,
+        bmpProductStockDao, bmpStockLedgerDao, bmpProductionLogDao
+    )
 }

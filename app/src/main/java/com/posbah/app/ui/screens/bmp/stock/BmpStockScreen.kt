@@ -69,8 +69,8 @@ class BmpStockViewModel @Inject constructor(
     val stockItems: StateFlow<List<StockProductItem>> = combine(
         stockRepo.observeStocks(tenantId),
         masterProductRepo.observe(tenantId)
-    ) { stocks, products ->
-        products.map { p ->
+    ) { stocks: List<BmpProductStockEntity>, products: List<BmpMasterProductEntity> ->
+        products.map { p: BmpMasterProductEntity ->
             val s = stocks.find { it.masterProductId == p.id }
             StockProductItem(s, p)
         }
@@ -79,8 +79,8 @@ class BmpStockViewModel @Inject constructor(
     val ledgerItems: StateFlow<List<LedgerItem>> = combine(
         stockRepo.observeAllLedger(tenantId),
         masterProductRepo.observe(tenantId)
-    ) { ledgers, products ->
-        ledgers.map { l ->
+    ) { ledgers: List<BmpStockLedgerEntity>, products: List<BmpMasterProductEntity> ->
+        ledgers.map { l: BmpStockLedgerEntity ->
             val p = products.find { it.id == l.masterProductId }
             LedgerItem(l, p?.title ?: "Produk #${l.masterProductId}")
         }
@@ -88,10 +88,8 @@ class BmpStockViewModel @Inject constructor(
 
     fun adjustStockManual(productId: Long, change: Double, notes: String) = viewModelScope.launch {
         stockRepo.adjustStock(
-            context = context,
-            tenantId = tenantId,
-            productId = productId,
-            change = change,
+            masterItemId = productId,
+            change = change.toInt(),
             mutationType = "PENYESUAIAN",
             referenceId = 0L,
             notes = notes

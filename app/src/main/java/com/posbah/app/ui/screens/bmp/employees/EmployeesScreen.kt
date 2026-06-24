@@ -77,10 +77,10 @@ class EmployeesViewModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     val tenantId = authRepository.activeTenantId().orEmpty()
-    val employees = repo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-    val payrolls = repo.observePayrolls(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-    val outlets = db.outletDao().observeForTenant(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-    val posEmployees = db.employeeDao().observeForTenant(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val employees = repo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<BmpEmployeeEntity>())
+    val payrolls = repo.observePayrolls(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<BmpPayrollEntity>())
+    val outlets = db.outletDao().observeForTenant(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<com.posbah.app.data.local.entities.Outlet>())
+    val posEmployees = db.employeeDao().observeForTenant(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<com.posbah.app.data.local.entities.Employee>())
 
     val error = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     fun dismissError() { error.value = null }

@@ -88,5 +88,25 @@ data class PrintConfig(
                 logoUrl = entity.logoUrl
             )
         }
+
+        /**
+         * Overload untuk PrintSettingsData dari online mode.
+         * Digunakan oleh RentalViewModel, LaundryViewModel, PosViewModel.
+         */
+        fun fromEntity(data: com.posbah.app.data.repository.PrintSettingsData?): PrintConfig {
+            if (data == null) return PrintConfig()
+            return PrintConfig(
+                receiptPaperWidth = if (data.paperWidth == "MM58") PaperWidth.MM58 else PaperWidth.MM80,
+                receiptUseLogo = data.useLogo,
+                receiptHeaderAlign = if (data.headerAlign == "LEFT") HeaderAlign.LEFT else HeaderAlign.CENTER,
+                receiptIsColor = data.isColor,
+                receiptShowItemPrice = data.showItemPrice,
+                receiptFooterText = data.footerText,
+                bankOwnerName = data.bankOwnerName,
+                bankName = data.bankName,
+                bankAccountNumber = data.bankAccountNumber,
+                logoUrl = data.logoUrl
+            )
+        }
     }
 }

@@ -1,13 +1,12 @@
 package com.posbah.app.data.local.entities
 
-import androidx.room.Entity
-import androidx.room.PrimaryKey
+// ── ActivityLogEntity — Full Online mode stub ─────────────────────────────────
+// Room @Entity dihapus. Plain data class.
 
-@Entity(tableName = "activity_logs")
 data class ActivityLogEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val id: Long = 0,
     val tenantId: String,
-    val outletId: Long? = null,     // Per-outlet activity tracking
+    val outletId: Long? = null,
     val action: String,
     val description: String,
     val date: Long = System.currentTimeMillis(),

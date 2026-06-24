@@ -4,14 +4,12 @@ import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.posbah.app.data.local.PosBahDatabase
 import com.posbah.app.data.local.entities.BmpClientEntity
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpClientRepository
 import com.posbah.app.data.repository.OnlineWriteResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,7 +33,6 @@ class ClientsViewModel @Inject constructor(
     private val repo: BmpClientRepository,
     private val invoiceRepo: BmpInvoiceRepository,
     private val authRepository: AuthRepository,
-    private val db: PosBahDatabase,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -103,13 +100,7 @@ class ClientsViewModel @Inject constructor(
                         payMassalFeedback = "Pembayaran borongan berhasil dicatat"
                     )
                 }
-                viewModelScope.launch(Dispatchers.IO) {
-                    try {
-                        com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
+                // Full online: tidak perlu sync manual, data sudah real-time di VPS
             } catch (e: Exception) {
                 _ui.update {
                     it.copy(payMassalFeedback = "Gagal: ${e.message}")
@@ -123,7 +114,6 @@ class ClientsViewModel @Inject constructor(
 class ClientEditViewModel @Inject constructor(
     private val repo: BmpClientRepository,
     private val authRepository: AuthRepository,
-    private val db: PosBahDatabase,
     @ApplicationContext private val context: Context,
     savedState: SavedStateHandle
 ) : ViewModel() {

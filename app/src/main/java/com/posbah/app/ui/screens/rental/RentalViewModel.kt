@@ -347,7 +347,7 @@ class RentalViewModel @Inject constructor(
             db.customerDao().upsert(c)
 
             val total = vehicle.pricePerDay * days
-            val receiptNum = transactionRepository.generateReceiptNumberForType(tenantId, "RN")
+            val receiptNum = transactionRepository.generateReceiptNumberForType("RN", currentOutletId)
             val txDate = rentDate ?: System.currentTimeMillis()
             
             val tx = TransactionEntity(
@@ -380,7 +380,7 @@ class RentalViewModel @Inject constructor(
                 costPrice = vehicle.costPrice
             )
             
-            transactionRepository.checkout(tx, listOf(line))
+            transactionRepository.checkout(tx, listOf(line), productRepository)
             
             val p = productRepository.getById(vehicle.id.toLong())
             if (p != null) {
@@ -497,7 +497,7 @@ class RentalViewModel @Inject constructor(
                 type = "EXPENSE",
                 notes = description
             )
-            transactionRepository.checkout(expenseTx, emptyList())
+            transactionRepository.checkout(expenseTx, emptyList<com.posbah.app.data.local.entities.TransactionItemEntity>(), productRepository)
             logActivity("CATAT PENGELUARAN", "Mencatat pengeluaran: $description senilai Rp $amount")
             onDone()
             viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {

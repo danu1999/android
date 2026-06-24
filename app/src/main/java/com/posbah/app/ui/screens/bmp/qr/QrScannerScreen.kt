@@ -51,6 +51,7 @@ import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import com.posbah.app.data.local.dao.TenantDao
+import com.posbah.app.data.local.entities.LocalUser
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.ui.components.PosBahTopBar
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -112,7 +113,20 @@ class QrScannerViewModel @Inject constructor(
             val tenant = tenantDao.getById(tenantId)
             val businessMode = tenant?.businessMode ?: "BMP"
 
-            val success = confirmQrLoginOnServer(sessionId, user, businessMode)
+            val localUser = LocalUser(
+                googleSub = user.googleSub,
+                email = user.email,
+                displayName = user.displayName,
+                photoUrl = user.photoUrl,
+                role = user.role,
+                tenantId = user.tenantId,
+                whatsapp = null,
+                isPremium = user.isPremium,
+                businessModeLocked = user.businessModeLocked,
+                apkVersion = user.apkVersion
+            )
+
+            val success = confirmQrLoginOnServer(sessionId, localUser, businessMode)
             if (success) {
                 _uiState.update { it.copy(isConfirming = false, success = true, scannedSessionId = null) }
                 onComplete(true, null)

@@ -99,6 +99,39 @@ class SecurePreferences @Inject constructor(
         get() = prefs.getString("last_active_tenant_id", null)
         set(value) = prefs.edit().putString("last_active_tenant_id", value).apply()
 
+    // ── Full Online mode additions ─────────────────────────────────────────────
+
+    /** Business mode aktif: "FNB", "BMP", "RENTAL", "LAUNDRY" */
+    var currentBusinessMode: String?
+        get() = prefs.getString("current_business_mode", null)
+        set(value) = prefs.edit().putString("current_business_mode", value).apply()
+
+    /** Jumlah ganti password hari ini (reset tiap hari). */
+    var passwordChangeTodayCount: Int
+        get() = prefs.getInt("pwd_change_count_today", 0)
+        set(value) = prefs.edit().putInt("pwd_change_count_today", value).apply()
+
+    /** Timestamp terakhir ganti password (untuk rate-limit per hari). */
+    var lastPasswordChangeDayMillis: Long
+        get() = prefs.getLong("pwd_change_last_day", 0L)
+        set(value) = prefs.edit().putLong("pwd_change_last_day", value).apply()
+
+    /** Flag migrasi full-online selesai. Cukup 1 kali per akun. */
+    var migrationCompleted: Boolean
+        get() = prefs.getBoolean("migration_completed_v3", false)
+        set(value) = prefs.edit().putBoolean("migration_completed_v3", value).apply()
+
+    /** Role user aktif: "OWNER" | "KASIR" | "OUTLETKARYAWAN" */
+    var currentRole: String?
+        get() = prefs.getString("current_role", null)
+        set(value) = prefs.edit().putString("current_role", value).apply()
+
+    /** Nama tenant aktif — disimpan saat login/pilih tenant. */
+    var currentTenantName: String?
+        get() = prefs.getString("current_tenant_name", null)
+        set(value) = prefs.edit().putString("current_tenant_name", value).apply()
+
+
     /** Wipe entire encrypted session. Called on logout / tamper detection. */
     fun wipe() {
         val lastTenant = lastActiveTenantId ?: currentTenantId

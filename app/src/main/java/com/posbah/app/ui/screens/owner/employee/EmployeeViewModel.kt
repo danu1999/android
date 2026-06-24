@@ -208,9 +208,8 @@ class EmployeeViewModel @Inject constructor(
                 context,
                 db,
                 tenantId,
-                emp.email.orEmpty(),
-                newPassword,
-                ownerEmail
+                employeeId,
+                newPassword
             )
         }
     }
@@ -278,7 +277,7 @@ class EmployeeViewModel @Inject constructor(
             checkPermissionAndLoad()
 
             // Sync ke VPS
-            val ownerEmail = authRepository.activeUserEmail()
+            val ownerEmail = authRepository.activeUserEmail().orEmpty()
             com.posbah.app.data.remote.SupabaseSyncManager.pushEmployeeImmediate(context, db, tenantId, employeeId, ownerEmail)
             com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, ownerEmail)
         }
@@ -345,7 +344,7 @@ class EmployeeViewModel @Inject constructor(
                 checkPermissionAndLoad()
 
                 // Trigger auto-sync to VPS
-                val ownerEmail = authRepository.activeUserEmail()
+                val ownerEmail = authRepository.activeUserEmail().orEmpty()
                 com.posbah.app.data.remote.SupabaseSyncManager.pushEmployeeImmediate(context, db, tenantId, employee.id, ownerEmail)
                 com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, ownerEmail)
             } catch (e: Exception) {
@@ -383,7 +382,7 @@ class EmployeeViewModel @Inject constructor(
                 checkPermissionAndLoad()
 
                 // Trigger auto-sync to VPS
-                val ownerEmail = authRepository.activeUserEmail()
+                val ownerEmail = authRepository.activeUserEmail().orEmpty()
                 com.posbah.app.data.remote.SupabaseSyncManager.deleteEmployeeImmediate(context, db, tenantId, employeeId, ownerEmail)
                 com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, ownerEmail)
             } catch (e: Exception) {

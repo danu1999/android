@@ -31,10 +31,6 @@ android {
         val localToken = project.findProperty("adminAuthToken") as? String ?: "Bearer BahteraMigrate123!"
         buildConfigField("String", "ADMIN_AUTH_TOKEN", "\"$localToken\"")
         buildConfigField("boolean", "ENFORCE_INTEGRITY", "true")
-        ndk {
-            // Limit native ABIs to reduce APK size (SQLCipher native libs)
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
-        }
     }
 
     signingConfigs {
@@ -104,10 +100,6 @@ android {
                 "/META-INF/DEPENDENCIES"
             )
         }
-        // SQLCipher provides multiple ABIs
-        jniLibs {
-            useLegacyPackaging = false
-        }
     }
 
     // === Auto-naming APK output ===
@@ -135,8 +127,11 @@ dependencies {
     implementation(composeBom)
     androidTestImplementation(composeBom)
 
-    // Networking & WebSockets
+    // Networking — OkHttp + Retrofit (Full Online mode)
     implementation(libs.okhttp)
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
 
     // AndroidX & Lifecycle
     implementation(libs.androidx.core.ktx)
@@ -163,12 +158,12 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
 
-    // Room + SQLCipher
-    implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
-    ksp(libs.androidx.room.compiler)
-    implementation(libs.sqlcipher.android)
-    implementation(libs.androidx.sqlite.ktx)
+    // Room + SQLCipher — REMOVED (migrated to Full Online mode)
+    // implementation(libs.androidx.room.runtime)
+    // implementation(libs.androidx.room.ktx)
+    // ksp(libs.androidx.room.compiler)
+    // implementation(libs.sqlcipher.android)
+    // implementation(libs.androidx.sqlite.ktx)
 
     // Coroutines & Serialization
     implementation(libs.kotlinx.coroutines.android)

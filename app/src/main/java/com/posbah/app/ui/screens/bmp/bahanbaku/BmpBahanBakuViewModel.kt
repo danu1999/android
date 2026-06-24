@@ -30,7 +30,7 @@ class BahanBakuListViewModel @Inject constructor(
     private val tenantId = authRepo.activeTenantId().orEmpty()
 
     val list = repo.observe(tenantId)
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<BmpBahanBakuEntity>())
 
     val totalHarga = repo.totalHarga(tenantId)
         .stateIn(viewModelScope, SharingStarted.Eagerly, 0.0)
@@ -71,7 +71,7 @@ class BahanBakuListViewModel @Inject constructor(
             list = list.filter { it.totalHarga - it.nominal <= 0 }
         }
         list
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<BmpBahanBakuEntity>())
 
     fun setDateRange(start: Long?, end: Long?) {
         _filterStartDate.value = start

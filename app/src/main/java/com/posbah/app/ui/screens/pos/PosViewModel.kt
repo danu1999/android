@@ -451,7 +451,7 @@ class PosViewModel @Inject constructor(
             }
 
             val txId = System.currentTimeMillis()
-            val receiptNum = transactionRepository.generateReceiptNumberForType(tenantId, "FNB")
+            val receiptNum = transactionRepository.generateReceiptNumberForType("FNB", currentOutletId)
 
             val tx = TransactionEntity(
                 id = txId,
@@ -496,7 +496,7 @@ class PosViewModel @Inject constructor(
             val result = com.posbah.app.data.remote.SupabaseSyncManager.checkoutWriteThrough(appContext, tenantId, tx, lines)
             when (result) {
                 is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Success -> {
-                    val savedTx = transactionRepository.checkout(tx, lines)
+                    val savedTx = transactionRepository.checkout(tx, lines, productRepository)
                     val savedItems = transactionRepository.listItemsForTransaction(savedTx.id)
 
                     val logAction = if (isQueue) "BUAT ANTRIAN" else "CHECKOUT"
@@ -566,7 +566,7 @@ class PosViewModel @Inject constructor(
                 )
             }
             // Delete this pending transaction now that it is loaded back into editing
-            transactionRepository.cancelTransaction(tx.id)
+            transactionRepository.cancelTransaction(tx.id, productRepository)
             // Push via global syncScope agar tidak ikut dibatalkan saat ViewModel di-clear.
             com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(
                 appContext, db, tenantId, authRepository.activeUserEmail()
@@ -576,13 +576,13 @@ class PosViewModel @Inject constructor(
 
     fun completeQueue(tx: TransactionEntity, method: String) {
         viewModelScope.launch {
-            val updateObj = org.json.JSONObject().apply {
-                put("status", "COMPLETED")
-                put("paymentMethod", method)
-                put("amountPaid", tx.total)
-                put("change", 0.0)
-                put("updatedAt", System.currentTimeMillis())
-            }
+            val updateObj = mapOf<String, Any?>(
+                "status" to "COMPLETED",
+                "paymentMethod" to method,
+                "amountPaid" to tx.total,
+                "change" to 0.0,
+                "updatedAt" to System.currentTimeMillis()
+            )
             val result = com.posbah.app.data.remote.SupabaseSyncManager.patchRowDirectly(appContext, "transactions", tx.id, updateObj, tenantId)
             when (result) {
                 is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Success -> {
@@ -615,7 +615,7 @@ class PosViewModel @Inject constructor(
 
     fun cancelQueue(txId: Long) {
         viewModelScope.launch {
-            transactionRepository.cancelTransaction(txId)
+            transactionRepository.cancelTransaction(txId, productRepository)
             com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(
                 appContext, db, tenantId, authRepository.activeUserEmail()
             )
@@ -666,7 +666,7 @@ class PosViewModel @Inject constructor(
             // ViewModel di-clear / user logout). Ini memastikan produk tersimpan
             // realtime di server meski user langsung logout / uninstall setelah simpan.
             com.posbah.app.data.remote.SupabaseSyncManager.pushProductImmediate(
-                appContext, db, tenantId, newId, authRepository.activeUserEmail()
+                appContext, db, tenantId, newId
             )
         }
     }
@@ -714,7 +714,7 @@ class PosViewModel @Inject constructor(
             // Push langsung perubahan ke VPS via global syncScope.
             val pushId = if (editedId > 0L) editedId else product.id
             com.posbah.app.data.remote.SupabaseSyncManager.pushProductImmediate(
-                appContext, db, tenantId, pushId, authRepository.activeUserEmail()
+                appContext, db, tenantId, pushId
             )
         }
     }
@@ -726,7 +726,7 @@ class PosViewModel @Inject constructor(
             logActivity("HAPUS PRODUK", "Menghapus produk: ${p.name}")
             // Hapus langsung di VPS via global syncScope.
             com.posbah.app.data.remote.SupabaseSyncManager.deleteProductImmediate(
-                appContext, db, tenantId, productId, authRepository.activeUserEmail()
+                appContext, db, tenantId, productId
             )
         }
     }
@@ -745,7 +745,7 @@ class PosViewModel @Inject constructor(
             onDone()
             // Push langsung pelanggan baru ke VPS via global syncScope.
             com.posbah.app.data.remote.SupabaseSyncManager.pushCustomerImmediate(
-                appContext, db, tenantId, newCustomerId, authRepository.activeUserEmail()
+                appContext, db, tenantId, newCustomerId
             )
         }
     }
@@ -784,7 +784,7 @@ class PosViewModel @Inject constructor(
     fun deleteTransaction(transactionId: Long) {
         viewModelScope.launch {
             val tx = transactionRepository.getById(transactionId) ?: return@launch
-            transactionRepository.deleteTransaction(transactionId)
+            transactionRepository.deleteTransaction(transactionId, productRepository)
             logActivity("HAPUS TRANSAKSI", "Menghapus transaksi ${tx.receiptNumber} (${tx.paymentMethod}) senilai Rp ${tx.total}")
             com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(
                 appContext, db, tenantId, authRepository.activeUserEmail()
@@ -881,7 +881,7 @@ class PosViewModel @Inject constructor(
                 type = "EXPENSE",
                 notes = description
             )
-            transactionRepository.checkout(expenseTx, emptyList())
+            transactionRepository.checkout(expenseTx, emptyList<com.posbah.app.data.local.entities.TransactionItemEntity>(), productRepository)
             logActivity("CATAT PENGELUARAN", "Mencatat pengeluaran: $description senilai Rp $amount")
             onDone()
             com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(

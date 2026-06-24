@@ -69,7 +69,7 @@ class PaymentsListViewModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     val tenantId = authRepository.activeTenantId().orEmpty()
-    val payments = dao.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val payments = dao.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<BmpInvoicePaymentEntity>())
 
     private val _uiState = MutableStateFlow(PaymentsListUiState())
     val uiState = _uiState.asStateFlow()

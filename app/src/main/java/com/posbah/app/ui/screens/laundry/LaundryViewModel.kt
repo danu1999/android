@@ -324,7 +324,7 @@ class LaundryViewModel @Inject constructor(
         viewModelScope.launch {
             val tx = transactions.value.find { it.receiptNumber == orderId }
             if (tx != null) {
-                transactionRepository.deleteTransaction(tx.id)
+                transactionRepository.deleteTransaction(tx.id, productRepository)
                 logActivity("HAPUS ORDER LAUNDRY", "Menghapus order laundry ${tx.receiptNumber} pelanggan ${tx.customerName}")
             }
             onDone()
@@ -349,7 +349,7 @@ class LaundryViewModel @Inject constructor(
             db.customerDao().upsert(c)
 
             val subtotal = cart.sumOf { it.service.price * it.quantity }
-            val receiptNum = transactionRepository.generateReceiptNumberForType(tenantId, "LD")
+            val receiptNum = transactionRepository.generateReceiptNumberForType("LD")
             val txDate = rentDate ?: System.currentTimeMillis()
             
             val summary = cart.joinToString(", ") { "${it.service.name} x${if (it.service.unit == "Kg") "%.1f Kg".format(it.quantity) else "${it.quantity.toInt()} Pcs"}" }
@@ -386,7 +386,7 @@ class LaundryViewModel @Inject constructor(
                 )
             }
 
-            transactionRepository.checkout(tx, lines)
+            transactionRepository.checkout(tx, lines, productRepository)
             
             logActivity("CHECKOUT LAUNDRY", "Checkout laundry pelanggan $customerName senilai Rp $subtotal (Struk: $receiptNum)")
 
@@ -513,7 +513,7 @@ class LaundryViewModel @Inject constructor(
                 type = "EXPENSE",
                 notes = description
             )
-            transactionRepository.checkout(expenseTx, emptyList())
+            transactionRepository.checkout(expenseTx, emptyList<TransactionItemEntity>(), productRepository)
             logActivity("CATAT PENGELUARAN", "Mencatat pengeluaran: $description senilai Rp $amount")
             onDone()
             viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {

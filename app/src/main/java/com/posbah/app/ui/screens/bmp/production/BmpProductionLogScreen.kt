@@ -30,10 +30,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.posbah.app.data.local.PosBahDatabase
 import com.posbah.app.data.local.entities.BmpMasterProductEntity
 import com.posbah.app.data.local.entities.BmpProductionLogEntity
-import com.posbah.app.data.remote.SupabaseSyncManager
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpMasterProductRepository
 import com.posbah.app.data.repository.BmpProductionLogRepository
@@ -43,7 +41,6 @@ import com.posbah.app.ui.components.PosBahTopBar
 import com.posbah.app.util.Formatters
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -62,7 +59,6 @@ class BmpProductionLogViewModel @Inject constructor(
     private val logRepo: BmpProductionLogRepository,
     private val masterProductRepo: BmpMasterProductRepository,
     private val authRepository: AuthRepository,
-    private val db: com.posbah.app.data.local.PosBahDatabase,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
@@ -104,9 +100,8 @@ class BmpProductionLogViewModel @Inject constructor(
             _error.value = result.message
         } else if (result is OnlineWriteResult.NoConnection) {
             _error.value = "Tidak ada koneksi internet. Data tidak tersimpan."
-        } else {
-            SupabaseSyncManager.enqueueFullSync(context, db, tenantId, null)
         }
+        // Full online: data langsung tersimpan di VPS, tidak perlu sync manual
     }
 
     fun deleteLog(log: BmpProductionLogEntity) = viewModelScope.launch {
@@ -115,9 +110,8 @@ class BmpProductionLogViewModel @Inject constructor(
             _error.value = result.message
         } else if (result is OnlineWriteResult.NoConnection) {
             _error.value = "Tidak ada koneksi internet. Hapus dibatalkan."
-        } else {
-            SupabaseSyncManager.enqueueFullSync(context, db, tenantId, null)
         }
+        // Full online: data langsung tersimpan di VPS, tidak perlu sync manual
     }
 }
 

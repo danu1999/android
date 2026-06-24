@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-import com.posbah.app.data.local.PosBahDatabase
 import com.posbah.app.data.repository.SessionState
 
 data class TenantPickerUiState(
@@ -33,7 +32,6 @@ class TenantPickerViewModel @Inject constructor(
     private val tenantRepository: TenantRepository,
     private val authRepository: AuthRepository,
     private val securePrefs: SecurePreferences,
-    private val db: PosBahDatabase,
     private val sessionState: SessionState,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
@@ -45,43 +43,46 @@ class TenantPickerViewModel @Inject constructor(
 
     private fun load() {
         val email = securePrefs.currentEmail ?: return
-        viewModelScope.launch {
-            val user = authRepository.getActiveUser()
-            val activeTenantId = user?.tenantId ?: securePrefs.currentTenantId
+        val role = securePrefs.currentRole ?: "OWNER"
+        val tenantId = securePrefs.currentTenantId
+        val lowerEmail = email.lowercase().trim()
 
-            val lowerEmail = email.lowercase().trim()
-            if (user?.role == "OWNER") {
-                viewModelScope.launch {
-                    try {
-                        com.posbah.app.data.remote.SupabaseSyncManager.fetchAndInsertOwnerTenants(context, db, email)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
+        viewModelScope.launch {
+            if (role == "OWNER") {
+                // Fetch tenant list dari VPS — convert TenantSession → Tenant
+                val sessions = authRepository.fetchOwnerTenants(email)
+                val list = sessions.map { ts ->
+                    Tenant(
+                        id = ts.id,
+                        name = ts.name,
+                        ownerEmail = ts.ownerEmail,
+                        businessMode = ts.businessMode
+                    )
                 }
-                tenantRepository.observeForOwner(email).collect { list ->
-                    _ui.update { 
-                        it.copy(
-                            isLoading = false, 
-                            tenants = list,
-                            canAddTenant = (lowerEmail == "muhammadmuizz8@gmail.com" || lowerEmail == "mulyakus84@gmail.com")
-                        ) 
-                    }
+                _ui.update {
+                    it.copy(
+                        isLoading = false,
+                        tenants = list,
+                        canAddTenant = (lowerEmail == "muhammadmuizz8@gmail.com" || lowerEmail == "mulyakus84@gmail.com")
+                    )
                 }
             } else {
-                // Regular owners and employees (outletkaryawan) cannot add tenant or choose more than 1.
-                // We lock them to exactly their active/assigned tenant.
-                val tenant = if (!activeTenantId.isNullOrBlank()) {
-                    tenantRepository.getById(activeTenantId)
-                } else {
-                    null
-                }
+                // Karyawan — lock ke tenant aktif saja
+                val tenant = if (!tenantId.isNullOrBlank()) {
+                    Tenant(
+                        id = tenantId,
+                        name = securePrefs.currentTenantName ?: tenantId,
+                        ownerEmail = email,
+                        businessMode = securePrefs.currentBusinessMode ?: "FNB"
+                    )
+                } else null
                 val tenantList = if (tenant != null) listOf(tenant) else emptyList()
-                _ui.update { 
+                _ui.update {
                     it.copy(
-                        isLoading = false, 
+                        isLoading = false,
                         tenants = tenantList,
                         canAddTenant = false
-                    ) 
+                    )
                 }
             }
         }
@@ -96,8 +97,9 @@ class TenantPickerViewModel @Inject constructor(
         val name = _ui.value.newTenantName.trim()
         if (name.isBlank()) return
         viewModelScope.launch {
-            tenantRepository.create(email, name, businessMode)
+            authRepository.createTenant(email, name, businessMode)
             _ui.update { it.copy(showCreateDialog = false, newTenantName = "") }
+            load() // refresh list
         }
     }
 
@@ -106,7 +108,8 @@ class TenantPickerViewModel @Inject constructor(
         viewModelScope.launch {
             val ok = authRepository.selectTenant(sub, tenantId)
             if (ok) {
-                val outlets = db.outletDao().listForTenant(tenantId)
+                // Load outlet untuk tenant ini
+                val outlets = authRepository.fetchOutletsForTenant(tenantId)
                 val activeOutlet = outlets.firstOrNull { it.isDefault } ?: outlets.firstOrNull()
                 sessionState.setOutlet(activeOutlet?.id)
                 _ui.update { it.copy(selectedId = tenantId) }

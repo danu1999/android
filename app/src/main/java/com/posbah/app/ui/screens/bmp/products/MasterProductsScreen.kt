@@ -181,8 +181,18 @@ class MasterProductsViewModel @Inject constructor(
             hppTotalPcs = computed.first,
             hppLusin = computed.second
         )
-        _error.value = null
-        val result = repo.upsert(context, finalProduct)
+        val data = com.posbah.app.data.repository.BmpMasterProductData(
+            id = finalProduct.id,
+            tenantId = finalProduct.tenantId,
+            title = finalProduct.title,
+            sku = null,
+            hppTotalPcs = finalProduct.hppTotalPcs,
+            pricePerPcs = finalProduct.price,
+            currentStock = 0,
+            isDeleted = finalProduct.isDeleted,
+            updatedAt = System.currentTimeMillis()
+        )
+        val result = repo.upsert(data)
         when (result) {
             is OnlineWriteResult.Success -> {
                 if (isNew) {
@@ -205,7 +215,7 @@ class MasterProductsViewModel @Inject constructor(
     fun delete(id: Long) = viewModelScope.launch {
         val p = repo.getById(id)
         _error.value = null
-        val result = repo.delete(context, tenantId, id)
+        val result = repo.delete(id)
         when (result) {
             is OnlineWriteResult.Success -> {
                 if (p != null) {
