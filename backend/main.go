@@ -767,9 +767,14 @@ func runAutoDeploy() {
 	// 5. Copy admin.html
 	_ = copyFile(backendDir+"/admin.html", destAdminHtml)
 
-	// 6. Copy web/admin.html
+	// 6. Copy web files
 	_ = os.MkdirAll("/home/muizz9900/web", 0755)
 	_ = copyFile(backendDir+"/web/admin.html", destWebAdminHtml)
+	_ = copyFile(backendDir+"/index.html", "/home/muizz9900/web/index.html")
+	_ = copyFile(backendDir+"/app.js", "/home/muizz9900/web/app.js")
+	_ = copyFile(backendDir+"/style.css", "/home/muizz9900/web/style.css")
+	_ = copyFile(backendDir+"/privacy.html", "/home/muizz9900/web/privacy.html")
+	_ = copyFile(backendDir+"/terms.html", "/home/muizz9900/web/terms.html")
 
 	// 7. Copy posbah-v*.apk files
 	if apks, err := filepath.Glob(backendDir + "/posbah-v*.apk"); err == nil {
