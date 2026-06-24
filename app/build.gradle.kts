@@ -50,9 +50,7 @@ android {
         debug {
             isMinifyEnabled = false
             isDebuggable = true
-            // Temporarily disabled suffix so the debug build uses the same package name "com.posbah.app"
-            // to upgrade/overwrite the old app and trigger the local database migration.
-            // applicationIdSuffix = ".debug"
+            applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
             buildConfigField("boolean", "DEBUG_MODE", "true")
         }
