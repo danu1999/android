@@ -143,6 +143,16 @@ func main() {
 	// Serve static files from TTD
 	http.Handle("/api/signatures/", http.StripPrefix("/api/signatures/", http.FileServer(http.Dir("./TTD"))))
 
+	// Upload endpoints for tenant-isolated logo & TTD pengirim assets
+	http.HandleFunc("/api/upload/logo", handleUploadLogo)
+	http.HandleFunc("/api/upload/ttd-pengirim", handleUploadTtdPengirim)
+
+	// Serve uploaded logos & TTD pengirim as static files (tenant-isolated folders)
+	// URL format: https://zedmz.cloud/logos/{tenantId}/logo.png
+	// URL format: https://zedmz.cloud/ttd-pengirim/{tenantId}/{moduleKey}_{docType}.png
+	http.Handle("/logos/", http.StripPrefix("/logos/", http.FileServer(http.Dir("./logos"))))
+	http.Handle("/ttd-pengirim/", http.StripPrefix("/ttd-pengirim/", http.FileServer(http.Dir("./ttd-pengirim"))))
+
 	// Reports API
 	http.HandleFunc("/api/reports/outlet-margin", handleOutletMarginReport)
 
@@ -7860,4 +7870,192 @@ func formatRupiahGo(v interface{}) string {
 		val = -val
 	}
 	return fmt.Sprintf("Rp %s", strconv.FormatFloat(val, 'f', 0, 64))
+}
+
+// handleUploadLogo menerima logo dari Android client dan menyimpannya di folder
+// terisolasi per-tenant: ./logos/{tenantId}/logo.png
+// POST /api/upload/logo
+// Form fields: tenantId (string), file (multipart/form-data PNG)
+// Auth: X-Tenant-Id header harus cocok dengan form tenantId
+func handleUploadLogo(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Tenant-Id")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Batas ukuran file: 2 MB
+	if err := r.ParseMultipartForm(2 << 20); err != nil {
+		http.Error(w, "Gagal parse form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	tenantId := strings.TrimSpace(r.FormValue("tenantId"))
+	if tenantId == "" {
+		http.Error(w, "tenantId wajib diisi", http.StatusBadRequest)
+		return
+	}
+	// Sanitasi: tenantId hanya boleh mengandung huruf, angka, underscore, dan dash
+	for _, ch := range tenantId {
+		if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+			(ch >= '0' && ch <= '9') || ch == '_' || ch == '-') {
+			http.Error(w, "tenantId tidak valid", http.StatusBadRequest)
+			return
+		}
+	}
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "File tidak ditemukan dalam form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	fileBytes, err := io.ReadAll(file)
+	if err != nil {
+		http.Error(w, "Gagal membaca file: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if len(fileBytes) == 0 {
+		http.Error(w, "File kosong", http.StatusBadRequest)
+		return
+	}
+
+	// Buat folder tenant jika belum ada
+	dir := filepath.Join(".", "logos", tenantId)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		log.Printf("[UploadLogo] Gagal buat folder %s: %v", dir, err)
+		http.Error(w, "Gagal menyiapkan folder penyimpanan", http.StatusInternalServerError)
+		return
+	}
+
+	destPath := filepath.Join(dir, "logo.png")
+	if err := os.WriteFile(destPath, fileBytes, 0644); err != nil {
+		log.Printf("[UploadLogo] Gagal menulis file %s: %v", destPath, err)
+		http.Error(w, "Gagal menyimpan file", http.StatusInternalServerError)
+		return
+	}
+
+	// Susun URL publik yang bisa diakses dari Android
+	baseURL := os.Getenv("BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://www.zedmz.cloud"
+	}
+	logoURL := fmt.Sprintf("%s/logos/%s/logo.png", baseURL, tenantId)
+	log.Printf("[UploadLogo] Logo tersimpan untuk tenant %s: %s", tenantId, logoURL)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"url":     logoURL,
+	})
+}
+
+// handleUploadTtdPengirim menerima gambar TTD pengirim dari Android client dan
+// menyimpannya di folder terisolasi per-tenant:
+// ./ttd-pengirim/{tenantId}/{moduleKey}_{docType}.png
+// POST /api/upload/ttd-pengirim
+// Form fields: tenantId, moduleKey, docType (jpg|sj|invoice), file (multipart)
+func handleUploadTtdPengirim(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Tenant-Id")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Batas ukuran file: 2 MB
+	if err := r.ParseMultipartForm(2 << 20); err != nil {
+		http.Error(w, "Gagal parse form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	tenantId := strings.TrimSpace(r.FormValue("tenantId"))
+	moduleKey := strings.TrimSpace(r.FormValue("moduleKey"))
+	docType := strings.TrimSpace(r.FormValue("docType"))
+
+	if tenantId == "" || moduleKey == "" || docType == "" {
+		http.Error(w, "tenantId, moduleKey, dan docType wajib diisi", http.StatusBadRequest)
+		return
+	}
+
+	// Sanitasi tenantId
+	for _, ch := range tenantId {
+		if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+			(ch >= '0' && ch <= '9') || ch == '_' || ch == '-') {
+			http.Error(w, "tenantId tidak valid", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Whitelist moduleKey dan docType agar tidak bisa path traversal
+	validModuleKeys := map[string]bool{"BMP": true, "FNB": true, "LAUNDRY": true, "RENTAL": true}
+	validDocTypes := map[string]bool{"jpg": true, "sj": true, "invoice": true}
+	if !validModuleKeys[moduleKey] {
+		http.Error(w, "moduleKey tidak valid. Nilai yang diizinkan: BMP, FNB, LAUNDRY, RENTAL", http.StatusBadRequest)
+		return
+	}
+	if !validDocTypes[docType] {
+		http.Error(w, "docType tidak valid. Nilai yang diizinkan: jpg, sj, invoice", http.StatusBadRequest)
+		return
+	}
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "File tidak ditemukan dalam form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	fileBytes, err := io.ReadAll(file)
+	if err != nil {
+		http.Error(w, "Gagal membaca file: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if len(fileBytes) == 0 {
+		http.Error(w, "File kosong", http.StatusBadRequest)
+		return
+	}
+
+	// Buat folder tenant jika belum ada
+	dir := filepath.Join(".", "ttd-pengirim", tenantId)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		log.Printf("[UploadTtd] Gagal buat folder %s: %v", dir, err)
+		http.Error(w, "Gagal menyiapkan folder penyimpanan", http.StatusInternalServerError)
+		return
+	}
+
+	// Nama file: {moduleKey}_{docType}.png — unik per modul per jenis dokumen
+	fileName := fmt.Sprintf("%s_%s.png", moduleKey, docType)
+	destPath := filepath.Join(dir, fileName)
+	if err := os.WriteFile(destPath, fileBytes, 0644); err != nil {
+		log.Printf("[UploadTtd] Gagal menulis file %s: %v", destPath, err)
+		http.Error(w, "Gagal menyimpan file", http.StatusInternalServerError)
+		return
+	}
+
+	// Susun URL publik
+	baseURL := os.Getenv("BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://www.zedmz.cloud"
+	}
+	ttdURL := fmt.Sprintf("%s/ttd-pengirim/%s/%s", baseURL, tenantId, fileName)
+	log.Printf("[UploadTtd] TTD tersimpan untuk tenant %s, modul %s, doc %s: %s", tenantId, moduleKey, docType, ttdURL)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"url":     ttdURL,
+	})
 }
