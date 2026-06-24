@@ -118,8 +118,28 @@ class PrintSettingsViewModel @Inject constructor(
                 val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
                 val base64Url = "data:image/png;base64,$base64"
 
+                // Set logo lokal dulu agar UI responsif
                 launch(Dispatchers.Main) {
                     update { e -> e.copy(logoPath = base64Url) }
+                }
+
+                // Upload ke VPS secara background — folder terisolasi per tenantId
+                // Logo disimpan di: /logos/{tenantId}/logo.png di server
+                if (tenantId.isNotBlank()) {
+                    val logoUrl = com.posbah.app.data.remote.SupabaseSyncManager.uploadLogoToVps(
+                        context,
+                        bytes,
+                        tenantId
+                    )
+                    if (logoUrl != null) {
+                        // Simpan URL permanen ke draft agar tersinkronisasi ke VPS via save()
+                        launch(Dispatchers.Main) {
+                            update { e -> e.copy(logoUrl = logoUrl) }
+                        }
+                        android.util.Log.d("PrintSettingsVM", "[Logo] Upload berhasil: $logoUrl")
+                    } else {
+                        android.util.Log.w("PrintSettingsVM", "[Logo] Upload ke VPS gagal — logo lokal tetap tersimpan, akan coba saat sync berikutnya")
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -151,7 +171,68 @@ class PrintSettingsViewModel @Inject constructor(
             }
         }
 
-        val updateWithTime = d.copy(updatedAt = System.currentTimeMillis())
+        // Upload TTD pengirim ke VPS jika ada base64 tapi belum ada URL
+        // Folder terisolasi per tenant: /ttd-pengirim/{tenantId}/{moduleKey}_{docType}.png
+        // Ini memastikan TTD pengirim tidak hilang saat ganti HP atau reinstall
+        var entity = d
+        if (tenantId.isNotBlank()) {
+            // JPG / Surat Jalan / Invoice — upload masing-masing jika ada base64 tapi belum ada URL
+            if (!d.jpgSignatureDrawnBase64.isNullOrBlank() && d.jpgSignatureDrawnUrl.isNullOrBlank()) {
+                try {
+                    val bytes = android.util.Base64.decode(
+                        d.jpgSignatureDrawnBase64!!.removePrefix("data:image/png;base64,"),
+                        android.util.Base64.NO_WRAP
+                    )
+                    val url = com.posbah.app.data.remote.SupabaseSyncManager.uploadTtdPengirimToVps(
+                        context, bytes, tenantId, moduleKey, "jpg"
+                    )
+                    if (url != null) {
+                        entity = entity.copy(jpgSignatureDrawnUrl = url)
+                        android.util.Log.d("PrintSettingsVM", "[TTD] Upload JPG berhasil: $url")
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("PrintSettingsVM", "[TTD] Gagal upload JPG TTD: ${e.message}")
+                }
+            }
+            if (!d.sjSignatureDrawnBase64.isNullOrBlank() && d.sjSignatureDrawnUrl.isNullOrBlank()) {
+                try {
+                    val bytes = android.util.Base64.decode(
+                        d.sjSignatureDrawnBase64!!.removePrefix("data:image/png;base64,"),
+                        android.util.Base64.NO_WRAP
+                    )
+                    val url = com.posbah.app.data.remote.SupabaseSyncManager.uploadTtdPengirimToVps(
+                        context, bytes, tenantId, moduleKey, "sj"
+                    )
+                    if (url != null) {
+                        entity = entity.copy(sjSignatureDrawnUrl = url)
+                        android.util.Log.d("PrintSettingsVM", "[TTD] Upload SJ berhasil: $url")
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("PrintSettingsVM", "[TTD] Gagal upload SJ TTD: ${e.message}")
+                }
+            }
+            if (!d.invoiceSignatureDrawnBase64.isNullOrBlank() && d.invoiceSignatureDrawnUrl.isNullOrBlank()) {
+                try {
+                    val bytes = android.util.Base64.decode(
+                        d.invoiceSignatureDrawnBase64!!.removePrefix("data:image/png;base64,"),
+                        android.util.Base64.NO_WRAP
+                    )
+                    val url = com.posbah.app.data.remote.SupabaseSyncManager.uploadTtdPengirimToVps(
+                        context, bytes, tenantId, moduleKey, "invoice"
+                    )
+                    if (url != null) {
+                        entity = entity.copy(invoiceSignatureDrawnUrl = url)
+                        android.util.Log.d("PrintSettingsVM", "[TTD] Upload Invoice berhasil: $url")
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("PrintSettingsVM", "[TTD] Gagal upload Invoice TTD: ${e.message}")
+                }
+            }
+            // Update draft agar URL tersimpan di UI state juga
+            if (entity !== d) _draft.value = entity
+        }
+
+        val updateWithTime = entity.copy(updatedAt = System.currentTimeMillis())
         printSettingsRepo.upsert(updateWithTime)
 
         // Write-through ke VPS

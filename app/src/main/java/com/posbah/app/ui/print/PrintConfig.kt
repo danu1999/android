@@ -37,7 +37,9 @@ data class PrintConfig(
     val bankOwnerName: String = "",
     val bankName: String = "BCA",
     val bankAccountNumber: String = "",
-    val logoPath: String? = null
+    val logoPath: String? = null,
+    /** URL permanen logo dari VPS, digunakan sebagai fallback jika logoPath lokal kosong */
+    val logoUrl: String? = null
 ) {
     companion object {
         fun fromEntity(entity: PrintSettingsEntity?): PrintConfig {
@@ -82,7 +84,8 @@ data class PrintConfig(
                 bankOwnerName = entity.bankOwnerName,
                 bankName = entity.bankName,
                 bankAccountNumber = entity.bankAccountNumber,
-                logoPath = entity.logoPath
+                logoPath = entity.logoPath,
+                logoUrl = entity.logoUrl
             )
         }
     }

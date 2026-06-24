@@ -365,6 +365,22 @@ data class PrintSettingsEntity(
 
     val logoPath: String? = null,
 
+    /**
+     * URL permanen logo bisnis di VPS (format: https://zedmz.cloud/logos/{tenantId}/logo.png).
+     * Diisi otomatis setelah upload berhasil ke server.
+     * Digunakan untuk restore logo setelah reinstall — lebih andal dari logoPath (base64 lokal).
+     */
+    val logoUrl: String? = null,
+
+    /**
+     * URL permanen gambar TTD pengirim untuk masing-masing jenis dokumen di VPS.
+     * Disimpan di: /ttd-pengirim/{tenantId}/{moduleKey}_jpg.png
+     * Digunakan untuk restore TTD pengirim setelah reinstall atau ganti HP.
+     */
+    val jpgSignatureDrawnUrl: String? = null,
+    val sjSignatureDrawnUrl: String? = null,
+    val invoiceSignatureDrawnUrl: String? = null,
+
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

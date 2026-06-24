@@ -83,7 +83,7 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
         BmpStockLedgerEntity::class,
         BmpProductionLogEntity::class
     ],
-    version = 34,
+    version = 35,
     exportSchema = true
 )
 abstract class PosBahDatabase : RoomDatabase() {
@@ -607,6 +607,19 @@ abstract class PosBahDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_34_35 = object : Migration(34, 35) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Tambah kolom logoUrl untuk menyimpan URL permanen logo bisnis di VPS
+                // Terisolasi per tenant di folder /logos/{tenantId}/ di server
+                db.execSQL("ALTER TABLE `print_settings` ADD COLUMN `logoUrl` TEXT")
+                // Tambah kolom URL TTD pengirim per jenis dokumen di VPS
+                // Terisolasi per tenant di folder /ttd-pengirim/{tenantId}/ di server
+                // Memastikan TTD pengirim tidak hilang saat reinstall / ganti HP
+                db.execSQL("ALTER TABLE `print_settings` ADD COLUMN `jpgSignatureDrawnUrl` TEXT")
+                db.execSQL("ALTER TABLE `print_settings` ADD COLUMN `sjSignatureDrawnUrl` TEXT")
+                db.execSQL("ALTER TABLE `print_settings` ADD COLUMN `invoiceSignatureDrawnUrl` TEXT")
+            }
+        }
 
         fun build(context: Context, passphrase: ByteArray): PosBahDatabase {
             // Load SQLCipher native library
@@ -627,7 +640,7 @@ abstract class PosBahDatabase : RoomDatabase() {
                     MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22,
                     MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27,
                     MIGRATION_27_28, MIGRATION_28_29, MIGRATION_29_30, MIGRATION_30_31, MIGRATION_31_32,
-                    MIGRATION_32_33, MIGRATION_33_34
+                    MIGRATION_32_33, MIGRATION_33_34, MIGRATION_34_35
                 ) // ← Data AMAN, tidak terhapus
                 .fallbackToDestructiveMigration()      // ← Fallback jika dari versi < 5 (install baru)
                 .addCallback(object : Callback() {

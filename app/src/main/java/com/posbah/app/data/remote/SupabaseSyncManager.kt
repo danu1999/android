@@ -685,6 +685,10 @@ object SupabaseSyncManager {
                         put("bankName", ps.bankName)
                         put("bankAccountNumber", ps.bankAccountNumber)
                         put("logoPath", ps.logoPath ?: JSONObject.NULL)
+                        put("logoUrl", ps.logoUrl ?: JSONObject.NULL)
+                        put("jpgSignatureDrawnUrl", ps.jpgSignatureDrawnUrl ?: JSONObject.NULL)
+                        put("sjSignatureDrawnUrl", ps.sjSignatureDrawnUrl ?: JSONObject.NULL)
+                        put("invoiceSignatureDrawnUrl", ps.invoiceSignatureDrawnUrl ?: JSONObject.NULL)
                         put("createdAt", ps.createdAt)
                         put("updatedAt", ps.updatedAt)
                     })
@@ -1462,6 +1466,181 @@ object SupabaseSyncManager {
         }
     }
 
+
+    /**
+     * Upload logo bisnis ke VPS dalam folder terisolasi per-tenant.
+     * Server menyimpan di: ./logos/{tenantId}/logo.png
+     * URL yang dikembalikan: https://zedmz.cloud/logos/{tenantId}/logo.png
+     *
+     * @param context Android context
+     * @param pngBytes Raw bytes gambar PNG yang sudah di-resize
+     * @param tenantId ID tenant pemilik logo (untuk isolasi folder)
+     * @return URL permanen logo di VPS, atau null jika gagal
+     */
+    suspend fun uploadLogoToVps(
+        context: Context,
+        pngBytes: ByteArray,
+        tenantId: String
+    ): String? = withContext(Dispatchers.IO) {
+        if (!isNetworkAvailable(context)) {
+            Log.w(TAG, "[uploadLogo] Tidak ada koneksi internet, upload logo dibatalkan.")
+            return@withContext null
+        }
+        var conn: HttpURLConnection? = null
+        try {
+            val boundary = "------PosBahLogoBoundary${System.currentTimeMillis()}"
+            val endpointUrl = "$VPS_URL/api/upload/logo"
+            val url = URL(endpointUrl)
+            conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                doOutput = true
+                connectTimeout = 15_000
+                readTimeout = 30_000
+                setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+                setRequestProperty("x-tenant-id", tenantId)
+                setRequestProperty("x-client-version", BuildConfig.VERSION_NAME)
+                val securePrefs = com.posbah.app.security.SecurePreferences(context)
+                val email = currentUserEmail.takeIf { it.isNotBlank() } ?: securePrefs.currentEmail
+                if (!email.isNullOrBlank()) {
+                    setRequestProperty("x-user-email", email)
+                }
+            }
+            conn.outputStream.use { out ->
+                val writer = out.bufferedWriter(Charsets.US_ASCII)
+                // -- multipart field: tenantId --
+                writer.write("--$boundary\r\n")
+                writer.write("Content-Disposition: form-data; name=\"tenantId\"\r\n\r\n")
+                writer.write("$tenantId\r\n")
+                // -- multipart field: file --
+                writer.write("--$boundary\r\n")
+                writer.write("Content-Disposition: form-data; name=\"logo\"; filename=\"logo.png\"\r\n")
+                writer.write("Content-Type: image/png\r\n\r\n")
+                writer.flush()
+                out.write(pngBytes)
+                out.flush()
+                writer.write("\r\n--$boundary--\r\n")
+                writer.flush()
+            }
+            val responseCode = conn.responseCode
+            if (responseCode in 200..299) {
+                val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+                val json = JSONObject(responseText)
+                val logoUrl = json.optString("url", "")
+                if (logoUrl.isNotBlank()) {
+                    Log.d(TAG, "[uploadLogo] Berhasil upload logo untuk tenant $tenantId: $logoUrl")
+                    notifyConnectionState(true)
+                    logoUrl
+                } else {
+                    Log.e(TAG, "[uploadLogo] Upload berhasil tapi URL kosong: $responseText")
+                    null
+                }
+            } else {
+                val err = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                Log.e(TAG, "[uploadLogo] Gagal upload logo ($responseCode): $err")
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "[uploadLogo] Exception: ${e.message}", e)
+            notifyConnectionState(false)
+            null
+        } finally {
+            conn?.disconnect()
+        }
+    }
+
+    /**
+     * Upload gambar TTD pengirim ke VPS dalam folder terisolasi per-tenant.
+     * Server menyimpan di: ./ttd-pengirim/{tenantId}/{moduleKey}_{docType}.png
+     * URL yang dikembalikan: https://zedmz.cloud/ttd-pengirim/{tenantId}/{moduleKey}_{docType}.png
+     *
+     * @param context Android context
+     * @param pngBytes Raw bytes gambar PNG tanda tangan pengirim
+     * @param tenantId ID tenant pemilik TTD (untuk isolasi folder)
+     * @param moduleKey Kunci modul (contoh: "BMP", "FNB", "LAUNDRY")
+     * @param docType Jenis dokumen ("jpg", "sj", atau "invoice")
+     * @return URL permanen TTD di VPS, atau null jika gagal
+     */
+    suspend fun uploadTtdPengirimToVps(
+        context: Context,
+        pngBytes: ByteArray,
+        tenantId: String,
+        moduleKey: String,
+        docType: String
+    ): String? = withContext(Dispatchers.IO) {
+        if (!isNetworkAvailable(context)) {
+            Log.w(TAG, "[uploadTtdPengirim] Tidak ada koneksi internet, upload TTD dibatalkan.")
+            return@withContext null
+        }
+        var conn: HttpURLConnection? = null
+        try {
+            val boundary = "------PosBahTtdBoundary${System.currentTimeMillis()}"
+            val endpointUrl = "$VPS_URL/api/upload/ttd-pengirim"
+            val url = URL(endpointUrl)
+            conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                doOutput = true
+                connectTimeout = 15_000
+                readTimeout = 30_000
+                setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+                setRequestProperty("x-tenant-id", tenantId)
+                setRequestProperty("x-client-version", BuildConfig.VERSION_NAME)
+                val securePrefs = com.posbah.app.security.SecurePreferences(context)
+                val email = currentUserEmail.takeIf { it.isNotBlank() } ?: securePrefs.currentEmail
+                if (!email.isNullOrBlank()) {
+                    setRequestProperty("x-user-email", email)
+                }
+            }
+            val filename = "${moduleKey}_${docType}.png"
+            conn.outputStream.use { out ->
+                val writer = out.bufferedWriter(Charsets.US_ASCII)
+                // -- multipart field: tenantId --
+                writer.write("--$boundary\r\n")
+                writer.write("Content-Disposition: form-data; name=\"tenantId\"\r\n\r\n")
+                writer.write("$tenantId\r\n")
+                // -- multipart field: moduleKey --
+                writer.write("--$boundary\r\n")
+                writer.write("Content-Disposition: form-data; name=\"moduleKey\"\r\n\r\n")
+                writer.write("$moduleKey\r\n")
+                // -- multipart field: docType --
+                writer.write("--$boundary\r\n")
+                writer.write("Content-Disposition: form-data; name=\"docType\"\r\n\r\n")
+                writer.write("$docType\r\n")
+                // -- multipart field: file --
+                writer.write("--$boundary\r\n")
+                writer.write("Content-Disposition: form-data; name=\"ttd\"; filename=\"$filename\"\r\n")
+                writer.write("Content-Type: image/png\r\n\r\n")
+                writer.flush()
+                out.write(pngBytes)
+                out.flush()
+                writer.write("\r\n--$boundary--\r\n")
+                writer.flush()
+            }
+            val responseCode = conn.responseCode
+            if (responseCode in 200..299) {
+                val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+                val json = JSONObject(responseText)
+                val ttdUrl = json.optString("url", "")
+                if (ttdUrl.isNotBlank()) {
+                    Log.d(TAG, "[uploadTtdPengirim] Berhasil upload TTD $docType untuk tenant $tenantId: $ttdUrl")
+                    notifyConnectionState(true)
+                    ttdUrl
+                } else {
+                    Log.e(TAG, "[uploadTtdPengirim] Upload berhasil tapi URL kosong: $responseText")
+                    null
+                }
+            } else {
+                val err = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                Log.e(TAG, "[uploadTtdPengirim] Gagal upload TTD ($responseCode): $err")
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "[uploadTtdPengirim] Exception: ${e.message}", e)
+            notifyConnectionState(false)
+            null
+        } finally {
+            conn?.disconnect()
+        }
+    }
 
     /**
      * Download data dari VPS REST API.
@@ -2591,6 +2770,10 @@ object SupabaseSyncManager {
                         bankName = obj.optString("bankName", "BCA"),
                         bankAccountNumber = obj.optString("bankAccountNumber", ""),
                         logoPath = if (obj.isNull("logoPath")) null else obj.optString("logoPath"),
+                        logoUrl = if (obj.isNull("logoUrl")) null else obj.optString("logoUrl"),
+                        jpgSignatureDrawnUrl = if (obj.isNull("jpgSignatureDrawnUrl")) null else obj.optString("jpgSignatureDrawnUrl"),
+                        sjSignatureDrawnUrl = if (obj.isNull("sjSignatureDrawnUrl")) null else obj.optString("sjSignatureDrawnUrl"),
+                        invoiceSignatureDrawnUrl = if (obj.isNull("invoiceSignatureDrawnUrl")) null else obj.optString("invoiceSignatureDrawnUrl"),
                         createdAt = obj.optLong("createdAt", System.currentTimeMillis()),
                         updatedAt = obj.optLong("updatedAt", System.currentTimeMillis())
                     ))
