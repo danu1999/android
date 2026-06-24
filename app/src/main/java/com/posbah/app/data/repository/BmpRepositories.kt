@@ -602,7 +602,9 @@ class BmpInvoiceRepository @Inject constructor(
     suspend fun checkReceiverSignatureRemote(tenantId: String, invoiceId: Long): RemoteSignatureResult = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         var conn: java.net.HttpURLConnection? = null
         try {
-            val url = java.net.URL("https://www.zedmz.cloud/api/invoice/signature-status?id=$invoiceId")
+            val token = com.posbah.app.util.SignatureLinkGenerator.generateShareLink(tenantId, invoiceId)
+                .substringAfter(com.posbah.app.util.SignatureLinkGenerator.BASE_URL)
+            val url = java.net.URL("https://www.zedmz.cloud/api/invoice/signature-status?id=$invoiceId&tenantId=$tenantId&token=$token")
             conn = url.openConnection() as java.net.HttpURLConnection
             conn.requestMethod = "GET"
             conn.connectTimeout = 8000

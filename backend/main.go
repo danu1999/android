@@ -1298,6 +1298,13 @@ func handleSaveSignature(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validasi Token secara kriptografis & multi-tenant isolation
+	tokenTenantId, err := validateSignatureToken(reqData.Token, reqData.InvoiceId)
+	if err != nil {
+		http.Error(w, "Token tanda tangan tidak valid atau kadaluarsa: "+err.Error(), http.StatusForbidden)
+		return
+	}
+
 	savedUrl := reqData.SignatureUrl
 
 	if reqData.SignatureBase64 != "" {
@@ -1337,6 +1344,13 @@ func handleSaveSignature(w http.ResponseWriter, r *http.Request) {
 	err = db.QueryRow(`SELECT "clientId", "tenantId" FROM "bmp_invoices" WHERE "id" = $1`, reqData.InvoiceId).Scan(&clientId, &dbTenantId)
 	if err != nil {
 		log.Printf("[Warning] Failed to find clientId/tenantId in local DB for invoice %d: %v", reqData.InvoiceId, err)
+		http.Error(w, "Invoice tidak ditemukan di database server", http.StatusNotFound)
+		return
+	}
+
+	if dbTenantId != "" && tokenTenantId != "" && dbTenantId != tokenTenantId {
+		http.Error(w, "Akses ditolak: Tenant ID tidak cocok", http.StatusForbidden)
+		return
 	}
 
 	updatedAt := time.Now().UnixNano() / int64(time.Millisecond)
@@ -1353,11 +1367,6 @@ func handleSaveSignature(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("[Warning] Failed to update local bmp_clients for client %d: %v", clientId.Int64, err)
 		}
-	}
-
-	tenantId := dbTenantId
-	if tenantId == "" {
-		tenantId = reqData.TenantId
 	}
 
 	log.Printf("[Signature] Successfully saved receiver signature for invoice %d (URL: %s)", reqData.InvoiceId, savedUrl)
@@ -1378,6 +1387,7 @@ func handleDeleteSignature(w http.ResponseWriter, r *http.Request) {
 	var reqData struct {
 		InvoiceId int64  `json:"invoiceId"`
 		TenantId  string `json:"tenantId"`
+		Token     string `json:"token"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&reqData); err != nil {
 		http.Error(w, "Invalid request body: " + err.Error(), http.StatusBadRequest)
@@ -1389,17 +1399,26 @@ func handleDeleteSignature(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validasi Token secara kriptografis & multi-tenant isolation
+	tokenTenantId, err := validateSignatureToken(reqData.Token, reqData.InvoiceId)
+	if err != nil {
+		http.Error(w, "Token tanda tangan tidak valid atau kadaluarsa: "+err.Error(), http.StatusForbidden)
+		return
+	}
+
 	// 1. Fetch clientId & tenantId from local DB
 	var clientId sql.NullInt64
 	var dbTenantId string
-	err := db.QueryRow(`SELECT "clientId", "tenantId" FROM "bmp_invoices" WHERE "id" = $1`, reqData.InvoiceId).Scan(&clientId, &dbTenantId)
+	err = db.QueryRow(`SELECT "clientId", "tenantId" FROM "bmp_invoices" WHERE "id" = $1`, reqData.InvoiceId).Scan(&clientId, &dbTenantId)
 	if err != nil {
 		log.Printf("[Warning] Failed to find clientId/tenantId for invoice %d: %v", reqData.InvoiceId, err)
+		http.Error(w, "Invoice tidak ditemukan di database server", http.StatusNotFound)
+		return
 	}
 
-	tenantId := dbTenantId
-	if tenantId == "" {
-		tenantId = reqData.TenantId
+	if dbTenantId != "" && tokenTenantId != "" && dbTenantId != tokenTenantId {
+		http.Error(w, "Akses ditolak: Tenant ID tidak cocok", http.StatusForbidden)
+		return
 	}
 
 	updatedAt := time.Now().UnixNano() / int64(time.Millisecond)
@@ -1451,6 +1470,38 @@ func handleSignatureStatus(w http.ResponseWriter, r *http.Request) {
 	invoiceIdStr := r.URL.Query().Get("id")
 	if invoiceIdStr == "" {
 		http.Error(w, "Missing invoice id", http.StatusBadRequest)
+		return
+	}
+
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		http.Error(w, "Missing token", http.StatusUnauthorized)
+		return
+	}
+
+	invoiceId, err := strconv.ParseInt(invoiceIdStr, 10, 64)
+	if err != nil || invoiceId <= 0 {
+		http.Error(w, "Invalid invoice id", http.StatusBadRequest)
+		return
+	}
+
+	// Validasi Token secara kriptografis & multi-tenant isolation
+	tokenTenantId, err := validateSignatureToken(token, invoiceId)
+	if err != nil {
+		http.Error(w, "Token tanda tangan tidak valid atau kadaluarsa: "+err.Error(), http.StatusForbidden)
+		return
+	}
+
+	var dbTenantId string
+	err = db.QueryRow(`SELECT "tenantId" FROM "bmp_invoices" WHERE "id" = $1`, invoiceId).Scan(&dbTenantId)
+	if err != nil {
+		log.Printf("[Warning] Failed to find tenantId for invoice %d: %v", invoiceId, err)
+		http.Error(w, "Invoice tidak ditemukan di database server", http.StatusNotFound)
+		return
+	}
+
+	if dbTenantId != "" && tokenTenantId != "" && dbTenantId != tokenTenantId {
+		http.Error(w, "Akses ditolak: Tenant ID tidak cocok", http.StatusForbidden)
 		return
 	}
 
@@ -1966,6 +2017,29 @@ func handleSignPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		path := r.URL.Path
+		if strings.HasPrefix(path, "/api/sign/") {
+			token = strings.TrimPrefix(path, "/api/sign/")
+		} else if strings.HasPrefix(path, "/sign/") {
+			token = strings.TrimPrefix(path, "/sign/")
+		}
+	}
+
+	token = strings.TrimSpace(token)
+	if token == "" || token == "sign" || token == "api/sign" {
+		http.Error(w, "Token tidak ditemukan. Minta pengirim membagikan ulang link.", http.StatusBadRequest)
+		return
+	}
+
+	_, _, err := validateSignatureTokenOnly(token)
+	if err != nil {
+		http.Error(w, "Link tanda tangan tidak valid atau telah kadaluarsa: "+err.Error(), http.StatusForbidden)
+		return
+	}
+
 	w.Header().Set("Content-Type", "text/html")
 	w.Write([]byte(signatureHtmlPage))
 }
@@ -2779,6 +2853,175 @@ func computeStoreHmacSha256(data string, secret string) string {
 	h := hmac.New(sha256.New, []byte(secret))
 	h.Write([]byte(data))
 	return base64.RawURLEncoding.EncodeToString(h.Sum(nil))
+}
+
+func computeSignatureHmacSha256(data string, secret string) string {
+	h := hmac.New(sha256.New, []byte(secret))
+	h.Write([]byte(data))
+	return base64.RawURLEncoding.EncodeToString(h.Sum(nil))
+}
+
+func validateSignatureTokenOnly(tokenEncoded string) (int64, string, error) {
+	tokenEncoded = strings.TrimSpace(tokenEncoded)
+	if tokenEncoded == "" {
+		return 0, "", fmt.Errorf("token is empty")
+	}
+
+	decodedBytes, err := base64.RawURLEncoding.DecodeString(tokenEncoded)
+	if err != nil {
+		decodedBytes, err = base64.URLEncoding.DecodeString(tokenEncoded)
+		if err != nil {
+			decodedBytes, err = base64.RawStdEncoding.DecodeString(tokenEncoded)
+			if err != nil {
+				decodedBytes, err = base64.StdEncoding.DecodeString(tokenEncoded)
+				if err != nil {
+					return 0, "", fmt.Errorf("failed to decode base64 token: %w", err)
+				}
+			}
+		}
+	}
+
+	tokenRaw := string(decodedBytes)
+	parts := strings.Split(tokenRaw, ":")
+	secretKey := "PosBahSignatureSecretKey123!"
+
+	var tenantId string
+	var tokInvoiceId int64
+	var expiry int64
+	var signature string
+
+	if len(parts) == 4 {
+		tenantId = parts[0]
+		parsedInvId, err := strconv.ParseInt(parts[1], 10, 64)
+		if err != nil {
+			return 0, "", fmt.Errorf("invalid invoiceId in token")
+		}
+		tokInvoiceId = parsedInvId
+		parsedExpiry, err := strconv.ParseInt(parts[2], 10, 64)
+		if err != nil {
+			return 0, "", fmt.Errorf("invalid expiry in token")
+		}
+		expiry = parsedExpiry
+		signature = parts[3]
+	} else if len(parts) == 3 {
+		tenantId = ""
+		parsedInvId, err := strconv.ParseInt(parts[0], 10, 64)
+		if err != nil {
+			return 0, "", fmt.Errorf("invalid invoiceId in token")
+		}
+		tokInvoiceId = parsedInvId
+		parsedExpiry, err := strconv.ParseInt(parts[1], 10, 64)
+		if err != nil {
+			return 0, "", fmt.Errorf("invalid expiry in token")
+		}
+		expiry = parsedExpiry
+		signature = parts[2]
+	} else {
+		return 0, "", fmt.Errorf("invalid token parts count: %d", len(parts))
+	}
+
+	nowMs := time.Now().UnixNano() / int64(time.Millisecond)
+	if nowMs > expiry {
+		return 0, "", fmt.Errorf("token has expired")
+	}
+
+	var dataToSign string
+	if tenantId != "" {
+		dataToSign = fmt.Sprintf("%s:%d:%d", tenantId, tokInvoiceId, expiry)
+	} else {
+		dataToSign = fmt.Sprintf("%d:%d", tokInvoiceId, expiry)
+	}
+
+	expectedSig := computeSignatureHmacSha256(dataToSign, secretKey)
+	if expectedSig != signature {
+		return 0, "", fmt.Errorf("cryptographic signature mismatch")
+	}
+
+	return tokInvoiceId, tenantId, nil
+}
+
+
+func validateSignatureToken(tokenEncoded string, invoiceId int64) (string, error) {
+	tokenEncoded = strings.TrimSpace(tokenEncoded)
+	if tokenEncoded == "" {
+		return "", fmt.Errorf("token is empty")
+	}
+
+	decodedBytes, err := base64.RawURLEncoding.DecodeString(tokenEncoded)
+	if err != nil {
+		decodedBytes, err = base64.URLEncoding.DecodeString(tokenEncoded)
+		if err != nil {
+			decodedBytes, err = base64.RawStdEncoding.DecodeString(tokenEncoded)
+			if err != nil {
+				decodedBytes, err = base64.StdEncoding.DecodeString(tokenEncoded)
+				if err != nil {
+					return "", fmt.Errorf("failed to decode base64 token: %w", err)
+				}
+			}
+		}
+	}
+
+	tokenRaw := string(decodedBytes)
+	parts := strings.Split(tokenRaw, ":")
+	secretKey := "PosBahSignatureSecretKey123!"
+
+	var tenantId string
+	var tokInvoiceId int64
+	var expiry int64
+	var signature string
+
+	if len(parts) == 4 {
+		tenantId = parts[0]
+		parsedInvId, err := strconv.ParseInt(parts[1], 10, 64)
+		if err != nil {
+			return "", fmt.Errorf("invalid invoiceId in token")
+		}
+		tokInvoiceId = parsedInvId
+		parsedExpiry, err := strconv.ParseInt(parts[2], 10, 64)
+		if err != nil {
+			return "", fmt.Errorf("invalid expiry in token")
+		}
+		expiry = parsedExpiry
+		signature = parts[3]
+	} else if len(parts) == 3 {
+		tenantId = ""
+		parsedInvId, err := strconv.ParseInt(parts[0], 10, 64)
+		if err != nil {
+			return "", fmt.Errorf("invalid invoiceId in token")
+		}
+		tokInvoiceId = parsedInvId
+		parsedExpiry, err := strconv.ParseInt(parts[1], 10, 64)
+		if err != nil {
+			return "", fmt.Errorf("invalid expiry in token")
+		}
+		expiry = parsedExpiry
+		signature = parts[2]
+	} else {
+		return "", fmt.Errorf("invalid token parts count: %d", len(parts))
+	}
+
+	nowMs := time.Now().UnixNano() / int64(time.Millisecond)
+	if nowMs > expiry {
+		return "", fmt.Errorf("token has expired")
+	}
+
+	if tokInvoiceId != invoiceId {
+		return "", fmt.Errorf("token invoiceId mismatch (token: %d, request: %d)", tokInvoiceId, invoiceId)
+	}
+
+	var dataToSign string
+	if tenantId != "" {
+		dataToSign = fmt.Sprintf("%s:%d:%d", tenantId, tokInvoiceId, expiry)
+	} else {
+		dataToSign = fmt.Sprintf("%d:%d", tokInvoiceId, expiry)
+	}
+
+	expectedSig := computeSignatureHmacSha256(dataToSign, secretKey)
+	if expectedSig != signature {
+		return "", fmt.Errorf("cryptographic signature mismatch")
+	}
+
+	return tenantId, nil
 }
 
 func loadTenantProducts(tenantId string) ([]StoreProduct, error) {

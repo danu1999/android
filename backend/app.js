@@ -1216,15 +1216,36 @@ async function deleteSignature() {
 
     const tenantId = localStorage.getItem("tenantId");
 
+    // Generate valid token for deletion authorization
+    const expiryTimestamp = Date.now() + (10 * 60 * 1000); // 10 minutes
+    const dataToSign = `${tenantId}:${currentInvoice.id}:${expiryTimestamp}`;
+    const SECRET_KEY = "PosBahSignatureSecretKey123!";
+    
+    let signature = "";
+    try {
+        signature = await computeHmacSha256(dataToSign, SECRET_KEY);
+    } catch (err) {
+        console.error("Gagal membuat signature token:", err);
+    }
+    
+    const tokenRaw = `${tenantId}:${currentInvoice.id}:${expiryTimestamp}:${signature}`;
+    const tokenEncoded = btoa(tokenRaw)
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+
     try {
         const response = await fetch(`${BASE_URL}/api/invoice/delete-signature`, {
             method: "POST",
             headers: {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "x-tenant-id": tenantId || "",
+                "x-user-email": localStorage.getItem("email") || ""
             },
             body: JSON.stringify({
                 invoiceId: currentInvoice.id,
-                tenantId: tenantId
+                tenantId: tenantId,
+                token: tokenEncoded
             })
         });
 
