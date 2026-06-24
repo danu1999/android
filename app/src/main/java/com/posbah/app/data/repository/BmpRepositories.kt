@@ -387,21 +387,15 @@ class BmpClientRepository @Inject constructor(
     }
 
     fun observe(tenantId: String): kotlinx.coroutines.flow.Flow<List<BmpClientEntity>> =
-        kotlinx.coroutines.flow.flow {
-            emit(list().map { it.toEntity() })
-        }
+        _clients.map { list -> list.map { it.toEntity() } }
 
     fun search(tenantId: String, query: String): kotlinx.coroutines.flow.Flow<List<BmpClientEntity>> =
-        kotlinx.coroutines.flow.flow {
-            val all = list().map { it.toEntity() }
-            val filtered = all.filter { it.clientName.contains(query, ignoreCase = true) }
-            emit(filtered)
+        _clients.map { list ->
+            list.map { it.toEntity() }.filter { it.clientName.contains(query, ignoreCase = true) }
         }
 
     fun count(tenantId: String): kotlinx.coroutines.flow.Flow<Int> =
-        kotlinx.coroutines.flow.flow {
-            emit(list().size)
-        }
+        _clients.map { it.size }
 
     suspend fun getById(id: Long): BmpClientEntity? =
         list().find { it.id == id }?.toEntity()
@@ -422,6 +416,7 @@ class BmpClientRepository @Inject constructor(
             } else {
                 api.updateClient(client.id, body)
             }
+            refresh()
             OnlineWriteResult.Success
         } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal simpan klien") }
     }
@@ -433,6 +428,7 @@ class BmpClientRepository @Inject constructor(
     suspend fun delete(id: Long, cashflowRepo: BmpCashFlowRepository): OnlineWriteResult {
         return try {
             api.deleteClient(id)
+            refresh()
             OnlineWriteResult.Success
         } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal hapus klien") }
     }
@@ -440,6 +436,7 @@ class BmpClientRepository @Inject constructor(
     suspend fun delete(context: android.content.Context, tenantId: String, id: Long): OnlineWriteResult {
         return try {
             api.deleteClient(id)
+            refresh()
             OnlineWriteResult.Success
         } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal hapus klien") }
     }
@@ -1125,6 +1122,7 @@ class BmpMasterProductRepository @Inject constructor(
             }
             if (item.id == 0L) api.createMasterProduct(body)
             else api.updateMasterProduct(item.id, body)
+            refresh()
             OnlineWriteResult.Success
         } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal simpan master produk") }
     }
@@ -1132,13 +1130,14 @@ class BmpMasterProductRepository @Inject constructor(
     suspend fun delete(id: Long): OnlineWriteResult {
         return try {
             api.deleteMasterProduct(id)
+            refresh()
             OnlineWriteResult.Success
         } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal hapus") }
     }
 
     fun observe(tenantId: String): Flow<List<com.posbah.app.data.local.entities.BmpMasterProductEntity>> =
-        kotlinx.coroutines.flow.flow {
-            emit(list().map {
+        _items.map { list ->
+            list.map {
                 com.posbah.app.data.local.entities.BmpMasterProductEntity(
                     id = it.id,
                     tenantId = it.tenantId,
@@ -1161,7 +1160,7 @@ class BmpMasterProductRepository @Inject constructor(
                     hppTotalPcs = 0.0,
                     hppLusin = 0.0
                 )
-            })
+            }
         }
 }
 

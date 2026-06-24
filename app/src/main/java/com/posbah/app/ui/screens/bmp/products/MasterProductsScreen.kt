@@ -110,6 +110,7 @@ class MasterProductsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
+            repo.refresh()
             val materials = db.bmpBahanBakuItemDao().getDistinctBahanBaku(tenantId)
             val ratesMap = materials.associateWith { material ->
                 db.bmpBahanBakuItemDao().getLatestRate(tenantId, material) ?: 0.0

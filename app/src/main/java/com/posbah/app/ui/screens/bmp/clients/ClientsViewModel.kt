@@ -60,6 +60,13 @@ class ClientsViewModel @Inject constructor(
     private val _ui = MutableStateFlow(ClientsUiState())
     val ui = _ui.asStateFlow()
 
+    init {
+        viewModelScope.launch {
+            clientRepository.refresh()
+            invoiceRepository.refresh()
+        }
+    }
+
     private val repository = object {
         fun getClientsState(): kotlinx.coroutines.flow.Flow<UiState<List<ClientDto>>> =
             clientRepository.allClients.map { UiState.Success(it) }

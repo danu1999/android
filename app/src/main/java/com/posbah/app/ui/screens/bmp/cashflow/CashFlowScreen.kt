@@ -50,6 +50,7 @@ import com.posbah.app.data.local.entities.BmpCashFlowEntity
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpCashFlowRepository
 import com.posbah.app.data.repository.toBmpCashflowData
+import com.posbah.app.data.repository.toBmpPaymentData
 import com.posbah.app.data.remote.api.BmpApiService
 import com.posbah.app.ui.components.PosBahTopBar
 import com.posbah.app.ui.components.StatChip
@@ -88,6 +89,9 @@ class CashFlowViewModel @Inject constructor(
     private val _totalOut = MutableStateFlow(0.0)
     val totalOut = _totalOut.asStateFlow()
 
+    private val _paymentToInvoice = MutableStateFlow<Map<Long, Long>>(emptyMap())
+    val paymentToInvoice = _paymentToInvoice.asStateFlow()
+
     init {
         viewModelScope.launch {
             selectedMonth.collect { month ->
@@ -116,6 +120,12 @@ class CashFlowViewModel @Inject constructor(
                 _flows.value = entityList
                 _totalIn.value = entityList.filter { it.transactionType == "MASUK" }.sumOf { it.amount }
                 _totalOut.value = entityList.filter { it.transactionType == "KELUAR" }.sumOf { it.amount }
+            }
+
+            val paymentsResp = api.getPayments()
+            if (paymentsResp.isSuccessful) {
+                val paymentList = paymentsResp.body()?.map { it.toBmpPaymentData() } ?: emptyList()
+                _paymentToInvoice.value = paymentList.associate { it.id to it.invoiceId }
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -152,6 +162,7 @@ fun CashFlowScreen(
     val totalIn by viewModel.totalIn.collectAsState()
     val totalOut by viewModel.totalOut.collectAsState()
     val selectedMonthState by viewModel.selectedMonth.collectAsState()
+    val paymentToInvoice by viewModel.paymentToInvoice.collectAsState()
 
     var showForm by remember { mutableStateOf(false) }
     var formType by remember { mutableStateOf("MASUK") }
@@ -228,8 +239,9 @@ fun CashFlowScreen(
                 )
             }
             items(flows, key = { it.id }) { item ->
-                val clickableModifier = if (item.paymentRefId != null) {
-                    Modifier.clickable { onNavigateToInvoiceDetail(item.paymentRefId) }
+                val invoiceId = item.paymentRefId?.let { paymentToInvoice[it] }
+                val clickableModifier = if (invoiceId != null) {
+                    Modifier.clickable { onNavigateToInvoiceDetail(invoiceId) }
                 } else {
                     Modifier
                 }

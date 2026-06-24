@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -86,7 +87,7 @@ fun InvoicesListScreen(
 
     val context = LocalContext.current
     var showCalendarDialog by remember { mutableStateOf(false) }
-    var isCustomerMenuExpanded by remember { mutableStateOf(false) }
+    var showCustomerFilterDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -96,35 +97,12 @@ fun InvoicesListScreen(
                 subtitle = "${invoices.size} tagihan",
                 onBack = onBack,
                 actions = {
-                    Box {
-                        IconButton(onClick = { isCustomerMenuExpanded = true }, modifier = Modifier.testTag("btn-client-filter")) {
-                            Icon(
-                                imageVector = if (selectedClientId != null) Icons.Filled.People else Icons.Outlined.People,
-                                contentDescription = "Filter Pelanggan",
-                                tint = if (selectedClientId != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = isCustomerMenuExpanded,
-                            onDismissRequest = { isCustomerMenuExpanded = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Semua Pelanggan", fontWeight = if (selectedClientId == null) FontWeight.Bold else FontWeight.Normal) },
-                                onClick = {
-                                    viewModel.setClientFilter(null)
-                                    isCustomerMenuExpanded = false
-                                }
-                            )
-                            clients.forEach { client ->
-                                DropdownMenuItem(
-                                    text = { Text(client.clientName, fontWeight = if (selectedClientId == client.id) FontWeight.Bold else FontWeight.Normal) },
-                                    onClick = {
-                                        viewModel.setClientFilter(client.id)
-                                        isCustomerMenuExpanded = false
-                                    }
-                                )
-                            }
-                        }
+                    IconButton(onClick = { showCustomerFilterDialog = true }, modifier = Modifier.testTag("btn-client-filter")) {
+                        Icon(
+                            imageVector = if (selectedClientId != null) Icons.Filled.People else Icons.Outlined.People,
+                            contentDescription = "Filter Pelanggan",
+                            tint = if (selectedClientId != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground
+                        )
                     }
                     IconButton(onClick = { showCalendarDialog = true }, modifier = Modifier.testTag("btn-calendar-trigger")) {
                         Icon(
@@ -262,6 +240,84 @@ fun InvoicesListScreen(
         BmpInvoiceCalendarDialog(
             viewModel = viewModel,
             onDismiss = { showCalendarDialog = false }
+        )
+    }
+
+    if (showCustomerFilterDialog) {
+        AlertDialog(
+            onDismissRequest = { showCustomerFilterDialog = false },
+            title = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Filter Pelanggan",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                    IconButton(onClick = { showCustomerFilterDialog = false }) {
+                        Icon(
+                            imageVector = Icons.Outlined.Close,
+                            contentDescription = "Tutup"
+                        )
+                    }
+                }
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth().heightIn(max = 380.dp)) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        item {
+                            Surface(
+                                color = if (selectedClientId == null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        viewModel.setClientFilter(null)
+                                        showCustomerFilterDialog = false
+                                    }
+                            ) {
+                                Text(
+                                    text = "Semua Pelanggan",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (selectedClientId == null) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (selectedClientId == null) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(14.dp).fillMaxWidth()
+                                )
+                            }
+                        }
+                        items(clients, key = { it.id }) { client ->
+                            Surface(
+                                color = if (selectedClientId == client.id) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        viewModel.setClientFilter(client.id)
+                                        showCustomerFilterDialog = false
+                                    }
+                            ) {
+                                Text(
+                                    text = client.clientName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (selectedClientId == client.id) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (selectedClientId == client.id) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(14.dp).fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showCustomerFilterDialog = false }) {
+                    Text("Tutup")
+                }
+            }
         )
     }
 }

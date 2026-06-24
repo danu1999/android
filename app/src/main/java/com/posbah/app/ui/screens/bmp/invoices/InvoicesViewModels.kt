@@ -42,7 +42,7 @@ class InvoicesListViewModel @Inject constructor(
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
 
-    val initialClientId: Long? = savedStateHandle["clientId"]
+    val initialClientId: Long? = savedStateHandle.get<String>("clientId")?.toLongOrNull()
 
     val invoices = invoiceRepo.observe(tenantId)
         .map { list ->
