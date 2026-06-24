@@ -40,6 +40,11 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.foundation.border
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.runtime.remember
@@ -63,6 +68,7 @@ import com.posbah.app.ui.components.EmptyState
 import com.posbah.app.ui.components.PosBahTopBar
 import com.posbah.app.util.Formatters
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InvoicesListScreen(
     onBack: () -> Unit,
@@ -244,81 +250,153 @@ fun InvoicesListScreen(
     }
 
     if (showCustomerFilterDialog) {
-        AlertDialog(
+        ModalBottomSheet(
             onDismissRequest = { showCustomerFilterDialog = false },
-            title = {
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 24.dp)
+            ) {
+                // Header
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Filter Pelanggan",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        text = "Pilih Pelanggan",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                     )
                     IconButton(onClick = { showCustomerFilterDialog = false }) {
-                        Icon(
-                            imageVector = Icons.Outlined.Close,
-                            contentDescription = "Tutup"
-                        )
+                        Icon(Icons.Outlined.Close, contentDescription = "Tutup")
                     }
                 }
-            },
-            text = {
-                Column(modifier = Modifier.fillMaxWidth().heightIn(max = 380.dp)) {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        item {
-                            Surface(
-                                color = if (selectedClientId == null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        viewModel.setClientFilter(null)
-                                        showCustomerFilterDialog = false
-                                    }
+
+                // Add search bar
+                var searchQuery by remember { mutableStateOf("") }
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Cari nama pelanggan...") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 8.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true,
+                    leadingIcon = {
+                        Icon(imageVector = Icons.Outlined.Search, contentDescription = "Cari")
+                    }
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                // Customers list
+                val filteredClients = remember(clients, searchQuery) {
+                    if (searchQuery.isBlank()) {
+                        clients
+                    } else {
+                        clients.filter { it.clientName.contains(searchQuery, ignoreCase = true) }
+                    }
+                }
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f, fill = false)
+                        .heightIn(max = 400.dp)
+                        .padding(horizontal = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    item {
+                        // "Semua Pelanggan" option
+                        Surface(
+                            color = if (selectedClientId == null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.setClientFilter(null)
+                                    showCustomerFilterDialog = false
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.People,
+                                    contentDescription = null,
+                                    tint = if (selectedClientId == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(16.dp))
                                 Text(
                                     text = "Semua Pelanggan",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = if (selectedClientId == null) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (selectedClientId == null) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.padding(14.dp).fillMaxWidth()
-                                )
-                            }
-                        }
-                        items(clients, key = { it.id }) { client ->
-                            Surface(
-                                color = if (selectedClientId == client.id) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        viewModel.setClientFilter(client.id)
-                                        showCustomerFilterDialog = false
-                                    }
-                            ) {
-                                Text(
-                                    text = client.clientName,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = if (selectedClientId == client.id) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (selectedClientId == client.id) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.padding(14.dp).fillMaxWidth()
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (selectedClientId == null) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
                                 )
                             }
                         }
                     }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showCustomerFilterDialog = false }) {
-                    Text("Tutup")
+
+                    items(filteredClients, key = { it.id }) { client ->
+                        val isSelected = selectedClientId == client.id
+                        Surface(
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                            shape = RoundedCornerShape(12.dp),
+                            border = if (isSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.setClientFilter(client.id)
+                                    showCustomerFilterDialog = false
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer,
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            text = client.clientName.take(1).uppercase(),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column {
+                                    Text(
+                                        text = client.clientName,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                    )
+                                    if (!client.phoneNumber.isNullOrBlank() || !client.emailAddress.isNullOrBlank()) {
+                                        Text(
+                                            text = client.phoneNumber ?: client.emailAddress ?: "",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
-        )
+        }
     }
 }
 

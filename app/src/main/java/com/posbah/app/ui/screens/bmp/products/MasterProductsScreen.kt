@@ -208,14 +208,17 @@ class MasterProductsViewModel @Inject constructor(
                 } else {
                     logActivity("EDIT PRODUK BMP", "Mengubah master produk: ${e.title} (Harga: Rp ${e.price})")
                 }
+                Toast.makeText(context, "Produk berhasil disimpan!", Toast.LENGTH_SHORT).show()
                 SupabaseSyncManager.enqueueFullSync(context, db, tenantId, null)
                 _form.update { FormState() }
             }
             is OnlineWriteResult.Error -> {
                 _error.value = result.message
+                Toast.makeText(context, "Gagal menyimpan: ${result.message}", Toast.LENGTH_LONG).show()
             }
             is OnlineWriteResult.NoConnection -> {
                 _error.value = "Tidak ada koneksi internet. Data tidak tersimpan."
+                Toast.makeText(context, "Tidak ada koneksi internet. Data tidak tersimpan.", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -229,13 +232,16 @@ class MasterProductsViewModel @Inject constructor(
                 if (p != null) {
                     logActivity("HAPUS PRODUK BMP", "Menghapus master produk: ${p.title}")
                 }
+                Toast.makeText(context, "Produk berhasil dihapus!", Toast.LENGTH_SHORT).show()
                 SupabaseSyncManager.enqueueFullSync(context, db, tenantId, null)
             }
             is OnlineWriteResult.Error -> {
                 _error.value = result.message
+                Toast.makeText(context, "Gagal menghapus: ${result.message}", Toast.LENGTH_LONG).show()
             }
             is OnlineWriteResult.NoConnection -> {
                 _error.value = "Tidak ada koneksi internet. Hapus dibatalkan."
+                Toast.makeText(context, "Tidak ada koneksi internet. Hapus dibatalkan.", Toast.LENGTH_LONG).show()
             }
         }
     }

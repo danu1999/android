@@ -1,0 +1,18 @@
+import subprocess
+
+def run_query(sql):
+    ssh_cmd = [
+        "ssh", "-i", "C:\\Users\\danus\\Documents\\muizz.pem",
+        "-o", "StrictHostKeyChecking=no",
+        "muizz9900@zedmz.cloud",
+        f"psql postgres://postgres:Bahtera1!@localhost:5432/posbah?sslmode=disable -c \"{sql}\""
+    ]
+    res = subprocess.run(ssh_cmd, capture_output=True, text=True)
+    return res.stdout, res.stderr, res.returncode
+
+tables = ["bmp_clients", "bmp_invoices", "bmp_cashflow"]
+for table in tables:
+    print(f"\nConstraint for {table}:")
+    sql = f"SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid = '{table}'::regclass;"
+    out, err, code = run_query(sql)
+    print(out)

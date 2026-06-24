@@ -1402,7 +1402,7 @@ function triggerInvoicePrint() {
     } else {
         sizeStyle = `
             @page {
-                size: 11in 9.5in landscape !important;
+                size: 11in 9.5in !important;
                 margin: 0 !important;
             }
             #print-area {
@@ -1608,7 +1608,7 @@ function triggerSjPrint() {
     } else {
         sizeStyle = `
             @page {
-                size: 11in 9.5in landscape !important;
+                size: 11in 9.5in !important;
                 margin: 0 !important;
             }
             #print-area {
