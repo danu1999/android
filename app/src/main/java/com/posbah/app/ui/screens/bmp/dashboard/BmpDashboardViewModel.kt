@@ -80,6 +80,16 @@ class BmpDashboardViewModel @Inject constructor(
                 }
             }
             viewModelScope.launch {
+                try {
+                    invoiceRepo.refresh()
+                    clientRepo.refresh()
+                    cashFlowRepo.refresh()
+                    bahanBakuRepo.refresh()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            viewModelScope.launch {
                 combine(
                     clientRepo.count(tenantId),
                     invoiceRepo.observe(tenantId)
