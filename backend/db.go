@@ -118,7 +118,8 @@ func initSchema() error {
 			"receiverSignatureUrl" TEXT,
 			"receiverNameActual" VARCHAR(255),
 			"createdAt" BIGINT,
-			"updatedAt" BIGINT
+			"updatedAt" BIGINT,
+			"isDeleted" BOOLEAN DEFAULT FALSE
 		);`,
 		`CREATE TABLE IF NOT EXISTS "bmp_invoices" (
 			"id" INT PRIMARY KEY,
@@ -139,7 +140,8 @@ func initSchema() error {
 			"receiverSignatureUrl" TEXT,
 			"receiverNameActual" VARCHAR(255),
 			"createdAt" BIGINT,
-			"updatedAt" BIGINT
+			"updatedAt" BIGINT,
+			"isDeleted" BOOLEAN DEFAULT FALSE
 		);`,
 		`CREATE TABLE IF NOT EXISTS "bmp_products" (
 			"id" INT PRIMARY KEY,
@@ -189,7 +191,8 @@ func initSchema() error {
 			"paymentAmount" DOUBLE PRECISION NOT NULL,
 			"paymentMethod" VARCHAR(50) DEFAULT 'TRANSFER',
 			"notes" TEXT,
-			"createdAt" BIGINT
+			"createdAt" BIGINT,
+			"isDeleted" BOOLEAN DEFAULT FALSE
 		);`,
 		`CREATE TABLE IF NOT EXISTS "bmp_cashflow" (
 			"id" INT PRIMARY KEY,
@@ -197,9 +200,9 @@ func initSchema() error {
 			"transactionDate" BIGINT NOT NULL,
 			"transactionType" VARCHAR(50) NOT NULL,
 			"description" TEXT NOT NULL,
-			"amount" DOUBLE PRECISION DEFAULT 0,
 			"paymentRefId" INT,
-			"createdAt" BIGINT
+			"createdAt" BIGINT,
+			"isDeleted" BOOLEAN DEFAULT FALSE
 		);`,
 		`CREATE TABLE IF NOT EXISTS "bmp_settings" (
 			"id" INT PRIMARY KEY,
@@ -257,7 +260,8 @@ func initSchema() error {
 			"notaFotoPath" TEXT,
 			"notaFotoUrl" TEXT,
 			"createdAt" BIGINT,
-			"updatedAt" BIGINT
+			"updatedAt" BIGINT,
+			"isDeleted" BOOLEAN DEFAULT FALSE
 		);`,
 		`CREATE TABLE IF NOT EXISTS "bmp_bahan_baku_item" (
 			"id" INT PRIMARY KEY,
@@ -267,7 +271,8 @@ func initSchema() error {
 			"kuantitas" DOUBLE PRECISION DEFAULT 0,
 			"unit" VARCHAR(50) DEFAULT 'Kg',
 			"rate" DOUBLE PRECISION DEFAULT 0,
-			"createdAt" BIGINT
+			"createdAt" BIGINT,
+			"isDeleted" BOOLEAN DEFAULT FALSE
 		);`,
 		`CREATE TABLE IF NOT EXISTS "print_settings" (
 			"id" BIGINT PRIMARY KEY,
