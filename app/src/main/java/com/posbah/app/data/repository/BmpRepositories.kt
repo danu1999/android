@@ -447,6 +447,7 @@ class BmpInvoiceRepository @Inject constructor(
         notes = notes,
         totalAmount = totalAmount,
         paidAmount = paidAmount,
+        isSynced = true,
         createdAt = createdAt,
         updatedAt = updatedAt,
         slug = ""
@@ -1200,7 +1201,8 @@ class BmpCashFlowRepository @Inject constructor(
                     transactionType = d.transactionType,
                     description = d.description,
                     amount = d.amount,
-                    transactionDate = d.transactionDate
+                    transactionDate = d.transactionDate,
+                    isSynced = true
                 )
             }
         }
