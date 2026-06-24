@@ -187,7 +187,9 @@ class MasterProductsViewModel @Inject constructor(
             title = finalProduct.title,
             sku = null,
             hppTotalPcs = finalProduct.hppTotalPcs,
+            hppLusin = finalProduct.hppLusin,
             pricePerPcs = finalProduct.price,
+            pricePerLusin = finalProduct.price * 12.0,
             currentStock = 0,
             isDeleted = finalProduct.isDeleted,
             updatedAt = System.currentTimeMillis()
@@ -395,7 +397,8 @@ fun MasterProductsScreen(
     if (form.show && form.editing != null) {
         val e = form.editing!!
         val settings by viewModel.settings.collectAsState()
-        var simHargaJual by remember { mutableStateOf("") }
+        var simHargaJualPcs by remember { mutableStateOf("") }
+        var simHargaJualLusin by remember { mutableStateOf("") }
 
         val latestRates by viewModel.latestRates.collectAsState()
         val hppRes = remember(e, settings, latestRates) {
@@ -429,9 +432,14 @@ fun MasterProductsScreen(
             }
         }
 
-        val simPriceVal = simHargaJual.toDoubleOrNull() ?: 0.0
-        val simMarginPcs = if (hppRes != null) simPriceVal - hppRes.hppTotalPcs else 0.0
-        val simMarginLusin = simMarginPcs * 12.0
+        val simPricePcsVal = simHargaJualPcs.toDoubleOrNull() ?: 0.0
+        val simPriceLusinVal = simHargaJualLusin.toDoubleOrNull() ?: 0.0
+        // Kalkulasi simulasi: profit dari input per pcs
+        val simMarginPcs = if (hppRes != null && simPricePcsVal > 0) simPricePcsVal - hppRes.hppTotalPcs else 0.0
+        val simMarginLusinFromPcs = simMarginPcs * 12.0
+        // Kalkulasi simulasi: profit dari input per lusin (1 lusin = 12 pcs)
+        val simMarginLusin = if (hppRes != null && simPriceLusinVal > 0) simPriceLusinVal - hppRes.hppLusin else 0.0
+        val simMarginPcsFromLusin = if (simPriceLusinVal > 0) simMarginLusin / 12.0 else 0.0
 
         AlertDialog(
             onDismissRequest = viewModel::closeForm,
@@ -698,31 +706,82 @@ fun MasterProductsScreen(
                         }
 
                         Spacer(Modifier.height(8.dp))
+                        // ── Simulasi Harga Jual Per Pcs ──
                         OutlinedTextField(
-                            value = simHargaJual,
-                            onValueChange = { simHargaJual = it },
+                            value = simHargaJualPcs,
+                            onValueChange = {
+                                simHargaJualPcs = it
+                                // Auto-sync ke input lusin
+                                val pcsVal = it.toDoubleOrNull()
+                                if (pcsVal != null) simHargaJualLusin = (pcsVal * 12.0).toLong().toString()
+                            },
                             label = { Text("Simulasi Harga Jual / Pcs (Rp)") },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.fillMaxWidth()
                         )
-                        if (simPriceVal > 0.0) {
-                            Spacer(Modifier.height(4.dp))
-                            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                                Text("Simulasi Profit / Pcs", style = MaterialTheme.typography.bodySmall)
-                                Text(
-                                    Formatters.rupiah(simMarginPcs),
-                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                                    color = if (simMarginPcs >= 0) Color(0xFF1F8B4C) else Color(0xFFC5453B)
-                                )
-                            }
-                            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                                Text("Simulasi Profit / Lusin", style = MaterialTheme.typography.bodySmall)
-                                Text(
-                                    Formatters.rupiah(simMarginLusin),
-                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                                    color = if (simMarginLusin >= 0) Color(0xFF1F8B4C) else Color(0xFFC5453B)
-                                )
+                        Spacer(Modifier.height(4.dp))
+                        OutlinedTextField(
+                            value = simHargaJualLusin,
+                            onValueChange = {
+                                simHargaJualLusin = it
+                                // Auto-sync ke input pcs
+                                val lusinVal = it.toDoubleOrNull()
+                                if (lusinVal != null) simHargaJualPcs = (lusinVal / 12.0).toLong().toString()
+                            },
+                            label = { Text("Simulasi Harga Jual / Lusin (Rp) — 1 Lusin = 12 Pcs") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        // ── Hasil Simulasi ──
+                        if (simPricePcsVal > 0.0 || simPriceLusinVal > 0.0) {
+                            Spacer(Modifier.height(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (simMarginPcs >= 0 && simPricePcsVal > 0) Color(0xFF1F8B4C).copy(alpha = 0.1f)
+                                        else if (simMarginLusin >= 0 && simPriceLusinVal > 0) Color(0xFF1F8B4C).copy(alpha = 0.1f)
+                                        else Color(0xFFC5453B).copy(alpha = 0.1f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    if (simPricePcsVal > 0.0) {
+                                        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                            Text("Profit / Pcs", style = MaterialTheme.typography.bodySmall)
+                                            Text(
+                                                Formatters.rupiah(simMarginPcs),
+                                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                                color = if (simMarginPcs >= 0) Color(0xFF1F8B4C) else Color(0xFFC5453B)
+                                            )
+                                        }
+                                        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                            Text("Profit / Lusin (×12)", style = MaterialTheme.typography.bodySmall)
+                                            Text(
+                                                Formatters.rupiah(simMarginLusinFromPcs),
+                                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                                color = if (simMarginLusinFromPcs >= 0) Color(0xFF1F8B4C) else Color(0xFFC5453B)
+                                            )
+                                        }
+                                    }
+                                    if (simPriceLusinVal > 0.0 && simPricePcsVal == 0.0) {
+                                        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                            Text("Profit / Lusin", style = MaterialTheme.typography.bodySmall)
+                                            Text(
+                                                Formatters.rupiah(simMarginLusin),
+                                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                                color = if (simMarginLusin >= 0) Color(0xFF1F8B4C) else Color(0xFFC5453B)
+                                            )
+                                        }
+                                        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                            Text("Profit / Pcs (÷12)", style = MaterialTheme.typography.bodySmall)
+                                            Text(
+                                                Formatters.rupiah(simMarginPcsFromLusin),
+                                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                                color = if (simMarginPcsFromLusin >= 0) Color(0xFF1F8B4C) else Color(0xFFC5453B)
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

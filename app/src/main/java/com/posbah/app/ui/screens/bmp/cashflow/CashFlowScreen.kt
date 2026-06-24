@@ -1,6 +1,7 @@
 package com.posbah.app.ui.screens.bmp.cashflow
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,9 +19,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -44,11 +49,15 @@ import androidx.lifecycle.viewModelScope
 import com.posbah.app.data.local.entities.BmpCashFlowEntity
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpCashFlowRepository
+import com.posbah.app.data.repository.toBmpCashflowData
+import com.posbah.app.data.remote.api.BmpApiService
 import com.posbah.app.ui.components.PosBahTopBar
 import com.posbah.app.ui.components.StatChip
 import com.posbah.app.util.Formatters
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -61,13 +70,57 @@ import com.posbah.app.data.remote.SupabaseSyncManager
 class CashFlowViewModel @Inject constructor(
     private val repo: BmpCashFlowRepository,
     private val authRepository: AuthRepository,
+    private val api: BmpApiService,
     private val db: PosBahDatabase,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
-    val flows = repo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-    val totalIn = repo.totalIn(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, 0.0)
-    val totalOut = repo.totalOut(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, 0.0)
+    
+    val currentMonth = java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.getDefault()).format(java.util.Date())
+    val selectedMonth = MutableStateFlow(currentMonth)
+
+    private val _flows = MutableStateFlow<List<BmpCashFlowEntity>>(emptyList())
+    val flows = _flows.asStateFlow()
+
+    private val _totalIn = MutableStateFlow(0.0)
+    val totalIn = _totalIn.asStateFlow()
+
+    private val _totalOut = MutableStateFlow(0.0)
+    val totalOut = _totalOut.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            selectedMonth.collect { month ->
+                refreshCashFlow(month)
+            }
+        }
+    }
+
+    fun refreshCashFlow(month: String) = viewModelScope.launch {
+        try {
+            val resp = api.getCashFlow(tenantId, month = month)
+            if (resp.isSuccessful) {
+                val dataList = resp.body()?.map { it.toBmpCashflowData() } ?: emptyList()
+                val entityList = dataList.map { d ->
+                    BmpCashFlowEntity(
+                        id = d.id,
+                        tenantId = d.tenantId,
+                        transactionType = d.transactionType,
+                        description = d.description,
+                        amount = d.amount,
+                        transactionDate = d.transactionDate,
+                        paymentRefId = d.paymentRefId,
+                        isSynced = true
+                    )
+                }
+                _flows.value = entityList
+                _totalIn.value = entityList.filter { it.transactionType == "MASUK" }.sumOf { it.amount }
+                _totalOut.value = entityList.filter { it.transactionType == "KELUAR" }.sumOf { it.amount }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
 
     fun insert(type: String, desc: String, amount: Double) = viewModelScope.launch {
         if (desc.isBlank() || amount <= 0) return@launch
@@ -85,22 +138,35 @@ class CashFlowViewModel @Inject constructor(
         } catch (e: Exception) {
             e.printStackTrace()
         }
+        refreshCashFlow(selectedMonth.value)
     }
 }
 
 @Composable
 fun CashFlowScreen(
     onBack: () -> Unit,
+    onNavigateToInvoiceDetail: (Long) -> Unit = {},
     viewModel: CashFlowViewModel = hiltViewModel()
 ) {
     val flows by viewModel.flows.collectAsState()
     val totalIn by viewModel.totalIn.collectAsState()
     val totalOut by viewModel.totalOut.collectAsState()
+    val selectedMonthState by viewModel.selectedMonth.collectAsState()
 
     var showForm by remember { mutableStateOf(false) }
     var formType by remember { mutableStateOf("MASUK") }
     var formDesc by remember { mutableStateOf("") }
     var formAmt by remember { mutableStateOf("") }
+    var dropdownExpanded by remember { mutableStateOf(false) }
+
+    val monthsList = remember {
+        val sdf = java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.getDefault())
+        (0..11).map { offset ->
+            val cal = java.util.Calendar.getInstance()
+            cal.add(java.util.Calendar.MONTH, -offset)
+            sdf.format(cal.time)
+        }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -122,6 +188,30 @@ fun CashFlowScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { dropdownExpanded = true },
+                        modifier = Modifier.fillMaxWidth().testTag("btn-select-month")
+                    ) {
+                        Text("Periode: $selectedMonthState")
+                    }
+                    DropdownMenu(
+                        expanded = dropdownExpanded,
+                        onDismissRequest = { dropdownExpanded = false }
+                    ) {
+                        monthsList.forEach { m ->
+                            DropdownMenuItem(
+                                text = { Text(m) },
+                                onClick = {
+                                    viewModel.selectedMonth.value = m
+                                    dropdownExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            item {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Box(Modifier.weight(1f)) {
                         StatChip("Masuk", Formatters.rupiah(totalIn), Color(0xFF22C57E))
@@ -137,25 +227,50 @@ fun CashFlowScreen(
                     if (totalIn - totalOut >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
                 )
             }
-            items(flows, key = { it.id }) { f ->
+            items(flows, key = { it.id }) { item ->
+                val clickableModifier = if (item.paymentRefId != null) {
+                    Modifier.clickable { onNavigateToInvoiceDetail(item.paymentRefId) }
+                } else {
+                    Modifier
+                }
+
                 Surface(
                     shape = RoundedCornerShape(14.dp),
                     color = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.fillMaxWidth().testTag("cashflow-${f.id}")
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(clickableModifier)
+                        .testTag("cashflow-${item.id}")
                 ) {
                     Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(f.description, style = MaterialTheme.typography.titleSmall)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(item.description, style = MaterialTheme.typography.titleSmall)
+                                if (item.paymentRefId != null) {
+                                    Spacer(Modifier.width(6.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = MaterialTheme.colorScheme.secondaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                                    ) {
+                                        Text(
+                                            "Dari Invoice",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                            }
                             Text(
-                                Formatters.dateLong(f.transactionDate),
+                                Formatters.dateLong(item.transactionDate),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         Text(
-                            (if (f.transactionType == "MASUK") "+ " else "- ") + Formatters.rupiah(f.amount),
+                            (if (item.transactionType == "MASUK") "+ " else "- ") + Formatters.rupiah(item.amount),
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                            color = if (f.transactionType == "MASUK") Color(0xFF22C57E)
+                            color = if (item.transactionType == "MASUK") Color(0xFF22C57E)
                                     else MaterialTheme.colorScheme.error
                         )
                     }

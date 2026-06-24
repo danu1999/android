@@ -82,42 +82,21 @@ class MainActivity : FragmentActivity() {
             sessionState.setOnline(online)
         }
 
-        // Periodic foreground auto-sync: pulls remote updates & pushes local changes every 30 seconds
+        // Full Online mode: periodic foreground data refresh via Retrofit API every 30 seconds.
+        // No more SupabaseSyncManager bulk sync (no local DB). All data comes from VPS real-time.
         lifecycleScope.launch(Dispatchers.IO) {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 try {
                     while (true) {
                         try {
                             val tenantId = authRepository.activeTenantId()
-                            if (!tenantId.isNullOrBlank()) {
-                                val context = applicationContext
-                                val activeDb = db
+                            if (!tenantId.isNullOrBlank() && sessionState.isOnline.value) {
+                                // Keep WebSocket for real-time push notifications (no-op stub currently)
+                                com.posbah.app.data.remote.WebSocketSyncClient.connect(
+                                    applicationContext, tenantId, db
+                                )
 
-                                // Connect WebSocket client for real-time push updates
-                                com.posbah.app.data.remote.WebSocketSyncClient.connect(context, tenantId, activeDb)
-
-                                val securePrefs = com.posbah.app.security.SecurePreferences(context)
-
-                                val email = authRepository.activeUserEmail()
-                                if (!email.isNullOrBlank()) {
-                                    val dbUser = activeDb.localUserDao().getByEmail(email)
-                                    if (dbUser != null && dbUser.apkVersion != com.posbah.app.BuildConfig.VERSION_NAME) {
-                                        try {
-                                            com.posbah.app.data.remote.SupabaseSyncManager.pullAll(context, activeDb, tenantId)
-                                            com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, activeDb, tenantId)
-                                        } catch (e: Exception) {
-                                            e.printStackTrace()
-                                        }
-                                        activeDb.localUserDao().upsert(
-                                            dbUser.copy(
-                                                apkVersion = com.posbah.app.BuildConfig.VERSION_NAME,
-                                                updatedAt = System.currentTimeMillis()
-                                            )
-                                        )
-                                    }
-                                }
-
-                                // If this is a demo session, perform an upgrade check against the server
+                                // Demo upgrade check (unchanged logic)
                                 if (tenantId.startsWith("demo_tenant_") || tenantId == "demo_tenant") {
                                     val email = authRepository.activeUserEmail()
                                     if (!email.isNullOrBlank()) {
@@ -134,8 +113,7 @@ class MainActivity : FragmentActivity() {
                                                 val response = checkConn.inputStream.bufferedReader().use { it.readText() }
                                                 val array = org.json.JSONArray(response)
                                                 if (array.length() > 0) {
-                                                    val obj = array.getJSONObject(0)
-                                                    isUpgraded = obj.optBoolean("isPremium", false)
+                                                    isUpgraded = array.getJSONObject(0).optBoolean("isPremium", false)
                                                 }
                                             }
                                         } catch (e: Exception) {
@@ -145,14 +123,7 @@ class MainActivity : FragmentActivity() {
                                         }
 
                                         if (isUpgraded) {
-                                            // AUTOMATION: Upgraded to premium! Clear demo data to 0 and logout
-                                            try {
-                                                activeDb.clearAllTables()
-                                            } catch (e: Exception) {
-                                                e.printStackTrace()
-                                            }
                                             authRepository.logout()
-                                            // Recreate activity to force redirect immediately back to splash/login and clear composable states
                                             kotlinx.coroutines.withContext(Dispatchers.Main) {
                                                 this@MainActivity.recreate()
                                             }
@@ -161,21 +132,55 @@ class MainActivity : FragmentActivity() {
                                     }
                                 }
 
-                                // Optimized Realtime Polling: Check status first
-                                val serverTs = com.posbah.app.data.remote.SupabaseSyncManager.checkServerSyncStatus(context, tenantId)
-                                val localTs = securePrefs.lastSyncedTimestamp
-                                if (serverTs > localTs || localTs == 0L) {
-                                    // 1. Pull remote updates first
-                                    val pullRes = com.posbah.app.data.remote.SupabaseSyncManager.pullAll(context, activeDb, tenantId)
-                                    // 2. Push any unsynced local mutations
-                                    val syncRes = com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, activeDb, tenantId)
-
-                                    if (pullRes is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Success &&
-                                        syncRes is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Success) {
-                                        securePrefs.lastSyncedTimestamp = if (serverTs > 0L) serverTs else System.currentTimeMillis()
+                                // Full Online: Active employee deactivation check via VPS API
+                                // (replaces the old DAO-based employee watcher that called stub DAOs)
+                                val currentRole = com.posbah.app.security.SecurePreferences(applicationContext).currentRole
+                                if (currentRole != null && currentRole != "OWNER") {
+                                    val activeEmail = authRepository.activeUserEmail()
+                                    if (!activeEmail.isNullOrBlank()) {
+                                        try {
+                                            val url = java.net.URL("https://www.zedmz.cloud/api/sync/employees?email=eq.${java.net.URLEncoder.encode(activeEmail.lowercase().trim(), "UTF-8")}&tenantId=eq.$tenantId")
+                                            val conn = url.openConnection() as java.net.HttpURLConnection
+                                            conn.requestMethod = "GET"
+                                            conn.connectTimeout = 5000
+                                            conn.readTimeout = 5000
+                                            if (conn.responseCode in 200..299) {
+                                                val body = conn.inputStream.bufferedReader().use { it.readText() }
+                                                val arr = org.json.JSONArray(body)
+                                                if (arr.length() == 0) {
+                                                    // Employee deleted from VPS → force logout
+                                                    android.util.Log.w("MainActivity", "Employee not found on VPS. Force logout.")
+                                                    authRepository.logout()
+                                                    kotlinx.coroutines.withContext(Dispatchers.Main) {
+                                                        this@MainActivity.recreate()
+                                                    }
+                                                } else {
+                                                    val emp = arr.getJSONObject(0)
+                                                    if (!emp.optBoolean("isActive", true)) {
+                                                        android.util.Log.w("MainActivity", "Employee deactivated on VPS. Force logout.")
+                                                        authRepository.logout()
+                                                        kotlinx.coroutines.withContext(Dispatchers.Main) {
+                                                            this@MainActivity.recreate()
+                                                        }
+                                                    } else {
+                                                        // Check outlet shift
+                                                        val vpsOutletId = emp.optLong("outletId").takeIf { it > 0 }
+                                                        val currentLock = sessionState.lockedEmployeeOutletId.value
+                                                        if (vpsOutletId != currentLock) {
+                                                            android.util.Log.i("MainActivity", "Dynamic outlet shift: $currentLock -> $vpsOutletId")
+                                                            sessionState.setEmployeeOutletLock(vpsOutletId)
+                                                            com.posbah.app.security.SecurePreferences(applicationContext).currentOutletId = vpsOutletId
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            conn.disconnect()
+                                        } catch (e: Exception) {
+                                            android.util.Log.w("MainActivity", "Employee check failed: ${e.message}")
+                                        }
                                     }
                                 }
-                            } else {
+                            } else if (!sessionState.isOnline.value) {
                                 com.posbah.app.data.remote.WebSocketSyncClient.disconnect()
                             }
                         } catch (e: Exception) {
@@ -207,34 +212,9 @@ class MainActivity : FragmentActivity() {
                 android.util.Log.e("MainActivity", "Error preloading database", e)
             }
         }
-        // Reactively watch for employee updates (outlet lock shift, or deactivation/deletion)
-        lifecycleScope.launch {
-            lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                db.employeeDao().observeAll().collect { employees ->
-                    val activeEmail = authRepository.activeUserEmail()
-                    if (!activeEmail.isNullOrBlank()) {
-                        val dbUser = db.localUserDao().getByEmail(activeEmail)
-                        if (dbUser != null && dbUser.role != "OWNER") {
-                            val empRecord = employees.find { it.email.equals(activeEmail, ignoreCase = true) }
-                            if (empRecord == null || !empRecord.isActive) {
-                                android.util.Log.w("MainActivity", "Employee deactivated or deleted. Force logout.")
-                                authRepository.logout()
-                                this@MainActivity.recreate()
-                                return@collect
-                            }
-                            
-                            val currentLock = sessionState.lockedEmployeeOutletId.value
-                            if (empRecord.outletId != currentLock) {
-                                android.util.Log.i("MainActivity", "Dynamic outlet shift detected: $currentLock -> ${empRecord.outletId}")
-                                sessionState.setEmployeeOutletLock(empRecord.outletId)
-                                val securePrefs = com.posbah.app.security.SecurePreferences(applicationContext)
-                                securePrefs.currentOutletId = empRecord.outletId
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        // Note: Employee deactivation & outlet shift detection is now handled in the 
+        // periodic API polling loop above (30-second interval, checks VPS /api/sync/employees).
+        // The old db.employeeDao().observeAll() was calling a stub DAO — removed.
         
         enableEdgeToEdge()
 

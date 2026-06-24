@@ -235,7 +235,8 @@ fun PosBahRoot(
         composable(Screen.BmpClients.route) {
             ClientsScreen(
                 onBack = { nav.popBackStack() },
-                onEdit = { id -> nav.navigate(Screen.BmpClientEdit.build(id)) }
+                onEdit = { id -> nav.navigate(Screen.BmpClientEdit.build(id)) },
+                onNavigateToInvoiceList = { clientId -> nav.navigate(Screen.BmpInvoices.build(clientId)) }
             )
         }
 
@@ -246,7 +247,10 @@ fun PosBahRoot(
             ClientEditScreen(onDone = { nav.popBackStack() })
         }
 
-        composable(Screen.BmpInvoices.route) {
+        composable(
+            route = Screen.BmpInvoices.route,
+            arguments = listOf(navArgument("clientId") { type = NavType.StringType; nullable = true; defaultValue = null })
+        ) {
             InvoicesListScreen(
                 onBack = { nav.popBackStack() },
                 onCreate = { nav.navigate(Screen.BmpCreateInvoice.build(null)) },
@@ -280,7 +284,12 @@ fun PosBahRoot(
         }
 
         composable(Screen.BmpCashFlow.route) {
-            CashFlowScreen(onBack = { nav.popBackStack() })
+            CashFlowScreen(
+                onBack = { nav.popBackStack() },
+                onNavigateToInvoiceDetail = { id ->
+                    nav.navigate(Screen.BmpInvoiceDetail.build(id))
+                }
+            )
         }
 
         composable(Screen.BmpEmployees.route) {

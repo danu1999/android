@@ -13,6 +13,7 @@ import com.posbah.app.data.local.entities.BmpSettingsEntity
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpClientRepository
 import com.posbah.app.data.repository.BmpInvoiceRepository
+import com.posbah.app.data.repository.BmpCashFlowRepository
 import com.posbah.app.data.repository.BmpMasterProductRepository
 import com.posbah.app.data.repository.BmpSettingsRepository
 import com.posbah.app.data.repository.PrintSettingsRepository
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.io.File
@@ -35,17 +37,27 @@ class InvoicesListViewModel @Inject constructor(
     private val db: com.posbah.app.data.local.PosBahDatabase,
     private val invoiceRepo: BmpInvoiceRepository,
     private val clientRepo: BmpClientRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    savedStateHandle: SavedStateHandle
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
 
+    val initialClientId: Long? = savedStateHandle["clientId"]
+
     val invoices = invoiceRepo.observe(tenantId)
+        .map { list ->
+            if (initialClientId != null) {
+                list.filter { it.clientId == initialClientId }
+            } else {
+                list
+            }
+        }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val clients = clientRepo.observe(tenantId)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    private val _filterClientId = MutableStateFlow<Long?>(null)
+    private val _filterClientId = MutableStateFlow<Long?>(initialClientId)
     val filterClientId = _filterClientId.asStateFlow()
 
     private val _filterStartDate = MutableStateFlow<Long?>(null)
@@ -163,6 +175,7 @@ class InvoiceDetailViewModel @Inject constructor(
     private val settingsRepo: BmpSettingsRepository,
     private val printSettingsRepo: PrintSettingsRepository,
     private val authRepository: AuthRepository,
+    private val cashflowRepo: BmpCashFlowRepository,
     savedState: SavedStateHandle
 ) : ViewModel() {
     val tenantId = authRepository.activeTenantId().orEmpty()
@@ -248,6 +261,12 @@ class InvoiceDetailViewModel @Inject constructor(
             } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
                 _ui.update { it.copy(pollingError = "Tidak ada koneksi internet.") }
                 return@launch
+            }
+            // Eksekusi pemanggilan fungsi fetch ulang untuk CashFlow secara paralel
+            launch {
+                try {
+                    cashflowRepo.fetchCashFlowFromNetwork()
+                } catch (_: Exception) {}
             }
             val inv = invoiceRepo.getById(invoiceId)
             com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, null)

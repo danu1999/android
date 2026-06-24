@@ -35,6 +35,8 @@ import com.posbah.app.data.local.entities.BmpProductionLogEntity
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpMasterProductRepository
 import com.posbah.app.data.repository.BmpProductionLogRepository
+import com.posbah.app.data.repository.BmpStockRepository
+import com.posbah.app.data.repository.BmpBahanBakuRepository
 import com.posbah.app.data.repository.OnlineWriteResult
 import com.posbah.app.ui.components.EmptyState
 import com.posbah.app.ui.components.PosBahTopBar
@@ -58,12 +60,17 @@ data class ProductionLogItem(
 class BmpProductionLogViewModel @Inject constructor(
     private val logRepo: BmpProductionLogRepository,
     private val masterProductRepo: BmpMasterProductRepository,
+    private val stockRepo: BmpStockRepository,
+    private val bahanBakuRepo: BmpBahanBakuRepository,
     private val authRepository: AuthRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
+    private val stockApi = stockRepo
+    private val bahanBakuApi = bahanBakuRepo
 
     val products = masterProductRepo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val productStocks = stockRepo.observeStocks(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val logItems: StateFlow<List<ProductionLogItem>> = combine(
         logRepo.observeAll(tenantId),
@@ -96,7 +103,12 @@ class BmpProductionLogViewModel @Inject constructor(
             productionDate = System.currentTimeMillis()
         )
         val result = logRepo.addProductionLog(context, log)
-        if (result is OnlineWriteResult.Error) {
+        if (result is OnlineWriteResult.Success) {
+            stockApi.adjustStock(productId = log.productId, quantity = log.quantityProduced, reason = "PRODUKSI")
+            if (log.rawMaterialUsedKg > 0) {
+                bahanBakuApi.addUsage(materialId = log.rawMaterialId, quantity = -log.rawMaterialUsedKg, reason = "PRODUKSI")
+            }
+        } else if (result is OnlineWriteResult.Error) {
             _error.value = result.message
         } else if (result is OnlineWriteResult.NoConnection) {
             _error.value = "Tidak ada koneksi internet. Data tidak tersimpan."
@@ -122,6 +134,7 @@ fun BmpProductionLogScreen(
 ) {
     val logs by viewModel.logItems.collectAsState()
     val products by viewModel.products.collectAsState()
+    val productStocks by viewModel.productStocks.collectAsState()
     val context = LocalContext.current
     val error by viewModel.error.collectAsState()
 
@@ -288,8 +301,9 @@ fun BmpProductionLogScreen(
                     
                     // Product Selector Dropdown
                     Box(modifier = Modifier.fillMaxWidth()) {
+                        val currentStockQty = productStocks.find { it.masterProductId == prod.id }?.quantity ?: 0.0
                         OutlinedTextField(
-                            value = prod.title,
+                            value = "${prod.title} (Stok: ${Formatters.number(currentStockQty)} ${prod.unit})",
                             onValueChange = {},
                             readOnly = true,
                             label = { Text("Produk Jadi") },
@@ -306,8 +320,22 @@ fun BmpProductionLogScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             products.forEach { p ->
+                                val pStockQty = productStocks.find { it.masterProductId == p.id }?.quantity ?: 0.0
                                 DropdownMenuItem(
-                                    text = { Text("${p.title} (${p.unit})") },
+                                    text = {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(p.title)
+                                            Text(
+                                                text = "Stok: ${Formatters.number(pStockQty)} ${p.unit}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    },
                                     onClick = {
                                         selectedProduct = p
                                         dropdownExpanded = false

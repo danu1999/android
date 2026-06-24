@@ -9,6 +9,7 @@ import retrofit2.http.*
 // Auth: Authorization: Bearer <token>
 // ─────────────────────────────────────────────────────────────────────────────
 
+@JvmSuppressWildcards
 interface BmpApiService {
 
     // ── Clients ───────────────────────────────────────────────────────────────
@@ -66,6 +67,12 @@ interface BmpApiService {
     // ── Cashflow ──────────────────────────────────────────────────────────────
     @GET("api/rt/bmp/cashflow")
     suspend fun getCashflow(): Response<List<Map<String, Any?>>>
+
+    @GET("api/rt/bmp/cashflow")
+    suspend fun getCashFlow(
+        @Query("tenantId") tenantId: String,
+        @Query("month") month: String
+    ): Response<List<Map<String, Any?>>>
 
     @POST("api/rt/bmp/cashflow")
     suspend fun createCashflow(@Body body: Map<String, Any?>): Response<Map<String, Any?>>

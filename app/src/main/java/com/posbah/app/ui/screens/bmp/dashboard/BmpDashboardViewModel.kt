@@ -7,6 +7,10 @@ import com.posbah.app.data.repository.BmpBahanBakuRepository
 import com.posbah.app.data.repository.BmpCashFlowRepository
 import com.posbah.app.data.repository.BmpClientRepository
 import com.posbah.app.data.repository.BmpInvoiceRepository
+import com.posbah.app.data.repository.BmpMasterProductRepository
+import com.posbah.app.data.repository.BmpStockRepository
+import com.posbah.app.data.repository.BmpProductionLogRepository
+import com.posbah.app.data.remote.api.BmpApiService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,6 +18,18 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+
+sealed interface UiState<out T> {
+    object Loading : UiState<Nothing>
+    data class Success<out T>(val data: T) : UiState<T>
+    data class Error(val message: String) : UiState<Nothing>
+}
+
+data class DashboardKpiData(
+    val overdueCount: Int,
+    val totalStockValue: Double,
+    val productionThisMonth: Int
+)
 
 data class BmpCashFlowDataPoint(
     val dateLabel: String,
@@ -36,6 +52,7 @@ data class BmpDashboardUiState(
     val saldoKasRiil: Double = 0.0,      // totalIn - totalOut - nonoTotalNominal
     val simulasiSaldo: Double = 0.0,     // totalAmount - nonoTotalHarga - totalOut
     val cashFlowHistory: List<BmpCashFlowDataPoint> = emptyList(),
+    val kpiState: UiState<DashboardKpiData> = UiState.Loading,
     val isLoading: Boolean = true
 )
 
@@ -46,6 +63,10 @@ class BmpDashboardViewModel @Inject constructor(
     private val invoiceRepo: BmpInvoiceRepository,
     private val cashFlowRepo: BmpCashFlowRepository,
     private val bahanBakuRepo: BmpBahanBakuRepository,
+    private val productRepo: BmpMasterProductRepository,
+    private val stockRepo: BmpStockRepository,
+    private val productionLogRepo: BmpProductionLogRepository,
+    private val apiService: BmpApiService,
     private val localDataSeeder: com.posbah.app.data.local.LocalDataSeeder,
     private val db: com.posbah.app.data.local.PosBahDatabase,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
@@ -54,17 +75,83 @@ class BmpDashboardViewModel @Inject constructor(
     private val _ui = MutableStateFlow(BmpDashboardUiState())
     val ui = _ui.asStateFlow()
 
+    private val _kpiState = MutableStateFlow<UiState<DashboardKpiData>>(UiState.Loading)
+    val kpiState = _kpiState.asStateFlow()
+
     init {
         val tenantId = authRepository.activeTenantId()
         val userEmail = authRepository.activeUserEmail()
         if (tenantId != null) {
             _ui.value = _ui.value.copy(tenantId = tenantId, ownerEmail = userEmail, isLoading = false)
+            
             viewModelScope.launch {
                 try {
-                    val t = db.tenantDao().getById(tenantId)
-                    if (t != null) {
-                        _ui.value = _ui.value.copy(tenantName = t.name)
+                    _kpiState.value = UiState.Loading
+                    
+                    // 1. Ambil seluruh invoice "UNPAID" via API, filter yang melewati dueDate, lalu lakukan hit update status
+                    val now = System.currentTimeMillis()
+                    val invoices = invoiceRepo.list()
+                    val unpaidInvoices = invoices.filter {
+                        (it.status == "UNPAID" || it.status == "PARTIAL") &&
+                        it.dueDate != null && it.dueDate < now
                     }
+                    for (inv in unpaidInvoices) {
+                        try {
+                            apiService.updateInvoice(inv.id, mapOf("status" to "OVERDUE"))
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                    
+                    // Refresh data terbaru dari VPS
+                    invoiceRepo.refresh()
+                    productRepo.refresh()
+                    productionLogRepo.loadAll(tenantId)
+                    
+                    val updatedInvoices = invoiceRepo.list()
+                    val overdueCount = updatedInvoices.count { it.status == "OVERDUE" }
+                    
+                    val products = productRepo.list()
+                    val totalStockValue = products.sumOf { it.currentStock * it.hppTotalPcs }
+                    
+                    // Hitung produksi bulan ini
+                    val cal = java.util.Calendar.getInstance()
+                    val currentYear = cal.get(java.util.Calendar.YEAR)
+                    val currentMonth = cal.get(java.util.Calendar.MONTH)
+                    val startOfMonthCal = java.util.Calendar.getInstance().apply {
+                        set(java.util.Calendar.YEAR, currentYear)
+                        set(java.util.Calendar.MONTH, currentMonth)
+                        set(java.util.Calendar.DAY_OF_MONTH, 1)
+                        set(java.util.Calendar.HOUR_OF_DAY, 0)
+                        set(java.util.Calendar.MINUTE, 0)
+                        set(java.util.Calendar.SECOND, 0)
+                        set(java.util.Calendar.MILLISECOND, 0)
+                    }
+                    val startOfMonth = startOfMonthCal.timeInMillis
+                    
+                    val logs = productionLogRepo.observeAll(tenantId).first()
+                    val productionThisMonth = logs.filter { it.productionDate >= startOfMonth }
+                        .sumOf { it.quantityProduced }.toInt()
+                    
+                    val kpiData = DashboardKpiData(
+                        overdueCount = overdueCount,
+                        totalStockValue = totalStockValue,
+                        productionThisMonth = productionThisMonth
+                    )
+                    
+                    _kpiState.value = UiState.Success(kpiData)
+                    _ui.value = _ui.value.copy(kpiState = UiState.Success(kpiData))
+                } catch (e: Exception) {
+                    _kpiState.value = UiState.Error(e.message ?: "Gagal menghitung KPI")
+                    _ui.value = _ui.value.copy(kpiState = UiState.Error(e.message ?: "Gagal menghitung KPI"))
+                }
+            }
+            viewModelScope.launch {
+                try {
+                    // Ambil tenant name dari active user (tidak perlu hit tenantDao stub)
+                    val user = authRepository.getActiveUser()
+                    val name = user?.displayName ?: userEmail ?: tenantId
+                    _ui.value = _ui.value.copy(tenantName = name)
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }

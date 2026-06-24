@@ -19,7 +19,9 @@ sealed class Screen(val route: String) {
     object BmpClientEdit : Screen("bmp/clients/edit?id={id}") {
         fun build(id: Long? = null) = "bmp/clients/edit?id=${id ?: -1}"
     }
-    object BmpInvoices : Screen("bmp/invoices")
+    object BmpInvoices : Screen("bmp/invoices?clientId={clientId}") {
+        fun build(clientId: Long? = null) = if (clientId != null) "bmp/invoices?clientId=$clientId" else "bmp/invoices"
+    }
     object BmpInvoiceDetail : Screen("bmp/invoices/{id}") {
         fun build(id: Long) = "bmp/invoices/$id"
     }

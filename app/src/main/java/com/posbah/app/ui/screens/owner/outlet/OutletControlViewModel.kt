@@ -4,9 +4,10 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.posbah.app.data.local.PosBahDatabase
-import com.posbah.app.data.local.entities.Outlet
 import com.posbah.app.data.local.entities.Employee
+import com.posbah.app.data.local.entities.Outlet
 import com.posbah.app.data.local.entities.ProductEntity
+import com.posbah.app.data.remote.api.PosApiService
 import com.posbah.app.data.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -14,9 +15,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -51,6 +51,7 @@ data class OutletControlUiState(
 class OutletControlViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val db: PosBahDatabase,
+    private val api: PosApiService,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -60,79 +61,109 @@ class OutletControlViewModel @Inject constructor(
     val uiState = _uiState.asStateFlow()
 
     init {
-        // Collect DB changes and refresh data reactively
-        viewModelScope.launch {
-            combine(
-                db.outletDao().observeForTenant(tenantId),
-                db.productDao().observe(tenantId),
-                db.employeeDao().observeForTenant(tenantId),
-                db.transactionDao().observe(tenantId)
-            ) { _, _, _, _ ->
-                // Trigger reload on database change
-            }.collect {
-                loadData()
-            }
-        }
-
-        // Trigger background pull sync
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            com.posbah.app.data.remote.SupabaseSyncManager.pullAll(context, db, tenantId)
-        }
+        loadData()
     }
 
     fun loadData() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
-                // Fetch outlets
-                val rawOutlets = db.outletDao().listForTenant(tenantId)
-                
-                // Fetch products to calculate stock (all products for this tenant)
-                val allProducts = db.productDao().list(tenantId)
-                
-                // Fetch employees for assignment list — strictly scoped to this tenant only
+                val isOwner = authRepository.getActiveUser()?.role == "OWNER"
                 val ownerEmail = authRepository.activeUserEmail()?.lowercase()?.trim()
-                val allEmployees = db.employeeDao().getAll()
-                    .filter { emp ->
-                        emp.tenantId == tenantId &&
-                        emp.isActive &&
-                        emp.role != "OWNER" &&
-                        emp.email?.lowercase()?.trim() != ownerEmail
-                    }
 
+                // ── Fetch outlets via API ──────────────────────────────────
+                val outletResp = withContext(Dispatchers.IO) { api.getOutlets() }
+                val rawOutlets = outletResp.body()?.map { m ->
+                    Outlet(
+                        id = (m["id"] as? Number)?.toLong() ?: 0,
+                        tenantId = m["tenantId"] as? String ?: tenantId,
+                        name = m["name"] as? String ?: "",
+                        address = m["address"] as? String,
+                        phone = m["phone"] as? String,
+                        isDefault = m["isDefault"] as? Boolean ?: false,
+                        isOpen = m["isOpen"] as? Boolean ?: true,
+                        currentEmployee = m["currentEmployee"] as? String,
+                        createdAt = (m["createdAt"] as? Number)?.toLong() ?: 0,
+                        updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: 0,
+                        isSynced = true
+                    )
+                } ?: emptyList()
 
-                // Fetch transactions and items for margin calculation
-                val completedTransactions = db.transactionDao().getAll()
-                    .filter { it.tenantId == tenantId && it.status == "COMPLETED" }
-                val transactionItems = db.transactionItemDao().getAll()
-                val itemsByTxId = transactionItems.groupBy { it.transactionId }
+                // ── Fetch products via API ─────────────────────────────────
+                val productResp = withContext(Dispatchers.IO) { api.getProducts() }
+                val allProducts = productResp.body()?.mapNotNull { m ->
+                    val id = (m["id"] as? Number)?.toLong() ?: return@mapNotNull null
+                    ProductEntity(
+                        id = id,
+                        tenantId = m["tenantId"] as? String ?: tenantId,
+                        outletId = (m["outletId"] as? Number)?.toLong(),
+                        name = m["name"] as? String ?: "",
+                        price = (m["price"] as? Number)?.toDouble() ?: 0.0,
+                        costPrice = (m["costPrice"] as? Number)?.toDouble() ?: 0.0,
+                        stock = (m["stock"] as? Number)?.toInt() ?: 0,
+                        unit = m["unit"] as? String ?: "pcs",
+                        barcode = m["barcode"] as? String,
+                        category = m["category"] as? String ?: "Umum",
+                        image = (m["image"] ?: m["imageUrl"]) as? String,
+                        isSynced = true
+                    )
+                } ?: emptyList()
 
-                // Map outlets to summary
+                // ── Fetch employees via API ────────────────────────────────
+                val empResp = withContext(Dispatchers.IO) { api.getEmployees() }
+                val allEmployees = empResp.body()?.mapNotNull { m ->
+                    val empId = (m["id"] as? Number)?.toLong() ?: return@mapNotNull null
+                    val empRole = m["role"] as? String ?: "KASIR"
+                    val empEmail = m["email"] as? String
+                    if (empRole == "OWNER") return@mapNotNull null
+                    if (!ownerEmail.isNullOrBlank() && empEmail?.lowercase() == ownerEmail) return@mapNotNull null
+                    Employee(
+                        id = empId,
+                        tenantId = m["tenantId"] as? String ?: tenantId,
+                        outletId = (m["outletId"] as? Number)?.toLong(),
+                        name = m["name"] as? String ?: "",
+                        email = empEmail,
+                        phone = m["phone"] as? String,
+                        role = empRole,
+                        pinHash = m["pinHash"] as? String ?: "",
+                        salary = (m["salary"] as? Number)?.toDouble() ?: 0.0,
+                        payPeriod = m["payPeriod"] as? String ?: "MONTHLY",
+                        isActive = m["isActive"] as? Boolean ?: true,
+                        lastPaidAt = (m["lastPaidAt"] as? Number)?.toLong(),
+                        emailVerified = m["emailVerified"] as? Boolean ?: false,
+                        createdAt = (m["createdAt"] as? Number)?.toLong() ?: 0,
+                        updatedAt = (m["updatedAt"] as? Number)?.toLong() ?: 0,
+                        isSynced = true
+                    )
+                } ?: emptyList()
+
+                // ── Fetch transactions via API untuk margin ────────────────
+                val txResp = withContext(Dispatchers.IO) { api.getTransactions(limit = 1000) }
+                val completedTransactions = txResp.body()?.filter {
+                    it["status"] as? String == "COMPLETED"
+                } ?: emptyList()
+
+                // ── Build outlet summaries ─────────────────────────────────
                 val summaries = rawOutlets.map { outlet ->
                     val isDefaultOutlet = outlet.isDefault
-                    // Count stock. If product outletId is null, map it to the default outlet.
                     val outletProducts = allProducts.filter { p ->
                         p.outletId == outlet.id || (isDefaultOutlet && p.outletId == null)
                     }
                     val stockCount = outletProducts.sumOf { it.stock }
 
-                    // Find active employee names
-                    val assignedEmployees = allEmployees.filter { it.outletId == outlet.id }
+                    val assignedEmployees = allEmployees.filter { it.outletId == outlet.id && it.isActive }
                     val employeeName = if (assignedEmployees.isNotEmpty()) {
                         assignedEmployees.joinToString(", ") { it.name }
                     } else {
                         outlet.currentEmployee ?: "-"
                     }
 
-                    // Calculate total margin for this outlet
+                    // Margin: transactions tanpa items detail — pakai total saja (simplified)
                     val outletTxs = completedTransactions.filter { tx ->
-                        tx.outletId == outlet.id || (isDefaultOutlet && tx.outletId == null)
+                        val txOutletId = (tx["outletId"] as? Number)?.toLong()
+                        txOutletId == outlet.id || (isDefaultOutlet && txOutletId == null)
                     }
-                    val outletMargin = outletTxs.sumOf { tx ->
-                        val items = itemsByTxId[tx.id] ?: emptyList()
-                        val cost = items.sumOf { it.costPrice * it.quantity }
-                        tx.total - cost
-                    }
+                    val outletMargin = outletTxs.sumOf { (it["total"] as? Number)?.toDouble() ?: 0.0 }
 
                     OutletSummary(
                         outlet = outlet,
@@ -142,77 +173,48 @@ class OutletControlViewModel @Inject constructor(
                     )
                 }
 
-                // Generate 7 Days Margin history comparison
+                // ── Generate 7-day margin history ─────────────────────────
                 val sdf = SimpleDateFormat("dd MMM", Locale.US)
-                val cal = Calendar.getInstance()
-                val history = mutableListOf<MarginDataPoint>()
-
-                // We want the last 7 days
                 val days = (0..6).map { i ->
                     val dCal = Calendar.getInstance()
                     dCal.add(Calendar.DAY_OF_YEAR, -i)
                     dCal
                 }.reversed()
-
-                // Identify Outlet IDs corresponding to Outlet A, B, C (first 3 outlets)
                 val outletAId = rawOutlets.getOrNull(0)?.id
                 val outletBId = rawOutlets.getOrNull(1)?.id
                 val outletCId = rawOutlets.getOrNull(2)?.id
-                
                 val defaultOutletId = rawOutlets.firstOrNull { it.isDefault }?.id
 
-                days.forEach { day ->
+                val history = days.map { day ->
                     val dayStart = day.apply {
-                        set(Calendar.HOUR_OF_DAY, 0)
-                        set(Calendar.MINUTE, 0)
-                        set(Calendar.SECOND, 0)
-                        set(Calendar.MILLISECOND, 0)
+                        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+                        set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
                     }.timeInMillis
-
                     val dayEnd = day.apply {
-                        set(Calendar.HOUR_OF_DAY, 23)
-                        set(Calendar.MINUTE, 59)
-                        set(Calendar.SECOND, 59)
-                        set(Calendar.MILLISECOND, 999)
+                        set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59)
+                        set(Calendar.SECOND, 59); set(Calendar.MILLISECOND, 999)
                     }.timeInMillis
-
                     val dateLabel = sdf.format(Date(dayStart))
 
-                    val dayTxs = completedTransactions.filter { it.date in dayStart..dayEnd }
-
-                    // Function to calculate margin for a list of transactions
-                    fun calcMargin(txs: List<com.posbah.app.data.local.entities.TransactionEntity>): Double {
-                        return txs.sumOf { tx ->
-                            val items = itemsByTxId[tx.id] ?: emptyList()
-                            val cost = items.sumOf { it.costPrice * it.quantity }
-                            tx.total - cost
-                        }
+                    val dayTxs = completedTransactions.filter { tx ->
+                        val d = (tx["date"] as? Number)?.toLong() ?: 0
+                        d in dayStart..dayEnd
                     }
 
-                    val marginA = calcMargin(dayTxs.filter { tx ->
-                        tx.outletId == outletAId || (outletAId == defaultOutletId && tx.outletId == null)
-                    })
+                    fun calcForOutlet(oid: Long?): Double = dayTxs.filter { tx ->
+                        val txOid = (tx["outletId"] as? Number)?.toLong()
+                        txOid == oid || (oid == defaultOutletId && txOid == null)
+                    }.sumOf { (it["total"] as? Number)?.toDouble() ?: 0.0 }
 
-                    val marginB = calcMargin(dayTxs.filter { tx ->
-                        tx.outletId == outletBId || (outletBId == defaultOutletId && tx.outletId == null)
-                    })
-
-                    val marginC = calcMargin(dayTxs.filter { tx ->
-                        tx.outletId == outletCId || (outletCId == defaultOutletId && tx.outletId == null)
-                    })
-
-                    history.add(
-                        MarginDataPoint(
-                            dateStr = dateLabel,
-                            marginA = marginA,
-                            marginB = marginB,
-                            marginC = marginC
-                        )
+                    MarginDataPoint(
+                        dateStr = dateLabel,
+                        marginA = calcForOutlet(outletAId),
+                        marginB = calcForOutlet(outletBId),
+                        marginC = calcForOutlet(outletCId)
                     )
                 }
 
-                val isOwner = authRepository.getActiveUser()?.role == "OWNER"
-                _uiState.update { 
+                _uiState.update {
                     it.copy(
                         outlets = summaries,
                         employees = allEmployees,
@@ -220,26 +222,26 @@ class OutletControlViewModel @Inject constructor(
                         isLoading = false,
                         isOwner = isOwner,
                         products = allProducts
-                    ) 
+                    )
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, error = e.localizedMessage ?: "Failed to load data") }
+                android.util.Log.e("OutletControlVM", "loadData error: ${e.message}", e)
+                _uiState.update { it.copy(isLoading = false, error = e.localizedMessage ?: "Gagal memuat data") }
             }
         }
     }
 
     fun toggleOutletStatus(outletId: Long) {
         viewModelScope.launch {
-            val outlet = db.outletDao().getById(outletId) ?: return@launch
-            val updated = outlet.copy(isOpen = !outlet.isOpen, isSynced = false, updatedAt = System.currentTimeMillis())
-            db.outletDao().update(updated)
-            loadData()
-            viewModelScope.launch(Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
+            _uiState.update { it.copy(isLoading = true) }
+            try {
+                val current = _uiState.value.outlets.find { it.outlet.id == outletId }?.outlet ?: return@launch
+                withContext(Dispatchers.IO) {
+                    api.updateOutlet(outletId, mapOf("isOpen" to !current.isOpen))
                 }
+                loadData()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoading = false, error = "Gagal ubah status outlet: ${e.localizedMessage}") }
             }
         }
     }
@@ -255,23 +257,19 @@ class OutletControlViewModel @Inject constructor(
                 _uiState.update { it.copy(error = "Akses ditolak: Hanya OWNER yang dapat menghapus outlet.") }
                 return@launch
             }
-            val outlet = db.outletDao().getById(outletId) ?: return@launch
-
-            // Safe sync unlink: set outletId to null for all employees in this outlet
-            val employees = db.employeeDao().getAll().filter { it.outletId == outletId }
-            employees.forEach { emp ->
-                db.employeeDao().update(emp.copy(outletId = null, isSynced = false, updatedAt = System.currentTimeMillis()))
-            }
-
-            db.outletDao().delete(outletId)
-            loadData()
-            viewModelScope.launch(Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.deleteRow(context, "outlets", outletId, tenantId)
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
+            _uiState.update { it.copy(isLoading = true) }
+            try {
+                // Unassign employees dari outlet ini
+                val assignedEmps = _uiState.value.employees.filter { it.outletId == outletId }
+                assignedEmps.forEach { emp ->
+                    withContext(Dispatchers.IO) {
+                        api.updateEmployee(emp.id, mapOf("outletId" to null))
+                    }
                 }
+                withContext(Dispatchers.IO) { api.deleteOutlet(outletId) }
+                loadData()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoading = false, error = "Gagal hapus outlet: ${e.localizedMessage}") }
             }
         }
     }
@@ -282,71 +280,57 @@ class OutletControlViewModel @Inject constructor(
                 _uiState.update { it.copy(error = "Maksimal 10 karyawan per outlet.") }
                 return@launch
             }
-            
-            // Get all active employees for this tenant
-            val ownerEmail = authRepository.activeUserEmail()?.lowercase()?.trim()
-            val allActiveEmployees = db.employeeDao().getAll().filter { emp ->
-                emp.tenantId == tenantId &&
-                emp.isActive &&
-                emp.role != "OWNER" &&
-                emp.email?.lowercase()?.trim() != ownerEmail
-            }
-
-            // For all employees currently assigned to this outlet: if not in employeeIds, unassign them
-            val currentAssigned = allActiveEmployees.filter { it.outletId == outletId }
-            currentAssigned.forEach { emp ->
-                if (emp.id !in employeeIds) {
-                    db.employeeDao().update(emp.copy(outletId = null, isSynced = false, updatedAt = System.currentTimeMillis()))
+            _uiState.update { it.copy(isLoading = true) }
+            try {
+                val allEmps = _uiState.value.employees
+                // Unassign employees yang sebelumnya di outlet ini tapi tidak dipilih lagi
+                val currentAssigned = allEmps.filter { it.outletId == outletId }
+                currentAssigned.forEach { emp ->
+                    if (emp.id !in employeeIds) {
+                        withContext(Dispatchers.IO) {
+                            api.updateEmployee(emp.id, mapOf("outletId" to null))
+                        }
+                    }
                 }
-            }
-
-            // For all selected employeeIds: update their outletId to this outletId
-            employeeIds.forEach { empId ->
-                val emp = allActiveEmployees.firstOrNull { it.id == empId }
-                if (emp != null && emp.outletId != outletId) {
-                    db.employeeDao().update(emp.copy(outletId = outletId, isSynced = false, updatedAt = System.currentTimeMillis()))
+                // Assign newly selected
+                employeeIds.forEach { empId ->
+                    val emp = allEmps.firstOrNull { it.id == empId }
+                    if (emp != null && emp.outletId != outletId) {
+                        withContext(Dispatchers.IO) {
+                            api.updateEmployee(emp.id, mapOf("outletId" to outletId))
+                        }
+                    }
                 }
-            }
-
-            // Update outlet's currentEmployee field with the joined names
-            val outlet = db.outletDao().getById(outletId) ?: return@launch
-            val updatedNames = allActiveEmployees.filter { it.id in employeeIds || (it.outletId == outletId && it.id !in currentAssigned.map { c -> c.id }) }.joinToString(", ") { it.name }
-            val updatedEmployeeText = if (updatedNames.isNotBlank()) updatedNames else null
-            val updatedOutlet = outlet.copy(currentEmployee = updatedEmployeeText, isSynced = false, updatedAt = System.currentTimeMillis())
-            db.outletDao().update(updatedOutlet)
-
-            loadData()
-            viewModelScope.launch(Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
+                // Update currentEmployee nama di outlet
+                val selectedNames = allEmps.filter { it.id in employeeIds }.joinToString(", ") { it.name }
+                withContext(Dispatchers.IO) {
+                    api.updateOutlet(outletId, mapOf("currentEmployee" to selectedNames.takeIf { it.isNotBlank() }))
                 }
+                loadData()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoading = false, error = "Gagal assign karyawan: ${e.localizedMessage}") }
             }
         }
     }
 
     fun assignEmployee(outletId: Long, employeeName: String) {
         viewModelScope.launch {
-            val ownerEmail = authRepository.activeUserEmail()?.lowercase()?.trim()
-            val activeEmployees = db.employeeDao().getAll().filter { emp ->
-                emp.tenantId == tenantId &&
-                emp.isActive &&
-                emp.role != "OWNER" &&
-                emp.email?.lowercase()?.trim() != ownerEmail
-            }
+            val allEmps = _uiState.value.employees
             if (employeeName.isBlank()) {
-                val currentAssigned = activeEmployees.filter { it.outletId == outletId }
+                // Unassign semua dari outlet ini
+                val currentAssigned = allEmps.filter { it.outletId == outletId }
                 currentAssigned.forEach { emp ->
-                    db.employeeDao().update(emp.copy(outletId = null, isSynced = false, updatedAt = System.currentTimeMillis()))
+                    withContext(Dispatchers.IO) {
+                        api.updateEmployee(emp.id, mapOf("outletId" to null))
+                    }
                 }
-                val outlet = db.outletDao().getById(outletId) ?: return@launch
-                val updated = outlet.copy(currentEmployee = null, isSynced = false, updatedAt = System.currentTimeMillis())
-                db.outletDao().update(updated)
+                withContext(Dispatchers.IO) {
+                    api.updateOutlet(outletId, mapOf("currentEmployee" to null))
+                }
+                loadData()
             } else {
-                val emp = activeEmployees.firstOrNull { it.name == employeeName }
-                if (emp == null) return@launch
-                val currentAssigned = activeEmployees.filter { it.outletId == outletId }.map { it.id }.toMutableList()
+                val emp = allEmps.firstOrNull { it.name == employeeName } ?: return@launch
+                val currentAssigned = allEmps.filter { it.outletId == outletId }.map { it.id }.toMutableList()
                 if (emp.id !in currentAssigned) {
                     if (currentAssigned.size >= 10) return@launch
                     currentAssigned.add(emp.id)
@@ -358,8 +342,8 @@ class OutletControlViewModel @Inject constructor(
 
     fun createOutlet(name: String, address: String?, phone: String?, employeeIds: List<Long>) {
         viewModelScope.launch {
-            val existing = db.outletDao().listForTenant(tenantId)
-            if (existing.size >= 3) {
+            val existingCount = _uiState.value.outlets.size
+            if (existingCount >= 3) {
                 _uiState.update { it.copy(error = "Maksimum outlet dibatasi 3.") }
                 return@launch
             }
@@ -376,55 +360,34 @@ class OutletControlViewModel @Inject constructor(
                 return@launch
             }
 
-            val ownerEmail = authRepository.activeUserEmail()?.lowercase()?.trim()
-            val activeEmployees = db.employeeDao().getAll().filter { emp ->
-                emp.tenantId == tenantId &&
-                emp.isActive &&
-                emp.role != "OWNER" &&
-                emp.email?.lowercase()?.trim() != ownerEmail
-            }
+            _uiState.update { it.copy(isLoading = true) }
+            try {
+                val isDefault = existingCount == 0
+                val selectedNames = _uiState.value.employees
+                    .filter { it.id in employeeIds }
+                    .joinToString(", ") { it.name }
 
-            // Check if any of these employee IDs are the last employee at their current outlet
-            for (empId in employeeIds) {
-                val emp = activeEmployees.firstOrNull { it.id == empId }
-                if (emp != null && emp.outletId != null) {
-                    val oldOutletCount = activeEmployees.count { it.outletId == emp.outletId }
-                    if (oldOutletCount <= 1) {
-                        val oldOutletName = db.outletDao().getById(emp.outletId)?.name ?: "Outlet Lain"
-                        _uiState.update { it.copy(error = "Gagal: ${emp.name} adalah karyawan terakhir di $oldOutletName.") }
-                        return@launch
+                val resp = withContext(Dispatchers.IO) {
+                    api.createOutlet(mapOf(
+                        "name" to name,
+                        "address" to address,
+                        "phone" to phone,
+                        "isDefault" to isDefault,
+                        "isOpen" to true,
+                        "currentEmployee" to selectedNames.takeIf { it.isNotBlank() }
+                    ))
+                }
+                val newOutletId = (resp.body()?.get("id") as? Number)?.toLong()
+                if (newOutletId != null && employeeIds.isNotEmpty()) {
+                    employeeIds.forEach { empId ->
+                        withContext(Dispatchers.IO) {
+                            api.updateEmployee(empId, mapOf("outletId" to newOutletId))
+                        }
                     }
                 }
-            }
-
-            val selectedEmployeeNames = activeEmployees.filter { it.id in employeeIds }.joinToString(", ") { it.name }
-            val isDefault = existing.isEmpty()
-            val newOutlet = Outlet(
-                tenantId = tenantId,
-                name = name,
-                address = address,
-                phone = phone,
-                currentEmployee = if (selectedEmployeeNames.isNotBlank()) selectedEmployeeNames else null,
-                isOpen = true,
-                isDefault = isDefault
-            )
-            val newOutletId = db.outletDao().insert(newOutlet)
-
-            // Update outletId for all selected employees
-            employeeIds.forEach { empId ->
-                val emp = activeEmployees.firstOrNull { it.id == empId }
-                if (emp != null) {
-                    db.employeeDao().update(emp.copy(outletId = newOutletId, isSynced = false, updatedAt = System.currentTimeMillis()))
-                }
-            }
-            
-            loadData()
-            viewModelScope.launch(Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+                loadData()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoading = false, error = "Gagal buat outlet: ${e.localizedMessage}") }
             }
         }
     }
@@ -435,54 +398,32 @@ class OutletControlViewModel @Inject constructor(
                 _uiState.update { it.copy(error = "Nama outlet tidak boleh kosong.") }
                 return@launch
             }
-            if (employeeIds.size > 10) {
-                _uiState.update { it.copy(error = "Gagal: Maksimal 10 karyawan per outlet.") }
-                return@launch
-            }
-            val existing = db.outletDao().getById(outletId) ?: return@launch
-
-            val ownerEmail = authRepository.activeUserEmail()?.lowercase()?.trim()
-            val activeEmployees = db.employeeDao().getAll().filter { emp ->
-                emp.tenantId == tenantId &&
-                emp.isActive &&
-                emp.role != "OWNER" &&
-                emp.email?.lowercase()?.trim() != ownerEmail
-            }
-
-            // Unassign employees currently at this outlet who are not in the new selection
-            val currentlyAssigned = activeEmployees.filter { it.outletId == outletId }
-            currentlyAssigned.forEach { emp ->
-                if (emp.id !in employeeIds) {
-                    db.employeeDao().update(emp.copy(outletId = null, isSynced = false, updatedAt = System.currentTimeMillis()))
+            _uiState.update { it.copy(isLoading = true) }
+            try {
+                val allEmps = _uiState.value.employees
+                // Unassign yang tidak dipilih lagi
+                allEmps.filter { it.outletId == outletId && it.id !in employeeIds }.forEach { emp ->
+                    withContext(Dispatchers.IO) { api.updateEmployee(emp.id, mapOf("outletId" to null)) }
                 }
-            }
-
-            // Assign newly selected employees
-            employeeIds.forEach { empId ->
-                val emp = activeEmployees.firstOrNull { it.id == empId }
-                if (emp != null && emp.outletId != outletId) {
-                    db.employeeDao().update(emp.copy(outletId = outletId, isSynced = false, updatedAt = System.currentTimeMillis()))
+                // Assign yang dipilih
+                employeeIds.forEach { empId ->
+                    val emp = allEmps.firstOrNull { it.id == empId }
+                    if (emp != null && emp.outletId != outletId) {
+                        withContext(Dispatchers.IO) { api.updateEmployee(emp.id, mapOf("outletId" to outletId)) }
+                    }
                 }
-            }
-
-            val selectedEmployeeNames = activeEmployees.filter { it.id in employeeIds }.joinToString(", ") { it.name }
-            val updated = existing.copy(
-                name = name,
-                address = address,
-                phone = phone,
-                currentEmployee = if (selectedEmployeeNames.isNotBlank()) selectedEmployeeNames else null,
-                isSynced = false,
-                updatedAt = System.currentTimeMillis()
-            )
-            db.outletDao().update(updated)
-
-            loadData()
-            viewModelScope.launch(Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
+                val selectedNames = allEmps.filter { it.id in employeeIds }.joinToString(", ") { it.name }
+                withContext(Dispatchers.IO) {
+                    api.updateOutlet(outletId, mapOf(
+                        "name" to name,
+                        "address" to address,
+                        "phone" to phone,
+                        "currentEmployee" to selectedNames.takeIf { it.isNotBlank() }
+                    ))
                 }
+                loadData()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoading = false, error = "Gagal update outlet: ${e.localizedMessage}") }
             }
         }
     }
@@ -497,80 +438,52 @@ class OutletControlViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             try {
-                if (sourceOutletId == destOutletId) {
-                    onError("Outlet asal dan tujuan tidak boleh sama.")
-                    return@launch
-                }
-                if (qty <= 0) {
-                    onError("Jumlah transfer harus lebih dari 0.")
-                    return@launch
-                }
-                val product = db.productDao().getById(productId)
-                if (product == null) {
-                    onError("Produk asal tidak ditemukan.")
-                    return@launch
-                }
-                if (product.stock < qty) {
-                    onError("Stok produk tidak mencukupi (Tersedia: ${product.stock}).")
+                if (sourceOutletId == destOutletId) { onError("Outlet asal dan tujuan tidak boleh sama."); return@launch }
+                if (qty <= 0) { onError("Jumlah transfer harus lebih dari 0."); return@launch }
+
+                val products = _uiState.value.products
+                val sourceProduct = products.firstOrNull {
+                    it.id == productId && (it.outletId == sourceOutletId || (_uiState.value.outlets.find { o -> o.outlet.id == sourceOutletId }?.outlet?.isDefault == true && it.outletId == null))
+                } ?: run { onError("Produk asal tidak ditemukan."); return@launch }
+
+                if (sourceProduct.stock < qty) {
+                    onError("Stok produk tidak mencukupi (Tersedia: ${sourceProduct.stock}).")
                     return@launch
                 }
 
-                val sourceOutlet = db.outletDao().getById(sourceOutletId)
-                val destOutlet = db.outletDao().getById(destOutletId)
-                if (sourceOutlet == null || destOutlet == null) {
-                    onError("Outlet tidak ditemukan.")
-                    return@launch
+                // Kurangi stok source
+                withContext(Dispatchers.IO) {
+                    api.updateProduct(sourceProduct.id, mapOf("stock" to (sourceProduct.stock - qty)))
                 }
 
-                // Deduct source stock
-                val newSourceStock = product.stock - qty
-                db.productDao().updateStock(product.id, newSourceStock)
-
-                // Find or create destination product
-                val allTenantProducts = db.productDao().list(tenantId)
-                val isDestDefault = destOutlet.isDefault
-                val destProduct = allTenantProducts.firstOrNull { p ->
-                    p.name.equals(product.name, ignoreCase = true) &&
-                    (p.outletId == destOutletId || (isDestDefault && p.outletId == null))
+                // Tambah stok di dest
+                val destProduct = products.firstOrNull { p ->
+                    p.name.equals(sourceProduct.name, ignoreCase = true) &&
+                    (p.outletId == destOutletId || (_uiState.value.outlets.find { o -> o.outlet.id == destOutletId }?.outlet?.isDefault == true && p.outletId == null))
                 }
-
                 if (destProduct != null) {
-                    db.productDao().updateStock(destProduct.id, destProduct.stock + qty)
+                    withContext(Dispatchers.IO) {
+                        api.updateProduct(destProduct.id, mapOf("stock" to (destProduct.stock + qty)))
+                    }
                 } else {
-                    val newProduct = product.copy(
-                        id = 0,
-                        outletId = destOutletId,
-                        stock = qty,
-                        createdAt = System.currentTimeMillis(),
-                        updatedAt = System.currentTimeMillis(),
-                        isSynced = false
-                    )
-                    db.productDao().upsert(newProduct)
+                    // Buat produk baru di outlet tujuan
+                    withContext(Dispatchers.IO) {
+                        api.createProduct(mapOf(
+                            "name" to sourceProduct.name,
+                            "price" to sourceProduct.price,
+                            "costPrice" to sourceProduct.costPrice,
+                            "stock" to qty,
+                            "unit" to sourceProduct.unit,
+                            "barcode" to sourceProduct.barcode,
+                            "category" to sourceProduct.category,
+                            "image" to sourceProduct.image,
+                            "outletId" to destOutletId
+                        ))
+                    }
                 }
-
-                // Log activity
-                db.activityLogDao().insertLog(
-                    com.posbah.app.data.local.entities.ActivityLogEntity(
-                        tenantId = tenantId,
-                        action = "STOCK_TRANSFER",
-                        description = "Owner mentransfer $qty ${product.unit} ${product.name} dari ${sourceOutlet.name} ke ${destOutlet.name}",
-                        date = System.currentTimeMillis(),
-                        employeeName = authRepository.getActiveUser()?.displayName ?: "Owner",
-                        appMode = "FNB"
-                    )
-                )
 
                 loadData()
                 onSuccess()
-
-                // Trigger background sync
-                viewModelScope.launch(Dispatchers.IO) {
-                    try {
-                        com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
             } catch (e: Exception) {
                 onError(e.localizedMessage ?: "Gagal melakukan transfer stok.")
             }

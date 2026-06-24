@@ -82,7 +82,7 @@ fun Map<String, Any?>.toProductData() = ProductData(
     stock = (get("stock") as? Number)?.toInt() ?: 0,
     category = get("category") as? String,
     barcode = get("barcode") as? String,
-    imageUrl = get("imageUrl") as? String,
+    imageUrl = (get("image") ?: get("imageUrl")) as? String,
     isDeleted = get("isDeleted") as? Boolean ?: false,
     updatedAt = (get("updatedAt") as? Number)?.toLong() ?: 0
 )
@@ -184,7 +184,7 @@ class ProductRepository @Inject constructor(
                 "stock" to product.stock,
                 "category" to product.category,
                 "barcode" to product.barcode,
-                "imageUrl" to product.imageUrl,
+                "image" to product.imageUrl,
                 "outletId" to product.outletId
             )
             if (product.id == 0L) {

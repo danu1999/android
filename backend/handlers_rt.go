@@ -27,11 +27,26 @@ func extractTenantId(r *http.Request) (string, bool) {
 		return "", false
 	}
 	var tenantId string
+	// Try 1: sessionToken (for future JWT support)
 	err := db.QueryRow(`SELECT "tenantId" FROM "local_users" WHERE "sessionToken" = $1 AND "isActive" = TRUE LIMIT 1`, token).Scan(&tenantId)
 	if err != nil {
+		// Try 2: googleSub (numeric sub ID from Google SSO)
 		err2 := db.QueryRow(`SELECT "tenantId" FROM "local_users" WHERE "googleSub" = $1 AND "isActive" = TRUE LIMIT 1`, token).Scan(&tenantId)
 		if err2 != nil {
-			return "", false
+			// Try 3: email — for premium static users (email+password login) whose token = email
+			err3 := db.QueryRow(`SELECT "tenantId" FROM "local_users" WHERE "email" = $1 AND "isActive" = TRUE LIMIT 1`, token).Scan(&tenantId)
+			if err3 != nil {
+				// Try 4: check employees table — for kasir/admin login where token = "emp:<id>"
+				if strings.HasPrefix(token, "emp:") {
+					empIdStr := strings.TrimPrefix(token, "emp:")
+					err4 := db.QueryRow(`SELECT "tenantId" FROM "employees" WHERE id = $1 AND "isActive" = TRUE LIMIT 1`, empIdStr).Scan(&tenantId)
+					if err4 != nil {
+						return "", false
+					}
+				} else {
+					return "", false
+				}
+			}
 		}
 	}
 	return tenantId, tenantId != ""
@@ -161,6 +176,8 @@ func handleMigrationVerifyTable(w http.ResponseWriter, r *http.Request) {
 	var err error
 	if noTenantFilter[req.TableName] {
 		err = db.QueryRow(`SELECT COUNT(*) FROM "` + req.TableName + `"`).Scan(&serverCount)
+	} else if req.TableName == "transaction_items" {
+		err = db.QueryRow(`SELECT COUNT(*) FROM "transaction_items" ti JOIN "transactions" t ON t.id = ti."transactionId" WHERE t."tenantId" = $1`, tenantId).Scan(&serverCount)
 	} else {
 		err = db.QueryRow(`SELECT COUNT(*) FROM "`+req.TableName+`" WHERE "tenantId" = $1`, tenantId).Scan(&serverCount)
 	}

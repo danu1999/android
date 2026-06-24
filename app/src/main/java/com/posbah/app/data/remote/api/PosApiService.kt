@@ -9,6 +9,7 @@ import retrofit2.http.*
 // Auth: Authorization: Bearer <token>
 // ─────────────────────────────────────────────────────────────────────────────
 
+@JvmSuppressWildcards
 interface PosApiService {
 
     // ── Products ──────────────────────────────────────────────────────────────

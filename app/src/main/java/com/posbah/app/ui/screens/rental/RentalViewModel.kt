@@ -6,16 +6,18 @@ import com.posbah.app.data.local.LocalDataSeeder
 import com.posbah.app.data.local.entities.ProductEntity
 import com.posbah.app.data.local.entities.TransactionEntity
 import com.posbah.app.data.local.entities.TransactionItemEntity
-import com.posbah.app.data.local.dao.ActivityLogDao
-import com.posbah.app.data.local.entities.ActivityLogEntity
 import com.posbah.app.data.repository.AuthRepository
+import com.posbah.app.data.repository.CustomerRepository
+import com.posbah.app.data.repository.OutletRepository
 import com.posbah.app.data.repository.ProductRepository
+import com.posbah.app.security.SecurePreferences
 import com.posbah.app.data.repository.SessionState
 import com.posbah.app.data.repository.TransactionRepository
 import com.posbah.app.util.CameraUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.stateIn
@@ -46,10 +48,12 @@ class RentalViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val sessionState: SessionState,
     private val productRepository: ProductRepository,
+    private val customerRepository: CustomerRepository,
     private val transactionRepository: TransactionRepository,
+    private val outletRepository: OutletRepository,
     private val localDataSeeder: LocalDataSeeder,
-    private val activityLogDao: ActivityLogDao,
-    private val db: com.posbah.app.data.local.PosBahDatabase,
+    private val securePrefs: SecurePreferences,
+    private val db: com.posbah.app.data.local.PosBahDatabase, // kept for SupabaseSyncManager stubs
     private val printSettingsRepository: PrintSettingsRepository,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context
 ) : ViewModel() {
@@ -58,9 +62,7 @@ class RentalViewModel @Inject constructor(
     val activeTenantId get() = tenantId
     private val currentOutletId get() = sessionState.outletId.value
 
-    val tenantName = db.tenantDao().observeById(tenantId)
-        .map { it?.name ?: "Rental POS" }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, "Rental POS")
+    val tenantName = kotlinx.coroutines.flow.MutableStateFlow(securePrefs.currentTenantName ?: "Rental POS").asStateFlow()
 
     val printConfig = printSettingsRepository.observe(tenantId, "RENTAL")
         .map { PrintConfig.fromEntity(it) }
@@ -68,21 +70,22 @@ class RentalViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            // Load outlets via API
+            val outlets = outletRepository.list()
             if (sessionState.outletId.value == null) {
-                val outlets = db.outletDao().listForTenant(tenantId)
                 val defaultOutlet = outlets.firstOrNull { it.isDefault } ?: outlets.firstOrNull()
-                if (defaultOutlet != null) {
-                    sessionState.setOutlet(defaultOutlet.id)
-                }
+                if (defaultOutlet != null) sessionState.setOutlet(defaultOutlet.id)
             }
-        }
-        // Trigger background pull sync
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            com.posbah.app.data.remote.SupabaseSyncManager.pullAll(appContext, db, tenantId)
+            // Refresh produk
+            productRepository.refresh(sessionState.outletId.value)
+            // Refresh transaksi
+            transactionRepository.refresh(sessionState.outletId.value)
+            // Refresh customers
+            customerRepository.refresh()
         }
     }
 
-    val availableOutlets = db.outletDao().observeForTenant(tenantId)
+    val availableOutlets = outletRepository.observe(tenantId)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val activeOutletId = sessionState.outletId
@@ -100,7 +103,7 @@ class RentalViewModel @Inject constructor(
     val products = kotlinx.coroutines.flow.combine(
         productRepository.observe(tenantId),
         sessionState.outletId,
-        db.outletDao().observeForTenant(tenantId)
+        outletRepository.observe(tenantId)
     ) { allProducts, activeOutletId, outlets ->
         val defaultOutletId = outlets.firstOrNull { it.isDefault }?.id
         allProducts.filter { p ->
@@ -111,7 +114,7 @@ class RentalViewModel @Inject constructor(
     val transactions = kotlinx.coroutines.flow.combine(
         transactionRepository.observe(tenantId),
         sessionState.outletId,
-        db.outletDao().observeForTenant(tenantId)
+        outletRepository.observe(tenantId)
     ) { allTransactions, activeOutletId, outlets ->
         val defaultOutletId = outlets.firstOrNull { it.isDefault }?.id
         allTransactions.filter { t ->
@@ -119,7 +122,8 @@ class RentalViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val customers = db.customerDao().observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val customers = customerRepository.customers
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val isOwner = flow {
         val user = authRepository.getActiveUser()
@@ -131,8 +135,7 @@ class RentalViewModel @Inject constructor(
         emit(user?.role == "OWNER")
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    val activityLogs = activityLogDao.observeLogs(tenantId, "RENTAL")
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val activityLogs = kotlinx.coroutines.flow.MutableStateFlow<List<com.posbah.app.data.local.entities.ActivityLogEntity>>(emptyList()).asStateFlow()
 
     val vehicles: StateFlow<List<Vehicle>> = combine(products, transactions) { prodList, txList ->
         val filtered = prodList.filter { it.category == "MOBIL" || it.category == "MOTOR" }
@@ -344,7 +347,7 @@ class RentalViewModel @Inject constructor(
                 phone = whatsapp.takeIf { it.isNotBlank() },
                 address = ""
             )
-            db.customerDao().upsert(c)
+            customerRepository.upsert(c)
 
             val total = vehicle.pricePerDay * days
             val receiptNum = transactionRepository.generateReceiptNumberForType("RN", currentOutletId)
@@ -443,17 +446,11 @@ class RentalViewModel @Inject constructor(
 
     fun logActivity(action: String, description: String) {
         viewModelScope.launch {
-            val user = authRepository.getActiveUser()
-            val employeeName = user?.displayName ?: "Owner"
-            activityLogDao.insertLog(
-                ActivityLogEntity(
-                    tenantId = tenantId,
-                    action = action,
-                    description = description,
-                    employeeName = employeeName,
-                    appMode = "RENTAL"
-                )
-            )
+            try {
+                val user = authRepository.getActiveUser()
+                val employeeName = user?.displayName ?: "Owner"
+                android.util.Log.i("RentalVM", "[$action] $description by $employeeName")
+            } catch (_: Exception) {}
         }
     }
 
@@ -465,16 +462,9 @@ class RentalViewModel @Inject constructor(
                 phone = phone.takeIf { it.isNotBlank() },
                 address = address.takeIf { it.isNotBlank() }
             )
-            db.customerDao().upsert(c)
+            customerRepository.upsert(c)
             logActivity("TAMBAH PELANGGAN", "Menambahkan pelanggan baru: $name")
             onDone()
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
         }
     }
 

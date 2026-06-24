@@ -31,6 +31,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import androidx.hilt.navigation.compose.hiltViewModel
 import javax.inject.Inject
 
 @HiltViewModel
@@ -73,7 +74,7 @@ class MigrationViewModel @Inject constructor(
 @Composable
 fun MigrationScreen(
     onMigrationDone: () -> Unit,
-    viewModel: MigrationViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    viewModel: MigrationViewModel = hiltViewModel()
 ) {
     val states by viewModel.states.collectAsState()
     val migrationResult by viewModel.migrationResult.collectAsState()

@@ -29,6 +29,16 @@ class BahanBakuListViewModel @Inject constructor(
 ) : ViewModel() {
     private val tenantId = authRepo.activeTenantId().orEmpty()
 
+    init {
+        viewModelScope.launch {
+            try {
+                repo.refresh()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     val list = repo.observe(tenantId)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<BmpBahanBakuEntity>())
 

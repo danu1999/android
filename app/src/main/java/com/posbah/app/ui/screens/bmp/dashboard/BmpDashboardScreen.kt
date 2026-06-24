@@ -88,6 +88,20 @@ fun BmpDashboardScreen(
     viewModel: BmpDashboardViewModel = hiltViewModel()
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
+    val kpiState by viewModel.kpiState.collectAsStateWithLifecycle()
+
+    val navController = remember {
+        object {
+            fun navigate(route: String) {
+                when (route) {
+                    "create_invoice" -> onNavigate(Screen.BmpCreateInvoice.build(null))
+                    "add_production" -> onNavigate(Screen.BmpProductionLog.route)
+                    "buy_material" -> onNavigate(Screen.BmpBahanBakuForm.build(null))
+                    else -> onNavigate(route)
+                }
+            }
+        }
+    }
 
     var showUpgradeDialog by remember { mutableStateOf(false) }
     var upgradeEmail by remember { mutableStateOf("") }
@@ -283,6 +297,73 @@ fun BmpDashboardScreen(
                                 else MaterialTheme.colorScheme.error
                             )
                         }
+                    }
+                }
+
+                if (kpiState is UiState.Success) {
+                    val kpiData = (kpiState as UiState.Success).data
+                    item {
+                        Spacer(Modifier.height(4.dp))
+                        OverdueInvoiceCard(
+                            overdueCount = kpiData.overdueCount,
+                            onClick = { onNavigate(Screen.BmpInvoices.build(null)) }
+                        )
+                    }
+                    
+                    item {
+                        Spacer(Modifier.height(4.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Box(Modifier.weight(1f)) {
+                                StatChip(
+                                    label = "Aset Stok",
+                                    value = Formatters.rupiah(kpiData.totalStockValue),
+                                    accent = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+                            Box(Modifier.weight(1f)) {
+                                StatChip(
+                                    label = "Produksi Bulan Ini",
+                                    value = Formatters.number(kpiData.productionThisMonth.toLong()),
+                                    accent = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "AKSI CEPAT",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        QuickActionButton(
+                            label = "Buat Invoice",
+                            icon = Icons.Outlined.Description,
+                            onClick = { navController.navigate("create_invoice") },
+                            modifier = Modifier.weight(1f)
+                        )
+                        QuickActionButton(
+                            label = "Catat Produksi",
+                            icon = Icons.Outlined.PrecisionManufacturing,
+                            onClick = { navController.navigate("add_production") },
+                            modifier = Modifier.weight(1f)
+                        )
+                        QuickActionButton(
+                            label = "Beli Bahan Baku",
+                            icon = Icons.Outlined.Science,
+                            onClick = { navController.navigate("buy_material") },
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
 
@@ -781,6 +862,93 @@ fun CashFlowTrendChart(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun OverdueInvoiceCard(overdueCount: Int, onClick: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.errorContainer,
+        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        tonalElevation = 2.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .testTag("overdue-invoice-card")
+    ) {
+        Row(
+            modifier = Modifier.padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "INVOICE JATUH TEMPO",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.error
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Ada invoice unpaid yang melewati tenggat waktu pembayaran.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            Spacer(Modifier.width(16.dp))
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.error,
+                contentColor = MaterialTheme.colorScheme.onError,
+                modifier = Modifier.size(48.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = overdueCount.toString(),
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 20.sp
+                        )
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickActionButton(
+    label: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        tonalElevation = 1.dp,
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(vertical = 12.dp, horizontal = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(24.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                textAlign = TextAlign.Center,
+                fontSize = 11.sp
+            )
         }
     }
 }

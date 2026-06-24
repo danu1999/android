@@ -3,6 +3,7 @@ package com.posbah.app.ui.screens.bmp.clients
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +25,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FloatingActionButton
@@ -60,19 +62,21 @@ import com.posbah.app.util.Formatters
 fun ClientsScreen(
     onBack: () -> Unit,
     onEdit: (Long?) -> Unit,
+    onNavigateToInvoiceList: (Long) -> Unit,
     viewModel: ClientsViewModel = hiltViewModel()
 ) {
     val clients by viewModel.clients.collectAsState()
     val ui by viewModel.ui.collectAsState()
+    val invoiceSummaryState by viewModel.clientInvoiceSummary.collectAsState()
     val context = LocalContext.current
-
+ 
     // Tampilkan feedback Toast setelah bayar borongan
     LaunchedEffect(ui.payMassalFeedback) {
         ui.payMassalFeedback?.let { msg ->
             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
         }
     }
-
+ 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -104,7 +108,7 @@ fun ClientsScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp)
                     .testTag("client-search")
             )
-
+ 
             if (clients.isEmpty()) {
                 EmptyState(
                     title = "Belum ada klien",
@@ -118,11 +122,14 @@ fun ClientsScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(clients, key = { it.id }) { client ->
+                        val summary = (invoiceSummaryState as? UiState.Success)?.data?.get(client.id)
                         ClientRow(
                             client = client,
+                            summary = summary,
                             onClick = { onEdit(client.id) },
                             onDelete = { viewModel.delete(client.id) },
-                            onPayMassal = { viewModel.openPayMassal(client.id) }
+                            onPayMassal = { viewModel.openPayMassal(client.id) },
+                            onNavigateToInvoiceList = { onNavigateToInvoiceList(client.id) }
                         )
                     }
                 }
@@ -259,13 +266,16 @@ fun ClientsScreen(
 @Composable
 private fun ClientRow(
     client: BmpClientEntity,
+    summary: ClientInvoiceSummary?,
     onClick: () -> Unit,
     onDelete: () -> Unit,
-    onPayMassal: () -> Unit
+    onPayMassal: () -> Unit,
+    onNavigateToInvoiceList: () -> Unit
 ) {
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surface,
+        color = if (summary?.hasOverdue == true) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f) else MaterialTheme.colorScheme.surface,
+        border = if (summary?.hasOverdue == true) BorderStroke(1.dp, MaterialTheme.colorScheme.error) else null,
         tonalElevation = 1.dp,
         modifier = Modifier
             .fillMaxWidth()
@@ -317,6 +327,42 @@ private fun ClientRow(
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
+                if (summary != null && summary.totalPiutang > 0.0) {
+                    Spacer(Modifier.size(2.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            "Piutang: ${Formatters.rupiah(summary.totalPiutang)}",
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                            color = if (summary.hasOverdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(100),
+                            color = if (summary.hasOverdue) MaterialTheme.colorScheme.error.copy(alpha = 0.15f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                            modifier = Modifier.padding(horizontal = 4.dp)
+                        ) {
+                            Text(
+                                text = "${summary.jumlahUnpaid} Unpaid",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                color = if (summary.hasOverdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+            }
+            // Tombol Lihat Invoice
+            IconButton(
+                onClick = onNavigateToInvoiceList,
+                modifier = Modifier.testTag("view-invoices-${client.id}")
+            ) {
+                Icon(
+                    Icons.Outlined.Description,
+                    contentDescription = "Lihat Invoice",
+                    tint = MaterialTheme.colorScheme.primary
+                )
             }
             // Tombol Bayar Borongan
             IconButton(

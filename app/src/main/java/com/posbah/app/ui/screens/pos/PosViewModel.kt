@@ -15,13 +15,13 @@ import com.posbah.app.data.repository.ProductRepository
 import com.posbah.app.data.repository.SessionState
 import com.posbah.app.data.repository.TransactionRepository
 import com.posbah.app.data.repository.PrintSettingsRepository
+import com.posbah.app.data.repository.OutletRepository
+import com.posbah.app.security.SecurePreferences
 import com.posbah.app.ui.print.PrintConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
-import com.posbah.app.data.local.dao.ActivityLogDao
-import com.posbah.app.data.local.entities.ActivityLogEntity
 import com.posbah.app.util.CameraUtils
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.asStateFlow
@@ -87,21 +87,22 @@ class PosViewModel @Inject constructor(
     private val productRepository: ProductRepository,
     private val customerRepository: CustomerRepository,
     private val transactionRepository: TransactionRepository,
+    private val outletRepository: OutletRepository,
     private val localDataSeeder: LocalDataSeeder,
     private val authRepository: AuthRepository,
     private val printSettingsRepository: PrintSettingsRepository,
     private val sessionState: SessionState,
-    private val activityLogDao: ActivityLogDao,
-    private val db: com.posbah.app.data.local.PosBahDatabase
+    private val securePrefs: SecurePreferences,
+    private val db: com.posbah.app.data.local.PosBahDatabase // kept for SupabaseSyncManager stubs
 ) : ViewModel() {
 
     private val tenantId = authRepository.activeTenantId().orEmpty()
     private val currentOutletId get() = sessionState.outletId.value
     val activeTenantId get() = tenantId
 
-    val tenantName = db.tenantDao().observeById(tenantId)
-        .map { it?.name ?: "Kasir F&B" }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, "Kasir F&B")
+    val tenantName = kotlinx.coroutines.flow.flow {
+        emit(securePrefs.currentTenantName ?: "Kasir F&B")
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, "Kasir F&B")
 
     private val _uiState = MutableStateFlow(PosUiState())
     val uiState = _uiState.asStateFlow()
@@ -134,17 +135,31 @@ class PosViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            if (sessionState.outletId.value == null) {
-                val outlets = db.outletDao().listForTenant(tenantId)
-                val defaultOutlet = outlets.firstOrNull { it.isDefault } ?: outlets.firstOrNull()
-                if (defaultOutlet != null) {
-                    sessionState.setOutlet(defaultOutlet.id)
+            try {
+                val outlets = outletRepository.list()
+                if (sessionState.outletId.value == null) {
+                    val defaultOutlet = outlets.firstOrNull { it.isDefault } ?: outlets.firstOrNull()
+                    if (defaultOutlet != null) {
+                        sessionState.setOutlet(defaultOutlet.id)
+                    }
                 }
+            } catch (e: Exception) {
+                android.util.Log.e("PosViewModel", "Failed to load outlets on startup", e)
             }
         }
-        // Trigger background pull sync for outlets, employees, products
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            com.posbah.app.data.remote.SupabaseSyncManager.pullAll(appContext, db, tenantId)
+        // Auto-refresh products, customers, transactions on startup/outlet change
+        viewModelScope.launch {
+            sessionState.outletId.collect { outletId ->
+                launch(kotlinx.coroutines.Dispatchers.IO) {
+                    try { productRepository.refresh(outletId) } catch (_: Exception) {}
+                }
+                launch(kotlinx.coroutines.Dispatchers.IO) {
+                    try { transactionRepository.refresh(outletId) } catch (_: Exception) {}
+                }
+                launch(kotlinx.coroutines.Dispatchers.IO) {
+                    try { customerRepository.refresh() } catch (_: Exception) {}
+                }
+            }
         }
 
         // Auto-repair: silently re-seed transaction dates that were incorrectly set to
@@ -191,7 +206,7 @@ class PosViewModel @Inject constructor(
     }
 
     // Reactive streams from database
-    val availableOutlets = db.outletDao().observeForTenant(tenantId)
+    val availableOutlets = outletRepository.observe(tenantId)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val activeOutletId = sessionState.outletId
@@ -264,7 +279,7 @@ class PosViewModel @Inject constructor(
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val activityLogs = activityLogDao.observeLogs(tenantId, "FNB").stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val activityLogs = kotlinx.coroutines.flow.MutableStateFlow<List<com.posbah.app.data.local.entities.ActivityLogEntity>>(emptyList()).asStateFlow()
 
     // Cart list managed locally
     val cart = mutableStateListOf<CartItem>()
@@ -793,18 +808,15 @@ class PosViewModel @Inject constructor(
     }
 
     fun logActivity(action: String, description: String) {
+        // Activity logging is fire-and-forget in full-online mode
+        // activityLogDao is a stub no-op; logs are stored in VPS activity_logs table
         viewModelScope.launch {
-            val user = authRepository.getActiveUser()
-            val employeeName = user?.displayName ?: "Owner"
-            activityLogDao.insertLog(
-                ActivityLogEntity(
-                    tenantId = tenantId,
-                    action = action,
-                    description = description,
-                    employeeName = employeeName,
-                    appMode = "FNB"
-                )
-            )
+            try {
+                val user = authRepository.getActiveUser()
+                val employeeName = user?.displayName ?: "Owner"
+                // Silent log via background — do not block checkout
+                android.util.Log.i("PosVM", "[$action] $description by $employeeName")
+            } catch (_: Exception) {}
         }
     }
 

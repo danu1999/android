@@ -355,6 +355,7 @@ class AuthRepository @Inject constructor(
                 securePrefs.setActiveSession(cleanEmail, cleanEmail)
                 securePrefs.currentTenantId = tenantId
                 securePrefs.currentBusinessMode = tenantMode
+                securePrefs.currentRole = user.role
                 if (isPremiumUser) securePrefs.tempPlainPassword = password
 
                 return@withContext LoginOutcome.Success(user, tenant)
@@ -410,6 +411,7 @@ class AuthRepository @Inject constructor(
                 securePrefs.setActiveSession(user.googleSub, cleanEmail)
                 securePrefs.currentTenantId = tenantId
                 securePrefs.currentBusinessMode = tenantMode
+                securePrefs.currentRole = role
 
                 return@withContext LoginOutcome.Success(user, tenant)
             }

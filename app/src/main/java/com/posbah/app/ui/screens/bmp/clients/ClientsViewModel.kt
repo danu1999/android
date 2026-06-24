@@ -17,9 +17,21 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.StateFlow
 
 import com.posbah.app.data.repository.BmpInvoiceRepository
 import javax.inject.Inject
+
+sealed interface UiState<out T> {
+    object Loading : UiState<Nothing>
+    data class Success<out T>(val data: T) : UiState<T>
+    data class Error(val message: String) : UiState<Nothing>
+}
+
+typealias ClientDto = BmpClientEntity
+typealias BmpInvoiceDto = com.posbah.app.data.local.entities.BmpInvoiceEntity
 
 data class ClientsUiState(
     val query: String = "",
@@ -28,10 +40,17 @@ data class ClientsUiState(
     val payMassalFeedback: String? = null   // pesan sukses/error setelah bayar borongan
 )
 
+/** Ringkasan piutang per klien — dipakai di kartu klien */
+data class ClientInvoiceSummary(
+    val totalPiutang: Double,
+    val jumlahUnpaid: Int,
+    val hasOverdue: Boolean
+)
+
 @HiltViewModel
 class ClientsViewModel @Inject constructor(
-    private val repo: BmpClientRepository,
-    private val invoiceRepo: BmpInvoiceRepository,
+    private val clientRepository: BmpClientRepository,
+    private val invoiceRepository: BmpInvoiceRepository,
     private val authRepository: AuthRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
@@ -41,10 +60,46 @@ class ClientsViewModel @Inject constructor(
     private val _ui = MutableStateFlow(ClientsUiState())
     val ui = _ui.asStateFlow()
 
+    private val repository = object {
+        fun getClientsState(): kotlinx.coroutines.flow.Flow<UiState<List<ClientDto>>> =
+            clientRepository.allClients.map { UiState.Success(it) }
+
+        fun getInvoicesState(): kotlinx.coroutines.flow.Flow<UiState<List<BmpInvoiceDto>>> =
+            invoiceRepository.allInvoices.map { UiState.Success(it) }
+    }
+
+    /** Map clientId → ringkasan piutang — diupdate setiap kali invoices/clients berubah */
+    val clientInvoiceSummary: StateFlow<UiState<Map<Long, ClientInvoiceSummary>>> = combine(
+        repository.getClientsState(), // memancarkan UiState<List<ClientDto>>
+        repository.getInvoicesState() // memancarkan UiState<List<BmpInvoiceDto>>
+    ) { clientsState, invoicesState ->
+        if (clientsState is UiState.Success && invoicesState is UiState.Success) {
+            val clients = clientsState.data
+            val invoices = invoicesState.data
+            val now = System.currentTimeMillis()
+            val map = clients.associate { client ->
+                val clientInvoices = invoices.filter { it.clientId == client.id && it.status != "PAID" && !it.isDeleted }
+                val totalPiutang = clientInvoices.sumOf { it.totalAmount - it.paidAmount }
+                val jumlahUnpaid = clientInvoices.size
+                val hasOverdue = clientInvoices.any { inv ->
+                    inv.dueDate != null && inv.dueDate < now && inv.status != "PAID"
+                }
+                client.id to ClientInvoiceSummary(
+                    totalPiutang = totalPiutang,
+                    jumlahUnpaid = jumlahUnpaid,
+                    hasOverdue = hasOverdue
+                )
+            }
+            UiState.Success(map)
+        } else {
+            UiState.Loading
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), UiState.Loading)
+
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val clients = _query
         .flatMapLatest { q ->
-            if (q.isBlank()) repo.observe(tenantId) else repo.search(tenantId, q)
+            if (q.isBlank()) clientRepository.observe(tenantId) else clientRepository.search(tenantId, q)
         }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -59,7 +114,7 @@ class ClientsViewModel @Inject constructor(
     fun delete(id: Long) {
         viewModelScope.launch {
             _deleteError.value = null
-            val result = repo.delete(context, tenantId, id)
+            val result = clientRepository.delete(context, tenantId, id)
             if (result is OnlineWriteResult.Error) {
                 _deleteError.value = result.message
             } else if (result is OnlineWriteResult.NoConnection) {
@@ -87,7 +142,7 @@ class ClientsViewModel @Inject constructor(
     fun payMassal(clientId: Long, nominal: Double, method: String, notes: String?) {
         viewModelScope.launch {
             try {
-                invoiceRepo.payMassal(
+                invoiceRepository.payMassal(
                     tenantId = tenantId,
                     clientId = clientId,
                     nominal = nominal,

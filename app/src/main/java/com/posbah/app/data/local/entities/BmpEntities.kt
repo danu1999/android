@@ -291,4 +291,7 @@ data class BmpProductionLogEntity(
     val isSynced: Boolean = false,
     val isDeleted: Boolean = false,
     val createdAt: Long = System.currentTimeMillis()
-)
+) {
+    val productId: Long get() = masterProductId
+    val rawMaterialId: Long get() = 0L
+}

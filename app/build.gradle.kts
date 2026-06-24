@@ -50,7 +50,9 @@ android {
         debug {
             isMinifyEnabled = false
             isDebuggable = true
-            applicationIdSuffix = ".debug"
+            // Temporarily disabled suffix so the debug build uses the same package name "com.posbah.app"
+            // to upgrade/overwrite the old app and trigger the local database migration.
+            // applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
             buildConfigField("boolean", "DEBUG_MODE", "true")
         }
@@ -162,8 +164,8 @@ dependencies {
     // implementation(libs.androidx.room.runtime)
     // implementation(libs.androidx.room.ktx)
     // ksp(libs.androidx.room.compiler)
-    // implementation(libs.sqlcipher.android)
-    // implementation(libs.androidx.sqlite.ktx)
+    implementation(libs.sqlcipher.android)
+    implementation(libs.androidx.sqlite.ktx)
 
     // Coroutines & Serialization
     implementation(libs.kotlinx.coroutines.android)

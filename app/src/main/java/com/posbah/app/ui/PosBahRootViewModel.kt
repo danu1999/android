@@ -106,6 +106,27 @@ class PosBahRootViewModel @Inject constructor(
      * Full online mode: baca dari SecurePreferences (set saat login).
      */
     fun getDashboardRouteSync(): String {
+        val dbFile = context.getDatabasePath("posbah.db")
+        val backupFile = java.io.File(dbFile.path + ".bak")
+        if (backupFile.exists() && !dbFile.exists()) {
+            try {
+                dbFile.parentFile?.mkdirs()
+                backupFile.copyTo(dbFile, overwrite = true)
+                val walBak = java.io.File(dbFile.path + "-wal.bak")
+                val walDb = java.io.File(dbFile.path + "-wal")
+                if (walBak.exists()) walBak.copyTo(walDb, overwrite = true)
+                
+                val shmBak = java.io.File(dbFile.path + "-shm.bak")
+                val shmDb = java.io.File(dbFile.path + "-shm")
+                if (shmBak.exists()) shmBak.copyTo(shmDb, overwrite = true)
+                
+                android.util.Log.i("PosBahRootViewModel", "Restored posbah.db from backup for re-migration")
+                securePrefs.migrationCompleted = false
+            } catch (e: Exception) {
+                android.util.Log.e("PosBahRootViewModel", "Failed to restore backup db", e)
+            }
+        }
+
         val isMigrationNeeded = context.getDatabasePath("posbah.db").exists() && !securePrefs.migrationCompleted
         if (isMigrationNeeded) {
             return Screen.Migration.route

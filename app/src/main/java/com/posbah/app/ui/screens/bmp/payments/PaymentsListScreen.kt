@@ -51,7 +51,18 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import com.posbah.app.data.repository.BmpClientRepository
+import com.posbah.app.data.repository.toBmpPaymentData
+
+sealed interface UiState<out T> {
+    object Loading : UiState<Nothing>
+    data class Success<out T>(val data: T) : UiState<T>
+    data class Error(val message: String) : UiState<Nothing>
+}
 
 data class PaymentsListUiState(
     val editingPayment: BmpInvoicePaymentEntity? = null,
@@ -60,16 +71,56 @@ data class PaymentsListUiState(
     val confirmDeletePaymentId: Long? = null
 )
 
+typealias BmpPaymentDto = com.posbah.app.data.repository.BmpPaymentData
+
+data class PaymentWithContext(
+    val payment: BmpPaymentDto,
+    val clientName: String,
+    val invoiceNumber: String
+)
+
 @HiltViewModel
 class PaymentsListViewModel @Inject constructor(
     private val dao: BmpPaymentDao,
     private val invoiceRepo: BmpInvoiceRepository,
+    private val clientRepo: BmpClientRepository,
+    private val api: com.posbah.app.data.remote.api.BmpApiService,
     private val db: PosBahDatabase,
     private val authRepository: AuthRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     val tenantId = authRepository.activeTenantId().orEmpty()
-    val payments = dao.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<BmpInvoicePaymentEntity>())
+    
+    private val paymentsFlow = kotlinx.coroutines.flow.flow {
+        try {
+            val response = api.getPayments()
+            if (response.isSuccessful) {
+                val list = response.body()?.map { it.toBmpPaymentData() } ?: emptyList()
+                emit(list)
+            } else {
+                emit(emptyList())
+            }
+        } catch (_: Exception) {
+            emit(emptyList())
+        }
+    }
+
+    val paymentsWithContext: StateFlow<UiState<List<PaymentWithContext>>> = combine(
+        paymentsFlow,
+        invoiceRepo.allInvoices,
+        clientRepo.allClients
+    ) { rawPayments, invoices, clients ->
+        val list = rawPayments.map { p ->
+            val invoice = invoices.find { it.id == p.invoiceId }
+            val client = clients.find { it.id == invoice?.clientId }
+            PaymentWithContext(
+                payment = p,
+                clientName = client?.clientName ?: "Klien Tidak Dikenal",
+                invoiceNumber = invoice?.number ?: "#${p.invoiceId}"
+            )
+        }
+        UiState.Success(list)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, UiState.Loading)
 
     private val _uiState = MutableStateFlow(PaymentsListUiState())
     val uiState = _uiState.asStateFlow()
@@ -137,68 +188,98 @@ fun PaymentsListScreen(
     onBack: () -> Unit,
     viewModel: PaymentsListViewModel = hiltViewModel()
 ) {
-    val list by viewModel.payments.collectAsState()
+    val state by viewModel.paymentsWithContext.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { PosBahTopBar(title = "Pembayaran", subtitle = "${list.size} transaksi", onBack = onBack) }
+        topBar = {
+            val count = (state as? UiState.Success)?.data?.size ?: 0
+            PosBahTopBar(title = "Pembayaran", subtitle = "$count transaksi", onBack = onBack)
+        }
     ) { padding ->
-        if (list.isEmpty()) {
-            Box(modifier = Modifier.padding(padding).fillMaxSize()) {
-                EmptyState("Belum ada pembayaran", "Catat pembayaran melalui detail invoice")
+        when (val ui = state) {
+            is UiState.Loading -> {
+                Box(modifier = Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.Center) {
+                    androidx.compose.material3.CircularProgressIndicator()
+                }
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier.padding(padding).fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(list, key = { it.id }) { p ->
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        modifier = Modifier.fillMaxWidth()
+            is UiState.Success -> {
+                val list = ui.data
+                if (list.isEmpty()) {
+                    Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+                        EmptyState("Belum ada pembayaran", "Catat pembayaran melalui detail invoice")
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.padding(padding).fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        "Invoice #${p.invoiceId}",
-                                        style = MaterialTheme.typography.titleSmall
-                                    )
-                                    Text(
-                                        "${Formatters.dateTime(p.paymentDate)} • ${p.paymentMethod}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Text(
-                                    Formatters.rupiah(p.paymentAmount),
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End
+                        items(list, key = { it.payment.id }) { item ->
+                            val p = item.payment
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                TextButton(
-                                    onClick = { viewModel.selectEditPayment(p) },
-                                    contentPadding = PaddingValues(horizontal = 8.dp)
-                                ) {
-                                    Text("Ubah", style = MaterialTheme.typography.bodySmall)
-                                }
-                                TextButton(
-                                    onClick = { viewModel.selectDeletePayment(p.id) },
-                                    contentPadding = PaddingValues(horizontal = 8.dp)
-                                ) {
-                                    Text("Hapus", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(
+                                                "${item.clientName} • ${item.invoiceNumber}",
+                                                style = MaterialTheme.typography.titleSmall
+                                            )
+                                            Text(
+                                                "${Formatters.dateTime(p.paymentDate)} • ${p.paymentMethod}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Text(
+                                            Formatters.rupiah(p.paymentAmount),
+                                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Spacer(Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.End
+                                    ) {
+                                        TextButton(
+                                            onClick = {
+                                                val entity = BmpInvoicePaymentEntity(
+                                                    id = p.id,
+                                                    tenantId = p.tenantId,
+                                                    invoiceId = p.invoiceId,
+                                                    paymentDate = p.paymentDate,
+                                                    paymentAmount = p.paymentAmount,
+                                                    paymentMethod = p.paymentMethod,
+                                                    notes = p.notes
+                                                )
+                                                viewModel.selectEditPayment(entity)
+                                            },
+                                            contentPadding = PaddingValues(horizontal = 8.dp)
+                                        ) {
+                                            Text("Ubah", style = MaterialTheme.typography.bodySmall)
+                                        }
+                                        TextButton(
+                                            onClick = { viewModel.selectDeletePayment(p.id) },
+                                            contentPadding = PaddingValues(horizontal = 8.dp)
+                                        ) {
+                                            Text("Hapus", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
+                }
+            }
+            is UiState.Error -> {
+                Box(modifier = Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(ui.message, color = MaterialTheme.colorScheme.error)
                 }
             }
         }

@@ -25,6 +25,7 @@ class PrintSettingsViewModel @Inject constructor(
     private val printSettingsRepo: PrintSettingsRepository,
     private val authRepository: AuthRepository,
     private val db: PosBahDatabase,
+    private val securePrefs: com.posbah.app.security.SecurePreferences,
     @ApplicationContext private val context: Context,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -72,7 +73,14 @@ class PrintSettingsViewModel @Inject constructor(
                     tenantId = tenantId,
                     moduleKey = moduleKey
                 )
-                _draftTenant.value = db.tenantDao().getById(tenantId)
+                // Ambil nama tenant dari SecurePreferences (tidak hit tenantDao stub)
+                val tenantName = securePrefs.currentTenantName ?: authRepository.getActiveUser()?.displayName
+                _draftTenant.value = com.posbah.app.data.local.entities.Tenant(
+                    id = tenantId,
+                    name = tenantName ?: "",
+                    ownerEmail = authRepository.activeUserEmail() ?: "",
+                    updatedAt = System.currentTimeMillis()
+                )
             }
         }
     }
@@ -274,19 +282,8 @@ class PrintSettingsViewModel @Inject constructor(
             return@launch
         }
 
-        if (t != null) {
-            db.tenantDao().upsert(t.copy(updatedAt = System.currentTimeMillis()))
-            // Sync BmpSettingsEntity if exists, to keep it consistent
-            try {
-                val existingBmpSettings = db.bmpSettingsDao().getByTenantId(t.id)
-                if (existingBmpSettings != null) {
-                    db.bmpSettingsDao().upsert(existingBmpSettings.copy(clientName = t.name, updatedAt = System.currentTimeMillis()))
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-
+        // Tenant name update disimpan di draftTenant untuk UI saja
+        // Data sudah tersimpan di VPS via printSettingsRepo.save() di atas
         onDone()
     }
 }

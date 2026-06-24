@@ -46,10 +46,19 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+sealed interface UiState<out T> {
+    object Loading : UiState<Nothing>
+    data class Success<out T>(val data: T) : UiState<T>
+    data class Error(val message: String) : UiState<Nothing>
+}
+
 data class StockProductItem(
     val stock: BmpProductStockEntity?,
     val product: BmpMasterProductEntity
-)
+) {
+    val quantity: Double get() = stock?.quantity ?: 0.0
+    val hppTotalPcs: Double get() = product.hppTotalPcs
+}
 
 data class LedgerItem(
     val ledger: BmpStockLedgerEntity,
@@ -75,6 +84,17 @@ class BmpStockViewModel @Inject constructor(
             StockProductItem(s, p)
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val stockItemsState: StateFlow<UiState<List<StockProductItem>>> = combine(
+        stockRepo.observeStocks(tenantId),
+        masterProductRepo.observe(tenantId)
+    ) { stocks: List<BmpProductStockEntity>, products: List<BmpMasterProductEntity> ->
+        val list = products.map { p ->
+            val s = stocks.find { it.masterProductId == p.id }
+            StockProductItem(s, p)
+        }
+        UiState.Success(list)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, UiState.Loading)
 
     val ledgerItems: StateFlow<List<LedgerItem>> = combine(
         stockRepo.observeAllLedger(tenantId),
@@ -109,7 +129,7 @@ fun BmpStockScreen(
     onBack: () -> Unit,
     viewModel: BmpStockViewModel = hiltViewModel()
 ) {
-    val stocks by viewModel.stockItems.collectAsState()
+    val stockState by viewModel.stockItemsState.collectAsState()
     val ledgers by viewModel.ledgerItems.collectAsState()
     var selectedTab by remember { mutableStateOf(0) }
     val context = LocalContext.current
@@ -142,96 +162,149 @@ fun BmpStockScreen(
             }
 
             if (selectedTab == 0) {
-                if (stocks.isEmpty()) {
-                    EmptyState(
-                        title = "Belum ada produk master",
-                        description = "Tambah produk master terlebih dahulu di menu Produk untuk melacak stok gudang.",
-                        actionLabel = "Kembali",
-                        onAction = onBack
-                    )
-                } else {
-                    LazyColumn(
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        items(stocks) { item ->
-                            val currentQty = item.stock?.quantity ?: 0.0
-                            val isLowStock = item.stock != null && currentQty <= item.stock.minStockAlert && item.stock.minStockAlert > 0.0
-                            
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                                tonalElevation = 1.dp,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(16.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                when (val ui = stockState) {
+                    is UiState.Loading -> {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
+                    }
+                    is UiState.Success -> {
+                        val stockList = ui.data
+                        if (stockList.isEmpty()) {
+                            EmptyState(
+                                title = "Belum ada produk master",
+                                description = "Tambah produk master terlebih dahulu di menu Produk untuk melacak stok gudang.",
+                                actionLabel = "Kembali",
+                                onAction = onBack
+                            )
+                        } else {
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                LazyColumn(
+                                    contentPadding = PaddingValues(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.weight(1f)
                                 ) {
-                                    Surface(
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = if (isLowStock) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                        modifier = Modifier.size(42.dp)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                Icons.Outlined.Inventory,
-                                                null,
-                                                tint = if (isLowStock) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                                            )
-                                        }
-                                    }
-                                    Spacer(Modifier.width(14.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            item.product.title,
-                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                                        )
-                                        if (item.product.jenisBahanBaku.isNotEmpty()) {
-                                            Text(
-                                                "Bahan: ${item.product.jenisBahanBaku}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                        if (isLowStock) {
-                                            Text(
-                                                "Stok Minim! (Batas: ${Formatters.number(item.stock?.minStockAlert ?: 0.0)} ${item.product.unit})",
-                                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                                                color = MaterialTheme.colorScheme.error
-                                            )
-                                        }
-                                    }
-                                    Column(
-                                        horizontalAlignment = Alignment.End
-                                    ) {
-                                        Text(
-                                            "${Formatters.number(currentQty)} ${item.product.unit}",
-                                            style = MaterialTheme.typography.titleLarge.copy(
-                                                fontWeight = FontWeight.ExtraBold,
-                                                color = if (isLowStock) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                                            )
-                                        )
-                                        Spacer(Modifier.height(4.dp))
-                                        IconButton(
-                                            onClick = {
-                                                adjustProduct = item.product
-                                                adjustChangeInput = ""
-                                                adjustNotes = ""
-                                                showAdjustDialog = true
-                                            },
-                                            modifier = Modifier.size(28.dp)
+                                    items(stockList) { item ->
+                                        val currentQty = item.quantity
+                                        val isLowStock = item.stock != null && currentQty <= item.stock.minStockAlert && item.stock.minStockAlert > 0.0
+                                        
+                                        Surface(
+                                            shape = RoundedCornerShape(16.dp),
+                                            color = MaterialTheme.colorScheme.surface,
+                                            tonalElevation = 1.dp,
+                                            modifier = Modifier.fillMaxWidth()
                                         ) {
-                                            Icon(
-                                                Icons.Outlined.Edit,
-                                                contentDescription = "Edit Stok",
-                                                tint = MaterialTheme.colorScheme.secondary,
-                                                modifier = Modifier.size(18.dp)
-                                            )
+                                            Row(
+                                                modifier = Modifier.padding(16.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Surface(
+                                                    shape = RoundedCornerShape(10.dp),
+                                                    color = if (isLowStock) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                                    modifier = Modifier.size(42.dp)
+                                                ) {
+                                                    Box(contentAlignment = Alignment.Center) {
+                                                        Icon(
+                                                            Icons.Outlined.Inventory,
+                                                            null,
+                                                            tint = if (isLowStock) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                                        )
+                                                    }
+                                                }
+                                                Spacer(Modifier.width(14.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        item.product.title,
+                                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                                    )
+                                                    if (item.product.jenisBahanBaku.isNotEmpty()) {
+                                                        Text(
+                                                            "Bahan: ${item.product.jenisBahanBaku}",
+                                                            style = MaterialTheme.typography.bodySmall,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                    Text(
+                                                        "HPP: ${Formatters.rupiah(item.hppTotalPcs)}",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                    if (isLowStock) {
+                                                        Text(
+                                                            "Stok Minim! (Batas: ${Formatters.number(item.stock?.minStockAlert ?: 0.0)} ${item.product.unit})",
+                                                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                                                            color = MaterialTheme.colorScheme.error
+                                                        )
+                                                    }
+                                                }
+                                                Column(
+                                                    horizontalAlignment = Alignment.End
+                                                ) {
+                                                    Text(
+                                                        "${Formatters.number(currentQty)} ${item.product.unit}",
+                                                        style = MaterialTheme.typography.titleLarge.copy(
+                                                            fontWeight = FontWeight.ExtraBold,
+                                                            color = if (isLowStock) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                                                        )
+                                                    )
+                                                    Spacer(Modifier.height(4.dp))
+                                                    IconButton(
+                                                        onClick = {
+                                                            adjustProduct = item.product
+                                                            adjustChangeInput = ""
+                                                            adjustNotes = ""
+                                                            showAdjustDialog = true
+                                                        },
+                                                        modifier = Modifier.size(28.dp)
+                                                    ) {
+                                                        Icon(
+                                                            Icons.Outlined.Edit,
+                                                            contentDescription = "Edit Stok",
+                                                            tint = MaterialTheme.colorScheme.secondary,
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
+
+                                // Footer: total nilai aset stok
+                                val totalValue = stockList.sumOf { it.quantity * it.hppTotalPcs }
+                                Surface(
+                                    tonalElevation = 4.dp,
+                                    shadowElevation = 8.dp,
+                                    color = MaterialTheme.colorScheme.surface,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Total Nilai Aset Stok:",
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = Formatters.rupiah(totalValue),
+                                            style = MaterialTheme.typography.titleLarge.copy(
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        )
+                                    }
+                                }
                             }
+                        }
+                    }
+                    is UiState.Error -> {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(ui.message, color = MaterialTheme.colorScheme.error)
                         }
                     }
                 }
