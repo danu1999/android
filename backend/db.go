@@ -638,7 +638,7 @@ func initSchema() error {
 
 		`UPDATE "bmp_master_products" SET "tenantId" = 'demo_tenant' WHERE "tenantId" IS NULL OR "tenantId" = '';`,
 		`ALTER TABLE "bmp_master_products" DROP CONSTRAINT IF EXISTS "bmp_master_products_pkey";`,
-		`ALTER TABLE "bmp_master_products" ADD PRIMARY KEY ("id", "tenantId") ON CONFLICT DO NOTHING;`,
+		`ALTER TABLE "bmp_master_products" ADD PRIMARY KEY ("id", "tenantId");`,
 
 		`UPDATE "bmp_invoice_payments" SET "tenantId" = 'demo_tenant' WHERE "tenantId" IS NULL OR "tenantId" = '';`,
 		`ALTER TABLE "bmp_invoice_payments" DROP CONSTRAINT IF EXISTS "bmp_invoice_payments_pkey";`,
@@ -694,7 +694,7 @@ func initSchema() error {
 		// v2.17.3: Tambah kolom jenisBahanBaku pada master produk & composite PK master products jika belum
 		`ALTER TABLE "bmp_master_products" ADD COLUMN IF NOT EXISTS "jenisBahanBaku" VARCHAR(100) DEFAULT '';`,
 		`ALTER TABLE "bmp_master_products" DROP CONSTRAINT IF EXISTS "bmp_master_products_pkey";`,
-		`ALTER TABLE "bmp_master_products" ADD PRIMARY KEY ("id", "tenantId") ON CONFLICT DO NOTHING;`,
+		`ALTER TABLE "bmp_master_products" ADD PRIMARY KEY ("id", "tenantId");`,
 
 		// v2.17.9: Tambah kolom image pada bmp_master_products
 		`ALTER TABLE "bmp_master_products" ADD COLUMN IF NOT EXISTS "image" TEXT;`,

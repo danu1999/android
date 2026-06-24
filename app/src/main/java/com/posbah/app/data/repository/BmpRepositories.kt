@@ -33,10 +33,10 @@ data class BmpClientData(
     val tenantId: String = "",
     val clientName: String = "",
     val saldoTitipan: Double = 0.0,
-    val address: String? = null,
-    val phone: String? = null,
-    val email: String? = null,
-    val npwp: String? = null,
+    val addressLine1: String? = null,
+    val phoneNumber: String? = null,
+    val emailAddress: String? = null,
+    val taxNumber: String? = null,
     val uniqueID: String? = null,
     val slug: String? = null,
     val isDeleted: Boolean = false,
@@ -78,12 +78,17 @@ data class BmpMasterProductData(
     val id: Long = 0,
     val tenantId: String = "",
     val title: String = "",
-    val sku: String? = null,
-    val hppTotalPcs: Double = 0.0,
-    val hppLusin: Double = 0.0,
-    val pricePerPcs: Double = 0.0,
-    val pricePerLusin: Double = 0.0,
-    val currentStock: Int = 0,
+    val description: String? = null,
+    val unit: String = "Kg",
+    val price: Double = 0.0,
+    val beratGram: Double = 0.0,
+    val cycleTime: Double = 0.0,
+    val cavity: Int = 1,
+    val rejectRate: Double = 0.0,
+    val uniqueID: String? = null,
+    val slug: String? = null,
+    val jenisBahanBaku: String = "",
+    val image: String? = null,
     val isDeleted: Boolean = false,
     val updatedAt: Long = 0
 )
@@ -138,11 +143,11 @@ data class BmpPayrollData(
 data class BmpBahanBakuData(
     val id: Long = 0,
     val tenantId: String = "",
-    val nomorNota: String = "",
+    val noTagihan: String = "",
     val tanggal: Long = System.currentTimeMillis(),
     val supplier: String? = null,
-    val totalBiaya: Double = 0.0,
-    val paidAmount: Double = 0.0,
+    val totalHarga: Double = 0.0,
+    val nominal: Double = 0.0,
     val notes: String? = null,
     val notaFotoPath: String? = null,
     val notaFotoUrl: String? = null,
@@ -153,10 +158,10 @@ data class BmpBahanBakuData(
 data class BmpBahanBakuItemData(
     val id: Long = 0,
     val bahanBakuId: Long = 0,
-    val name: String = "",
-    val quantity: Double = 0.0,
+    val jenisBahan: String = "",
+    val kuantitas: Double = 0.0,
     val unit: String = "kg",
-    val pricePerUnit: Double = 0.0,
+    val rate: Double = 0.0,
     val subtotal: Double = 0.0,
     val isDeleted: Boolean = false
 )
@@ -225,10 +230,10 @@ fun Map<String, Any?>.toBmpClientData() = BmpClientData(
     tenantId = get("tenantId") as? String ?: "",
     clientName = get("clientName") as? String ?: "",
     saldoTitipan = (get("saldoTitipan") as? Number)?.toDouble() ?: 0.0,
-    address = get("address") as? String,
-    phone = get("phone") as? String,
-    email = get("email") as? String,
-    npwp = get("npwp") as? String,
+    addressLine1 = get("addressLine1") as? String,
+    phoneNumber = get("phoneNumber") as? String,
+    emailAddress = get("emailAddress") as? String,
+    taxNumber = get("taxNumber") as? String,
     uniqueID = get("uniqueID") as? String,
     slug = get("slug") as? String,
     isDeleted = get("isDeleted") as? Boolean ?: false,
@@ -270,10 +275,17 @@ fun Map<String, Any?>.toBmpMasterProductData() = BmpMasterProductData(
     id = (get("id") as? Number)?.toLong() ?: 0,
     tenantId = get("tenantId") as? String ?: "",
     title = get("title") as? String ?: "",
-    sku = get("sku") as? String,
-    hppTotalPcs = (get("hppTotalPcs") as? Number)?.toDouble() ?: 0.0,
-    pricePerPcs = (get("pricePerPcs") as? Number)?.toDouble() ?: 0.0,
-    currentStock = (get("currentStock") as? Number)?.toInt() ?: 0,
+    description = get("description") as? String,
+    unit = get("unit") as? String ?: "Kg",
+    price = (get("price") as? Number)?.toDouble() ?: 0.0,
+    beratGram = (get("beratGram") as? Number)?.toDouble() ?: 0.0,
+    cycleTime = (get("cycleTime") as? Number)?.toDouble() ?: 0.0,
+    cavity = (get("cavity") as? Number)?.toInt() ?: 1,
+    rejectRate = (get("rejectRate") as? Number)?.toDouble() ?: 0.0,
+    uniqueID = get("uniqueID") as? String,
+    slug = get("slug") as? String,
+    jenisBahanBaku = get("jenisBahanBaku") as? String ?: "",
+    image = get("image") as? String,
     isDeleted = get("isDeleted") as? Boolean ?: false,
     updatedAt = (get("updatedAt") as? Number)?.toLong() ?: 0
 )
@@ -305,11 +317,11 @@ fun Map<String, Any?>.toBmpPaymentData() = BmpPaymentData(
 fun Map<String, Any?>.toBmpBahanBakuData() = BmpBahanBakuData(
     id = (get("id") as? Number)?.toLong() ?: 0,
     tenantId = get("tenantId") as? String ?: "",
-    nomorNota = (get("noTagihan") as? String) ?: (get("nomorNota") as? String) ?: "",
+    noTagihan = get("noTagihan") as? String ?: "",
     tanggal = (get("tanggal") as? Number)?.toLong() ?: System.currentTimeMillis(),
     supplier = get("supplier") as? String,
-    totalBiaya = (get("totalHarga") as? Number)?.toDouble() ?: (get("totalBiaya") as? Number)?.toDouble() ?: 0.0,
-    paidAmount = (get("nominal") as? Number)?.toDouble() ?: (get("paidAmount") as? Number)?.toDouble() ?: 0.0,
+    totalHarga = (get("totalHarga") as? Number)?.toDouble() ?: 0.0,
+    nominal = (get("nominal") as? Number)?.toDouble() ?: 0.0,
     notes = get("notes") as? String,
     notaFotoPath = get("notaFotoPath") as? String,
     notaFotoUrl = get("notaFotoUrl") as? String,
@@ -334,10 +346,10 @@ class BmpClientRepository @Inject constructor(
         id = id,
         tenantId = tenantId,
         clientName = clientName,
-        addressLine1 = address,
-        phoneNumber = phone,
-        emailAddress = email,
-        taxNumber = npwp,
+        addressLine1 = addressLine1,
+        phoneNumber = phoneNumber,
+        emailAddress = emailAddress,
+        taxNumber = taxNumber,
         uniqueID = uniqueID,
         slug = slug,
         isDeleted = isDeleted,
@@ -349,10 +361,10 @@ class BmpClientRepository @Inject constructor(
         id = id,
         tenantId = tenantId,
         clientName = clientName,
-        address = addressLine1,
-        phone = phoneNumber,
-        email = emailAddress,
-        npwp = taxNumber,
+        addressLine1 = addressLine1,
+        phoneNumber = phoneNumber,
+        emailAddress = emailAddress,
+        taxNumber = taxNumber,
         uniqueID = uniqueID,
         slug = slug,
         isDeleted = isDeleted,
@@ -398,10 +410,10 @@ class BmpClientRepository @Inject constructor(
         return try {
             val body = mapOf<String, Any?>(
                 "clientName" to client.clientName,
-                "address" to client.address,
-                "phone" to client.phone,
-                "email" to client.email,
-                "npwp" to client.npwp,
+                "addressLine1" to client.addressLine1,
+                "phoneNumber" to client.phoneNumber,
+                "emailAddress" to client.emailAddress,
+                "taxNumber" to client.taxNumber,
                 "uniqueID" to (client.uniqueID ?: java.util.UUID.randomUUID().toString()),
                 "slug" to (client.slug ?: client.clientName.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-'))
             )
@@ -1097,15 +1109,19 @@ class BmpMasterProductRepository @Inject constructor(
 
     suspend fun upsert(item: BmpMasterProductData): OnlineWriteResult {
         return try {
-            // Hapus null values agar tidak menyebabkan error serialization Gson
             val body = mutableMapOf<String, Any>().apply {
                 put("title", item.title)
-                put("hppTotalPcs", item.hppTotalPcs)
-                put("hppLusin", item.hppLusin)
-                put("pricePerPcs", item.pricePerPcs)
-                put("pricePerLusin", item.pricePerLusin)
-                put("currentStock", item.currentStock)
-                if (item.sku != null) put("sku", item.sku)
+                put("unit", item.unit)
+                put("price", item.price)
+                put("beratGram", item.beratGram)
+                put("cycleTime", item.cycleTime)
+                put("cavity", item.cavity)
+                put("rejectRate", item.rejectRate)
+                put("jenisBahanBaku", item.jenisBahanBaku)
+                if (item.description != null) put("description", item.description)
+                if (item.uniqueID != null) put("uniqueID", item.uniqueID)
+                if (item.slug != null) put("slug", item.slug)
+                if (item.image != null) put("image", item.image)
             }
             if (item.id == 0L) api.createMasterProduct(body)
             else api.updateMasterProduct(item.id, body)
@@ -1127,22 +1143,22 @@ class BmpMasterProductRepository @Inject constructor(
                     id = it.id,
                     tenantId = it.tenantId,
                     title = it.title,
-                    description = null,
-                    unit = "Kg",
-                    price = it.pricePerPcs,
-                    beratGram = 0.0,
-                    cycleTime = 0.0,
-                    cavity = 1,
-                    rejectRate = 0.0,
-                    uniqueID = null,
-                    slug = null,
+                    description = it.description,
+                    unit = it.unit,
+                    price = it.price,
+                    beratGram = it.beratGram,
+                    cycleTime = it.cycleTime,
+                    cavity = it.cavity,
+                    rejectRate = it.rejectRate,
+                    uniqueID = it.uniqueID,
+                    slug = it.slug,
                     isDeleted = it.isDeleted,
-                    jenisBahanBaku = "",
-                    image = null,
+                    jenisBahanBaku = it.jenisBahanBaku,
+                    image = it.image,
                     createdAt = System.currentTimeMillis(),
                     updatedAt = it.updatedAt,
                     isSynced = true,
-                    hppTotalPcs = it.hppTotalPcs,
+                    hppTotalPcs = 0.0,
                     hppLusin = 0.0
                 )
             })
@@ -1488,11 +1504,11 @@ class BmpBahanBakuRepository @Inject constructor(
      ): OnlineWriteResult {
         return try {
             val resp = api.createBahanBaku(mapOf(
-                "noTagihan" to bahanBaku.nomorNota,
+                "noTagihan" to bahanBaku.noTagihan,
                 "tanggal" to bahanBaku.tanggal,
                 "supplier" to bahanBaku.supplier,
-                "totalHarga" to bahanBaku.totalBiaya,
-                "nominal" to bahanBaku.paidAmount,
+                "totalHarga" to bahanBaku.totalHarga,
+                "nominal" to bahanBaku.nominal,
                 "notaFotoPath" to bahanBaku.notaFotoPath,
                 "notaFotoUrl" to bahanBaku.notaFotoUrl,
                 "notes" to bahanBaku.notes
@@ -1503,10 +1519,10 @@ class BmpBahanBakuRepository @Inject constructor(
             val itemBodies = items.map {
                 mapOf<String, Any?>(
                     "bahanBakuId" to newId,
-                    "jenisBahan" to it.name,
-                    "kuantitas" to it.quantity,
+                    "jenisBahan" to it.jenisBahan,
+                    "kuantitas" to it.kuantitas,
                     "unit" to it.unit,
-                    "rate" to it.pricePerUnit
+                    "rate" to it.rate
                 )
             }
             api.createBahanBakuItems(itemBodies)
@@ -1514,8 +1530,8 @@ class BmpBahanBakuRepository @Inject constructor(
             // ── Business logic: input bahan baku → potong cashflow ──────────
             cashflowRepo.createEntry(BmpCashflowData(
                 transactionType = "KELUAR",
-                description = "Pembelian Bahan Baku: ${bahanBaku.nomorNota}",
-                amount = bahanBaku.totalBiaya,
+                description = "Pembelian Bahan Baku: ${bahanBaku.noTagihan}",
+                amount = bahanBaku.totalHarga,
                 transactionDate = bahanBaku.tanggal
             ))
 
@@ -1526,11 +1542,11 @@ class BmpBahanBakuRepository @Inject constructor(
     suspend fun update(bahanBaku: BmpBahanBakuData): OnlineWriteResult {
         return try {
             api.updateBahanBaku(bahanBaku.id, mapOf(
-                "noTagihan" to bahanBaku.nomorNota,
+                "noTagihan" to bahanBaku.noTagihan,
                 "tanggal" to bahanBaku.tanggal,
                 "supplier" to bahanBaku.supplier,
-                "totalHarga" to bahanBaku.totalBiaya,
-                "nominal" to bahanBaku.paidAmount,
+                "totalHarga" to bahanBaku.totalHarga,
+                "nominal" to bahanBaku.nominal,
                 "notaFotoPath" to bahanBaku.notaFotoPath,
                 "notaFotoUrl" to bahanBaku.notaFotoUrl,
                 "notes" to bahanBaku.notes
@@ -1565,10 +1581,10 @@ class BmpBahanBakuRepository @Inject constructor(
         return com.posbah.app.data.local.entities.BmpBahanBakuEntity(
             id = data.id,
             tenantId = data.tenantId,
-            noTagihan = data.nomorNota,
+            noTagihan = data.noTagihan,
             tanggal = data.tanggal,
-            totalHarga = data.totalBiaya,
-            nominal = data.paidAmount,
+            totalHarga = data.totalHarga,
+            nominal = data.nominal,
             notes = data.notes,
             notaFotoPath = data.notaFotoPath,
             notaFotoUrl = data.notaFotoUrl
@@ -1578,11 +1594,11 @@ class BmpBahanBakuRepository @Inject constructor(
     /** Get by nomor tagihan */
     suspend fun getByTagihan(noTagihan: String): com.posbah.app.data.local.entities.BmpBahanBakuEntity? {
         val data = try {
-            api.getBahanBaku().body()?.map { it.toBmpBahanBakuData() }?.find { it.nomorNota == noTagihan }
+            api.getBahanBaku().body()?.map { it.toBmpBahanBakuData() }?.find { it.noTagihan == noTagihan }
         } catch (_: Exception) { null } ?: return null
         return com.posbah.app.data.local.entities.BmpBahanBakuEntity(
-            id = data.id, tenantId = data.tenantId, noTagihan = data.nomorNota,
-            tanggal = data.tanggal, totalHarga = data.totalBiaya, nominal = data.paidAmount, notes = data.notes,
+            id = data.id, tenantId = data.tenantId, noTagihan = data.noTagihan,
+            tanggal = data.tanggal, totalHarga = data.totalHarga, nominal = data.nominal, notes = data.notes,
             notaFotoPath = data.notaFotoPath,
             notaFotoUrl = data.notaFotoUrl
         )
@@ -1598,7 +1614,7 @@ class BmpBahanBakuRepository @Inject constructor(
             emit(items.map { d ->
                 com.posbah.app.data.local.entities.BmpBahanBakuItemEntity(
                     id = d.id, tenantId = "", bahanBakuId = d.bahanBakuId,
-                    jenisBahan = d.name, kuantitas = d.quantity, unit = d.unit, rate = d.pricePerUnit
+                    jenisBahan = d.jenisBahan, kuantitas = d.kuantitas, unit = d.unit, rate = d.rate
                 )
             })
         }
@@ -1607,9 +1623,9 @@ class BmpBahanBakuRepository @Inject constructor(
     /** Update header only — alias for update() */
     suspend fun updateHeaderOnly(entity: com.posbah.app.data.local.entities.BmpBahanBakuEntity): OnlineWriteResult {
         return update(BmpBahanBakuData(
-            id = entity.id, tenantId = entity.tenantId, nomorNota = entity.noTagihan,
-            tanggal = entity.tanggal, totalBiaya = entity.totalHarga,
-            paidAmount = entity.nominal, notes = entity.notes,
+            id = entity.id, tenantId = entity.tenantId, noTagihan = entity.noTagihan,
+            tanggal = entity.tanggal, totalHarga = entity.totalHarga,
+            nominal = entity.nominal, notes = entity.notes,
             notaFotoPath = entity.notaFotoPath, notaFotoUrl = entity.notaFotoUrl
         ))
     }
@@ -1620,15 +1636,15 @@ class BmpBahanBakuRepository @Inject constructor(
         items: List<com.posbah.app.data.local.entities.BmpBahanBakuItemEntity>
     ): OnlineWriteResult {
         val data = BmpBahanBakuData(
-            id = entity.id, tenantId = entity.tenantId, nomorNota = entity.noTagihan,
-            tanggal = entity.tanggal, totalBiaya = entity.totalHarga,
-            paidAmount = entity.nominal, notes = entity.notes,
+            id = entity.id, tenantId = entity.tenantId, noTagihan = entity.noTagihan,
+            tanggal = entity.tanggal, totalHarga = entity.totalHarga,
+            nominal = entity.nominal, notes = entity.notes,
             notaFotoPath = entity.notaFotoPath, notaFotoUrl = entity.notaFotoUrl
         )
         val itemData = items.map {
             BmpBahanBakuItemData(
-                id = it.id, bahanBakuId = it.bahanBakuId, name = it.jenisBahan,
-                quantity = it.kuantitas, unit = it.unit, pricePerUnit = it.rate,
+                id = it.id, bahanBakuId = it.bahanBakuId, jenisBahan = it.jenisBahan,
+                kuantitas = it.kuantitas, unit = it.unit, rate = it.rate,
                 subtotal = it.kuantitas * it.rate
             )
         }
@@ -1655,16 +1671,16 @@ class BmpBahanBakuRepository @Inject constructor(
 
     suspend fun getItems(bahanBakuId: Long): List<BmpBahanBakuItemData> = try {
         api.getBahanBakuItems(bahanBakuId).body()?.map {
-            val q = (it["kuantitas"] as? Number)?.toDouble() ?: (it["quantity"] as? Number)?.toDouble() ?: 0.0
-            val p = (it["rate"] as? Number)?.toDouble() ?: (it["pricePerUnit"] as? Number)?.toDouble() ?: 0.0
+            val q = (it["kuantitas"] as? Number)?.toDouble() ?: 0.0
+            val r = (it["rate"] as? Number)?.toDouble() ?: 0.0
             BmpBahanBakuItemData(
                 id = (it["id"] as? Number)?.toLong() ?: 0,
                 bahanBakuId = bahanBakuId,
-                name = (it["jenisBahan"] as? String) ?: (it["name"] as? String) ?: "",
-                quantity = q,
+                jenisBahan = it["jenisBahan"] as? String ?: "",
+                kuantitas = q,
                 unit = it["unit"] as? String ?: "kg",
-                pricePerUnit = p,
-                subtotal = (it["subtotal"] as? Number)?.toDouble() ?: (q * p)
+                rate = r,
+                subtotal = (it["subtotal"] as? Number)?.toDouble() ?: (q * r)
             )
         } ?: emptyList()
     } catch (_: Exception) { emptyList() }
@@ -1678,10 +1694,10 @@ class BmpBahanBakuRepository @Inject constructor(
                 com.posbah.app.data.local.entities.BmpBahanBakuEntity(
                     id = d.id,
                     tenantId = d.tenantId,
-                    noTagihan = d.nomorNota,
+                    noTagihan = d.noTagihan,
                     tanggal = d.tanggal,
-                    totalHarga = d.totalBiaya,
-                    nominal = d.paidAmount,
+                    totalHarga = d.totalHarga,
+                    nominal = d.nominal,
                     notes = d.notes,
                     notaFotoPath = d.notaFotoPath,
                     notaFotoUrl = d.notaFotoUrl
@@ -1691,10 +1707,10 @@ class BmpBahanBakuRepository @Inject constructor(
     }
 
     fun totalHarga(tenantId: String): kotlinx.coroutines.flow.Flow<Double> =
-        _bahanBaku.map { list -> list.sumOf { it.totalBiaya } }
+        _bahanBaku.map { list -> list.sumOf { it.totalHarga } }
 
     fun totalNominal(tenantId: String): kotlinx.coroutines.flow.Flow<Double> =
-        _bahanBaku.map { list -> list.sumOf { it.paidAmount } }
+        _bahanBaku.map { list -> list.sumOf { it.nominal } }
 }
 
 // ── BmpStockRepository ────────────────────────────────────────────────────────

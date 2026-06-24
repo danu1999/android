@@ -1,0 +1,31 @@
+SELECT 'apk_config' AS tbl, COUNT(*) FROM apk_config UNION ALL
+SELECT 'bmp_adms_devices', COUNT(*) FROM bmp_adms_devices UNION ALL
+SELECT 'bmp_attendance_logs', COUNT(*) FROM bmp_attendance_logs UNION ALL
+SELECT 'bmp_bahan_baku', COUNT(*) FROM bmp_bahan_baku UNION ALL
+SELECT 'bmp_bahan_baku_item', COUNT(*) FROM bmp_bahan_baku_item UNION ALL
+SELECT 'bmp_cashflow', COUNT(*) FROM bmp_cashflow UNION ALL
+SELECT 'bmp_clients', COUNT(*) FROM bmp_clients UNION ALL
+SELECT 'bmp_device_tenants', COUNT(*) FROM bmp_device_tenants UNION ALL
+SELECT 'bmp_employees', COUNT(*) FROM bmp_employees UNION ALL
+SELECT 'bmp_invoice_payments', COUNT(*) FROM bmp_invoice_payments UNION ALL
+SELECT 'bmp_invoices', COUNT(*) FROM bmp_invoices UNION ALL
+SELECT 'bmp_master_products', COUNT(*) FROM bmp_master_products UNION ALL
+SELECT 'bmp_payrolls', COUNT(*) FROM bmp_payrolls UNION ALL
+SELECT 'bmp_product_stocks', COUNT(*) FROM bmp_product_stocks UNION ALL
+SELECT 'bmp_production_logs', COUNT(*) FROM bmp_production_logs UNION ALL
+SELECT 'bmp_products', COUNT(*) FROM bmp_products UNION ALL
+SELECT 'bmp_settings', COUNT(*) FROM bmp_settings UNION ALL
+SELECT 'bmp_stock_ledger', COUNT(*) FROM bmp_stock_ledger UNION ALL
+SELECT 'customers', COUNT(*) FROM customers UNION ALL
+SELECT 'deleted_users', COUNT(*) FROM deleted_users UNION ALL
+SELECT 'employees', COUNT(*) FROM employees UNION ALL
+SELECT 'local_users', COUNT(*) FROM local_users UNION ALL
+SELECT 'outlets', COUNT(*) FROM outlets UNION ALL
+SELECT 'print_settings', COUNT(*) FROM print_settings UNION ALL
+SELECT 'products', COUNT(*) FROM products UNION ALL
+SELECT 'system_admins', COUNT(*) FROM system_admins UNION ALL
+SELECT 'tenant_sync_status', COUNT(*) FROM tenant_sync_status UNION ALL
+SELECT 'tenants', COUNT(*) FROM tenants UNION ALL
+SELECT 'transaction_items', COUNT(*) FROM transaction_items UNION ALL
+SELECT 'transactions', COUNT(*) FROM transactions UNION ALL
+SELECT 'activity_logs', COUNT(*) FROM activity_logs;
