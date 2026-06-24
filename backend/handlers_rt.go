@@ -531,6 +531,14 @@ func handleRtBmpInvoices(w http.ResponseWriter, r *http.Request) {
 		json.NewDecoder(r.Body).Decode(&body)
 		body["tenantId"] = tenantId; body["updatedAt"] = nowMillis()
 		if _, ok := body["createdAt"]; !ok { body["createdAt"] = nowMillis() }
+		if _, ok := body["title"]; !ok { body["title"] = "Invoice Baru" }
+		if _, ok := body["slug"]; !ok {
+			numberStr := ""
+			if num, ok := body["number"].(string); ok {
+				numberStr = num
+			}
+			body["slug"] = fmt.Sprintf("inv-%s-%d", numberStr, nowMillis())
+		}
 		id, err := insertRow("bmp_invoices", body)
 		if err != nil { jsonErr(w, 500, err.Error()); return }
 		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
@@ -570,6 +578,11 @@ func handleRtBmpProducts(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		var body map[string]interface{}
 		json.NewDecoder(r.Body).Decode(&body); body["tenantId"] = tenantId; body["updatedAt"] = nowMillis()
+		if nameVal, ok := body["name"]; ok {
+			body["title"] = nameVal
+			delete(body, "name")
+		}
+		if _, ok := body["title"]; !ok { body["title"] = "" }
 		id, err := insertRow("bmp_products", body)
 		if err != nil { jsonErr(w, 500, err.Error()); return }
 		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
