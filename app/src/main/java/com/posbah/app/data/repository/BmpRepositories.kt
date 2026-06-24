@@ -305,11 +305,11 @@ fun Map<String, Any?>.toBmpPaymentData() = BmpPaymentData(
 fun Map<String, Any?>.toBmpBahanBakuData() = BmpBahanBakuData(
     id = (get("id") as? Number)?.toLong() ?: 0,
     tenantId = get("tenantId") as? String ?: "",
-    nomorNota = get("nomorNota") as? String ?: "",
+    nomorNota = (get("noTagihan") as? String) ?: (get("nomorNota") as? String) ?: "",
     tanggal = (get("tanggal") as? Number)?.toLong() ?: System.currentTimeMillis(),
     supplier = get("supplier") as? String,
-    totalBiaya = (get("totalBiaya") as? Number)?.toDouble() ?: 0.0,
-    paidAmount = (get("paidAmount") as? Number)?.toDouble() ?: 0.0,
+    totalBiaya = (get("totalHarga") as? Number)?.toDouble() ?: (get("totalBiaya") as? Number)?.toDouble() ?: 0.0,
+    paidAmount = (get("nominal") as? Number)?.toDouble() ?: (get("paidAmount") as? Number)?.toDouble() ?: 0.0,
     notes = get("notes") as? String,
     notaFotoPath = get("notaFotoPath") as? String,
     notaFotoUrl = get("notaFotoUrl") as? String,
@@ -1482,17 +1482,17 @@ class BmpBahanBakuRepository @Inject constructor(
      * Simpan bahan baku + items.
      * Business logic TETAP: input bahan baku → OTOMATIS potong cashflow (KELUAR).
      */
-    suspend fun create(
+     suspend fun create(
         bahanBaku: BmpBahanBakuData,
         items: List<BmpBahanBakuItemData>
-    ): OnlineWriteResult {
+     ): OnlineWriteResult {
         return try {
             val resp = api.createBahanBaku(mapOf(
-                "nomorNota" to bahanBaku.nomorNota,
+                "noTagihan" to bahanBaku.nomorNota,
                 "tanggal" to bahanBaku.tanggal,
                 "supplier" to bahanBaku.supplier,
-                "totalBiaya" to bahanBaku.totalBiaya,
-                "paidAmount" to bahanBaku.paidAmount,
+                "totalHarga" to bahanBaku.totalBiaya,
+                "nominal" to bahanBaku.paidAmount,
                 "notaFotoPath" to bahanBaku.notaFotoPath,
                 "notaFotoUrl" to bahanBaku.notaFotoUrl,
                 "notes" to bahanBaku.notes
@@ -1503,11 +1503,10 @@ class BmpBahanBakuRepository @Inject constructor(
             val itemBodies = items.map {
                 mapOf<String, Any?>(
                     "bahanBakuId" to newId,
-                    "name" to it.name,
-                    "quantity" to it.quantity,
+                    "jenisBahan" to it.name,
+                    "kuantitas" to it.quantity,
                     "unit" to it.unit,
-                    "pricePerUnit" to it.pricePerUnit,
-                    "subtotal" to it.subtotal
+                    "rate" to it.pricePerUnit
                 )
             }
             api.createBahanBakuItems(itemBodies)
@@ -1527,11 +1526,11 @@ class BmpBahanBakuRepository @Inject constructor(
     suspend fun update(bahanBaku: BmpBahanBakuData): OnlineWriteResult {
         return try {
             api.updateBahanBaku(bahanBaku.id, mapOf(
-                "nomorNota" to bahanBaku.nomorNota,
+                "noTagihan" to bahanBaku.nomorNota,
                 "tanggal" to bahanBaku.tanggal,
                 "supplier" to bahanBaku.supplier,
-                "totalBiaya" to bahanBaku.totalBiaya,
-                "paidAmount" to bahanBaku.paidAmount,
+                "totalHarga" to bahanBaku.totalBiaya,
+                "nominal" to bahanBaku.paidAmount,
                 "notaFotoPath" to bahanBaku.notaFotoPath,
                 "notaFotoUrl" to bahanBaku.notaFotoUrl,
                 "notes" to bahanBaku.notes
@@ -1548,10 +1547,10 @@ class BmpBahanBakuRepository @Inject constructor(
     /** Context overload — backward compat untuk BahanBakuListViewModel */
     suspend fun delete(context: android.content.Context, tenantId: String, id: Long): OnlineWriteResult = delete(id)
 
-    /** Bayar hutang bahan baku — update paidAmount di VPS */
+    /** Bayar hutang bahan baku — update nominal di VPS */
     suspend fun payDebt(context: android.content.Context, tenantId: String, id: Long, amount: Double): OnlineWriteResult {
         return try {
-            api.updateBahanBaku(id, mapOf("paidAmount" to amount))
+            api.updateBahanBaku(id, mapOf("nominal" to amount))
             // Refresh setelah update
             refresh()
             OnlineWriteResult.Success
@@ -1656,14 +1655,16 @@ class BmpBahanBakuRepository @Inject constructor(
 
     suspend fun getItems(bahanBakuId: Long): List<BmpBahanBakuItemData> = try {
         api.getBahanBakuItems(bahanBakuId).body()?.map {
+            val q = (it["kuantitas"] as? Number)?.toDouble() ?: (it["quantity"] as? Number)?.toDouble() ?: 0.0
+            val p = (it["rate"] as? Number)?.toDouble() ?: (it["pricePerUnit"] as? Number)?.toDouble() ?: 0.0
             BmpBahanBakuItemData(
                 id = (it["id"] as? Number)?.toLong() ?: 0,
                 bahanBakuId = bahanBakuId,
-                name = it["name"] as? String ?: "",
-                quantity = (it["quantity"] as? Number)?.toDouble() ?: 0.0,
+                name = (it["jenisBahan"] as? String) ?: (it["name"] as? String) ?: "",
+                quantity = q,
                 unit = it["unit"] as? String ?: "kg",
-                pricePerUnit = (it["pricePerUnit"] as? Number)?.toDouble() ?: 0.0,
-                subtotal = (it["subtotal"] as? Number)?.toDouble() ?: 0.0
+                pricePerUnit = p,
+                subtotal = (it["subtotal"] as? Number)?.toDouble() ?: (q * p)
             )
         } ?: emptyList()
     } catch (_: Exception) { emptyList() }
