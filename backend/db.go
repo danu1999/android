@@ -743,9 +743,9 @@ func initSchema() error {
 		ON CONFLICT ("email") DO UPDATE SET "passwordHash" = EXCLUDED."passwordHash";`, defaultAdminHash, time.Now().UnixNano()/int64(time.Millisecond))
 
 
-	// Seed default apk_config — v2.17.39
+	// Seed default apk_config — v2.17.52
 	_, _ = db.Exec(`INSERT INTO "apk_config" ("id", "version", "description", "downloadUrl", "updatedAt")
-		VALUES (1, '2.17.39', 'Pembaruan wajib untuk pengaktifan sinkronisasi real-time instan berbasis WebSockets, peningkatan performa pencegahan hang/ANR, serta perbaikan sinkronisasi outlet karyawan.', '/api/download-apk', $1)
+		VALUES (1, '2.17.52', 'Pembaruan keamanan wajib: pengamanan alur tanda tangan penerima dengan validasi kriptografi HMAC-SHA256, perlindungan data multi-tenant pada semua endpoint tanda tangan, perbaikan sinkronisasi deskripsi produk saat reinstall, serta peningkatan keandalan urutan pull sync master produk.', '/api/download-apk', $1)
 		ON CONFLICT ("id") DO UPDATE SET "version" = EXCLUDED."version", "description" = EXCLUDED."description", "updatedAt" = EXCLUDED."updatedAt";`, time.Now().UnixNano()/int64(time.Millisecond))
 	
 	// Protect syerlirahma7@gmail.com: mark as ACTIVE in deleted_users so she is never purged again
