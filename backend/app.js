@@ -1341,7 +1341,7 @@ function triggerInvoicePrint() {
         itemsHtml += `
             <tr>
                 <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${index + 1}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;"><strong>${p.title}</strong>${descriptionHtml}</td>
+                <td style="border: 1px solid #ddd; padding: 8px;">${p.title}${descriptionHtml}</td>
                 <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${p.quantity}</td>
                 <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${satuanVal}</td>
                 <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${formatRupiah(p.price)}</td>
@@ -1557,7 +1557,7 @@ function triggerSjPrint() {
         itemsHtml += `
             <tr>
                 <td style="border: 1px solid #333; padding: 8px; text-align: center;">${index + 1}</td>
-                <td style="border: 1px solid #333; padding: 8px;"><strong>${p.title}</strong>${descriptionHtml}</td>
+                <td style="border: 1px solid #333; padding: 8px;">${p.title}${descriptionHtml}</td>
                 <td style="border: 1px solid #333; padding: 8px; text-align: center;">${satuanVal}</td>
                 <td style="border: 1px solid #333; padding: 8px; text-align: center;">${p.quantity}</td>
             </tr>
