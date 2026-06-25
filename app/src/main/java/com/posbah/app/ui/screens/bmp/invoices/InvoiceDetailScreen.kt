@@ -692,15 +692,17 @@ private fun generateInvoiceHtml(
     products.forEachIndexed { index, p ->
         val subtotal = p.price * p.quantity * p.jumlahLusin
         val satuanVal = "${Formatters.number(p.jumlahLusin)} ${if (p.unit.lowercase() == "lusin" || p.unit == "-") "Lusin" else p.unit}"
-        val descHtml = if (!p.description.isNullOrBlank()) "<br/><span style=\"font-size: 11px; color: #555; font-weight: normal;\">${p.description}</span>" else ""
+        val descHtml = if (!p.description.isNullOrBlank()) "<br/><span style=\"font-size: 8px; color: #555; font-weight: normal;\">${p.description}</span>" else ""
         itemsHtml.append("""
-            <tr>
-                <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${index + 1}</td>
-                <td style="border: 1px solid #ddd; padding: 8px;"><strong>${p.title}</strong>$descHtml</td>
-                <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${Formatters.number(p.quantity)}</td>
-                <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">$satuanVal</td>
-                <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${Formatters.rupiah(p.price)}</td>
-                <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${Formatters.rupiah(subtotal)}</td>
+            <tr class="item-row">
+                <td style="text-align: center;">${index + 1}</td>
+                <td><strong>${p.title}</strong>$descHtml</td>
+                <td style="text-align: center;">
+                    <strong>${Formatters.number(p.quantity)}</strong>
+                    <br/><span style="font-size: 8px; color: #555;">$satuanVal</span>
+                </td>
+                <td style="text-align: right;"><strong>${Formatters.rupiah(p.price)}</strong></td>
+                <td style="text-align: right;"><strong>${Formatters.rupiah(subtotal)}</strong></td>
             </tr>
         """.trimIndent())
     }
@@ -708,91 +710,46 @@ private fun generateInvoiceHtml(
     val isColor = printConfig.isColor
     val themeColor = if (isColor) "#1E3A8A" else "#000000"
     val accentBg = if (isColor) "#EFF6FF" else "#ffffff"
-    val statusColor = when (invoice.status) {
-        "PAID" -> if (isColor) "#10B981" else "#000000"
-        "PARTIAL" -> if (isColor) "#3B82F6" else "#000000"
-        "OVERDUE" -> if (isColor) "#EF4444" else "#000000"
-        else -> if (isColor) "#6B7280" else "#000000"
-    }
 
-    val headerHtml = if (logoBase64.isNotEmpty()) {
-        """
-        <table class="header-table">
+    val headerHtml = """
+        <table style="width: 100%; border-bottom: 1.5px solid #000000; margin-bottom: 8px; padding-bottom: 5px;">
             <tr>
-                <td style="width: 80px; vertical-align: top; padding-right: 15px;">
-                    <img src="$logoBase64" style="width: 80px; height: auto;" />
+                <td style="width: 60%; vertical-align: top; text-align: left; padding-left: 0;">
+                    <table style="width: 100%; border: none; border-collapse: collapse;">
+                        <tr>
+                            ${if (logoBase64.isNotEmpty()) """
+                            <td style="width: 50px; vertical-align: top; padding-right: 10px;">
+                                <img id="logo-img" src="$logoBase64" alt="Logo" style="max-height: 35px; width: auto; display: block;" onerror="this.style.display='none';">
+                            </td>
+                            """ else ""}
+                            <td style="vertical-align: top;">
+                                <h1 style="margin: 0; color: #000000; font-size: 14px; line-height: 1.1; font-weight: bold;">
+                                    $companyName
+                                </h1>
+                                <p style="margin: 3px 0 1px 0; font-size: 9px; color: #333333;">
+                                    $companyAddress
+                                </p>
+                                <p style="margin: 1px 0; font-size: 9px; color: #333333;">
+                                    Telp: $companyPhone | Email: $companyEmail
+                                </p>
+                            </td>
+                        </tr>
+                    </table>
                 </td>
-                <td style="vertical-align: top;">
-                    <span class="company-name">$companyName</span><br>
-                    $companyAddress<br>
-                    Telp: $companyPhone | Email: $companyEmail
-                </td>
-                <td style="text-align: right; vertical-align: top;">
-                    <span class="doc-title">Faktur</span><br>
-                    No: <strong>${invoice.number}</strong><br>
-                    Status: <span class="status-badge">${Formatters.invoiceStatus(invoice.status).uppercase()}</span>
-                    ${if (!isColor) """
-                    <br>
-                    <span style="font-size: 13px;">
-                        TGL: ${Formatters.dateLong(invoice.createdAt)}<br>
-                        TEMPO: ${invoice.dueDate?.let { Formatters.dateLong(it) } ?: "-"}
-                    </span>
-                    """ else ""}
+
+                <td style="width: 40%; vertical-align: top; text-align: right; padding-right: 0;">
+                    <div class="nota-title">
+                        <h1 style="margin: 0; font-size: 16px; letter-spacing: 1px; color: #000000; line-height: 1; font-weight: bold;">FAKTUR</h1>
+                        <p style="margin: 4px 0 1px 0; font-size: 9px; line-height: 1.3;">
+                            No: #<span id="invoice-number-val">${invoice.number}</span><br>
+                            Tgl: <span id="created-date-val">${Formatters.dateLong(invoice.createdAt)}</span> | 
+                            Jatuh Tempo: <span id="due-date-val">${invoice.dueDate?.let { Formatters.dateLong(it) } ?: "-"}</span>
+                        </p>
+                    </div>
                 </td>
             </tr>
         </table>
-        """
-    } else {
-        if (printConfig.headerAlign == HeaderAlign.CENTER) {
-            """
-            <table class="header-table">
-                <tr>
-                    <td style="text-align: center; vertical-align: top;">
-                        <span class="company-name">$companyName</span><br>
-                        $companyAddress<br>
-                        Telp: $companyPhone | Email: $companyEmail
-                    </td>
-                </tr>
-                <tr>
-                    <td style="text-align: center; padding-top: 15px;">
-                        <span class="doc-title" style="text-align: center; display: block; width: 100%;">Faktur</span>
-                        No: <strong>${invoice.number}</strong> | Status: <span class="status-badge">${Formatters.invoiceStatus(invoice.status).uppercase()}</span>
-                        ${if (!isColor) """
-                        <br>
-                        <span style="font-size: 13px;">
-                            TGL: ${Formatters.dateLong(invoice.createdAt)} | TEMPO: ${invoice.dueDate?.let { Formatters.dateLong(it) } ?: "-"}
-                        </span>
-                        """ else ""}
-                    </td>
-                </tr>
-            </table>
-            """
-        } else {
-            """
-            <table class="header-table">
-                <tr>
-                    <td style="vertical-align: top;">
-                        <span class="company-name">$companyName</span><br>
-                        $companyAddress<br>
-                        Telp: $companyPhone | Email: $companyEmail
-                    </td>
-                    <td style="text-align: right; vertical-align: top;">
-                        <span class="doc-title">Faktur</span><br>
-                        No: <strong>${invoice.number}</strong><br>
-                        Status: <span class="status-badge">${Formatters.invoiceStatus(invoice.status).uppercase()}</span>
-                        ${if (!isColor) """
-                        <br>
-                        <span style="font-size: 13px;">
-                            TGL: ${Formatters.dateLong(invoice.createdAt)}<br>
-                            TEMPO: ${invoice.dueDate?.let { Formatters.dateLong(it) } ?: "-"}
-                        </span>
-                        """ else ""}
-                    </td>
-                </tr>
-            </table>
-            """
-        }
-    }
+    """.trimIndent()
 
     val signatureHtml = if (printConfig.useSignature) {
         val localSigBase64 = getFileBase64(invoice.receiverSignaturePath)
@@ -811,23 +768,24 @@ private fun generateInvoiceHtml(
             printConfig.signatureReceiverName
         }
         """
-        <table class="signature-section">
+        <table class="signature-section" style="width: 100%; margin-top: 10px; page-break-inside: avoid; border-collapse: collapse; border: none;">
             <tr>
-                <td class="signature-col" style="vertical-align: top;">
-                    Penerima,<br>
+                <td style="width: 40%; text-align: center; vertical-align: top; font-size: 9px; border: none;">
+                    Penerima / Pembeli,<br>
                     ${if (!receiverSig.isNullOrBlank()) """
-                    <img src="$receiverSig" style="height: 60px; width: auto; margin: 5px auto; display: block;" />
+                    <img src="$receiverSig" style="height: 40px; width: auto; margin: 3px auto; display: block;" />
                     """ else """
-                    <div style="height: 60px;"></div>
+                    <div style="height: 40px;"></div>
                     """}
                     ( <strong>${receiverName.ifBlank { " _____________________ " }}</strong> )
                 </td>
-                <td class="signature-col" style="vertical-align: top;">
+                <td style="width: 20%; border: none;"></td>
+                <td style="width: 40%; text-align: center; vertical-align: top; font-size: 9px; border: none;">
                     Hormat Kami,<br>
                     ${if (printConfig.signatureDrawnBase64?.isNotEmpty() == true) """
-                    <img src="${printConfig.signatureDrawnBase64}" style="height: 60px; width: auto; margin: 5px auto; display: block;" />
+                    <img id="ttd-img" src="${printConfig.signatureDrawnBase64}" style="height: 40px; width: auto; margin: 3px auto; display: block;" onerror="handleTtdError(this)" />
                     """ else """
-                    <div style="height: 60px;"></div>
+                    <div id="ttd-container" style="height: 40px;"></div>
                     """}
                     ( <strong>${printConfig.signatureSenderName.ifBlank { " _____________________ " }}</strong> )
                 </td>
@@ -838,126 +796,257 @@ private fun generateInvoiceHtml(
 
     return """
         <!DOCTYPE html>
-        <html>
+        <html lang="id">
         <head>
             <meta charset="utf-8">
+            <title>Faktur - $companyName</title>
             <style>
-                body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333; margin: 0; padding: 20px; font-size: 13px; line-height: 1.5; }
-                .header-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-                .company-name { font-size: 20px; font-weight: bold; color: $themeColor; }
-                .doc-title { font-size: 24px; font-weight: bold; text-align: right; color: $themeColor; text-transform: uppercase; }
-                .info-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
-                .info-col { width: 50%; vertical-align: top; }
-                .info-box { padding: 10px; border: 1px solid #eee; background-color: #FAFAFA; border-radius: 4px; margin-right: 10px; }
-                .info-box-right { padding: 10px; border: 1px solid #eee; background-color: #FAFAFA; border-radius: 4px; margin-left: 10px; }
-                .details-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
-                .details-table th {
-                    background-color: ${if (isColor) themeColor else "white"};
-                    color: ${if (isColor) "white" else "black"};
-                    padding: 10px;
-                    font-weight: bold;
-                    text-align: left;
-                    ${if (isColor) "" else "border-top: 2px solid black; border-bottom: 2px solid black;"}
+                @page {
+                    size: A4 portrait;
+                    margin: 0.5cm;
                 }
-                .details-table td { padding: 10px; border-bottom: 1px solid #eee; }
-                .totals-table { width: 40%; margin-left: auto; border-collapse: collapse; margin-top: 15px; }
-                .totals-table td { padding: 6px 10px; }
-                .totals-table tr.grand-total { font-size: 15px; font-weight: bold; background-color: $accentBg; }
-                .status-badge {
-                    display: inline-block;
-                    padding: 3px 8px;
+                .print-container {
+                    width: 100%;
+                    height: 138mm;
+                    max-height: 138mm;
+                    box-sizing: border-box;
+                    overflow: hidden;
+                    position: relative;
+                }
+                body {
+                    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                    color: #000000;
+                    margin: 0;
+                    padding: 0;
+                    font-size: 10px;
+                    line-height: 1.2;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                }
+                .nota-title h1 {
+                    margin: 0;
+                    font-size: 16px;
+                    letter-spacing: 1px;
+                    color: #000000;
                     font-weight: bold;
-                    color: ${if (isColor) "white" else "black"};
-                    background-color: ${if (isColor) statusColor else "white"};
-                    border: ${if (isColor) "none" else "1px solid black"};
-                    border-radius: 3px;
-                    font-size: 11px;
+                }
+                .client-info {
+                    margin-bottom: 5px;
+                    font-weight: bold;
                     text-transform: uppercase;
+                    font-size: 9px;
+                    color: #000000;
                 }
-                .footer { margin-top: 50px; text-align: center; color: #777; font-size: 11px; border-top: 1px solid #eee; padding-top: 15px; }
-                .signature-section { width: 100%; margin-top: 50px; border-collapse: collapse; }
-                .signature-col { width: 50%; text-align: center; }
+                .table-items {
+                    margin-bottom: 8px;
+                    border-collapse: collapse;
+                    width: 100%;
+                }
+                .table-items th {
+                    background-color: ${if (isColor) themeColor else "#ffffff"};
+                    color: ${if (isColor) "white" else "#000000"};
+                    padding: 4px 5px;
+                    text-align: left;
+                    text-transform: uppercase;
+                    font-size: 11px;
+                    border-top: 1.5px solid #000000;
+                    border-bottom: 1.5px solid #000000;
+                }
+                .table-items td {
+                    padding: 3px 5px;
+                    border-bottom: 1px solid #dddddd;
+                    font-size: 10px;
+                    color: #000000;
+                }
+                .stempel-lunas {
+                    color: #000000;
+                    border: 2px solid #000000;
+                    padding: 3px 6px;
+                    font-size: 12px;
+                    font-weight: bold;
+                    text-align: center;
+                    display: inline-block;
+                    letter-spacing: 1px;
+                }
             </style>
         </head>
         <body>
+            <div class="print-container">
             $headerHtml
- 
-            <hr style="border: none; border-top: 2px solid $themeColor; margin-bottom: 20px;">
- 
-            <table class="info-table">
-                <tr>
-                    <td class="info-col" style="${if (isColor) "width: 50%;" else "width: 100%;"}">
-                        <div class="info-box" style="${if (isColor) "" else "background-color: white; border: none; padding-left: 0;"}">
-                            <strong>DITAGIHKAN KEPADA:</strong><br>
-                            <span style="font-size: 14px; font-weight: bold;">$clientName</span><br>
-                            Alamat: $clientAddress<br>
-                            Telp: $clientPhone
-                        </div>
-                                      ${if (isColor) """
-                    <td class="info-col" style="width: 50%;">
-                        <div class="info-box-right">
-                            <strong>Rincian Pembayaran:</strong><br>
-                            Tanggal Faktur: ${Formatters.dateLong(invoice.createdAt)}<br>
-                            Jatuh Tempo: ${invoice.dueDate?.let { Formatters.dateLong(it) } ?: "-"}<br>
-                            Termin: ${invoice.paymentTerms.replace("days", "hari", ignoreCase = true).replace("day", "hari", ignoreCase = true)}
-                        </div>
-                    </td>
-                    """ else ""}
-                </tr>
-            </table>
- 
-            <table class="details-table" style="border: 1px solid #ddd; width: 100%;">
+
+            <div class="client-info" style="border-bottom: 1px solid #eeeeee; padding-bottom: 4px; margin-bottom: 8px;">
+                KEPADA YTH: 
+                <span style="font-size: 10px; font-weight: bold; margin-left: 5px;">$clientName</span>
+                <span style="font-weight: normal; font-size: 9px; text-transform: capitalize; color: #444444; margin-left: 10px;">
+                    $clientAddress
+                </span>
+            </div>
+
+            <table class="table-items">
                 <thead>
                     <tr>
                         <th style="width: 5%; text-align: center;">No</th>
-                        <th style="width: 45%;">Nama Barang / Deskripsi</th>
-                        <th style="width: 10%; text-align: center;">Jumlah</th>
-                        <th style="width: 15%; text-align: center;">Satuan</th>
-                        <th style="width: 12%; text-align: right;">Harga</th>
-                        <th style="width: 13%; text-align: right;">Total</th>
+                        <th style="width: 50%;">Deskripsi Barang</th>
+                        <th style="width: 15%; text-align: center;">Qty</th>
+                        <th style="width: 15%; text-align: right;">Harga</th>
+                        <th style="width: 15%; text-align: right;">Total</th>
                     </tr>
                 </thead>
                 <tbody>
                     $itemsHtml
                 </tbody>
             </table>
- 
-            <table class="totals-table">
+
+            <table style="margin-top: 5px; width: 100%; page-break-inside: avoid; border-collapse: collapse; border: none;">
                 <tr>
-                    <td>Subtotal:</td>
-                    <td style="text-align: right;">${Formatters.rupiah(invoice.totalAmount)}</td>
-                </tr>
-                <tr>
-                    <td>Telah Dibayar:</td>
-                    <td style="text-align: right; color: ${if (isColor) "#10B981" else "#000000"};">${Formatters.rupiah(invoice.paidAmount)}</td>
-                </tr>
-                <tr class="grand-total">
-                    <td style="border-top: 1px solid #ccc;">Sisa Tagihan:</td>
-                    <td style="text-align: right; border-top: 1px solid #ccc; color: ${if (isColor) "#EF4444" else "#000000"};">${Formatters.rupiah(invoice.totalAmount - invoice.paidAmount)}</td>
-                </tr>
-            </table>
- 
-            ${if (globalConfig.bankOwnerName.isNotBlank() && globalConfig.bankAccountNumber.isNotBlank()) """
-            <table style="width: 100%; margin-top: 20px;">
-                <tr>
-                    <td style="width: 60%; vertical-align: top;">
-                        <div style="font-size: 13px; border-top: 1px solid #000; padding-top: 8px; margin-bottom: 15px;">
-                            <strong>Info Pembayaran :</strong><br>
-                            Bank : ${globalConfig.bankName} : ${globalConfig.bankAccountNumber}<br>
-                            Atas Nama : ${globalConfig.bankOwnerName}
+                    <td style="width: 50%; vertical-align: top; padding-right: 15px; border: none;">
+                        ${if (globalConfig.bankOwnerName.isNotBlank() && globalConfig.bankAccountNumber.isNotBlank()) """
+                        <div style="font-size: 9px; border-top: 1px solid #000000; padding-top: 4px; margin-bottom: 5px; line-height: 1.3;">
+                            <strong>INFO PEMBAYARAN:</strong> ${globalConfig.bankName}: ${globalConfig.bankAccountNumber} a/n ${globalConfig.bankOwnerName}
                         </div>
+                        """ else ""}
+
+                        ${if (!invoice.notes.isNullOrBlank()) """
+                        <div style="font-size: 8px; border-top: 1px solid #eeeeee; padding-top: 4px;">
+                            <strong>CATATAN:</strong> ${invoice.notes}
+                        </div>
+                        """ else ""}
                     </td>
-                    <td style="width: 40%;"></td>
+                    
+                    <td style="width: 50%; vertical-align: top; border: none;">
+                        <table style="width: 100%; font-size: 10px; line-height: 1.4; border-collapse: collapse;">
+                            <tr style="border-bottom: 1px solid #000000;">
+                                <td style="text-align: left; font-weight: bold; padding: 2px 0;">SUBTOTAL</td>
+                                <td style="text-align: right; padding: 2px 0; font-weight: bold;">${Formatters.rupiah(invoice.totalAmount)}</td>
+                            </tr>
+                            <tr style="border-bottom: 1px solid #000000;">
+                                <td style="text-align: left; font-weight: bold; padding: 2px 0;">Telah Dibayar</td>
+                                <td style="text-align: right; padding: 2px 0; font-weight: bold; color: ${if (isColor) "#10B981" else "#000000"};">${Formatters.rupiah(invoice.paidAmount)}</td>
+                            </tr>
+                            <tr style="border-top: 1px solid #000000;">
+                                <td style="text-align: left; font-weight: bold; color: #000000; padding: 2px 0;">SISA TAGIHAN</td>
+                                <td style="text-align: right; font-weight: bold; color: ${if (isColor) "#EF4444" else "#000000"}; padding: 2px 0;">
+                                    ${Formatters.rupiah(invoice.totalAmount - invoice.paidAmount)}
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td style="text-align: left; font-weight: bold; color: #000000; padding: 4px 0; vertical-align: middle;">STATUS</td>
+                                <td style="text-align: right; padding: 4px 0; vertical-align: middle;">
+                                    <div id="status-stamp"></div>
+                                    <div id="status-raw" style="display: none;">${invoice.status}</div>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
                 </tr>
             </table>
-            """ else ""}
- 
+
             $signatureHtml
- 
-            <div class="footer">
-                Terima kasih atas kerja sama Anda.<br>
-                Faktur ini dihasilkan secara luring oleh POSBah.
             </div>
+
+            <script>
+            window.onload = function() {
+                checkTtdAndLogo();
+                resolveStatusStamp();
+
+                var rows = document.querySelectorAll('.table-items tbody tr');
+                var rowCount = rows.length;
+
+                var body = document.body;
+                var logoImg = document.getElementById('logo-img');
+                var ttdContainer = document.getElementById('ttd-container');
+                var tableCells = document.querySelectorAll('.table-items td');
+                var tableHeaders = document.querySelectorAll('.table-items th');
+
+                var baseFontSize = 10;
+                var paddingSize = 3;
+                var logoHeight = 35;
+                var ttdHeight = 40;
+
+                if (rowCount > 3) {
+                    var scale = Math.max(0.65, 1 - (rowCount - 3) * 0.08);
+                    
+                    body.style.fontSize = Math.round(baseFontSize * scale) + 'px';
+                    if (logoImg) {
+                        logoImg.style.maxHeight = Math.round(logoHeight * scale) + 'px';
+                    }
+                    if (ttdContainer) {
+                        ttdContainer.style.height = Math.round(ttdHeight * scale) + 'px';
+                    }
+                    
+                    tableHeaders.forEach(function(th) {
+                        th.style.fontSize = Math.round(11 * scale) + 'px';
+                        th.style.padding = Math.round(paddingSize * scale) + 'px 4px';
+                    });
+                    tableCells.forEach(function(td) {
+                        td.style.fontSize = Math.round(10 * scale) + 'px';
+                        td.style.padding = Math.round(paddingSize * scale) + 'px 4px';
+                    });
+                } else {
+                    body.style.fontSize = '10px';
+                    if (logoImg) {
+                        logoImg.style.maxHeight = '35px';
+                    }
+                    if (ttdContainer) {
+                        ttdContainer.style.height = '40px';
+                    }
+                    tableHeaders.forEach(function(th) {
+                        th.style.fontSize = '11px';
+                        th.style.padding = '4px 5px';
+                    });
+                    tableCells.forEach(function(td) {
+                        td.style.fontSize = '10px';
+                        td.style.padding = '3px 5px';
+                    });
+                }
+            };
+
+            function handleTtdError(img) {
+                img.style.display = 'none';
+            }
+
+            function checkTtdAndLogo() {
+                var ttdImg = document.getElementById('ttd-img');
+                if (ttdImg) {
+                    var src = ttdImg.getAttribute('src');
+                    if (!src || src.indexOf('ttd_path') !== -1 || src.trim() === '') {
+                        ttdImg.style.display = 'none';
+                    }
+                }
+                var logoImg = document.getElementById('logo-img');
+                if (logoImg) {
+                    var src = logoImg.getAttribute('src');
+                    if (!src || src.indexOf('logo_path') !== -1 || src.trim() === '') {
+                        logoImg.style.display = 'none';
+                    }
+                }
+            }
+
+            function resolveStatusStamp() {
+                var rawStatusEl = document.getElementById('status-raw');
+                var stampEl = document.getElementById('status-stamp');
+                if (!rawStatusEl || !stampEl) return;
+                
+                var status = rawStatusEl.textContent.trim().toUpperCase();
+                var html = '';
+                
+                if (status === 'PAID' || status === 'LUNAS') {
+                    html = '<div class="stempel-lunas">LUNAS</div>';
+                    var dueDateVal = document.getElementById('due-date-val');
+                    if (dueDateVal && dueDateVal.textContent.trim()) {
+                        html += '<div style="font-size: 8px; color: #000000; margin-top: 1px; font-weight: bold;">Lunas Pada: ' + dueDateVal.textContent.trim() + '</div>';
+                    }
+                } else if (status === 'PARTIAL' || status === 'CICIL' || status === 'BELUM LUNAS (CICIL)') {
+                    html = '<div style="color: #000000; font-weight: bold; font-size: 8px; text-transform: uppercase; border: 1px solid #000000; padding: 2px 4px; display: inline-block; border-radius: 2px;">CICIL</div>';
+                } else {
+                    html = '<div style="color: #000000; font-weight: bold; text-transform: uppercase; border: 1px solid #000000; padding: 2px 4px; display: inline-block; border-radius: 2px;">BELUM BAYAR</div>';
+                }
+                stampEl.innerHTML = html;
+            }
+            </script>
         </body>
         </html>
     """.trimIndent()
@@ -978,6 +1067,7 @@ private fun generateSuratJalanHtml(
     val companyName = settings?.clientName ?: "CV. Bahtera Mulya Plastik"
     val companyAddress = settings?.addressLine1 ?: "Sidoarjo, Jawa Timur"
     val companyPhone = settings?.phoneNumber ?: "082652626237"
+    val companyEmail = settings?.emailAddress ?: "bahteramulyap@gmail.com"
 
     val clientName = client?.clientName ?: "-"
     val clientAddress = client?.addressLine1 ?: "-"
@@ -986,75 +1076,55 @@ private fun generateSuratJalanHtml(
     val itemsHtml = StringBuilder()
     products.forEachIndexed { index, p ->
         val satuanVal = "${Formatters.number(p.jumlahLusin)} ${if (p.unit.lowercase() == "lusin" || p.unit == "-") "Lusin" else p.unit}"
-        val descHtml = if (!p.description.isNullOrBlank()) "<br/><span style=\"font-size: 11px; color: #555; font-weight: normal;\">${p.description}</span>" else ""
+        val descHtml = if (!p.description.isNullOrBlank()) "<br/><span style=\"font-size: 9px; color: #555; font-weight: normal;\">${p.description}</span>" else ""
         itemsHtml.append("""
             <tr>
-                <td style="border: 1px solid #333; padding: 8px; text-align: center;">${index + 1}</td>
-                <td style="border: 1px solid #333; padding: 8px;"><strong>${p.title}</strong>$descHtml</td>
-                <td style="border: 1px solid #333; padding: 8px; text-align: center;">$satuanVal</td>
-                <td style="border: 1px solid #333; padding: 8px; text-align: center;">${Formatters.number(p.quantity)}</td>
+                <td style="text-align: center;">${index + 1}</td>
+                <td><strong>${p.title}</strong>$descHtml</td>
+                <td style="text-align: center;">$satuanVal</td>
+                <td style="text-align: center;">${Formatters.number(p.quantity)}</td>
             </tr>
         """.trimIndent())
     }
 
-    val headerHtml = if (logoBase64.isNotEmpty()) {
-        """
-        <table class="header-table">
+    val headerHtml = """
+        <table style="width: 100%; border-bottom: 1.5px solid #000000; margin-bottom: 8px; padding-bottom: 5px;">
             <tr>
-                <td style="width: 80px; vertical-align: top; padding-right: 15px;">
-                    <img src="$logoBase64" style="width: 80px; height: auto;" />
+                <td style="width: 60%; vertical-align: top; text-align: left; padding-left: 0;">
+                    <table style="width: 100%; border: none; border-collapse: collapse;">
+                        <tr>
+                            ${if (logoBase64.isNotEmpty()) """
+                            <td style="width: 50px; vertical-align: top; padding-right: 10px;">
+                                <img id="logo-img" src="$logoBase64" alt="Logo" style="max-height: 35px; width: auto; display: block;" onerror="this.style.display='none';">
+                            </td>
+                            """ else ""}
+                            <td style="vertical-align: top;">
+                                <h1 style="margin: 0; color: #000000; font-size: 14px; line-height: 1.1; font-weight: bold;">
+                                    $companyName
+                                </h1>
+                                <p style="margin: 3px 0 1px 0; font-size: 9px; color: #333333;">
+                                    $companyAddress
+                                </p>
+                                <p style="margin: 1px 0; font-size: 9px; color: #333333;">
+                                    Telp: $companyPhone | Email: $companyEmail
+                                </p>
+                            </td>
+                        </tr>
+                    </table>
                 </td>
-                <td style="vertical-align: top;">
-                    <span class="company-name">$companyName</span><br>
-                    $companyAddress<br>
-                    Telp: $companyPhone
-                </td>
-                <td style="text-align: right; vertical-align: top;">
-                    <span class="doc-title">Surat Jalan</span><br>
-                    No. SJ: <strong>SJ-${invoice.number}</strong><br>
-                    Tanggal: ${Formatters.dateLong(System.currentTimeMillis())}
+
+                <td style="width: 40%; vertical-align: top; text-align: right; padding-right: 0;">
+                    <div class="nota-title">
+                        <h1 style="margin: 0; font-size: 16px; letter-spacing: 1px; color: #000000; line-height: 1; font-weight: bold;">SURAT JALAN</h1>
+                        <p style="margin: 4px 0 1px 0; font-size: 9px; line-height: 1.3;">
+                            No. SJ: <strong>SJ-${invoice.number}</strong><br>
+                            Tanggal: ${Formatters.dateLong(System.currentTimeMillis())}
+                        </p>
+                    </div>
                 </td>
             </tr>
         </table>
-        """
-    } else {
-        if (printConfig.headerAlign == HeaderAlign.CENTER) {
-            """
-            <table class="header-table">
-                <tr>
-                    <td style="text-align: center; vertical-align: top;">
-                        <span class="company-name">$companyName</span><br>
-                        $companyAddress<br>
-                        Telp: $companyPhone
-                    </td>
-                </tr>
-                <tr>
-                    <td style="text-align: center; padding-top: 15px;">
-                        <span class="doc-title" style="text-align: center; display: block; width: 100%;">Surat Jalan</span>
-                        No. SJ: <strong>SJ-${invoice.number}</strong> | Tanggal: ${Formatters.dateLong(System.currentTimeMillis())}
-                    </td>
-                </tr>
-            </table>
-            """
-        } else {
-            """
-            <table class="header-table">
-                <tr>
-                    <td style="vertical-align: top;">
-                        <span class="company-name">$companyName</span><br>
-                        $companyAddress<br>
-                        Telp: $companyPhone
-                    </td>
-                    <td style="text-align: right; vertical-align: top;">
-                        <span class="doc-title">Surat Jalan</span><br>
-                        No. SJ: <strong>SJ-${invoice.number}</strong><br>
-                        Tanggal: ${Formatters.dateLong(System.currentTimeMillis())}
-                    </td>
-                </tr>
-            </table>
-            """
-        }
-    }
+    """.trimIndent()
 
     val signatureHtml = if (printConfig.useSignature) {
         val localSigBase64 = getFileBase64(invoice.receiverSignaturePath)
@@ -1073,99 +1143,148 @@ private fun generateSuratJalanHtml(
             printConfig.signatureReceiverName
         }
         """
-        <table class="signature-section">
+        <table class="signature-section" style="width: 100%; margin-top: 15px; text-align: center; font-size: 10px; page-break-inside: avoid; border-collapse: collapse; border: none;">
             <tr>
-                <td class="signature-col">
-                    Penerima,<br>
+                <td style="width: 33%; vertical-align: top; border: none; text-align: center;">
+                    <strong>Penerima / Pembeli</strong>
+                    <br>
                     ${if (!receiverSig.isNullOrBlank()) """
-                    <img src="$receiverSig" style="height: 60px; width: auto; margin: 5px auto; display: block;" />
+                    <img src="$receiverSig" style="height: 40px; width: auto; margin: 3px auto; display: block;" />
                     """ else """
-                    <div style="height: 60px;"></div>
+                    <div style="height: 40px;"></div>
                     """}
                     ( <strong>${receiverName.ifBlank { " _____________________ " }}</strong> )
                 </td>
-                <td class="signature-col">
-                    Pengirim / Sopir,<br><br>
-                    <div style="height: 60px;"></div>
+                <td style="width: 33%; vertical-align: top; border: none; text-align: center;">
+                    <strong>Sopir / Kurir</strong>
+                    <br><br>
+                    <div style="height: 40px;"></div>
                     ( <strong> _____________________ </strong> )
                 </td>
-                <td class="signature-col" style="vertical-align: top;">
-                    Hormat Kami (Gudang),<br>
+                <td style="width: 34%; vertical-align: top; border: none; text-align: center;">
+                    <strong>Hormat Kami,</strong>
+                    <br>
                     ${if (printConfig.signatureDrawnBase64?.isNotEmpty() == true) """
-                    <img src="${printConfig.signatureDrawnBase64}" style="height: 60px; width: auto; margin: 5px auto; display: block;" /><br>
+                    <img src="${printConfig.signatureDrawnBase64}" style="height: 40px; width: auto; margin: 3px auto; display: block;" />
                     """ else """
-                    <div style="height: 60px;"></div>
+                    <div style="height: 40px;"></div>
                     """}
-                    ( <strong>${printConfig.signatureSenderName.ifBlank { " _____________________ " }}</strong> )
+                    ( <strong>Bag. Gudang</strong> )
                 </td>
             </tr>
         </table>
         """
-    } else ""
+    } else {
+        """
+        <table style="margin-top: 15px; text-align: center; width: 100%; font-size: 10px; page-break-inside: avoid; border-collapse: collapse; border: none;">
+            <tr>
+                <td style="width: 33%; vertical-align: top; border: none; text-align: center;">
+                    <strong>Penerima / Pembeli</strong>
+                    <br><br><br>
+                    ( .......................... )
+                </td>
+                <td style="width: 33%; vertical-align: top; border: none; text-align: center;">
+                    <strong>Sopir / Kurir</strong>
+                    <br><br><br>
+                    ( .......................... )
+                </td>
+                <td style="width: 34%; vertical-align: top; border: none; text-align: center;">
+                    <strong>Hormat Kami,</strong>
+                    <div style="height: 30px; margin: 3px 0;"></div>
+                    <strong>Bag. Gudang</strong>
+                </td>
+            </tr>
+        </table>
+        """
+    }
 
     return """
         <!DOCTYPE html>
-        <html>
+        <html lang="id">
         <head>
             <meta charset="utf-8">
+            <title>Surat Jalan - $companyName</title>
             <style>
-                body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #000; margin: 0; padding: 20px; font-size: 13px; line-height: 1.5; }
-                .header-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-                .company-name { font-size: 18px; font-weight: bold; color: #000; }
-                .doc-title { font-size: 22px; font-weight: bold; text-align: right; text-transform: uppercase; letter-spacing: 1px; }
-                .info-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
-                .info-col { width: 50%; vertical-align: top; }
-                .info-box { padding: 10px; border: none; margin-right: 10px; }
-                .info-box-right { padding: 10px; border: none; margin-left: 10px; }
-                .details-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
-                .details-table th {
-                    background-color: ${if (isColor) "#333" else "white"};
-                    color: ${if (isColor) "white" else "black"};
-                    padding: 8px;
-                    font-weight: bold;
-                    text-align: left;
-                    border: 1px solid #333;
+                @page {
+                    size: A4 portrait;
+                    margin: 0.5cm;
                 }
-                .details-table td { padding: 8px; border: 1px solid #333; }
-                .footer { margin-top: 30px; text-align: center; color: #555; font-size: 11px; }
-                .signature-section { width: 100%; margin-top: 40px; border-collapse: collapse; }
-                .signature-col { width: 33%; text-align: center; vertical-align: top; }
+                .print-container {
+                    width: 100%;
+                    height: 138mm;
+                    max-height: 138mm;
+                    box-sizing: border-box;
+                    overflow: hidden;
+                    position: relative;
+                }
+                body {
+                    font-family: Helvetica, Arial, sans-serif;
+                    color: #333333;
+                    margin: 0;
+                    padding: 0;
+                    font-size: 10px;
+                    line-height: 1.2;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                }
+                .nota-title h1 {
+                    margin: 0;
+                    font-size: 16px;
+                    letter-spacing: 1px;
+                    color: #000000;
+                    font-weight: bold;
+                }
+                .client-info {
+                    margin-bottom: 5px;
+                    font-weight: bold;
+                    text-transform: uppercase;
+                    font-size: 9px;
+                    color: #000000;
+                }
+                .table-items {
+                    margin-bottom: 8px;
+                    border-collapse: collapse;
+                    width: 100%;
+                }
+                .table-items th {
+                    background-color: #ffffff;
+                    color: #000000;
+                    padding: 4px 5px;
+                    text-align: left;
+                    text-transform: uppercase;
+                    font-size: 11px;
+                    border-top: 1.5px solid #000000;
+                    border-bottom: 1.5px solid #000000;
+                }
+                .table-items td {
+                    padding: 3px 5px;
+                    border-bottom: 1px solid #000000;
+                    font-size: 10px;
+                    color: #000000;
+                }
             </style>
         </head>
         <body>
+            <div class="print-container">
             $headerHtml
 
-            <hr style="border: none; border-top: 2px solid #000; margin-bottom: 20px;">
+            <div class="client-info" style="border-bottom: 1px solid #eeeeee; padding-bottom: 4px; margin-bottom: 8px;">
+                ALAMAT PENGIRIMAN:
+                <span style="font-size: 10px; font-weight: bold; margin-left: 5px;">$clientName</span>
+                <span style="font-weight: normal; font-size: 9px; text-transform: capitalize; color: #444444; margin-left: 10px;">
+                    $clientAddress
+                </span>
+            </div>
 
-            <table class="info-table">
-                <tr>
-                    <td class="info-col" style="${if (isColor) "width: 50%;" else "width: 100%;"}">
-                        <div class="info-box" style="${if (isColor) "" else "background-color: white; border: none; padding-left: 0;"}">
-                            <strong>Kirim Kepada:</strong><br>
-                            <span style="font-size: 14px; font-weight: bold;">$clientName</span><br>
-                            Alamat: $clientAddress<br>
-                            Telp: $clientPhone
-                        </div>
-                    </td>
-                    ${if (isColor) """
-                    <td class="info-col" style="width: 50%;">
-                        <div class="info-box-right">
-                            <strong>Keterangan:</strong><br>
-                            Dokumen ini adalah bukti penyerahan barang secara sah.<br>
-                            No. Faktur Rujukan: <strong>${invoice.number}</strong>
-                        </div>
-                    </td>
-                    """ else ""}
-                </tr>
-            </table>
-
-            <table class="details-table" style="width: 100%;">
+            <table class="table-items">
                 <thead>
                     <tr>
-                        <th style="width: 8%; text-align: center;">No</th>
-                        <th style="width: 52%;">Nama Barang / Deskripsi</th>
-                        <th style="width: 20%; text-align: center;">Satuan</th>
-                        <th style="width: 20%; text-align: center;">Jumlah</th>
+                        <th style="width: 5%; text-align: center;">#</th>
+                        <th style="width: 55%;">ITEM</th>
+                        <th style="width: 20%; text-align: center;">LUSIN</th>
+                        <th style="width: 20%; text-align: center;">QTY</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1174,9 +1293,6 @@ private fun generateSuratJalanHtml(
             </table>
 
             $signatureHtml
-
-            <div class="footer">
-                Surat Jalan ini sah dan diterbitkan secara luring oleh POSBah.
             </div>
         </body>
         </html>

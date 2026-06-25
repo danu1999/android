@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="utf-8">
+    <title>Surat Jalan - CV. Bahtera Mulya Plastik</title>
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 0.5cm;
+        }
+
+        .print-container {
+            width: 100%;
+            height: 138mm;
+            max-height: 138mm;
+            box-sizing: border-box;
+            overflow: hidden;
+            position: relative;
+        }
+
+        body {
+            font-family: Helvetica, Arial, sans-serif;
+            color: #333333;
+            margin: 0;
+            padding: 0;
+            font-size: 10px;
+            line-height: 1.2;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .nota-title h1 {
+            margin: 0;
+            font-size: 16px;
+            letter-spacing: 1px;
+            color: #000000;
+            font-weight: bold;
+        }
+
+        .client-info {
+            margin-bottom: 5px;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 9px;
+            color: #000000;
+        }
+
+        /* Tabel Barang (Tanpa Harga) */
+        .table-items {
+            margin-bottom: 8px;
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        .table-items th {
+            background-color: #ffffff;
+            color: #000000;
+            padding: 4px 5px;
+            text-align: left;
+            text-transform: uppercase;
+            font-size: 11px;
+            border-top: 1.5px solid #000000;
+            border-bottom: 1.5px solid #000000;
+        }
+
+        .table-items td {
+            padding: 3px 5px;
+            border-bottom: 1px solid #000000;
+            font-size: 10px;
+            color: #000000;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="print-container">
+    <table style="width: 100%; border-bottom: 1.5px solid #000000; margin-bottom: 8px; padding-bottom: 5px;">
+        <tr>
+            <td style="width: 60%; vertical-align: top; text-align: left; padding-left: 0;">
+                <h1 style="margin: 0; color: #000000; font-size: 14px; line-height: 1.1; font-weight: bold;">
+                    CV. Bahtera Mulya Plastik
+                </h1>
+                <p style="margin: 3px 0 1px 0; font-size: 9px; color: #333333;">
+                    Jl. Arimbi, RT04 RW 01 Desa Ngrimbi
+                </p>
+                <p style="margin: 1px 0; font-size: 9px; color: #333333;">
+                    Telp: {{ .Settings.PhoneNumber }} | Email: {{ .Settings.EmailAddress }}
+                </p>
+            </td>
+
+            <td style="width: 40%; vertical-align: top; text-align: right; padding-right: 0;">
+                <div class="nota-title">
+                    <h1
+                        style="margin: 0; font-size: 16px; letter-spacing: 1px; color: #000000; line-height: 1; font-weight: bold;">
+                        SURAT JALAN</h1>
+                    <div style="font-size: 9px; font-weight: normal; line-height: 1.3; margin-top: 4px;">
+                        No: #<span id="invoice-number-val">{{ if .Invoice.Number }}{{ .Invoice.Number }}{{ else
+                            }}{{"{{"}}no_invoice{{"}}"}}{{ end }}</span><br>
+                        Tanggal: <span id="created-date-val">{{ if .Invoice.DateCreated }}{{ formatDate
+                            .Invoice.DateCreated }}{{ else }}{{"{{"}}tgl_buat{{"}}"}}{{ end }}</span>
+                    </div>
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <div class="client-info" style="border-bottom: 1px solid #eeeeee; padding-bottom: 4px; margin-bottom: 8px;">
+        ALAMAT PENGIRIMAN:
+        <span style="font-size: 10px; font-weight: bold; margin-left: 5px;">
+            {{ if .Invoice.Client.ID }}
+            {{ .Invoice.Client.ClientName }}
+            {{ else }}
+            (Pelanggan Belum Dipilih)
+            {{ end }}
+        </span>
+        <span
+            style="font-weight: normal; font-size: 9px; text-transform: capitalize; color: #444444; margin-left: 10px;">
+            {{ if .Invoice.Client.ID }}
+            {{ .Invoice.Client.AddressLine1 }}
+            {{ end }}
+        </span>
+    </div>
+
+    <table class="table-items">
+        <thead>
+            <tr>
+                <th style="width: 5%;">#</th>
+                <th style="width: 55%;">ITEM</th>
+                <th style="width: 20%;">LUSIN</th>
+                <th style="width: 20%;">QTY</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{ range $index, $product := .Products }}
+            {{ if $product.Title }}
+            <tr>
+                <td>{{ add $index 1 }}</td>
+                <td><strong>{{ $product.Title }}</strong></td>
+                <td>{{ printf "%.0f" $product.JumlahLusin }}</td>
+                <td>{{ intcomma $product.Quantity }}</td>
+            </tr>
+            {{ end }}
+            {{ end }}
+        </tbody>
+    </table>
+
+    <table style="margin-top: 15px; text-align: center; width: 100%; font-size: 10px; page-break-inside: avoid;">
+        <tr>
+            <td style="width: 33%; vertical-align: top;">
+                <strong>Penerima / Pembeli</strong>
+                <br><br><br>
+                ( .......................... )
+            </td>
+            <td style="width: 33%; vertical-align: top;">
+                <strong>Sopir / Kurir</strong>
+                <br><br><br>
+                ( .......................... )
+            </td>
+            <td style="width: 34%; vertical-align: top;">
+                <strong>Hormat Kami,</strong>
+                <div style="height: 30px; margin: 3px 0;">
+                </div>
+                <strong>Bag. Gudang</strong>
+            </td>
+        </tr>
+    </table>
+    </div>
+</body>
+
+</html>
