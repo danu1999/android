@@ -53,12 +53,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import coil.compose.AsyncImage
 import com.posbah.app.data.local.entities.BmpSettingsEntity
-import com.posbah.app.data.local.entities.Outlet
 import com.posbah.app.data.local.entities.Tenant
-import com.posbah.app.data.local.entities.Employee
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpSettingsRepository
 import com.posbah.app.data.repository.OutletRepository
+import com.posbah.app.data.repository.EmployeeRepository
+import com.posbah.app.data.repository.EmployeeData
+import com.posbah.app.data.repository.BmpEmployeeRepository
+import com.posbah.app.data.repository.OutletData
 import com.posbah.app.ui.components.PosBahTopBar
 import com.posbah.app.ui.components.PrimaryButton
 import com.posbah.app.ui.components.ButtonVariant
@@ -79,10 +81,19 @@ class SettingsViewModel @Inject constructor(
     private val settingsRepo: BmpSettingsRepository,
     private val outletRepo: OutletRepository,
     private val authRepository: AuthRepository,
-    private val db: com.posbah.app.data.local.PosBahDatabase,
+    private val employeeRepo: EmployeeRepository,
+    private val bmpEmployeeRepo: BmpEmployeeRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
+
+    init {
+        viewModelScope.launch {
+            try { settingsRepo.refresh() } catch (_: Exception) {}
+            try { employeeRepo.refresh() } catch (_: Exception) {}
+            try { bmpEmployeeRepo.refresh() } catch (_: Exception) {}
+        }
+    }
 
     private val _syncStatus = MutableStateFlow<String?>(null)
     val syncStatus = _syncStatus.asStateFlow()
@@ -94,9 +105,9 @@ class SettingsViewModel @Inject constructor(
     val draftTenant = _draftTenant.asStateFlow()
 
     val outlets = outletRepo.observe(tenantId)
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<com.posbah.app.data.local.entities.Outlet>())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<OutletData>())
 
-    val posEmployees = db.employeeDao().observeForTenant(tenantId)
+    val posEmployees = employeeRepo.observeForTenant(tenantId)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     init {
@@ -119,7 +130,7 @@ class SettingsViewModel @Inject constructor(
                 tenantId = tenantId,
                 clientName = "Perusahaan Saya"
             )
-            _draftTenant.value = db.tenantDao().getById(tenantId)
+            _draftTenant.value = authRepository.getTenantOnline(tenantId)
         }
         loadSyncSummary()
     }
@@ -150,14 +161,7 @@ class SettingsViewModel @Inject constructor(
         )
         settingsRepo.save(dataToSave)
         if (t != null) {
-            db.tenantDao().upsert(t.copy(updatedAt = System.currentTimeMillis()))
-        }
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-            } catch (ex: Exception) {
-                ex.printStackTrace()
-            }
+            authRepository.updateTenantOnline(t.id, t.name)
         }
     }
 
@@ -166,7 +170,7 @@ class SettingsViewModel @Inject constructor(
             _syncStatus.value = "Nama outlet tidak boleh kosong."
             return@launch
         }
-        val activeEmployees = db.employeeDao().getAll().filter { it.tenantId == tenantId && it.isActive }
+        val activeEmployees = employeeRepo.list().filter { it.tenantId == tenantId && it.isActive }
         val emp = activeEmployees.firstOrNull { it.id == employeeId }
         if (emp == null) {
             _syncStatus.value = "Karyawan tidak ditemukan."
@@ -177,80 +181,34 @@ class SettingsViewModel @Inject constructor(
         if (emp.outletId != null) {
             val oldOutletCount = activeEmployees.count { it.outletId == emp.outletId }
             if (oldOutletCount <= 1) {
-                val oldOutletName = db.outletDao().getById(emp.outletId)?.name ?: "Outlet Lain"
+                val oldOutletName = outletRepo.getById(emp.outletId)?.name ?: "Outlet Lain"
                 _syncStatus.value = "Gagal: ${emp.name} adalah karyawan terakhir di $oldOutletName."
                 return@launch
             }
         }
 
         val newOutletId = outletRepo.create(name, address, phone)
-        db.employeeDao().update(emp.copy(outletId = newOutletId, updatedAt = System.currentTimeMillis(), isSynced = false))
-        val email = getActiveUserEmail().orEmpty()
-        com.posbah.app.data.remote.SupabaseSyncManager.pushEmployeeImmediate(context, db, tenantId, emp.id, email)
-
-        val outlet = db.outletDao().getById(newOutletId)
-        if (outlet != null) {
-            db.outletDao().update(outlet.copy(currentEmployee = emp.name, isSynced = false, updatedAt = System.currentTimeMillis()))
-        }
-
-        _syncStatus.value = "Outlet berhasil ditambahkan."
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-            } catch (ex: Exception) {
-                ex.printStackTrace()
-            }
+        if (newOutletId > 0) {
+            employeeRepo.update(emp.copy(outletId = newOutletId, updatedAt = System.currentTimeMillis()))
+            _syncStatus.value = "Outlet berhasil ditambahkan."
+        } else {
+            _syncStatus.value = "Gagal membuat outlet."
         }
     }
 
-    fun updateOutlet(o: Outlet) = viewModelScope.launch {
-        val data = com.posbah.app.data.repository.OutletData(
-            id = o.id,
-            tenantId = o.tenantId,
-            name = o.name,
-            address = o.address,
-            phone = o.phone,
-            isDefault = o.isDefault,
-            isOpen = o.isOpen
-        )
-        outletRepo.update(data)
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-            } catch (ex: Exception) {
-                ex.printStackTrace()
-            }
-        }
+    fun updateOutlet(o: OutletData) = viewModelScope.launch {
+        outletRepo.update(o)
     }
 
     fun deleteOutlet(id: Long) = viewModelScope.launch {
-        val outlet = db.outletDao().getById(id) ?: return@launch
-
         // Safe unlink for POS employees
-        val email = getActiveUserEmail().orEmpty()
-        val posEmployees = db.employeeDao().getAll().filter { it.outletId == id }
+        val posEmployees = employeeRepo.list().filter { it.outletId == id }
         posEmployees.forEach { emp ->
-            db.employeeDao().update(emp.copy(outletId = null, updatedAt = System.currentTimeMillis(), isSynced = false))
-            com.posbah.app.data.remote.SupabaseSyncManager.pushEmployeeImmediate(context, db, tenantId, emp.id, email)
-        }
-
-        // Safe unlink for BMP employees
-        val bmpEmployees = db.bmpEmployeeDao().getAll().filter { it.outletId == id }
-        bmpEmployees.forEach { emp ->
-            db.bmpEmployeeDao().update(emp.copy(outletId = null, updatedAt = System.currentTimeMillis()))
-            com.posbah.app.data.remote.SupabaseSyncManager.pushBmpEmployeeImmediate(context, db, tenantId, emp.id, email)
+            employeeRepo.update(emp.copy(outletId = null, updatedAt = System.currentTimeMillis()))
         }
 
         outletRepo.delete(id)
         _syncStatus.value = "Outlet berhasil dihapus."
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                com.posbah.app.data.remote.SupabaseSyncManager.deleteRow(context, "outlets", id, tenantId)
-                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-            } catch (ex: Exception) {
-                ex.printStackTrace()
-            }
-        }
     }
 
     private val _syncSummary = MutableStateFlow<Map<String, Int>?>(null)
@@ -285,20 +243,15 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun performSync(context: Context) = viewModelScope.launch {
-        _syncStatus.value = "Sedang mensinkronisasikan..."
-        val pullResult = com.posbah.app.data.remote.SupabaseSyncManager.pullAll(context, db, tenantId)
-        if (pullResult is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Error) {
-            _syncStatus.value = "Gagal memuat data dari server: ${pullResult.message}"
-            return@launch
-        }
-        val result = com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, tenantId)
-        _syncStatus.value = when (result) {
-            is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Success -> {
-                loadSyncSummary()
-                "Sinkronisasi berhasil!"
-            }
-            is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.NoConnection -> "Koneksi internet tidak tersedia."
-            is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Error -> "Gagal mengirim data: ${result.message}"
+        _syncStatus.value = "Menyegarkan data..."
+        try {
+            settingsRepo.refresh()
+            employeeRepo.refresh()
+            bmpEmployeeRepo.refresh()
+            loadSyncSummary()
+            _syncStatus.value = "Data berhasil diperbarui dari cloud!"
+        } catch (e: Exception) {
+            _syncStatus.value = "Gagal memperbarui data: ${e.localizedMessage}"
         }
     }
 
@@ -330,7 +283,7 @@ fun SettingsScreen(
     var selectedEmployeeName by remember { mutableStateOf("") }
     var employeeDropdownExpanded by remember { mutableStateOf(false) }
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
-    var outletToDelete by remember { mutableStateOf<Outlet?>(null) }
+    var outletToDelete by remember { mutableStateOf<OutletData?>(null) }
 
 
     var showChangePassword by remember { mutableStateOf(false) }

@@ -96,6 +96,36 @@ data class PrintConfig(
         fun fromEntity(data: com.posbah.app.data.repository.PrintSettingsData?): PrintConfig {
             if (data == null) return PrintConfig()
             return PrintConfig(
+                jpg = DocPrintConfig(
+                    useLogo = data.jpgUseLogo,
+                    headerAlign = if (data.jpgHeaderAlign == "CENTER") HeaderAlign.CENTER else HeaderAlign.LEFT,
+                    useSignature = data.jpgUseSignature,
+                    signatureSenderName = data.jpgSignatureSenderName,
+                    signatureReceiverName = data.jpgSignatureReceiverName,
+                    signatureDrawnBase64 = data.jpgSignatureDrawnBase64,
+                    isColor = data.jpgIsColor,
+                    templateType = data.jpgTemplateType
+                ),
+                sj = DocPrintConfig(
+                    useLogo = data.sjUseLogo,
+                    headerAlign = if (data.sjHeaderAlign == "CENTER") HeaderAlign.CENTER else HeaderAlign.LEFT,
+                    useSignature = data.sjUseSignature,
+                    signatureSenderName = data.sjSignatureSenderName,
+                    signatureReceiverName = data.sjSignatureReceiverName,
+                    signatureDrawnBase64 = data.sjSignatureDrawnBase64,
+                    isColor = data.sjIsColor,
+                    templateType = data.sjTemplateType
+                ),
+                invoice = DocPrintConfig(
+                    useLogo = data.invoiceUseLogo,
+                    headerAlign = if (data.invoiceHeaderAlign == "CENTER") HeaderAlign.CENTER else HeaderAlign.LEFT,
+                    useSignature = data.invoiceUseSignature,
+                    signatureSenderName = data.invoiceSignatureSenderName,
+                    signatureReceiverName = data.invoiceSignatureReceiverName,
+                    signatureDrawnBase64 = data.invoiceSignatureDrawnBase64,
+                    isColor = data.invoiceIsColor,
+                    templateType = data.invoiceTemplateType
+                ),
                 receiptPaperWidth = if (data.paperWidth == "MM58") PaperWidth.MM58 else PaperWidth.MM80,
                 receiptUseLogo = data.useLogo,
                 receiptHeaderAlign = if (data.headerAlign == "LEFT") HeaderAlign.LEFT else HeaderAlign.CENTER,

@@ -199,6 +199,68 @@ fun PrintSettingsScreen(
                                 context = context
                             )
                         }
+                        item {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text("Informasi Pembayaran", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                                    Text(
+                                        "Informasi bank/e-wallet untuk dicetak di JPG",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+
+                                    Text("Bank / E-Wallet", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        listOf("BCA", "BRI", "MANDIRI", "DANA", "SHOPE").forEach { bank ->
+                                            val selected = d.bankName == bank
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .clip(RoundedCornerShape(8.dp))
+                                                    .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent)
+                                                    .border(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
+                                                    .clickable { viewModel.update { it.copy(bankName = bank) } }
+                                                    .padding(vertical = 8.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(bank, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface, fontSize = 12.sp)
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(16.dp))
+
+                                    OutlinedTextField(
+                                        value = d.bankOwnerName,
+                                        onValueChange = { v -> viewModel.update { it.copy(bankOwnerName = v) } },
+                                        label = { Text("Atas Nama Pemilik") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth().testTag("jpg-bank-owner")
+                                    )
+
+                                    Spacer(modifier = Modifier.height(16.dp))
+
+                                    val inputLabel = if (d.bankName == "DANA" || d.bankName == "SHOPE") "Nomor Akun Dana/Shopee" else "Nomor Rekening"
+                                    OutlinedTextField(
+                                        value = d.bankAccountNumber,
+                                        onValueChange = { v -> viewModel.update { it.copy(bankAccountNumber = v) } },
+                                        label = { Text(inputLabel) },
+                                        singleLine = true,
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        modifier = Modifier.fillMaxWidth().testTag("jpg-bank-number")
+                                    )
+                                }
+                            }
+                        }
                     }
                     TAB_SJ -> {
                         item {

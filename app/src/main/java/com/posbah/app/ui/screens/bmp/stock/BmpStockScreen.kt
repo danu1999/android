@@ -26,11 +26,9 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.posbah.app.data.local.PosBahDatabase
 import com.posbah.app.data.local.entities.BmpProductStockEntity
 import com.posbah.app.data.local.entities.BmpStockLedgerEntity
 import com.posbah.app.data.local.entities.BmpMasterProductEntity
-import com.posbah.app.data.remote.SupabaseSyncManager
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpStockRepository
 import com.posbah.app.ui.components.EmptyState
@@ -70,10 +68,16 @@ class BmpStockViewModel @Inject constructor(
     private val stockRepo: BmpStockRepository,
     private val masterProductRepo: com.posbah.app.data.repository.BmpMasterProductRepository,
     private val authRepository: AuthRepository,
-    private val db: PosBahDatabase,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
+
+    init {
+        viewModelScope.launch {
+            try { stockRepo.refresh() } catch (_: Exception) {}
+            try { masterProductRepo.refresh() } catch (_: Exception) {}
+        }
+    }
 
     val stockItems: StateFlow<List<StockProductItem>> = combine(
         stockRepo.observeStocks(tenantId),
@@ -114,13 +118,6 @@ class BmpStockViewModel @Inject constructor(
             referenceId = 0L,
             notes = notes
         )
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                SupabaseSyncManager.syncAll(context, db, tenantId)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
     }
 }
 

@@ -38,7 +38,8 @@ data class UserSession(
     val businessMode: String? = null,
     val isPremium: Boolean = false,
     val businessModeLocked: Boolean = false,
-    val apkVersion: String = ""
+    val apkVersion: String = "",
+    val whatsapp: String? = null
 )
 
 data class TenantSession(
@@ -67,6 +68,7 @@ class AuthRepository @Inject constructor(
         "hanafiariful@gmail.com" to Triple("20710a82f8d6b458af10d49fbb1f985ac8aaf696e6b32e776d4f4ebbc30d08565e2bb5e1902ace18297d8db47ad35e49c086669125b1d6ac867c0d2d7e265e50", "PISANG KEJU RAMAYANA", "ten_premium_hanafiariful_gmail_com"),
         "fahrup22@gmail.com" to Triple("63e71711d1481b6da8b756e114aa2ac71a704929c0accf46f419706a5c1416ae1a312899ae84d3d8e33d255811e98fd4d17e59371a08e2f9c21c01d1b1c13a8d", "FahriP", "ten_premium_hanafiariful_gmail_com"),
         "alfarisirosi40@gmail.com" to Triple("a10301e4a133374bddc5f4f246aead30ba95b4f60c65df80418df2c6338141c9606262b07348fb0ee75964d460de3a459377217afa4b85b7bde3f8572d3b791c", "Mamet PKR", "ten_premium_hanafiariful_gmail_com"),
+        "mulyakus84@gmail.com" to Triple("d630f857374a68dff86f8bd605d9e1826c4e4b3267a13371d42c07516993337ea97d4d1fc4c1b68f611ab08ac77e9175cd74c03ee094e081dace5dbc097b2d44", "CV. Aku&dia Bersama (Laundry)", "ten_premium_mulyakus84_gmail_com_LAUNDRY"),
         "playstoretest@gmail.com" to Triple("f93226ab6fd88288603a9ea14137015f3667f84ea23e34c32fad092883b3994546a681e423e9c1d087a5ea6f7238dcf8d3b7a27b93d2315addfde043c01cbf1a", "PlayStore Test", "ten_premium_playstoretest_gmail_com")
     )
 
@@ -312,7 +314,12 @@ class AuthRepository @Inject constructor(
                 securePrefs.lockoutUntil = 0L
 
                 val isBmpTenant = tenantId.contains("bahteramulyap")
-                val mode = if (isBmpTenant) "BMP" else "FNB"
+                val mode = when {
+                    isBmpTenant -> "BMP"
+                    tenantId.endsWith("_LAUNDRY") -> "LAUNDRY"
+                    tenantId.endsWith("_RENTAL") -> "RENTAL"
+                    else -> "FNB"
+                }
 
                 val tenantObj = fetchTenantFromVps(tenantId)
                 val tenantName = tenantObj?.optString("name") ?: when {
@@ -323,7 +330,7 @@ class AuthRepository @Inject constructor(
                 val tenantMode = tenantObj?.optString("businessMode") ?: mode
 
                 val userRole = when (cleanEmail) {
-                    "hanafiariful@gmail.com", "bahteramulyap@gmail.com", "demo@posbah.com" -> "OWNER"
+                    "hanafiariful@gmail.com", "bahteramulyap@gmail.com", "mulyakus84@gmail.com", "demo@posbah.com" -> "OWNER"
                     "alfarisirosi40@gmail.com" -> "KASIR"
                     else -> vpsEmployee?.optString("role") ?: "ADMIN"
                 }
@@ -454,6 +461,24 @@ class AuthRepository @Inject constructor(
         )
     }
 
+    suspend fun fetchUserOnline(email: String): UserSession? = withContext(Dispatchers.IO) {
+        val obj = fetchUserFromVps(email) ?: return@withContext null
+        val sub = obj.optString("googleSub", "")
+        UserSession(
+            googleSub = sub,
+            email = obj.optString("email", email),
+            displayName = obj.optString("displayName", null).takeIf { !it.isNullOrBlank() },
+            photoUrl = obj.optString("photoUrl", null).takeIf { !it.isNullOrBlank() },
+            role = obj.optString("role", "OWNER"),
+            tenantId = obj.optString("tenantId", null).takeIf { !it.isNullOrBlank() },
+            businessMode = obj.optString("businessMode", null).takeIf { !it.isNullOrBlank() },
+            isPremium = obj.optBoolean("isPremium", false),
+            businessModeLocked = obj.optBoolean("businessModeLocked", false),
+            apkVersion = obj.optString("apkVersion", ""),
+            whatsapp = obj.optString("whatsapp", null).takeIf { !it.isNullOrBlank() }
+        )
+    }
+
     // ── Tenant selection (multi-tenant Google users) ──────────────────────────
 
     suspend fun selectTenant(googleSub: String, tenantId: String): Boolean = withContext(Dispatchers.IO) {
@@ -461,13 +486,64 @@ class AuthRepository @Inject constructor(
         val cleanEmail = email.lowercase().trim()
 
         // Premium email validation
-        if (cleanEmail == "hanafiariful@gmail.com" && tenantId != "ten_premium_hanafiariful_gmail_com") return@withContext false
-        if (cleanEmail == "bahteramulyap@gmail.com" && tenantId != "ten_premium_bahteramulyap_gmail_com") return@withContext false
-
         val tenantObj = fetchTenantFromVps(tenantId) ?: return@withContext false
+        val ownerEmail = tenantObj.optString("ownerEmail")
+        if (ownerEmail != cleanEmail) return@withContext false
+
         securePrefs.currentTenantId = tenantId
         securePrefs.currentBusinessMode = tenantObj.optString("businessMode")
         true
+    }
+
+    suspend fun getTenantOnline(tenantId: String): com.posbah.app.data.local.entities.Tenant? = withContext(Dispatchers.IO) {
+        val obj = fetchTenantFromVps(tenantId) ?: return@withContext null
+        com.posbah.app.data.local.entities.Tenant(
+            id = obj.getString("id"),
+            name = obj.optString("name", ""),
+            ownerEmail = obj.optString("ownerEmail", ""),
+            businessMode = obj.optString("businessMode", "FNB")
+        )
+    }
+
+    suspend fun updateTenantOnline(tenantId: String, name: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            var conn: HttpURLConnection? = null
+            try {
+                conn = URL("$BASE_URL/api/sync/tenants?id=eq.${URLEncoder.encode(tenantId, "UTF-8")}").openConnection() as HttpURLConnection
+                conn.requestMethod = "PATCH"
+                conn.doOutput = true
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.connectTimeout = CONNECT_TIMEOUT
+                conn.readTimeout = READ_TIMEOUT
+                val body = """{"name":"$name"}"""
+                conn.outputStream.bufferedWriter().use { it.write(body) }
+                conn.responseCode in 200..299
+            } finally { conn?.disconnect() }
+        } catch (_: Exception) { false }
+    }
+
+    suspend fun updateProfileOnline(email: String, tenantId: String, displayName: String, whatsapp: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            var conn: HttpURLConnection? = null
+            try {
+                val cleanEmail = email.lowercase().trim()
+                conn = URL("$BASE_URL/api/sync/local_users?email=eq.${URLEncoder.encode(cleanEmail, "UTF-8")}").openConnection() as HttpURLConnection
+                conn.requestMethod = "PATCH"
+                conn.doOutput = true
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.setRequestProperty("x-tenant-id", tenantId)
+                conn.setRequestProperty("x-user-email", cleanEmail)
+                conn.setRequestProperty("x-client-version", BuildConfig.VERSION_NAME)
+                conn.connectTimeout = CONNECT_TIMEOUT
+                conn.readTimeout = READ_TIMEOUT
+                val body = """{"displayName":"$displayName","whatsapp":"$whatsapp"}"""
+                conn.outputStream.bufferedWriter().use { it.write(body) }
+                conn.responseCode in 200..299
+            } finally { conn?.disconnect() }
+        } catch (e: Exception) {
+            android.util.Log.e("AuthRepository", "updateProfileOnline error", e)
+            false
+        }
     }
 
     // ── Fetch owner tenants from VPS ──────────────────────────────────────────
@@ -605,21 +681,52 @@ class AuthRepository @Inject constructor(
      * Digunakan oleh TenantPickerViewModel.
      */
     /** Buat tenant baru di VPS */
-    suspend fun createTenant(email: String, name: String, businessMode: String) = withContext(Dispatchers.IO) {
+    suspend fun createTenant(email: String, name: String, businessMode: String, tenantId: String? = null): String = withContext(Dispatchers.IO) {
+        val cleanEmail = email.lowercase().trim()
+        val emailKey = cleanEmail.replace(".", "_").replace("@", "_")
+        val isPremium = cleanEmail in premiumEmailSet
+        val prefix = if (isPremium) "ten_premium" else "demo_tenant"
+        val now = System.currentTimeMillis()
+        val finalTenantId = tenantId ?: "${prefix}_${emailKey}_${businessMode.lowercase()}_$now"
+
         try {
+            val jsonObject = JSONObject().apply {
+                put("id", finalTenantId)
+                put("name", name)
+                put("ownerEmail", cleanEmail)
+                put("businessMode", businessMode)
+                put("isActive", true)
+                put("createdAt", now)
+                put("updatedAt", now)
+            }
+            val body = JSONArray().put(jsonObject).toString()
+
             var conn: HttpURLConnection? = null
             try {
                 conn = URL("$BASE_URL/api/sync/tenants").openConnection() as HttpURLConnection
                 conn.requestMethod = "POST"
                 conn.doOutput = true
                 conn.setRequestProperty("Content-Type", "application/json")
+                conn.setRequestProperty("x-tenant-id", finalTenantId)
+                conn.setRequestProperty("x-user-email", cleanEmail)
+                conn.setRequestProperty("x-client-version", BuildConfig.VERSION_NAME)
                 conn.connectTimeout = CONNECT_TIMEOUT
                 conn.readTimeout = READ_TIMEOUT
-                val body = """{"name":"$name","ownerEmail":"$email","businessMode":"$businessMode"}"""
                 conn.outputStream.bufferedWriter().use { it.write(body) }
-                conn.responseCode
-            } finally { conn?.disconnect() }
-        } catch (e: Exception) { android.util.Log.e("AuthRepository", "createTenant error", e) }
+                val code = conn.responseCode
+                val responseMsg = if (code in 200..299) {
+                    conn.inputStream.bufferedReader().use { it.readText() }
+                } else {
+                    conn.errorStream?.bufferedReader()?.use { it.readText() }
+                }
+                android.util.Log.d("AuthRepository", "createTenant response code: $code, response: $responseMsg")
+            } finally {
+                conn?.disconnect()
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("AuthRepository", "createTenant error", e)
+        }
+        finalTenantId
     }
 
     /** Ambil list outlet untuk tenant dari VPS. */

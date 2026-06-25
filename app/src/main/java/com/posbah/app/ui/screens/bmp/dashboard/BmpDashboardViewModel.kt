@@ -69,8 +69,6 @@ class BmpDashboardViewModel @Inject constructor(
     private val productionLogRepo: BmpProductionLogRepository,
     private val settingsRepo: BmpSettingsRepository,
     private val apiService: BmpApiService,
-    private val localDataSeeder: com.posbah.app.data.local.LocalDataSeeder,
-    private val db: com.posbah.app.data.local.PosBahDatabase,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) : ViewModel() {
 
@@ -125,8 +123,7 @@ class BmpDashboardViewModel @Inject constructor(
                         null
                     }
                     val rates = try {
-                        val materials = db.bmpBahanBakuItemDao().getDistinctBahanBaku(tenantId)
-                        materials.associateWith { db.bmpBahanBakuItemDao().getLatestRate(tenantId, it) ?: 0.0 }
+                        bahanBakuRepo.getLatestMaterialRates(tenantId)
                     } catch (_: Exception) {
                         emptyMap<String, Double>()
                     }
@@ -197,16 +194,7 @@ class BmpDashboardViewModel @Inject constructor(
                     e.printStackTrace()
                 }
             }
-            viewModelScope.launch {
-                try {
-                    val list = bahanBakuRepo.observe(tenantId).first()
-                    if (list.isEmpty() && (tenantId == "bahteramulyap@gmail.com" || tenantId == "ten_premium_bahteramulyap_gmail_com" || tenantId == "demo_tenant")) {
-                        localDataSeeder.seedFromSqlDump(context, tenantId, null)
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
+            // Seeding is handled online on tenant bootstrap
             viewModelScope.launch {
                 try {
                     invoiceRepo.refresh()

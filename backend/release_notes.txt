@@ -1,3 +1,14 @@
+POSBah v2.17.54 - Perbaikan Pengaturan Cetak JPG & Pemutakhiran Sinkronisasi Real-Time
+
+Halo Kak! POSBah v2.17.54 hadir dengan perbaikan konfigurasi cetak dan peningkatan konektivitas real-time ke VPS:
+1. Perbaikan Bug Pengaturan Cetak: Memperbaiki kendala kegagalan simpan data pengaturan cetak (JPG, Surat Jalan, Invoice PDF, dan rekening bank) sehingga data terupdate dengan andal dan tidak berubah kembali.
+2. Informasi Pembayaran pada JPG: Menambahkan input informasi bank/e-wallet beserta nama pemilik langsung pada tab pengaturan Cetak JPG agar memudahkan pencantuman detail transfer di dokumen gambar yang diekspor.
+3. Sinkronisasi Lintas Layer & Interkoneksi: Mengoptimalkan integritas data cetak luring real-time dari database VPS PostgreSQL untuk semua perangkat kasir secara instan.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.35 - Sinkronisasi Real-Time Instan (WebSockets) & Hemat Daya
 
 Halo Kak! POSBah v2.17.35 hadir dengan optimalisasi koneksi dan sinkronisasi real-time murni:

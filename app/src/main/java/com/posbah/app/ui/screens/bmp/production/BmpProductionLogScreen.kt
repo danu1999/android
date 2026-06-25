@@ -72,6 +72,14 @@ class BmpProductionLogViewModel @Inject constructor(
     val products = masterProductRepo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val productStocks = stockRepo.observeStocks(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    init {
+        if (tenantId.isNotBlank()) {
+            viewModelScope.launch {
+                logRepo.loadAll(tenantId)
+            }
+        }
+    }
+
     val logItems: StateFlow<List<ProductionLogItem>> = combine(
         logRepo.observeAll(tenantId),
         masterProductRepo.observe(tenantId)
@@ -118,7 +126,12 @@ class BmpProductionLogViewModel @Inject constructor(
 
     fun deleteLog(log: BmpProductionLogEntity) = viewModelScope.launch {
         val result = logRepo.deleteProductionLog(context, tenantId, log)
-        if (result is OnlineWriteResult.Error) {
+        if (result is OnlineWriteResult.Success) {
+            stockApi.adjustStock(productId = log.productId, quantity = -log.quantityProduced, reason = "PEMBATALAN PRODUKSI")
+            if (log.rawMaterialUsedKg > 0) {
+                bahanBakuApi.addUsage(materialId = log.rawMaterialId, quantity = log.rawMaterialUsedKg, reason = "PEMBATALAN PRODUKSI")
+            }
+        } else if (result is OnlineWriteResult.Error) {
             _error.value = result.message
         } else if (result is OnlineWriteResult.NoConnection) {
             _error.value = "Tidak ada koneksi internet. Hapus dibatalkan."

@@ -48,6 +48,10 @@ import com.posbah.app.data.local.entities.BmpEmployeeEntity
 import com.posbah.app.data.local.entities.BmpPayrollEntity
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpEmployeeRepository
+import com.posbah.app.data.repository.EmployeeRepository
+import com.posbah.app.data.repository.OutletRepository
+import com.posbah.app.data.repository.OutletData
+import com.posbah.app.data.repository.EmployeeData
 import com.posbah.app.ui.components.EmptyState
 import com.posbah.app.ui.components.PosBahTopBar
 import com.posbah.app.util.Formatters
@@ -72,15 +76,24 @@ import kotlinx.coroutines.Dispatchers
 @HiltViewModel
 class EmployeesViewModel @Inject constructor(
     private val repo: BmpEmployeeRepository,
+    private val posEmployeeRepo: EmployeeRepository,
+    private val outletRepo: OutletRepository,
     private val authRepository: AuthRepository,
-    private val db: PosBahDatabase,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     val tenantId = authRepository.activeTenantId().orEmpty()
     val employees = repo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<BmpEmployeeEntity>())
     val payrolls = repo.observePayrolls(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<BmpPayrollEntity>())
-    val outlets = db.outletDao().observeForTenant(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<com.posbah.app.data.local.entities.Outlet>())
-    val posEmployees = db.employeeDao().observeForTenant(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<com.posbah.app.data.local.entities.Employee>())
+    val outlets = outletRepo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<OutletData>())
+    val posEmployees = posEmployeeRepo.observeForTenant(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<EmployeeData>())
+
+    init {
+        viewModelScope.launch {
+            try { repo.refresh() } catch (_: Exception) {}
+            try { repo.refreshPayrolls() } catch (_: Exception) {}
+            try { posEmployeeRepo.refresh() } catch (_: Exception) {}
+        }
+    }
 
     val error = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     fun dismissError() { error.value = null }
@@ -91,7 +104,7 @@ class EmployeesViewModel @Inject constructor(
         posEmail: String,
         posPin: String,
         posRole: String
-    ) = viewModelScope.launch {
+    ) = viewModelScope.launch(Dispatchers.IO) {
         val currentEmployees = employees.value.filter { it.isActive }
         
         if (e.outletId != null) {
@@ -107,7 +120,7 @@ class EmployeesViewModel @Inject constructor(
             if (oldRecord != null && oldRecord.outletId != null && oldRecord.outletId != e.outletId) {
                 val oldOutletCount = currentEmployees.count { it.outletId == oldRecord.outletId }
                 if (oldOutletCount <= 1) {
-                    val oldOutletName = db.outletDao().getById(oldRecord.outletId)?.name ?: "Outlet Lain"
+                    val oldOutletName = outlets.value.find { it.id == oldRecord.outletId }?.name ?: "Outlet Lain"
                     error.value = "Gagal: ${e.name} adalah karyawan terakhir di $oldOutletName."
                     return@launch
                 }
@@ -125,7 +138,7 @@ class EmployeesViewModel @Inject constructor(
             val hashedPassword = if (posPin.isNotBlank()) com.posbah.app.security.PinHasher.hash(posPin) else ""
 
             if (e.employeeId != null) {
-                val existing = db.employeeDao().getById(e.employeeId)
+                val existing = posEmployeeRepo.getById(e.employeeId)
                 if (existing != null) {
                     val updatedPos = existing.copy(
                         name = e.name,
@@ -134,23 +147,21 @@ class EmployeesViewModel @Inject constructor(
                         pinHash = if (posPin.isNotBlank()) hashedPassword else existing.pinHash,
                         outletId = e.outletId,
                         salary = e.salaryAmount,
-                        isSynced = false,
                         updatedAt = System.currentTimeMillis()
                     )
-                    db.employeeDao().update(updatedPos)
-                    com.posbah.app.data.remote.SupabaseSyncManager.pushEmployeeImmediate(context, db, tenantId, existing.id, email)
+                    posEmployeeRepo.update(updatedPos)
                 }
             } else {
                 if (posPin.isBlank()) {
                     error.value = "Gagal: PIN POS wajib diisi untuk karyawan baru."
                     return@launch
                 }
-                val alreadyUsed = db.employeeDao().findByEmail(posEmail)
+                val alreadyUsed = posEmployeeRepo.list().find { it.email?.lowercase()?.trim() == posEmail.lowercase().trim() }
                 if (alreadyUsed != null && alreadyUsed.tenantId == tenantId) {
                     error.value = "Gagal: Email POS sudah terdaftar."
                     return@launch
                 }
-                val newPos = com.posbah.app.data.local.entities.Employee(
+                val newPos = com.posbah.app.data.repository.EmployeeData(
                     tenantId = tenantId,
                     outletId = e.outletId,
                     name = e.name,
@@ -158,12 +169,10 @@ class EmployeesViewModel @Inject constructor(
                     role = posRole,
                     pinHash = hashedPassword,
                     salary = e.salaryAmount,
-                    isActive = true,
-                    isSynced = false
+                    isActive = true
                 )
-                val newId = db.employeeDao().insert(newPos)
+                val newId = posEmployeeRepo.insert(newPos)
                 finalEmployeeId = newId
-                com.posbah.app.data.remote.SupabaseSyncManager.pushEmployeeImmediate(context, db, tenantId, newId, email)
             }
         } else {
             finalEmployeeId = null
@@ -172,29 +181,24 @@ class EmployeesViewModel @Inject constructor(
         val toSave = e.copy(employeeId = finalEmployeeId)
         val generatedId = repo.upsert(toSave)
         val targetId = if (e.id != 0L) e.id else generatedId
-        com.posbah.app.data.remote.SupabaseSyncManager.pushBmpEmployeeImmediate(context, db, tenantId, targetId, email)
-        com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, email)
     }
 
-    fun softDelete(id: Long) = viewModelScope.launch {
+    fun softDelete(id: Long) = viewModelScope.launch(Dispatchers.IO) {
         val currentEmployees = employees.value.filter { it.isActive }
         val emp = currentEmployees.firstOrNull { it.id == id }
         if (emp != null && emp.outletId != null) {
             val currentCount = currentEmployees.count { it.outletId == emp.outletId }
             if (currentCount <= 1) {
-                val outletName = db.outletDao().getById(emp.outletId)?.name ?: "Outlet"
+                val outletName = outlets.value.find { it.id == emp.outletId }?.name ?: "Outlet"
                 error.value = "Gagal: $outletName harus memiliki minimal 1 karyawan."
                 return@launch
             }
         }
 
         repo.softDelete(id)
-        val email = authRepository.activeUserEmail()
-        com.posbah.app.data.remote.SupabaseSyncManager.deleteBmpEmployeeImmediate(context, db, tenantId, id, email)
-        com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, email)
     }
 
-    fun payEmployee(emp: BmpEmployeeEntity, amount: Double, attendance: Int) = viewModelScope.launch {
+    fun payEmployee(emp: BmpEmployeeEntity, amount: Double, attendance: Int) = viewModelScope.launch(Dispatchers.IO) {
         if (amount <= 0) return@launch
         val generatedPayrollId = repo.insertPayroll(
             BmpPayrollEntity(
@@ -206,9 +210,6 @@ class EmployeesViewModel @Inject constructor(
                 dailyRate = if (attendance > 0) amount / attendance else 0.0
             )
         )
-        val email = authRepository.activeUserEmail()
-        com.posbah.app.data.remote.SupabaseSyncManager.pushBmpPayrollImmediate(context, db, tenantId, generatedPayrollId, email)
-        com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, email)
     }
 }
 

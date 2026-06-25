@@ -35,9 +35,13 @@ import com.posbah.app.data.local.entities.TransactionItemEntity
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.ProductRepository
 import com.posbah.app.data.repository.TransactionRepository
+import com.posbah.app.data.repository.OutletRepository
 import com.posbah.app.util.Formatters
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -49,7 +53,7 @@ class MarginAnalysisViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val productRepository: ProductRepository,
     private val transactionRepository: TransactionRepository,
-    private val db: com.posbah.app.data.local.PosBahDatabase,
+    private val outletRepository: OutletRepository,
     private val sessionState: com.posbah.app.data.repository.SessionState,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context
 ) : ViewModel() {
@@ -57,7 +61,7 @@ class MarginAnalysisViewModel @Inject constructor(
     val tenantId = authRepository.activeTenantId().orEmpty()
 
     /** Outlet yang tersedia untuk filter (Owner melihat semua). */
-    val availableOutlets = db.outletDao().observeForTenant(tenantId)
+    val availableOutlets = outletRepository.observe(tenantId)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /**
@@ -122,15 +126,25 @@ class MarginAnalysisViewModel @Inject constructor(
                 refreshItems()
             }
         }
-        // Trigger background pull sync
-        viewModelScope.launch(Dispatchers.IO) {
-            com.posbah.app.data.remote.SupabaseSyncManager.pullAll(context, db, tenantId)
-        }
     }
 
     fun refreshItems() {
+        val txs = transactions.value
         viewModelScope.launch(Dispatchers.IO) {
-            _transactionItems.value = db.transactionItemDao().getAll()
+            val list = mutableListOf<TransactionItemEntity>()
+            coroutineScope {
+                val deferreds = txs.map { tx ->
+                    async {
+                        try {
+                            transactionRepository.listItemsForTransaction(tx.id)
+                        } catch (_: Exception) {
+                            emptyList()
+                        }
+                    }
+                }
+                list.addAll(awaitAll(*deferreds.toTypedArray()).flatten())
+            }
+            _transactionItems.value = list
         }
     }
 
@@ -144,9 +158,6 @@ class MarginAnalysisViewModel @Inject constructor(
             )
             transactionRepository.update(updated)
             refreshItems()
-            viewModelScope.launch(Dispatchers.IO) {
-                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context.applicationContext, db, tenantId)
-            }
         }
     }
 
@@ -185,44 +196,29 @@ class MarginAnalysisViewModel @Inject constructor(
                 notes = "Wastage: ${product.name} (Qty: $quantity ${product.unit}) - Alasan: $reason"
             )
 
-            val resultTx = com.posbah.app.data.remote.SupabaseSyncManager.checkoutWriteThrough(context, tenantId, tx, emptyList())
-            if (resultTx is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Success) {
-                val newStock = (product.stock - quantity).coerceAtLeast(0)
-                val updateObj = mapOf<String, Any?>(
-                    "stock" to newStock,
-                    "updatedAt" to System.currentTimeMillis()
-                )
-                com.posbah.app.data.remote.SupabaseSyncManager.patchRowDirectly(context, "products", product.id, updateObj, tenantId)
+            val newStock = (product.stock - quantity).coerceAtLeast(0)
+            val txData = com.posbah.app.data.repository.TransactionData(
+                id = tx.id,
+                tenantId = tx.tenantId,
+                outletId = tx.outletId,
+                receiptNumber = tx.receiptNumber,
+                type = tx.type,
+                status = tx.status,
+                totalAmount = tx.total,
+                paymentMethod = tx.paymentMethod,
+                amountPaid = tx.amountPaid,
+                change = tx.change,
+                customerId = tx.customerId,
+                notes = tx.notes,
+                date = tx.date,
+                isDeleted = tx.isDeleted,
+                updatedAt = tx.updatedAt
+            )
+            transactionRepository.checkout(txData, emptyList<com.posbah.app.data.repository.TransactionItemData>(), productRepository)
+            productRepository.updateStock(product.id, newStock)
 
-                val txData = com.posbah.app.data.repository.TransactionData(
-                    id = tx.id,
-                    tenantId = tx.tenantId,
-                    outletId = tx.outletId,
-                    receiptNumber = tx.receiptNumber,
-                    type = tx.type,
-                    status = tx.status,
-                    totalAmount = tx.total,
-                    paymentMethod = tx.paymentMethod,
-                    amountPaid = tx.amountPaid,
-                    change = tx.change,
-                    customerId = tx.customerId,
-                    notes = tx.notes,
-                    date = tx.date,
-                    isDeleted = tx.isDeleted,
-                    updatedAt = tx.updatedAt
-                )
-                transactionRepository.checkout(txData, emptyList<com.posbah.app.data.repository.TransactionItemData>(), productRepository)
-                productRepository.updateStock(product.id, newStock)
-
-                refreshItems()
-                onSuccess()
-            } else {
-                val errMsg = when (resultTx) {
-                    is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Error -> resultTx.message
-                    else -> "Koneksi internet terputus. Silakan coba lagi nanti."
-                }
-                android.widget.Toast.makeText(context, "Gagal mencatat wastage: $errMsg", android.widget.Toast.LENGTH_LONG).show()
-            }
+            refreshItems()
+            onSuccess()
         }
     }
 }

@@ -117,6 +117,11 @@ fun PosBahRoot(
                 },
                 onGoBmpDashboard = {
                     goDashboard(Screen.Splash.route)
+                },
+                onGoMigration = {
+                    nav.navigate(Screen.Migration.route) {
+                        popUpTo(Screen.Splash.route) { inclusive = true }
+                    }
                 }
             )
         }

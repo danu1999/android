@@ -863,6 +863,21 @@ func handleRtBmpProductionLogs(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func handleRtBmpProductionLogsById(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/bmp/production-logs/")
+	id, _ := strconv.ParseInt(idStr, 10, 64)
+	switch r.Method {
+	case http.MethodDelete:
+		_, err := db.Exec(`UPDATE bmp_production_logs SET "isDeleted"=TRUE WHERE id=$1 AND "tenantId"=$2`, id, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
 func handleRtBmpProductStocks(w http.ResponseWriter, r *http.Request) {
 	tenantId, ok := extractTenantId(r)
 	if !ok { jsonErr(w, 401, "unauthorized"); return }

@@ -30,15 +30,12 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.posbah.app.data.local.dao.LocalUserDao
-import com.posbah.app.data.local.dao.TenantDao
 import com.posbah.app.security.SecurePreferences
 import com.posbah.app.ui.components.PosBahTopBar
 import com.posbah.app.data.repository.SessionState
 import com.posbah.app.data.repository.AuthRepository
-import com.posbah.app.data.local.entities.Tenant
-import com.posbah.app.data.local.entities.Outlet
-import com.posbah.app.data.local.entities.LocalUser
+import com.posbah.app.data.repository.UserSession
+import com.posbah.app.data.repository.OutletRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -58,23 +55,24 @@ data class SystemOption(
 @HiltViewModel
 class SystemSelectionViewModel @Inject constructor(
     private val securePrefs: SecurePreferences,
-    private val userDao: LocalUserDao,
-    private val tenantDao: TenantDao,
     private val sessionState: SessionState,
-    private val db: com.posbah.app.data.local.PosBahDatabase,
-    private val localDataSeeder: com.posbah.app.data.local.LocalDataSeeder,
     private val authRepository: AuthRepository,
+    private val outletRepo: OutletRepository,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context
 ) : ViewModel() {
 
-    private val _user = MutableStateFlow<LocalUser?>(null)
+    private val _user = MutableStateFlow<UserSession?>(null)
     val user = _user.asStateFlow()
 
     init {
-        val sub = securePrefs.currentGoogleSub
-        if (sub != null) {
+        val email = securePrefs.currentEmail
+        if (email != null) {
             viewModelScope.launch {
-                _user.value = userDao.getBySub(sub)
+                try {
+                    _user.value = authRepository.fetchUserOnline(email)
+                } catch (e: Exception) {
+                    _user.value = authRepository.getActiveSession()
+                }
             }
         }
     }
@@ -89,12 +87,12 @@ class SystemSelectionViewModel @Inject constructor(
         newPin: String?,
         onDone: (Boolean, String?) -> Unit
     ) {
-        val sub = securePrefs.currentGoogleSub ?: return
+        val email = securePrefs.currentEmail ?: return onDone(false, "Sesi tidak valid")
         val tempPassword = securePrefs.tempPlainPassword.orEmpty()
         viewModelScope.launch {
             try {
-                val u = userDao.getBySub(sub) ?: return@launch onDone(false, "User tidak ditemukan")
-                
+                val u = authRepository.fetchUserOnline(email) ?: return@launch onDone(false, "User tidak ditemukan")
+
                 // If a new password is provided, change it
                 if (!newPin.isNullOrBlank()) {
                     val res = authRepository.changePassword(tempPassword, newPin)
@@ -102,24 +100,17 @@ class SystemSelectionViewModel @Inject constructor(
                         return@launch onDone(false, res.message)
                     }
                 }
-                
+
+                val success = authRepository.updateProfileOnline(email, u.tenantId ?: "", businessName, whatsapp)
+                if (!success) {
+                    return@launch onDone(false, "Gagal memperbarui profil di server")
+                }
                 val updatedUser = u.copy(
                     displayName = businessName,
-                    whatsapp = whatsapp,
-                    updatedAt = System.currentTimeMillis()
+                    whatsapp = whatsapp
                 )
-                userDao.upsert(updatedUser)
                 _user.value = updatedUser
                 securePrefs.tempPlainPassword = null
-                
-                // Sync metadata to server immediately
-                viewModelScope.launch(Dispatchers.IO) {
-                    try {
-                        com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, u.tenantId ?: "")
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
                 onDone(true, null)
             } catch (e: Exception) {
                 onDone(false, e.localizedMessage)
@@ -128,14 +119,13 @@ class SystemSelectionViewModel @Inject constructor(
     }
 
     fun lockInSystem(businessMode: String, onDone: () -> Unit) {
-        val sub = securePrefs.currentGoogleSub ?: return
         val email = securePrefs.currentEmail ?: return
-        val emailKey = email.lowercase().trim().replace(".", "_").replace("@", "_")
 
         viewModelScope.launch {
-            val user = userDao.getBySub(sub)
-            if (user != null) {
-                val isPremiumUser = user.isPremium
+            val u = _user.value
+            if (u != null) {
+                val isPremiumUser = u.isPremium
+                val emailKey = email.lowercase().trim().replace(".", "_").replace("@", "_")
                 val chosenTenantId = when (email.lowercase().trim()) {
                     "hanafiariful@gmail.com" -> "ten_premium_hanafiariful_gmail_com"
                     "bahteramulyap@gmail.com" -> "ten_premium_bahteramulyap_gmail_com"
@@ -146,80 +136,41 @@ class SystemSelectionViewModel @Inject constructor(
                     }
                 }
 
-                if (isPremiumUser) {
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                        try {
-                            db.clearAllTables()
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    }
-                    userDao.upsert(user)
-                }
-
                 // Create the tenant if it doesn't exist
-                var tenant = tenantDao.getById(chosenTenantId)
-                if (tenant == null) {
-                    val modeName = when (businessMode) {
-                        "FNB" -> "FnB"
-                        "RENTAL" -> "Rental"
-                        "LAUNDRY" -> "Laundry"
-                        else -> "Invoice & Manufaktur"
-                    }
-                    tenant = Tenant(
-                        id = chosenTenantId,
-                        name = if (isPremiumUser) {
-                            val customName = user.displayName
-                            if (!customName.isNullOrBlank()) customName else "CV. $email ($modeName)"
-                        } else {
-                            "Demo - ${user.displayName ?: email} ($modeName)"
-                        },
-                        ownerEmail = email,
-                        businessMode = businessMode
-                    )
-                    tenantDao.upsert(tenant)
-                    if (businessMode != "BMP") {
-                        db.outletDao().insert(
-                            Outlet(
-                                tenantId = chosenTenantId,
-                                name = "Outlet Utama",
-                                isDefault = true
-                            )
-                        )
-                    }
+                val modeName = when (businessMode) {
+                    "FNB" -> "FnB"
+                    "RENTAL" -> "Rental"
+                    "LAUNDRY" -> "Laundry"
+                    else -> "Invoice & Manufaktur"
+                }
+                val tenantName = if (isPremiumUser) {
+                    val customName = u.displayName
+                    if (!customName.isNullOrBlank()) customName else "CV. $email ($modeName)"
+                } else {
+                    "Demo - ${u.displayName ?: email} ($modeName)"
                 }
 
-                userDao.upsert(user.copy(businessModeLocked = true, tenantId = chosenTenantId))
+                authRepository.createTenant(email, tenantName, businessMode, chosenTenantId)
+
+                // Lock system selection online
+                authRepository.updateProfileOnline(email, chosenTenantId, u.displayName ?: "", u.whatsapp ?: "")
+                // Also update the local session state
                 securePrefs.currentTenantId = chosenTenantId
+                securePrefs.currentBusinessMode = businessMode
                 sessionState.setTenant(chosenTenantId)
 
-                // Select default outlet for the chosen tenant
-                val outlets = db.outletDao().listForTenant(chosenTenantId)
-                val activeOutlet = outlets.firstOrNull { it.isDefault } ?: outlets.firstOrNull()
-                sessionState.setOutlet(activeOutlet?.id)
-
-                if (isPremiumUser) {
-                    try {
-                        localDataSeeder.seedDefaultSettings(chosenTenantId)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+                // Create and select default outlet for the chosen tenant (except BMP)
+                if (businessMode != "BMP") {
+                    val outlets = outletRepo.list()
+                    val activeOutlet = outlets.firstOrNull { it.isDefault } ?: outlets.firstOrNull()
+                    val activeOutletId = if (activeOutlet == null) {
+                        outletRepo.create("Outlet Utama")
+                    } else {
+                        activeOutlet.id
                     }
-                }
-
-                // Seed simulated data instantly
-                try {
-                    localDataSeeder.seedFromSqlDump(context, chosenTenantId, activeOutlet?.id)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-
-                // Sync the newly created/seeded tenant data up to VPS immediately
-                viewModelScope.launch(Dispatchers.IO) {
-                    try {
-                        com.posbah.app.data.remote.SupabaseSyncManager.syncAll(context, db, chosenTenantId)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
+                    sessionState.setOutlet(activeOutletId)
+                } else {
+                    sessionState.setOutlet(null)
                 }
             }
             onDone()

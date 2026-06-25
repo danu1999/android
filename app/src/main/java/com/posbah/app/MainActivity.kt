@@ -17,7 +17,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.Lifecycle
 import com.posbah.app.data.repository.AuthRepository
-import com.posbah.app.data.local.PosBahDatabase
 import com.posbah.app.data.repository.SessionState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -38,9 +37,6 @@ class MainActivity : FragmentActivity() {
 
     @Inject
     lateinit var authRepository: AuthRepository
-
-    @Inject
-    lateinit var db: PosBahDatabase
 
     @Inject
     lateinit var sessionState: SessionState
@@ -77,11 +73,6 @@ class MainActivity : FragmentActivity() {
         val isOnlineInitial = capabilities != null && capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
         sessionState.setOnline(isOnlineInitial)
 
-        // Setup connection listener callback for remote requests
-        com.posbah.app.data.remote.SupabaseSyncManager.onConnectionStateChanged = { online ->
-            sessionState.setOnline(online)
-        }
-
         // Full Online mode: periodic foreground data refresh via Retrofit API every 30 seconds.
         // No more SupabaseSyncManager bulk sync (no local DB). All data comes from VPS real-time.
         lifecycleScope.launch(Dispatchers.IO) {
@@ -91,11 +82,6 @@ class MainActivity : FragmentActivity() {
                         try {
                             val tenantId = authRepository.activeTenantId()
                             if (!tenantId.isNullOrBlank() && sessionState.isOnline.value) {
-                                // Keep WebSocket for real-time push notifications (no-op stub currently)
-                                com.posbah.app.data.remote.WebSocketSyncClient.connect(
-                                    applicationContext, tenantId, db
-                                )
-
                                 // Demo upgrade check (unchanged logic)
                                 if (tenantId.startsWith("demo_tenant_") || tenantId == "demo_tenant") {
                                     val email = authRepository.activeUserEmail()
@@ -180,8 +166,6 @@ class MainActivity : FragmentActivity() {
                                         }
                                     }
                                 }
-                            } else if (!sessionState.isOnline.value) {
-                                com.posbah.app.data.remote.WebSocketSyncClient.disconnect()
                             }
                         } catch (e: Exception) {
                             e.printStackTrace()
@@ -189,7 +173,7 @@ class MainActivity : FragmentActivity() {
                         delay(if (sessionState.isOnline.value) 30_000 else 5_000)
                     }
                 } finally {
-                    com.posbah.app.data.remote.WebSocketSyncClient.disconnect()
+                    // Cleanup if needed
                 }
             }
         }
@@ -202,16 +186,6 @@ class MainActivity : FragmentActivity() {
                 //WindowManager.LayoutParams.FLAG_SECURE
             //)
         //}
-
-        // Preload database on a background thread to move SQLCipher load and key derivation off main thread
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                db.openHelper.writableDatabase
-                android.util.Log.i("MainActivity", "Database preloaded successfully on background thread")
-            } catch (e: Exception) {
-                android.util.Log.e("MainActivity", "Error preloading database", e)
-            }
-        }
         // Note: Employee deactivation & outlet shift detection is now handled in the 
         // periodic API polling loop above (30-second interval, checks VPS /api/sync/employees).
         // The old db.employeeDao().observeAll() was calling a stub DAO — removed.

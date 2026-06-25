@@ -3,7 +3,6 @@ package com.posbah.app.ui.screens.laundry
 import androidx.compose.runtime.mutableStateListOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.posbah.app.data.local.LocalDataSeeder
 import com.posbah.app.data.local.entities.ProductEntity
 import com.posbah.app.data.local.entities.TransactionEntity
 import com.posbah.app.data.local.entities.TransactionItemEntity
@@ -51,9 +50,7 @@ class LaundryViewModel @Inject constructor(
     private val customerRepository: CustomerRepository,
     private val transactionRepository: TransactionRepository,
     private val outletRepository: OutletRepository,
-    private val localDataSeeder: LocalDataSeeder,
     private val securePrefs: SecurePreferences,
-    private val db: com.posbah.app.data.local.PosBahDatabase, // kept for SupabaseSyncManager stubs
     private val printSettingsRepository: PrintSettingsRepository,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context
 ) : ViewModel() {
@@ -135,11 +132,6 @@ class LaundryViewModel @Inject constructor(
 
     val services: StateFlow<List<LaundryServiceItem>> = combine(products, transactions) { prodList, _ ->
         val filtered = prodList.filter { it.category == "KILOAN" || it.category == "SATUAN" }
-        if (filtered.isEmpty() && prodList.isEmpty()) {
-            viewModelScope.launch {
-                localDataSeeder.seedDefaultLaundryServices(tenantId, currentOutletId)
-            }
-        }
         filtered.map { p ->
             val monthlyMaint = if (!p.wholesalePrices.isNullOrBlank()) {
                 try {
@@ -202,6 +194,7 @@ class LaundryViewModel @Inject constructor(
         imageFile: java.io.File?,
         onDone: () -> Unit
     ) {
+        onDone()
         viewModelScope.launch {
             var base64Url: String? = null
             if (imageFile != null && imageFile.exists()) {
@@ -234,14 +227,6 @@ class LaundryViewModel @Inject constructor(
             )
             productRepository.upsert(p)
             logActivity("TAMBAH LAYANAN", "Menambahkan layanan laundry baru: $name ($category) Jual: $price Modal: $costPrice")
-            onDone()
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
         }
     }
 
@@ -257,6 +242,7 @@ class LaundryViewModel @Inject constructor(
         keepExistingImage: Boolean,
         onDone: () -> Unit
     ) {
+        onDone()
         viewModelScope.launch {
             var base64Url = if (keepExistingImage) product.image else null
             if (imageFile != null && imageFile.exists()) {
@@ -286,18 +272,11 @@ class LaundryViewModel @Inject constructor(
             )
             productRepository.upsert(updated)
             logActivity("EDIT LAYANAN", "Mengubah layanan laundry: $name ($category) Jual: $price Modal: $costPrice")
-            onDone()
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
         }
     }
 
     fun deleteService(serviceId: String, onDone: () -> Unit) {
+        onDone()
         viewModelScope.launch {
             val idVal = serviceId.toLongOrNull()
             if (idVal != null) {
@@ -305,40 +284,73 @@ class LaundryViewModel @Inject constructor(
                 productRepository.delete(idVal)
                 logActivity("HAPUS LAYANAN", "Menghapus layanan laundry: ${p?.name ?: serviceId}")
             }
-            onDone()
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
         }
     }
 
-    /**
-     * Hapus riwayat order laundry secara permanen.
-     * Soft-delete lokal + push DELETE ke server saat syncAll.
-     */
     fun deleteOrder(orderId: String, onDone: () -> Unit) {
+        onDone()
         viewModelScope.launch {
             val tx = transactions.value.find { it.receiptNumber == orderId }
             if (tx != null) {
                 transactionRepository.deleteTransaction(tx.id, productRepository)
                 logActivity("HAPUS ORDER LAUNDRY", "Menghapus order laundry ${tx.receiptNumber} pelanggan ${tx.customerName}")
             }
-            onDone()
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
         }
     }
 
     fun checkout(customerName: String, phone: String, rentDate: Long?, onDone: (LaundryOrder) -> Unit) {
+        val subtotal = cart.sumOf { it.service.price * it.quantity }
+        val receiptNum = "TEMP-LD-" + java.util.UUID.randomUUID().toString().take(6).uppercase()
+        val txDate = rentDate ?: System.currentTimeMillis()
+
+        val summary = cart.joinToString(", ") { "${it.service.name} x${if (it.service.unit == "Kg") "%.1f Kg".format(it.quantity) else "${it.quantity.toInt()} Pcs"}" }
+        val meta = LaundryTransactionMetadata(phone = phone, summary = summary)
+        val metaJson = Json.encodeToString(LaundryTransactionMetadata.serializer(), meta)
+
+        val tx = TransactionEntity(
+            tenantId = tenantId,
+            outletId = currentOutletId,
+            employeeId = 1L,
+            customerId = null,
+            customerName = customerName,
+            receiptNumber = receiptNum,
+            date = txDate,
+            subtotal = subtotal,
+            total = subtotal,
+            paymentMethod = "HUTANG",
+            status = "COMPLETED",
+            orderStatus = "BARU",
+            notes = metaJson,
+            deliveryDate = txDate + 3 * 24 * 60 * 60 * 1000L
+        )
+
+        val lines = cart.map { item ->
+            val qty = if (item.service.unit == "Kg") (item.quantity * 10).toInt() else item.quantity.toInt()
+            val price = if (item.service.unit == "Kg") item.service.price / 10.0 else item.service.price
+
+            TransactionItemEntity(
+                transactionId = 0,
+                productId = item.service.id.toLong(),
+                quantity = qty,
+                price = price,
+                costPrice = item.service.costPrice
+            )
+        }
+
+        val order = LaundryOrder(
+            id = receiptNum,
+            customerName = customerName,
+            phone = phone,
+            itemsSummary = summary,
+            total = subtotal,
+            paymentStatus = "BELUM LUNAS",
+            orderStatus = "BARU",
+            dateIn = tx.date
+        )
+
+        cart.clear()
+        onDone(order)
+
         viewModelScope.launch {
             val c = com.posbah.app.data.local.entities.CustomerEntity(
                 tenantId = tenantId,
@@ -347,63 +359,11 @@ class LaundryViewModel @Inject constructor(
                 address = ""
             )
             customerRepository.upsert(c)
-
-            val subtotal = cart.sumOf { it.service.price * it.quantity }
-            val receiptNum = transactionRepository.generateReceiptNumberForType("LD")
-            val txDate = rentDate ?: System.currentTimeMillis()
-            
-            val summary = cart.joinToString(", ") { "${it.service.name} x${if (it.service.unit == "Kg") "%.1f Kg".format(it.quantity) else "${it.quantity.toInt()} Pcs"}" }
-            val meta = LaundryTransactionMetadata(phone = phone, summary = summary)
-            val metaJson = Json.encodeToString(LaundryTransactionMetadata.serializer(), meta)
-
-            val tx = TransactionEntity(
-                tenantId = tenantId,
-                outletId = currentOutletId,
-                employeeId = 1L,
-                customerId = null,
-                customerName = customerName,
-                receiptNumber = receiptNum,
-                date = txDate,
-                subtotal = subtotal,
-                total = subtotal,
-                paymentMethod = "HUTANG",
-                status = "COMPLETED",
-                orderStatus = "BARU",
-                notes = metaJson,
-                deliveryDate = txDate + 3 * 24 * 60 * 60 * 1000L
-            )
-
-            val lines = cart.map { item ->
-                val qty = if (item.service.unit == "Kg") (item.quantity * 10).toInt() else item.quantity.toInt()
-                val price = if (item.service.unit == "Kg") item.service.price / 10.0 else item.service.price
-                
-                TransactionItemEntity(
-                    transactionId = 0,
-                    productId = item.service.id.toLong(),
-                    quantity = qty,
-                    price = price,
-                    costPrice = item.service.costPrice
-                )
-            }
-
-            transactionRepository.checkout(tx, lines, productRepository)
-            
-            logActivity("CHECKOUT LAUNDRY", "Checkout laundry pelanggan $customerName senilai Rp $subtotal (Struk: $receiptNum)")
-
-            val order = LaundryOrder(
-                id = receiptNum,
-                customerName = customerName,
-                phone = phone,
-                itemsSummary = summary,
-                total = subtotal,
-                paymentStatus = "BELUM LUNAS",
-                orderStatus = "BARU",
-                dateIn = tx.date
-            )
-            cart.clear()
-            onDone(order)
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
+            val realTx = transactionRepository.checkout(tx, lines, productRepository)
+            if (realTx.id > 0L) {
+                logActivity("CHECKOUT LAUNDRY", "Checkout laundry pelanggan $customerName senilai Rp $subtotal (Struk: ${realTx.receiptNumber})")
+            } else {
+                android.widget.Toast.makeText(appContext, "Gagal memproses checkout laundry di server.", android.widget.Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -413,9 +373,6 @@ class LaundryViewModel @Inject constructor(
             val tx = transactions.value.find { it.receiptNumber == orderId } ?: return@launch
             transactionRepository.update(tx.copy(orderStatus = newStatus))
             logActivity("UPDATE STATUS LAUNDRY", "Update status transaksi $orderId menjadi $newStatus")
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
-            }
         }
     }
 
@@ -425,9 +382,6 @@ class LaundryViewModel @Inject constructor(
             val method = if (newStatus == "LUNAS") "CASH" else "HUTANG"
             transactionRepository.update(tx.copy(paymentMethod = method))
             logActivity("UPDATE PEMBAYARAN LAUNDRY", "Update pembayaran transaksi $orderId menjadi $newStatus")
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
-            }
         }
     }
 
@@ -468,6 +422,7 @@ class LaundryViewModel @Inject constructor(
     }
 
     fun addCustomer(name: String, phone: String, address: String, onDone: () -> Unit) {
+        onDone()
         viewModelScope.launch {
             val c = com.posbah.app.data.local.entities.CustomerEntity(
                 tenantId = tenantId,
@@ -477,11 +432,11 @@ class LaundryViewModel @Inject constructor(
             )
             customerRepository.upsert(c)
             logActivity("TAMBAH PELANGGAN", "Menambahkan pelanggan baru: $name")
-            onDone()
         }
     }
 
     fun addExpense(description: String, amount: Double, dateMillis: Long, onDone: () -> Unit) {
+        onDone()
         viewModelScope.launch {
             val todayStr = java.text.SimpleDateFormat("yyMMdd", java.util.Locale.US).format(java.util.Date(dateMillis))
             val prefix = "EXP-LD"
@@ -502,10 +457,6 @@ class LaundryViewModel @Inject constructor(
             )
             transactionRepository.checkout(expenseTx, emptyList<TransactionItemEntity>(), productRepository)
             logActivity("CATAT PENGELUARAN", "Mencatat pengeluaran: $description senilai Rp $amount")
-            onDone()
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
-            }
         }
     }
 }

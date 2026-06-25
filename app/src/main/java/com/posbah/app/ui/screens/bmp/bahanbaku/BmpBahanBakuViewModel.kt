@@ -23,7 +23,6 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 class BahanBakuListViewModel @Inject constructor(
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
-    private val db: com.posbah.app.data.local.PosBahDatabase,
     private val repo: BmpBahanBakuRepository,
     private val authRepo: AuthRepository
 ) : ViewModel() {
@@ -101,13 +100,14 @@ class BahanBakuListViewModel @Inject constructor(
     fun clearError() { _error.value = null }
 
     fun delete(id: Long) = viewModelScope.launch {
+        android.widget.Toast.makeText(context, "Data berhasil dihapus!", android.widget.Toast.LENGTH_SHORT).show()
         val result = repo.delete(context, tenantId, id)
         if (result is com.posbah.app.data.repository.OnlineWriteResult.Error) {
             _error.value = result.message
+            android.widget.Toast.makeText(context, "Gagal hapus: ${result.message}", android.widget.Toast.LENGTH_LONG).show()
         } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
-            _error.value = "Tidak ada koneksi internet. Hapus dibatalkan."
-        } else {
-            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, null)
+            _error.value = "Tidak ada koneksi internet."
+            android.widget.Toast.makeText(context, "Gagal hapus: Tidak ada internet", android.widget.Toast.LENGTH_LONG).show()
         }
     }
 
@@ -117,8 +117,6 @@ class BahanBakuListViewModel @Inject constructor(
             _error.value = result.message
         } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
             _error.value = "Tidak ada koneksi internet."
-        } else {
-            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, null)
         }
     }
 }
@@ -171,7 +169,6 @@ data class BahanBakuFormUiState(
 @HiltViewModel
 class BahanBakuFormViewModel @Inject constructor(
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
-    private val db: com.posbah.app.data.local.PosBahDatabase,
     private val repo: BmpBahanBakuRepository,
     private val authRepo: AuthRepository,
     savedState: SavedStateHandle
@@ -368,8 +365,6 @@ class BahanBakuFormViewModel @Inject constructor(
                                 updatedAt = System.currentTimeMillis()
                             )
                             repo.updateHeaderOnly(updated)
-                            // Push ke VPS langsung
-                            com.posbah.app.data.remote.BmpOnlineWriter.upsertBahanBaku(context, tenantId, updated)
                         }
                     }
                 }
@@ -408,14 +403,19 @@ class BahanBakuFormViewModel @Inject constructor(
                 )
             }
 
+        val total = entities.sumOf { it.kuantitas * it.rate }
         // Pastikan path & URL foto tersimpan ke entity
         val finalHeader = h.copy(
+            totalHarga = total,
+            nominal = if (h.nominal <= 0.0) total else h.nominal,
             notaFotoPath = _ui.value.notaFotoPath,
             notaFotoUrl = _ui.value.notaFotoUrl
         )
 
         viewModelScope.launch {
             _ui.update { it.copy(isLoading = true, saveError = null) }
+            // Optimistic: tandai saved dulu, lanjut ke background
+            _ui.update { it.copy(isLoading = false, saved = true) }
             val result = if (finalHeader.id == 0L) {
                 val (_, r) = repo.save(context, finalHeader, entities)
                 r
@@ -423,12 +423,11 @@ class BahanBakuFormViewModel @Inject constructor(
                 repo.update(context, originalNominal, finalHeader, entities)
             }
             if (result is com.posbah.app.data.repository.OnlineWriteResult.Error) {
-                _ui.update { it.copy(isLoading = false, saveError = result.message) }
+                // Rollback: kembali ke form dengan error
+                _ui.update { it.copy(saved = false, saveError = result.message) }
             } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
-                _ui.update { it.copy(isLoading = false, saveError = "Tidak ada koneksi internet. Data tidak tersimpan.") }
-            } else {
-                com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, null)
-                _ui.update { it.copy(isLoading = false, saved = true) }
+                // Rollback: kembali ke form dengan error
+                _ui.update { it.copy(saved = false, saveError = "Tidak ada koneksi internet. Data tidak tersimpan.") }
             }
         }
     }

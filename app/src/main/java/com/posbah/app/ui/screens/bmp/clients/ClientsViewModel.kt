@@ -57,6 +57,7 @@ class ClientsViewModel @Inject constructor(
 
     private val tenantId = authRepository.activeTenantId().orEmpty()
     private val _query = MutableStateFlow("")
+    val searchQuery = _query.asStateFlow()
     private val _ui = MutableStateFlow(ClientsUiState())
     val ui = _ui.asStateFlow()
 
@@ -121,11 +122,14 @@ class ClientsViewModel @Inject constructor(
     fun delete(id: Long) {
         viewModelScope.launch {
             _deleteError.value = null
+            android.widget.Toast.makeText(context, "Klien berhasil dihapus!", android.widget.Toast.LENGTH_SHORT).show()
             val result = clientRepository.delete(context, tenantId, id)
             if (result is OnlineWriteResult.Error) {
                 _deleteError.value = result.message
+                android.widget.Toast.makeText(context, "Gagal hapus klien: ${result.message}", android.widget.Toast.LENGTH_LONG).show()
             } else if (result is OnlineWriteResult.NoConnection) {
-                _deleteError.value = "Tidak ada koneksi internet. Hapus dibatalkan."
+                _deleteError.value = "Tidak ada koneksi internet."
+                android.widget.Toast.makeText(context, "Gagal hapus klien: Tidak ada internet", android.widget.Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -209,15 +213,19 @@ class ClientEditViewModel @Inject constructor(
     fun save() {
         viewModelScope.launch {
             _saveError.value = null
+            // Optimistic: tandai sebagai berhasil disimpan sebelum menunggu network
+            _saved.value = true
             val result = repo.upsert(context, _form.value)
             when (result) {
                 is OnlineWriteResult.Success -> {
-                    _saved.value = true
+                    // sudah di-set sebelumnya, tidak perlu set ulang
                 }
                 is OnlineWriteResult.Error -> {
+                    _saved.value = false  // rollback
                     _saveError.value = result.message
                 }
                 is OnlineWriteResult.NoConnection -> {
+                    _saved.value = false  // rollback
                     _saveError.value = "Tidak ada koneksi internet. Data tidak tersimpan."
                 }
             }

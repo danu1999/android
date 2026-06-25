@@ -194,6 +194,7 @@ func main() {
 	http.HandleFunc("/api/rt/bmp/bahan-baku/", handleRtBmpBahanBakuById)
 	http.HandleFunc("/api/rt/bmp/bahan-baku-items", handleRtBmpBahanBakuItems)
 	http.HandleFunc("/api/rt/bmp/production-logs", handleRtBmpProductionLogs)
+	http.HandleFunc("/api/rt/bmp/production-logs/", handleRtBmpProductionLogsById)
 	http.HandleFunc("/api/rt/bmp/product-stocks", handleRtBmpProductStocks)
 	http.HandleFunc("/api/rt/bmp/stock-ledger", handleRtBmpStockLedger)
 	http.HandleFunc("/api/rt/bmp/settings", handleRtBmpSettings)
@@ -4571,10 +4572,21 @@ func handleSyncTable(w http.ResponseWriter, r *http.Request) {
 	}
 	tableName := parts[3]
 
-	var rows []map[string]interface{}
-	if err := json.NewDecoder(r.Body).Decode(&rows); err != nil {
-		http.Error(w, "Invalid JSON body: "+err.Error(), http.StatusBadRequest)
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Error reading request body: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	var rows []map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &rows); err != nil {
+		var single map[string]interface{}
+		if errObj := json.Unmarshal(bodyBytes, &single); errObj == nil {
+			rows = []map[string]interface{}{single}
+		} else {
+			http.Error(w, "Invalid JSON body: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 
 	if tableName == "local_users" {
@@ -4890,10 +4902,60 @@ func handleSyncTable(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	err := dynamicUpsert(tableName, rows)
+	err = dynamicUpsert(tableName, rows)
 	if err != nil {
 		http.Error(w, "Sync failed: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	if tableName == "tenants" {
+		for _, row := range rows {
+			tID, _ := row["id"].(string)
+			ownerEmail, _ := row["ownerEmail"].(string)
+			name, _ := row["name"].(string)
+
+			if tID != "" && ownerEmail != "" {
+				var empCount int
+				err := db.QueryRow(`SELECT COUNT(*) FROM "employees" WHERE "tenantId" = $1 AND TRIM(LOWER("email")) = TRIM(LOWER($2))`, tID, ownerEmail).Scan(&empCount)
+				if err == nil && empCount == 0 {
+					var pinHash string
+					_ = db.QueryRow(`SELECT "pinHash" FROM "employees" WHERE TRIM(LOWER("email")) = TRIM(LOWER($1)) LIMIT 1`, ownerEmail).Scan(&pinHash)
+					if pinHash == "" {
+						pinHash = "$2a$10$V07vUa8G575mO8Kx3k32z.Xl9B5m6n7q8r9s0t1u2v3w4x5y6z7a." // dummy fallback bcrypt hash
+					}
+
+					var ownerName string
+					_ = db.QueryRow(`SELECT "displayName" FROM "local_users" WHERE TRIM(LOWER("email")) = TRIM(LOWER($1)) LIMIT 1`, ownerEmail).Scan(&ownerName)
+					if ownerName == "" {
+						ownerName = name
+					}
+					if ownerName == "" {
+						ownerName = "Owner"
+					}
+
+					empId := int((time.Now().Unix() + int64(time.Now().Nanosecond())) % 2000000000)
+					nowMillis := time.Now().UnixNano() / 1e6
+
+					_, errEmp := db.Exec(`INSERT INTO "employees" ("id", "tenantId", "outletId", "name", "email", "role", "pinHash", "salary", "isActive", "createdAt", "updatedAt")
+						VALUES ($1, $2, 1, $3, $4, 'OWNER', $5, 0.0, true, $6, $7)
+						ON CONFLICT ("id", "tenantId") DO NOTHING`,
+						empId, tID, ownerName, ownerEmail, pinHash, nowMillis, nowMillis)
+					if errEmp != nil {
+						log.Printf("[SyncTenants] Error inserting default owner employee for %s: %v", tID, errEmp)
+					}
+
+					_, errOutlet := db.Exec(`INSERT INTO "outlets" ("id", "tenantId", "name", "isDefault", "isOpen", "createdAt", "updatedAt")
+						VALUES (1, $1, 'Outlet Utama', true, true, $2, $3)
+						ON CONFLICT ("id", "tenantId") DO NOTHING`,
+						tID, nowMillis, nowMillis)
+					if errOutlet != nil {
+						log.Printf("[SyncTenants] Error inserting default outlet for %s: %v", tID, errOutlet)
+					}
+
+					log.Printf("[SyncTenants] Auto-bootstrapped owner employee and outlet for new tenant %s", tID)
+				}
+			}
+		}
 	}
 
 	if len(rows) > 0 && tenantID != "" {

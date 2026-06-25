@@ -168,15 +168,38 @@ class ProductRepository @Inject constructor(
         updatedAt = updatedAt
     )
 
+    fun updateStockLocal(id: Long, newStock: Int) {
+        _products.value = _products.value.map { if (it.id == id) it.copy(stock = newStock) else it }
+    }
+
+    fun rollbackStocks(snapshot: List<ProductData>) {
+        _products.value = snapshot
+    }
+
     suspend fun getById(id: Long): com.posbah.app.data.local.entities.ProductEntity? {
+        val cached = _products.value.find { it.id == id }
+        if (cached != null) return cached.toEntity()
         return list().find { it.id == id }?.toEntity()
     }
 
     suspend fun getByBarcode(barcode: String): com.posbah.app.data.local.entities.ProductEntity? {
+        val cached = _products.value.find { it.barcode == barcode }
+        if (cached != null) return cached.toEntity()
         return list().find { it.barcode == barcode }?.toEntity()
     }
 
     suspend fun upsert(product: ProductData): Long {
+        val snapshot = _products.value
+        val isNew = product.id == 0L
+        val tempId = if (isNew) -System.currentTimeMillis() else product.id
+        val tempProduct = product.copy(id = tempId, tenantId = tenantId)
+
+        _products.value = if (isNew) {
+            snapshot + tempProduct
+        } else {
+            snapshot.map { if (it.id == product.id) tempProduct else it }
+        }
+
         return try {
             val body = mapOf<String, Any?>(
                 "name" to product.name,
@@ -187,14 +210,32 @@ class ProductRepository @Inject constructor(
                 "image" to product.imageUrl,
                 "outletId" to product.outletId
             )
-            if (product.id == 0L) {
+            val newId = if (product.id == 0L) {
                 val resp = api.createProduct(body)
-                (resp.body()?.get("id") as? Number)?.toLong() ?: 0L
+                if (resp.isSuccessful) {
+                    (resp.body()?.get("id") as? Number)?.toLong() ?: 0L
+                } else {
+                    _products.value = snapshot
+                    0L
+                }
             } else {
-                api.updateProduct(product.id, body)
-                product.id
+                val resp = api.updateProduct(product.id, body)
+                if (resp.isSuccessful) {
+                    product.id
+                } else {
+                    _products.value = snapshot
+                    0L
+                }
             }
-        } catch (_: Exception) { 0L }
+
+            if (newId > 0L && isNew) {
+                _products.value = _products.value.map { if (it.id == tempId) it.copy(id = newId) else it }
+            }
+            newId
+        } catch (_: Exception) {
+            _products.value = snapshot
+            0L
+        }
     }
 
     suspend fun upsert(product: com.posbah.app.data.local.entities.ProductEntity): Long {
@@ -213,13 +254,29 @@ class ProductRepository @Inject constructor(
     }
 
     suspend fun updateStock(id: Long, newStock: Int) {
+        val snapshot = _products.value
+        updateStockLocal(id, newStock)
         try {
-            api.updateProduct(id, mapOf("stock" to newStock))
-        } catch (_: Exception) {}
+            val resp = api.updateProduct(id, mapOf("stock" to newStock))
+            if (!resp.isSuccessful) {
+                _products.value = snapshot
+            }
+        } catch (_: Exception) {
+            _products.value = snapshot
+        }
     }
 
     suspend fun delete(id: Long) {
-        try { api.deleteProduct(id) } catch (_: Exception) {}
+        val snapshot = _products.value
+        _products.value = snapshot.filter { it.id != id }
+        try {
+            val resp = api.deleteProduct(id)
+            if (!resp.isSuccessful) {
+                _products.value = snapshot
+            }
+        } catch (_: Exception) {
+            _products.value = snapshot
+        }
     }
 
     /**
@@ -294,10 +351,23 @@ class CustomerRepository @Inject constructor(
     }
 
     suspend fun getById(id: Long): CustomerData? {
+        val cached = _customers.value.find { it.id == id }
+        if (cached != null) return cached
         return list().find { it.id == id }
     }
 
     suspend fun upsert(customer: CustomerData): Long {
+        val snapshot = _customers.value
+        val isNew = customer.id == 0L
+        val tempId = if (isNew) -System.currentTimeMillis() else customer.id
+        val tempCustomer = customer.copy(id = tempId, tenantId = tenantId)
+
+        _customers.value = if (isNew) {
+            snapshot + tempCustomer
+        } else {
+            snapshot.map { if (it.id == customer.id) tempCustomer else it }
+        }
+
         return try {
             val body = mapOf<String, Any?>(
                 "name" to customer.name,
@@ -305,13 +375,26 @@ class CustomerRepository @Inject constructor(
                 "address" to customer.address,
                 "outletId" to customer.outletId
             )
-            if (customer.id == 0L) {
+            val newId = if (customer.id == 0L) {
                 val resp = api.createCustomer(body)
-                (resp.body()?.get("id") as? Number)?.toLong() ?: 0L
+                if (resp.isSuccessful) {
+                    (resp.body()?.get("id") as? Number)?.toLong() ?: 0L
+                } else {
+                    _customers.value = snapshot
+                    0L
+                }
             } else {
-                0L // customers tidak di-update, cukup create baru
+                customer.id
             }
-        } catch (_: Exception) { 0L }
+
+            if (newId > 0L && isNew) {
+                _customers.value = _customers.value.map { if (it.id == tempId) it.copy(id = newId) else it }
+            }
+            newId
+        } catch (_: Exception) {
+            _customers.value = snapshot
+            0L
+        }
     }
 
     suspend fun upsert(customer: com.posbah.app.data.local.entities.CustomerEntity): Long {
@@ -326,7 +409,16 @@ class CustomerRepository @Inject constructor(
     }
 
     suspend fun delete(id: Long) {
-        try { api.deleteCustomer(id) } catch (_: Exception) {}
+        val snapshot = _customers.value
+        _customers.value = snapshot.filter { it.id != id }
+        try {
+            val resp = api.deleteCustomer(id)
+            if (!resp.isSuccessful) {
+                _customers.value = snapshot
+            }
+        } catch (_: Exception) {
+            _customers.value = snapshot
+        }
     }
 
     private fun CustomerData.toEntity() = com.posbah.app.data.local.entities.CustomerEntity(
@@ -354,7 +446,8 @@ class CustomerRepository @Inject constructor(
 @Singleton
 class TransactionRepository @Inject constructor(
     private val api: PosApiService,
-    private val securePrefs: SecurePreferences
+    private val securePrefs: SecurePreferences,
+    private val cashflowRepo: BmpCashFlowRepository
 ) {
     private val tenantId get() = securePrefs.currentTenantId ?: ""
 
@@ -536,55 +629,108 @@ class TransactionRepository @Inject constructor(
         transaction: TransactionData,
         items: List<TransactionItemData>,
         productRepo: ProductRepository
-    ): TransactionData {
+    ): TransactionData = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+        val snapshot = _transactions.value
+        val prefix = when (transaction.type) {
+            "RENTAL" -> "RN"
+            "LAUNDRY" -> "LD"
+            else -> "FNB"
+        }
         val receiptNum = if (transaction.receiptNumber.isBlank() || transaction.receiptNumber.startsWith("TEMP-")) {
-            generateReceiptNumberForType("FNB")
+            generateReceiptNumberForType(prefix)
         } else {
             transaction.receiptNumber
         }
 
-        val txBody = mapOf<String, Any?>(
-            "receiptNumber" to receiptNum,
-            "type" to transaction.type,
-            "status" to transaction.status,
-            "totalAmount" to transaction.totalAmount,
-            "paymentMethod" to transaction.paymentMethod,
-            "amountPaid" to transaction.amountPaid,
-            "change" to transaction.change,
-            "customerId" to transaction.customerId,
-            "notes" to transaction.notes,
-            "date" to transaction.date,
-            "outletId" to transaction.outletId
-        )
+        val tempId = -System.currentTimeMillis()
+        val tempTx = transaction.copy(id = tempId, receiptNumber = receiptNum, tenantId = tenantId)
 
-        val txResp = api.createTransaction(txBody)
-        val newId = (txResp.body()?.get("id") as? Number)?.toLong() ?: 0L
+        _transactions.value = snapshot + tempTx
 
-        // Simpan items
-        val itemBodies = items.map {
-            mapOf<String, Any?>(
-                "transactionId" to newId,
-                "productId" to it.productId,
-                "productName" to it.productName,
-                "price" to it.price,
-                "quantity" to it.quantity,
-                "subtotal" to it.subtotal
-            )
-        }
-        api.createTransactionItems(itemBodies)
-
-        // Kurangi stok — business logic tetap jalan
+        val productSnapshot = productRepo.products.value
         if (transaction.status == "COMPLETED") {
             items.forEach { item ->
-                val prod = productRepo.getById(item.productId)
+                val prod = productSnapshot.find { it.id == item.productId }
                 if (prod != null) {
                     val newStock = (prod.stock - item.quantity).coerceAtLeast(0)
-                    productRepo.updateStock(item.productId, newStock)
+                    productRepo.updateStockLocal(item.productId, newStock)
                 }
             }
         }
 
-        return transaction.copy(id = newId, receiptNumber = receiptNum)
+        try {
+            val txBody = mapOf<String, Any?>(
+                "receiptNumber" to receiptNum,
+                "type" to transaction.type,
+                "status" to transaction.status,
+                "totalAmount" to transaction.totalAmount,
+                "paymentMethod" to transaction.paymentMethod,
+                "amountPaid" to transaction.amountPaid,
+                "change" to transaction.change,
+                "customerId" to transaction.customerId,
+                "notes" to transaction.notes,
+                "date" to transaction.date,
+                "outletId" to transaction.outletId
+            )
+
+            val txResp = api.createTransaction(txBody)
+            if (!txResp.isSuccessful) {
+                _transactions.value = snapshot
+                productRepo.rollbackStocks(productSnapshot)
+                return@withContext transaction
+            }
+            val newId = (txResp.body()?.get("id") as? Number)?.toLong() ?: 0L
+
+            val itemBodies = items.map {
+                mapOf<String, Any?>(
+                    "transactionId" to newId,
+                    "productId" to it.productId,
+                    "productName" to it.productName,
+                    "price" to it.price,
+                    "quantity" to it.quantity,
+                    "subtotal" to it.subtotal
+                )
+            }
+            val itemsResp = api.createTransactionItems(itemBodies)
+            if (!itemsResp.isSuccessful) {
+                try { api.deleteTransaction(newId) } catch (_: Exception) {}
+                _transactions.value = snapshot
+                productRepo.rollbackStocks(productSnapshot)
+                return@withContext transaction
+            }
+
+            if (transaction.status == "COMPLETED") {
+                items.forEach { item ->
+                    val prod = productSnapshot.find { it.id == item.productId }
+                    if (prod != null) {
+                        val newStock = (prod.stock - item.quantity).coerceAtLeast(0)
+                        api.updateProduct(item.productId, mapOf("stock" to newStock))
+                    }
+                }
+
+                // Sync to Cashflow
+                val isExpense = transaction.type == "EXPENSE"
+                val cfType = if (isExpense) "KELUAR" else "MASUK"
+                val cfDesc = if (isExpense) "Pengeluaran: $receiptNum" else "Penjualan: $receiptNum"
+                val cfAmount = if (isExpense) Math.abs(transaction.totalAmount) else transaction.totalAmount
+                cashflowRepo.createEntry(
+                    BmpCashflowData(
+                        transactionType = cfType,
+                        description = cfDesc,
+                        amount = cfAmount,
+                        transactionDate = transaction.date
+                    )
+                )
+            }
+
+            val savedTx = tempTx.copy(id = newId)
+            _transactions.value = _transactions.value.map { if (it.id == tempId) savedTx else it }
+            savedTx
+        } catch (e: Exception) {
+            _transactions.value = snapshot
+            productRepo.rollbackStocks(productSnapshot)
+            transaction
+        }
     }
 
     suspend fun completePendingTransaction(
@@ -592,62 +738,164 @@ class TransactionRepository @Inject constructor(
         method: String,
         amountPaid: Double?,
         change: Double?
-    ) {
+    ) = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+        val snapshot = _transactions.value
+        val tx = snapshot.find { it.id == id } ?: return@withContext
+        val updatedTx = tx.copy(status = "COMPLETED", paymentMethod = method, amountPaid = amountPaid, change = change)
+        _transactions.value = snapshot.map {
+            if (it.id == id) updatedTx else it
+        }
         try {
-            api.updateTransaction(id, mapOf(
+            val resp = api.updateTransaction(id, mapOf(
                 "status" to "COMPLETED",
                 "paymentMethod" to method,
                 "amountPaid" to amountPaid,
                 "change" to change
             ))
-        } catch (_: Exception) {}
+            if (!resp.isSuccessful) {
+                _transactions.value = snapshot
+                return@withContext
+            }
+
+            // Sync to Cashflow
+            val isExpense = updatedTx.type == "EXPENSE"
+            val cfType = if (isExpense) "KELUAR" else "MASUK"
+            val cfDesc = if (isExpense) "Pengeluaran: ${updatedTx.receiptNumber}" else "Penjualan: ${updatedTx.receiptNumber}"
+            val cfAmount = if (isExpense) Math.abs(updatedTx.totalAmount) else updatedTx.totalAmount
+            cashflowRepo.createEntry(
+                BmpCashflowData(
+                    transactionType = cfType,
+                    description = cfDesc,
+                    amount = cfAmount,
+                    transactionDate = updatedTx.date
+                )
+            )
+        } catch (_: Exception) {
+            _transactions.value = snapshot
+        }
     }
 
-    suspend fun cancelTransaction(id: Long, productRepo: ProductRepository) {
+    suspend fun cancelTransaction(id: Long, productRepo: ProductRepository) = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+        val snapshot = _transactions.value
+        val tx = snapshot.find { it.id == id } ?: return@withContext
+        if (tx.status == "CANCELLED") return@withContext
+
+        _transactions.value = snapshot.map { if (it.id == id) it.copy(status = "CANCELLED") else it }
+
+        val productSnapshot = productRepo.products.value
         try {
-            val tx = getById(id) ?: return
-            if (tx.status == "CANCELLED") return
-            api.updateTransaction(id, mapOf("status" to "CANCELLED"))
-            // Kembalikan stok jika sebelumnya COMPLETED
+            val resp = api.updateTransaction(id, mapOf("status" to "CANCELLED"))
+            if (!resp.isSuccessful) {
+                _transactions.value = snapshot
+                return@withContext
+            }
+
+            // Sync to Cashflow: delete matching entry
+            val cfList = cashflowRepo.list()
+            val match = cfList.find { it.description.contains(tx.receiptNumber) }
+            if (match != null) {
+                cashflowRepo.delete(match.id)
+            }
+
             if (tx.status == "COMPLETED") {
                 val items = listItemsForTransaction(id)
                 items.forEach { item ->
-                    val prod = productRepo.getById(item.productId)
+                    val prod = productSnapshot.find { it.id == item.productId }
                     if (prod != null) {
-                        productRepo.updateStock(item.productId, prod.stock + item.quantity)
+                        val newStock = prod.stock + item.quantity
+                        productRepo.updateStock(item.productId, newStock)
                     }
                 }
             }
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+            _transactions.value = snapshot
+            productRepo.rollbackStocks(productSnapshot)
+        }
     }
 
-    suspend fun deleteTransaction(id: Long, productRepo: ProductRepository) {
+    suspend fun deleteTransaction(id: Long, productRepo: ProductRepository) = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+        val snapshot = _transactions.value
+        val tx = snapshot.find { it.id == id } ?: return@withContext
+
+        _transactions.value = snapshot.filter { it.id != id }
+
+        val productSnapshot = productRepo.products.value
         try {
-            val tx = getById(id) ?: return
-            // Kembalikan stok jika COMPLETED
+            // Sync to Cashflow: delete matching entry
+            val cfList = cashflowRepo.list()
+            val match = cfList.find { it.description.contains(tx.receiptNumber) }
+            if (match != null) {
+                cashflowRepo.delete(match.id)
+            }
+
             if (tx.status == "COMPLETED" && tx.type != "EXPENSE") {
                 val items = listItemsForTransaction(id)
                 items.forEach { item ->
-                    val prod = productRepo.getById(item.productId)
+                    val prod = productSnapshot.find { it.id == item.productId }
                     if (prod != null) {
-                        productRepo.updateStock(item.productId, prod.stock + item.quantity)
+                        val newStock = prod.stock + item.quantity
+                        productRepo.updateStock(item.productId, newStock)
                     }
                 }
             }
-            api.deleteTransaction(id)
-        } catch (_: Exception) {}
+            val resp = api.deleteTransaction(id)
+            if (!resp.isSuccessful) {
+                _transactions.value = snapshot
+                productRepo.rollbackStocks(productSnapshot)
+            }
+        } catch (_: Exception) {
+            _transactions.value = snapshot
+            productRepo.rollbackStocks(productSnapshot)
+        }
     }
 
-    suspend fun update(tx: TransactionData) {
+    suspend fun update(tx: TransactionData) = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+        val snapshot = _transactions.value
+        _transactions.value = snapshot.map { if (it.id == tx.id) tx else it }
         try {
-            api.updateTransaction(tx.id, mapOf(
+            val resp = api.updateTransaction(tx.id, mapOf(
                 "status" to tx.status,
                 "paymentMethod" to tx.paymentMethod,
                 "amountPaid" to tx.amountPaid,
                 "change" to tx.change,
                 "notes" to tx.notes
             ))
-        } catch (_: Exception) {}
+            if (!resp.isSuccessful) {
+                _transactions.value = snapshot
+                return@withContext
+            }
+
+            // Sync to Cashflow: update or delete or create matching entry
+            val cfList = cashflowRepo.list()
+            val match = cfList.find { it.description.contains(tx.receiptNumber) }
+            if (match != null) {
+                if (tx.status == "COMPLETED") {
+                    val isExpense = tx.type == "EXPENSE"
+                    val cfAmount = if (isExpense) Math.abs(tx.totalAmount) else tx.totalAmount
+                    cashflowRepo.update(match.copy(
+                        amount = cfAmount,
+                        transactionDate = tx.date
+                    ))
+                } else {
+                    cashflowRepo.delete(match.id)
+                }
+            } else if (tx.status == "COMPLETED") {
+                val isExpense = tx.type == "EXPENSE"
+                val cfType = if (isExpense) "KELUAR" else "MASUK"
+                val cfDesc = if (isExpense) "Pengeluaran: ${tx.receiptNumber}" else "Penjualan: ${tx.receiptNumber}"
+                val cfAmount = if (isExpense) Math.abs(tx.totalAmount) else tx.totalAmount
+                cashflowRepo.createEntry(
+                    BmpCashflowData(
+                        transactionType = cfType,
+                        description = cfDesc,
+                        amount = cfAmount,
+                        transactionDate = tx.date
+                    )
+                )
+            }
+        } catch (_: Exception) {
+            _transactions.value = snapshot
+        }
     }
 
     suspend fun update(tx: com.posbah.app.data.local.entities.TransactionEntity) {
@@ -713,3 +961,151 @@ fun com.posbah.app.data.local.entities.TransactionItemEntity.toTransactionItemDa
     quantity = quantity,
     subtotal = price * quantity
 )
+
+// ── EmployeeRepository ────────────────────────────────────────────────────────
+
+data class EmployeeData(
+    val id: Long = 0,
+    val tenantId: String = "",
+    val outletId: Long? = null,
+    val name: String = "",
+    val email: String? = null,
+    val role: String = "KASIR",
+    val pinHash: String = "",
+    val phone: String? = null,
+    val salary: Double = 0.0,
+    val isActive: Boolean = true,
+    val payPeriod: String = "MONTHLY",
+    val lastPaidAt: Long? = null,
+    val emailVerified: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+    val passwordChangeCount: Int = 0,
+    val lastPasswordChangeDate: Long = 0L
+)
+
+fun Map<String, Any?>.toEmployeeData() = EmployeeData(
+    id = (get("id") as? Number)?.toLong() ?: 0,
+    tenantId = get("tenantId") as? String ?: "",
+    outletId = (get("outletId") as? Number)?.toLong(),
+    name = get("name") as? String ?: "",
+    email = get("email") as? String,
+    role = get("role") as? String ?: "KASIR",
+    pinHash = (get("pinHash") ?: get("password") ?: "") as? String ?: "",
+    phone = get("phone") as? String,
+    salary = (get("salary") as? Number)?.toDouble() ?: 0.0,
+    isActive = get("isActive") as? Boolean ?: true,
+    payPeriod = get("payPeriod") as? String ?: "MONTHLY",
+    lastPaidAt = (get("lastPaidAt") as? Number)?.toLong(),
+    emailVerified = get("emailVerified") as? Boolean ?: false,
+    createdAt = (get("createdAt") as? Number)?.toLong() ?: System.currentTimeMillis(),
+    updatedAt = (get("updatedAt") as? Number)?.toLong() ?: System.currentTimeMillis(),
+    passwordChangeCount = (get("passwordChangeCount") as? Number)?.toInt() ?: 0,
+    lastPasswordChangeDate = (get("lastPasswordChangeDate") as? Number)?.toLong() ?: 0L
+)
+
+@Singleton
+class EmployeeRepository @Inject constructor(
+    private val api: PosApiService,
+    private val securePrefs: SecurePreferences
+) {
+    private val tenantId get() = securePrefs.currentTenantId ?: ""
+
+    private val _employees = MutableStateFlow<List<EmployeeData>>(emptyList())
+    val employees = _employees.asStateFlow()
+
+    suspend fun refresh() {
+        try {
+            val resp = api.getEmployees()
+            if (resp.isSuccessful) {
+                _employees.value = resp.body()?.map { it.toEmployeeData() } ?: emptyList()
+            }
+        } catch (_: Exception) {}
+    }
+
+    suspend fun list(): List<EmployeeData> {
+        return try {
+            val resp = api.getEmployees()
+            resp.body()?.map { it.toEmployeeData() } ?: emptyList()
+        } catch (_: Exception) { emptyList() }
+    }
+
+    suspend fun getById(id: Long): EmployeeData? {
+        val cached = _employees.value.find { it.id == id }
+        if (cached != null) return cached
+        return list().find { it.id == id }
+    }
+
+    suspend fun insert(emp: EmployeeData): Long {
+        val snapshot = _employees.value
+        val tempId = -System.currentTimeMillis()
+        val tempEmp = emp.copy(id = tempId, tenantId = tenantId)
+        _employees.value = snapshot + tempEmp
+        return try {
+            val body = mapOf(
+                "name" to emp.name,
+                "email" to emp.email,
+                "role" to emp.role,
+                "pinHash" to emp.pinHash,
+                "phone" to emp.phone,
+                "salary" to emp.salary,
+                "isActive" to emp.isActive,
+                "payPeriod" to emp.payPeriod,
+                "lastPaidAt" to emp.lastPaidAt,
+                "outletId" to emp.outletId
+            )
+            val resp = api.createEmployee(body)
+            if (resp.isSuccessful) {
+                val newId = (resp.body()?.get("id") as? Number)?.toLong() ?: 0L
+                val savedEmp = tempEmp.copy(id = newId)
+                _employees.value = _employees.value.map { if (it.id == tempId) savedEmp else it }
+                newId
+            } else {
+                _employees.value = snapshot
+                0L
+            }
+        } catch (e: Exception) {
+            _employees.value = snapshot
+            0L
+        }
+    }
+
+    suspend fun update(emp: EmployeeData) {
+        val snapshot = _employees.value
+        _employees.value = snapshot.map { if (it.id == emp.id) emp else it }
+        try {
+            val body = mapOf(
+                "name" to emp.name,
+                "email" to emp.email,
+                "role" to emp.role,
+                "pinHash" to emp.pinHash,
+                "phone" to emp.phone,
+                "salary" to emp.salary,
+                "isActive" to emp.isActive,
+                "payPeriod" to emp.payPeriod,
+                "lastPaidAt" to emp.lastPaidAt,
+                "outletId" to emp.outletId
+            )
+            api.updateEmployee(emp.id, body)
+        } catch (e: Exception) {
+            _employees.value = snapshot
+        }
+    }
+
+    suspend fun delete(id: Long) {
+        val snapshot = _employees.value
+        _employees.value = snapshot.filter { it.id != id }
+        try {
+            api.deleteEmployee(id)
+        } catch (e: Exception) {
+            _employees.value = snapshot
+        }
+    }
+
+    fun observeForTenant(tenantId: String): Flow<List<EmployeeData>> {
+        return _employees.map { list ->
+            list.filter { it.tenantId == tenantId }
+        }
+    }
+}
+

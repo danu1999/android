@@ -8,6 +8,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -65,6 +68,8 @@ data class BmpProductItemData(
     val invoiceId: Long = 0,
     val masterItemID: Long? = null,
     val name: String = "",
+    val description: String? = null,
+    val unit: String = "pcs",
     val price: Double = 0.0,
     val quantity: Int = 1,
     val jumlahLusin: Int = 1,
@@ -226,107 +231,119 @@ data class BmpSettingsData(
 // ── Converters from API Map to data classes ────────────────────────────────────
 
 fun Map<String, Any?>.toBmpClientData() = BmpClientData(
-    id = (get("id") as? Number)?.toLong() ?: 0,
-    tenantId = get("tenantId") as? String ?: "",
-    clientName = get("clientName") as? String ?: "",
-    saldoTitipan = (get("saldoTitipan") as? Number)?.toDouble() ?: 0.0,
-    addressLine1 = get("addressLine1") as? String,
-    phoneNumber = get("phoneNumber") as? String,
-    emailAddress = get("emailAddress") as? String,
-    taxNumber = get("taxNumber") as? String,
-    uniqueID = get("uniqueID") as? String,
-    slug = get("slug") as? String,
-    isDeleted = get("isDeleted") as? Boolean ?: false,
-    updatedAt = (get("updatedAt") as? Number)?.toLong() ?: 0
+    id = (getCaseInsensitive("id") as? Number)?.toLong() ?: 0,
+    tenantId = getCaseInsensitive("tenantId") as? String ?: "",
+    clientName = getCaseInsensitive("clientName") as? String ?: "",
+    saldoTitipan = (getCaseInsensitive("saldoTitipan") as? Number)?.toDouble() ?: 0.0,
+    addressLine1 = getCaseInsensitive("addressLine1") as? String,
+    phoneNumber = getCaseInsensitive("phoneNumber") as? String,
+    emailAddress = getCaseInsensitive("emailAddress") as? String,
+    taxNumber = getCaseInsensitive("taxNumber") as? String,
+    uniqueID = getCaseInsensitive("uniqueID") as? String,
+    slug = getCaseInsensitive("slug") as? String,
+    isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false,
+    updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0
 )
 
 fun Map<String, Any?>.toBmpInvoiceData() = BmpInvoiceData(
-    id = (get("id") as? Number)?.toLong() ?: 0,
-    tenantId = get("tenantId") as? String ?: "",
-    clientId = (get("clientId") as? Number)?.toLong() ?: 0,
-    number = get("number") as? String ?: "",
-    status = get("status") as? String ?: "UNPAID",
-    totalAmount = (get("totalAmount") as? Number)?.toDouble() ?: 0.0,
-    paidAmount = (get("paidAmount") as? Number)?.toDouble() ?: 0.0,
-    paymentTerms = get("paymentTerms") as? String ?: "14 hari",
-    dueDate = (get("dueDate") as? Number)?.toLong(),
-    notes = get("notes") as? String,
-    createdAt = (get("createdAt") as? Number)?.toLong() ?: System.currentTimeMillis(),
-    isDeleted = get("isDeleted") as? Boolean ?: false,
-    updatedAt = (get("updatedAt") as? Number)?.toLong() ?: 0
+    id = (getCaseInsensitive("id") as? Number)?.toLong() ?: 0,
+    tenantId = getCaseInsensitive("tenantId") as? String ?: "",
+    clientId = (getCaseInsensitive("clientId") as? Number)?.toLong() ?: 0,
+    number = getCaseInsensitive("number") as? String ?: "",
+    status = getCaseInsensitive("status") as? String ?: "UNPAID",
+    totalAmount = (getCaseInsensitive("totalAmount") as? Number)?.toDouble() ?: 0.0,
+    paidAmount = (getCaseInsensitive("paidAmount") as? Number)?.toDouble() ?: 0.0,
+    paymentTerms = getCaseInsensitive("paymentTerms") as? String ?: "14 hari",
+    dueDate = (getCaseInsensitive("dueDate") as? Number)?.toLong(),
+    notes = getCaseInsensitive("notes") as? String,
+    createdAt = (getCaseInsensitive("createdAt") as? Number)?.toLong() ?: System.currentTimeMillis(),
+    isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false,
+    updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0
 )
 
 fun Map<String, Any?>.toBmpProductItemData() = BmpProductItemData(
-    id = (get("id") as? Number)?.toLong() ?: 0,
-    tenantId = get("tenantId") as? String ?: "",
-    invoiceId = (get("invoiceId") as? Number)?.toLong() ?: 0,
-    masterItemID = (get("masterItemID") as? Number)?.toLong(),
-    name = get("name") as? String ?: "",
-    price = (get("price") as? Number)?.toDouble() ?: 0.0,
-    quantity = (get("quantity") as? Number)?.toInt() ?: 1,
-    jumlahLusin = (get("jumlahLusin") as? Number)?.toInt() ?: 1,
-    hargaBeli = (get("hargaBeli") as? Number)?.toDouble() ?: 0.0,
-    isKhusus = get("isKhusus") as? Boolean ?: false,
-    isDeleted = get("isDeleted") as? Boolean ?: false,
-    updatedAt = (get("updatedAt") as? Number)?.toLong() ?: 0
+    id = (getCaseInsensitive("id") as? Number)?.toLong() ?: 0,
+    tenantId = getCaseInsensitive("tenantId") as? String ?: "",
+    invoiceId = (getCaseInsensitive("invoiceId") as? Number)?.toLong() ?: 0,
+    masterItemID = (getCaseInsensitive("masterItemID") as? Number)?.toLong(),
+    name = getCaseInsensitive("title") as? String ?: getCaseInsensitive("name") as? String ?: "",
+    description = getCaseInsensitive("description") as? String,
+    unit = getCaseInsensitive("unit") as? String ?: "pcs",
+    price = (getCaseInsensitive("price") as? Number)?.toDouble() ?: 0.0,
+    quantity = (getCaseInsensitive("quantity") as? Number)?.toInt() ?: 1,
+    jumlahLusin = (getCaseInsensitive("jumlahLusin") as? Number)?.toInt() ?: 1,
+    hargaBeli = (getCaseInsensitive("hargaBeli") as? Number)?.toDouble() ?: 0.0,
+    isKhusus = getCaseInsensitive("isKhusus") as? Boolean ?: false,
+    isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false,
+    updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0
 )
 
 fun Map<String, Any?>.toBmpMasterProductData() = BmpMasterProductData(
-    id = (get("id") as? Number)?.toLong() ?: 0,
-    tenantId = get("tenantId") as? String ?: "",
-    title = get("title") as? String ?: "",
-    description = get("description") as? String,
-    unit = get("unit") as? String ?: "Kg",
-    price = (get("price") as? Number)?.toDouble() ?: 0.0,
-    beratGram = (get("beratGram") as? Number)?.toDouble() ?: 0.0,
-    cycleTime = (get("cycleTime") as? Number)?.toDouble() ?: 0.0,
-    cavity = (get("cavity") as? Number)?.toInt() ?: 1,
-    rejectRate = (get("rejectRate") as? Number)?.toDouble() ?: 0.0,
-    uniqueID = get("uniqueID") as? String,
-    slug = get("slug") as? String,
-    jenisBahanBaku = get("jenisBahanBaku") as? String ?: "",
-    image = get("image") as? String,
-    isDeleted = get("isDeleted") as? Boolean ?: false,
-    updatedAt = (get("updatedAt") as? Number)?.toLong() ?: 0
+    id = (getCaseInsensitive("id") as? Number)?.toLong() ?: 0,
+    tenantId = getCaseInsensitive("tenantId") as? String ?: "",
+    title = getCaseInsensitive("title") as? String ?: "",
+    description = getCaseInsensitive("description") as? String,
+    unit = getCaseInsensitive("unit") as? String ?: "Kg",
+    price = (getCaseInsensitive("price") as? Number)?.toDouble() ?: 0.0,
+    beratGram = (getCaseInsensitive("beratGram") as? Number)?.toDouble() ?: 0.0,
+    cycleTime = (getCaseInsensitive("cycleTime") as? Number)?.toDouble() ?: 0.0,
+    cavity = (getCaseInsensitive("cavity") as? Number)?.toInt() ?: 1,
+    rejectRate = (getCaseInsensitive("rejectRate") as? Number)?.toDouble() ?: 0.0,
+    uniqueID = getCaseInsensitive("uniqueID") as? String,
+    slug = getCaseInsensitive("slug") as? String,
+    jenisBahanBaku = getCaseInsensitive("jenisBahanBaku") as? String ?: "",
+    image = getCaseInsensitive("image") as? String,
+    isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false,
+    updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0
 )
 
 fun Map<String, Any?>.toBmpCashflowData() = BmpCashflowData(
-    id = (get("id") as? Number)?.toLong() ?: 0,
-    tenantId = get("tenantId") as? String ?: "",
-    transactionDate = (get("transactionDate") as? Number)?.toLong() ?: System.currentTimeMillis(),
-    transactionType = get("transactionType") as? String ?: "MASUK",
-    description = get("description") as? String ?: "",
-    amount = (get("amount") as? Number)?.toDouble() ?: 0.0,
-    paymentRefId = (get("paymentRefId") as? Number)?.toLong(),
-    isDeleted = get("isDeleted") as? Boolean ?: false,
-    updatedAt = (get("updatedAt") as? Number)?.toLong() ?: 0
+    id = (getCaseInsensitive("id") as? Number)?.toLong() ?: 0,
+    tenantId = getCaseInsensitive("tenantId") as? String ?: "",
+    transactionDate = (getCaseInsensitive("transactionDate") as? Number)?.toLong() ?: System.currentTimeMillis(),
+    transactionType = getCaseInsensitive("transactionType") as? String ?: "MASUK",
+    description = getCaseInsensitive("description") as? String ?: "",
+    amount = (getCaseInsensitive("amount") as? Number)?.toDouble() ?: 0.0,
+    paymentRefId = (getCaseInsensitive("paymentRefId") as? Number)?.toLong(),
+    isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false,
+    updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0
 )
 
 fun Map<String, Any?>.toBmpPaymentData() = BmpPaymentData(
-    id = (get("id") as? Number)?.toLong() ?: 0,
-    tenantId = get("tenantId") as? String ?: "",
-    invoiceId = (get("invoiceId") as? Number)?.toLong() ?: 0,
-    paymentDate = (get("paymentDate") as? Number)?.toLong() ?: System.currentTimeMillis(),
-    paymentAmount = (get("paymentAmount") as? Number)?.toDouble() ?: 0.0,
-    paymentMethod = get("paymentMethod") as? String ?: "CASH",
-    notes = get("notes") as? String,
-    isDeleted = get("isDeleted") as? Boolean ?: false,
-    updatedAt = (get("updatedAt") as? Number)?.toLong() ?: 0
+    id = (getCaseInsensitive("id") as? Number)?.toLong() ?: 0,
+    tenantId = getCaseInsensitive("tenantId") as? String ?: "",
+    invoiceId = (getCaseInsensitive("invoiceId") as? Number)?.toLong() ?: 0,
+    paymentDate = (getCaseInsensitive("paymentDate") as? Number)?.toLong() ?: System.currentTimeMillis(),
+    paymentAmount = (getCaseInsensitive("paymentAmount") as? Number)?.toDouble() ?: 0.0,
+    paymentMethod = getCaseInsensitive("paymentMethod") as? String ?: "CASH",
+    notes = getCaseInsensitive("notes") as? String,
+    isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false,
+    updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0
 )
 
+private fun Map<String, Any?>.getCaseInsensitive(key: String): Any? {
+    val exact = get(key)
+    if (exact != null) return exact
+    val lowercaseKey = key.lowercase()
+    for ((k, v) in this) {
+        if (k.lowercase() == lowercaseKey) return v
+    }
+    return null
+}
+
 fun Map<String, Any?>.toBmpBahanBakuData() = BmpBahanBakuData(
-    id = (get("id") as? Number)?.toLong() ?: 0,
-    tenantId = get("tenantId") as? String ?: "",
-    noTagihan = get("noTagihan") as? String ?: "",
-    tanggal = (get("tanggal") as? Number)?.toLong() ?: System.currentTimeMillis(),
-    supplier = get("supplier") as? String,
-    totalHarga = (get("totalHarga") as? Number)?.toDouble() ?: 0.0,
-    nominal = (get("nominal") as? Number)?.toDouble() ?: 0.0,
-    notes = get("notes") as? String,
-    notaFotoPath = get("notaFotoPath") as? String,
-    notaFotoUrl = get("notaFotoUrl") as? String,
-    isDeleted = get("isDeleted") as? Boolean ?: false,
-    updatedAt = (get("updatedAt") as? Number)?.toLong() ?: 0
+    id = (getCaseInsensitive("id") as? Number)?.toLong() ?: 0,
+    tenantId = getCaseInsensitive("tenantId") as? String ?: "",
+    noTagihan = getCaseInsensitive("noTagihan") as? String ?: "",
+    tanggal = (getCaseInsensitive("tanggal") as? Number)?.toLong() ?: System.currentTimeMillis(),
+    supplier = getCaseInsensitive("supplier") as? String,
+    totalHarga = (getCaseInsensitive("totalHarga") as? Number)?.toDouble() ?: 0.0,
+    nominal = (getCaseInsensitive("nominal") as? Number)?.toDouble() ?: 0.0,
+    notes = getCaseInsensitive("notes") as? String,
+    notaFotoPath = getCaseInsensitive("notaFotoPath") as? String,
+    notaFotoUrl = getCaseInsensitive("notaFotoUrl") as? String,
+    isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false,
+    updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0
 )
 
 // ── BmpClientRepository ───────────────────────────────────────────────────────
@@ -398,27 +415,39 @@ class BmpClientRepository @Inject constructor(
         _clients.map { it.size }
 
     suspend fun getById(id: Long): BmpClientEntity? =
-        list().find { it.id == id }?.toEntity()
+        _clients.value.find { it.id == id }?.toEntity() ?: list().find { it.id == id }?.toEntity()
 
     suspend fun upsert(client: BmpClientData): OnlineWriteResult {
+        val snapshot = _clients.value
+        // Optimistic update: perbarui state lokal sebelum request jaringan
+        if (client.id == 0L) {
+            _clients.value = snapshot + client.copy(id = -System.currentTimeMillis())
+        } else {
+            _clients.value = snapshot.map { if (it.id == client.id) client else it }
+        }
         return try {
+            val uniqueId = client.uniqueID ?: java.util.UUID.randomUUID().toString()
             val body = mapOf<String, Any?>(
                 "clientName" to client.clientName,
                 "addressLine1" to client.addressLine1,
                 "phoneNumber" to client.phoneNumber,
                 "emailAddress" to client.emailAddress,
                 "taxNumber" to client.taxNumber,
-                "uniqueID" to (client.uniqueID ?: java.util.UUID.randomUUID().toString()),
+                "uniqueID" to uniqueId,
                 "slug" to (client.slug ?: client.clientName.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-'))
             )
-            if (client.id == 0L) {
+            val resp = if (client.id == 0L) {
                 api.createClient(body)
             } else {
                 api.updateClient(client.id, body)
             }
+            // Refresh di background setelah berhasil untuk sinkronisasi ID sebenarnya
             refresh()
             OnlineWriteResult.Success
-        } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal simpan klien") }
+        } catch (e: Exception) {
+            _clients.value = snapshot  // rollback jika gagal
+            OnlineWriteResult.Error(e.message ?: "Gagal simpan klien")
+        }
     }
 
     suspend fun upsert(context: android.content.Context, entity: BmpClientEntity): OnlineWriteResult {
@@ -426,19 +455,27 @@ class BmpClientRepository @Inject constructor(
     }
 
     suspend fun delete(id: Long, cashflowRepo: BmpCashFlowRepository): OnlineWriteResult {
+        val snapshot = _clients.value
+        _clients.value = snapshot.filter { it.id != id }  // optimistic: hapus dulu
         return try {
             api.deleteClient(id)
-            refresh()
             OnlineWriteResult.Success
-        } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal hapus klien") }
+        } catch (e: Exception) {
+            _clients.value = snapshot  // rollback jika gagal
+            OnlineWriteResult.Error(e.message ?: "Gagal hapus klien")
+        }
     }
 
     suspend fun delete(context: android.content.Context, tenantId: String, id: Long): OnlineWriteResult {
+        val snapshot = _clients.value
+        _clients.value = snapshot.filter { it.id != id }  // optimistic: hapus dulu
         return try {
             api.deleteClient(id)
-            refresh()
             OnlineWriteResult.Success
-        } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal hapus klien") }
+        } catch (e: Exception) {
+            _clients.value = snapshot  // rollback jika gagal
+            OnlineWriteResult.Error(e.message ?: "Gagal hapus klien")
+        }
     }
 }
 
@@ -453,6 +490,18 @@ class BmpInvoiceRepository @Inject constructor(
 ) {
     private val _invoices = MutableStateFlow<List<BmpInvoiceData>>(emptyList())
     val invoices = _invoices.asStateFlow()
+
+    private val _payments = MutableStateFlow<List<BmpPaymentData>>(emptyList())
+    val allPayments = _payments.asStateFlow()
+
+    suspend fun refreshPayments() {
+        try {
+            val resp = api.getPayments()
+            if (resp.isSuccessful) {
+                _payments.value = resp.body()?.map { it.toBmpPaymentData() } ?: emptyList()
+            }
+        } catch (_: Exception) {}
+    }
 
     val allInvoices: kotlinx.coroutines.flow.Flow<List<com.posbah.app.data.local.entities.BmpInvoiceEntity>>
         get() = observe("")
@@ -476,9 +525,7 @@ class BmpInvoiceRepository @Inject constructor(
     )
 
     fun observe(tenantId: String): kotlinx.coroutines.flow.Flow<List<com.posbah.app.data.local.entities.BmpInvoiceEntity>> =
-        kotlinx.coroutines.flow.flow {
-            emit(list().map { it.toEntity() })
-        }
+        _invoices.map { list -> list.map { it.toEntity() } }
 
     suspend fun payMassal(
         tenantId: String,
@@ -573,12 +620,23 @@ class BmpInvoiceRepository @Inject constructor(
         cashflowRepo: BmpCashFlowRepository,
         stockRepo: BmpStockRepository
     ): Pair<Long, OnlineWriteResult> {
-        return try {
-            val total = products.sumOf { it.price * it.quantity * it.jumlahLusin }
-            val days = parsePaymentTermsDays(invoice.paymentTerms)
-            val computedDueDate = invoice.dueDate ?: (invoice.createdAt + days * 86400_000L)
-            val newStatus = computeInvoiceStatus(total, invoice.paidAmount)
+        val snapshot = _invoices.value
+        val total = products.sumOf { it.price * it.quantity * it.jumlahLusin }
+        val days = parsePaymentTermsDays(invoice.paymentTerms)
+        val computedDueDate = invoice.dueDate ?: (invoice.createdAt + days * 86400_000L)
+        val newStatus = computeInvoiceStatus(total, invoice.paidAmount)
 
+        // Optimistic update
+        val tempId = -System.currentTimeMillis()
+        val tempInvoice = invoice.copy(
+            id = tempId,
+            totalAmount = total,
+            status = newStatus,
+            dueDate = computedDueDate
+        )
+        _invoices.value = snapshot + tempInvoice
+
+        return try {
             // 1. POST invoice header ke VPS
             val invoiceBody = mapOf<String, Any?>(
                 "clientId" to invoice.clientId,
@@ -593,6 +651,7 @@ class BmpInvoiceRepository @Inject constructor(
             )
             val invoiceResp = api.createInvoice(invoiceBody)
             if (!invoiceResp.isSuccessful) {
+                _invoices.value = snapshot // rollback
                 return Pair(-1L, OnlineWriteResult.Error("Gagal simpan invoice ke server"))
             }
             val newId = (invoiceResp.body()?.get("id") as? Number)?.toLong() ?: -1L
@@ -603,6 +662,9 @@ class BmpInvoiceRepository @Inject constructor(
                     "invoiceId" to newId,
                     "masterItemID" to prod.masterItemID,
                     "name" to prod.name,
+                    "title" to prod.name,
+                    "description" to prod.description,
+                    "unit" to prod.unit,
                     "price" to prod.price,
                     "quantity" to prod.quantity,
                     "jumlahLusin" to prod.jumlahLusin,
@@ -655,8 +717,13 @@ class BmpInvoiceRepository @Inject constructor(
                 }
             }
 
+            // Replace temp invoice dengan saved invoice
+            val savedInvoice = tempInvoice.copy(id = newId)
+            _invoices.value = snapshot + savedInvoice
+
             Pair(newId, OnlineWriteResult.Success)
         } catch (e: Exception) {
+            _invoices.value = snapshot // rollback
             Pair(-1L, OnlineWriteResult.Error(e.message ?: "Gagal membuat invoice"))
         }
     }
@@ -671,14 +738,24 @@ class BmpInvoiceRepository @Inject constructor(
         cashflowRepo: BmpCashFlowRepository,
         stockRepo: BmpStockRepository
     ): OnlineWriteResult {
-        return try {
-            val total = products.sumOf { it.price * it.quantity * it.jumlahLusin }
-            val days = parsePaymentTermsDays(invoice.paymentTerms)
-            val computedDueDate = invoice.dueDate ?: (invoice.createdAt + days * 86400_000L)
-            val allPayments = getPaymentsByInvoice(invoice.id)
-            val totalPaidAmt = allPayments.sumOf { it.paymentAmount }
-            val newStatus = computeInvoiceStatus(total, totalPaidAmt, computedDueDate)
+        val snapshot = _invoices.value
+        val total = products.sumOf { it.price * it.quantity * it.jumlahLusin }
+        val days = parsePaymentTermsDays(invoice.paymentTerms)
+        val computedDueDate = invoice.dueDate ?: (invoice.createdAt + days * 86400_000L)
+        val allPayments = getPaymentsByInvoice(invoice.id)
+        val totalPaidAmt = allPayments.sumOf { it.paymentAmount }
+        val newStatus = computeInvoiceStatus(total, totalPaidAmt, computedDueDate)
 
+        // Optimistic update
+        val updatedInvoice = invoice.copy(
+            totalAmount = total,
+            status = newStatus,
+            dueDate = computedDueDate,
+            paidAmount = totalPaidAmt
+        )
+        _invoices.value = snapshot.map { if (it.id == invoice.id) updatedInvoice else it }
+
+        return try {
             // 1. Hapus produk lama di VPS
             val oldProducts = getProductsByInvoice(invoice.id)
             for (op in oldProducts) {
@@ -713,6 +790,9 @@ class BmpInvoiceRepository @Inject constructor(
                     "invoiceId" to invoice.id,
                     "masterItemID" to prod.masterItemID,
                     "name" to prod.name,
+                    "title" to prod.name,
+                    "description" to prod.description,
+                    "unit" to prod.unit,
                     "price" to prod.price,
                     "quantity" to prod.quantity,
                     "jumlahLusin" to prod.jumlahLusin,
@@ -744,7 +824,10 @@ class BmpInvoiceRepository @Inject constructor(
             }
 
             OnlineWriteResult.Success
-        } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal update invoice") }
+        } catch (e: Exception) {
+            _invoices.value = snapshot // rollback
+            OnlineWriteResult.Error(e.message ?: "Gagal update invoice")
+        }
     }
 
     suspend fun deleteInvoice(
@@ -752,9 +835,11 @@ class BmpInvoiceRepository @Inject constructor(
         cashflowRepo: BmpCashFlowRepository,
         stockRepo: BmpStockRepository
     ): OnlineWriteResult {
+        val snapshot = _invoices.value
+        _invoices.value = snapshot.filter { it.id != id }  // optimistic: hapus dari list dulu
         return try {
-            val inv = getById(id) ?: return OnlineWriteResult.Error("Invoice tidak ditemukan")
-            // Kembalikan stok
+            val inv = snapshot.find { it.id == id }
+            // Kembalikan stok (di background, tidak memblokir UI)
             val products = getProductsByInvoice(id)
             for (prod in products) {
                 if (prod.masterItemID != null) {
@@ -763,7 +848,7 @@ class BmpInvoiceRepository @Inject constructor(
                         change = prod.quantity * prod.jumlahLusin,
                         mutationType = "PENJUALAN",
                         referenceId = id,
-                        notes = "Hapus Invoice #${inv.number}"
+                        notes = "Hapus Invoice #${inv?.number ?: id}"
                     )
                 }
                 try { api.deleteBmpProduct(prod.id) } catch (_: Exception) {}
@@ -775,7 +860,10 @@ class BmpInvoiceRepository @Inject constructor(
             }
             api.deleteInvoice(id)
             OnlineWriteResult.Success
-        } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal hapus invoice") }
+        } catch (e: Exception) {
+            _invoices.value = snapshot  // rollback jika gagal
+            OnlineWriteResult.Error(e.message ?: "Gagal hapus invoice")
+        }
     }
 
     private fun parsePaymentTermsDays(terms: String): Long {
@@ -804,22 +892,43 @@ class BmpInvoiceRepository @Inject constructor(
         notes: String?,
         cashflowRepo: BmpCashFlowRepository
     ): OnlineWriteResult {
+        val snapshot = _payments.value
+        val invSnapshot = _invoices.value
+
+        val tempPayment = BmpPaymentData(
+            id = -System.currentTimeMillis(),
+            tenantId = "",
+            invoiceId = invoiceId,
+            paymentDate = System.currentTimeMillis(),
+            paymentAmount = amount,
+            paymentMethod = method,
+            notes = notes
+        )
+        _payments.value = snapshot + tempPayment
+
+        val targetInv = invSnapshot.find { it.id == invoiceId }
+        if (targetInv != null) {
+            val newPaid = targetInv.paidAmount + amount
+            val newStatus = computeInvoiceStatus(targetInv.totalAmount, newPaid, targetInv.dueDate)
+            _invoices.value = invSnapshot.map {
+                if (it.id == invoiceId) it.copy(paidAmount = newPaid, status = newStatus) else it
+            }
+        }
+
         return try {
             val payResp = api.createPayment(mapOf(
                 "invoiceId" to invoiceId,
-                "paymentDate" to System.currentTimeMillis(),
+                "paymentDate" to tempPayment.paymentDate,
                 "paymentAmount" to amount,
                 "paymentMethod" to method,
                 "notes" to notes
             ))
             val payId = (payResp.body()?.get("id") as? Number)?.toLong()
 
-            // Recalculate invoice status
-            val inv = getById(invoiceId)
-            if (inv != null) {
-                val allPayments = getPaymentsByInvoice(invoiceId)
-                val totalPaid = allPayments.sumOf { it.paymentAmount } + amount
-                val newStatus = computeInvoiceStatus(inv.totalAmount, totalPaid, inv.dueDate)
+            if (targetInv != null) {
+                val invoicePayments = getPaymentsByInvoice(invoiceId)
+                val totalPaid = invoicePayments.sumOf { it.paymentAmount } + amount
+                val newStatus = computeInvoiceStatus(targetInv.totalAmount, totalPaid, targetInv.dueDate)
                 api.updateInvoice(invoiceId, mapOf(
                     "status" to newStatus,
                     "paidAmount" to totalPaid
@@ -836,8 +945,15 @@ class BmpInvoiceRepository @Inject constructor(
             ))
             cashflowRepo.refreshEntries()
 
+            refreshPayments()
+            refresh()
+
             OnlineWriteResult.Success
-        } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal catat pembayaran") }
+        } catch (e: Exception) {
+            _payments.value = snapshot
+            _invoices.value = invSnapshot
+            OnlineWriteResult.Error(e.message ?: "Gagal catat pembayaran")
+        }
     }
 
     suspend fun editPayment(
@@ -848,18 +964,37 @@ class BmpInvoiceRepository @Inject constructor(
         method: String,
         notes: String?
     ): OnlineWriteResult {
+        val snapshot = _payments.value
+        val invSnapshot = _invoices.value
+
+        val pay = snapshot.find { it.id == paymentId }
+        if (pay != null) {
+            _payments.value = snapshot.map {
+                if (it.id == paymentId) it.copy(paymentAmount = amount, paymentMethod = method, notes = notes) else it
+            }
+            val invId = pay.invoiceId
+            val inv = invSnapshot.find { it.id == invId }
+            if (inv != null) {
+                val invoicePayments = snapshot.filter { it.invoiceId == invId && it.id != paymentId }
+                val totalPaid = invoicePayments.sumOf { it.paymentAmount } + amount
+                val newStatus = computeInvoiceStatus(inv.totalAmount, totalPaid, inv.dueDate)
+                _invoices.value = invSnapshot.map {
+                    if (it.id == invId) it.copy(paidAmount = totalPaid, status = newStatus) else it
+                }
+            }
+        }
+
         return try {
             api.updatePayment(paymentId, mapOf(
                 "paymentAmount" to amount,
                 "paymentMethod" to method,
                 "notes" to notes
             ))
-            val allPayments = api.getPayments().body()?.map { it.toBmpPaymentData() } ?: emptyList()
-            val pay = allPayments.find { it.id == paymentId }
             if (pay != null) {
                 val invId = pay.invoiceId
                 val inv = getById(invId)
                 if (inv != null) {
+                    val allPayments = api.getPayments().body()?.map { it.toBmpPaymentData() } ?: emptyList()
                     val invoicePayments = allPayments.filter { it.invoiceId == invId && it.id != paymentId }
                     val totalPaid = invoicePayments.sumOf { it.paymentAmount } + amount
                     val newStatus = computeInvoiceStatus(inv.totalAmount, totalPaid, inv.dueDate)
@@ -869,8 +1004,14 @@ class BmpInvoiceRepository @Inject constructor(
                     ))
                 }
             }
+            refreshPayments()
+            refresh()
             OnlineWriteResult.Success
-        } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal ubah pembayaran") }
+        } catch (e: Exception) {
+            _payments.value = snapshot
+            _invoices.value = invSnapshot
+            OnlineWriteResult.Error(e.message ?: "Gagal ubah pembayaran")
+        }
     }
 
     suspend fun deletePayment(
@@ -878,13 +1019,31 @@ class BmpInvoiceRepository @Inject constructor(
         tenantId: String,
         paymentId: Long
     ): OnlineWriteResult {
+        val snapshot = _payments.value
+        val invSnapshot = _invoices.value
+
+        val pay = snapshot.find { it.id == paymentId }
+        if (pay != null) {
+            _payments.value = snapshot.filter { it.id != paymentId }
+            val invId = pay.invoiceId
+            val inv = invSnapshot.find { it.id == invId }
+            if (inv != null) {
+                val invoicePayments = snapshot.filter { it.invoiceId == invId && it.id != paymentId }
+                val totalPaid = invoicePayments.sumOf { it.paymentAmount }
+                val newStatus = computeInvoiceStatus(inv.totalAmount, totalPaid, inv.dueDate)
+                _invoices.value = invSnapshot.map {
+                    if (it.id == invId) it.copy(paidAmount = totalPaid, status = newStatus) else it
+                }
+            }
+        }
+
         return try {
-            val allPayments = api.getPayments().body()?.map { it.toBmpPaymentData() } ?: emptyList()
-            val pay = allPayments.find { it.id == paymentId }
+            api.deletePayment(paymentId)
             if (pay != null) {
                 val invId = pay.invoiceId
                 val inv = getById(invId)
                 if (inv != null) {
+                    val allPayments = api.getPayments().body()?.map { it.toBmpPaymentData() } ?: emptyList()
                     val invoicePayments = allPayments.filter { it.invoiceId == invId && it.id != paymentId }
                     val totalPaid = invoicePayments.sumOf { it.paymentAmount }
                     val newStatus = computeInvoiceStatus(inv.totalAmount, totalPaid, inv.dueDate)
@@ -894,9 +1053,14 @@ class BmpInvoiceRepository @Inject constructor(
                     ))
                 }
             }
-            api.deletePayment(paymentId)
+            refreshPayments()
+            refresh()
             OnlineWriteResult.Success
-        } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal hapus pembayaran") }
+        } catch (e: Exception) {
+            _payments.value = snapshot
+            _invoices.value = invSnapshot
+            OnlineWriteResult.Error(e.message ?: "Gagal hapus pembayaran")
+        }
     }
 
     suspend fun deleteInvoice(
@@ -916,6 +1080,8 @@ class BmpInvoiceRepository @Inject constructor(
                     invoiceId = it.invoiceId,
                     masterItemID = it.masterItemID,
                     title = it.name,
+                    description = it.description,
+                    unit = it.unit,
                     price = it.price,
                     jumlahLusin = it.jumlahLusin.toDouble(),
                     quantity = it.quantity.toDouble(),
@@ -996,6 +1162,8 @@ class BmpInvoiceRepository @Inject constructor(
                 invoiceId = it.invoiceId ?: 0L,
                 masterItemID = it.masterItemID,
                 name = it.title,
+                description = it.description,
+                unit = it.unit,
                 price = it.price,
                 quantity = it.quantity.toInt(),
                 jumlahLusin = it.jumlahLusin.toInt(),
@@ -1031,6 +1199,8 @@ class BmpInvoiceRepository @Inject constructor(
                 invoiceId = it.invoiceId ?: 0L,
                 masterItemID = it.masterItemID,
                 name = it.title,
+                description = it.description,
+                unit = it.unit,
                 price = it.price,
                 quantity = it.quantity.toInt(),
                 jumlahLusin = it.jumlahLusin.toInt(),
@@ -1041,21 +1211,21 @@ class BmpInvoiceRepository @Inject constructor(
         return updateInvoice(invoiceData, productDataList, cashflowRepo, stockRepo)
     }
 
+    private fun BmpPaymentData.toEntity() = BmpInvoicePaymentEntity(
+        id = id,
+        tenantId = tenantId,
+        invoiceId = invoiceId,
+        paymentDate = paymentDate,
+        paymentAmount = paymentAmount,
+        paymentMethod = paymentMethod,
+        notes = notes,
+        isSynced = true,
+        isDeleted = isDeleted
+    )
+
     fun observePayments(invoiceId: Long): kotlinx.coroutines.flow.Flow<List<BmpInvoicePaymentEntity>> =
-        kotlinx.coroutines.flow.flow {
-            emit(getPaymentsByInvoice(invoiceId).map {
-                BmpInvoicePaymentEntity(
-                    id = it.id,
-                    tenantId = it.tenantId,
-                    invoiceId = it.invoiceId,
-                    paymentDate = it.paymentDate,
-                    paymentAmount = it.paymentAmount,
-                    paymentMethod = it.paymentMethod,
-                    notes = it.notes,
-                    isSynced = true,
-                    isDeleted = it.isDeleted
-                )
-            })
+        _payments.map { list ->
+            list.filter { it.invoiceId == invoiceId }.map { it.toEntity() }
         }
 
     suspend fun recordPayment(
@@ -1105,6 +1275,13 @@ class BmpMasterProductRepository @Inject constructor(
     suspend fun getById(id: Long): BmpMasterProductData? = list().find { it.id == id }
 
     suspend fun upsert(item: BmpMasterProductData): OnlineWriteResult {
+        val snapshot = _items.value
+        // Optimistic update: perbarui state lokal sebelum request jaringan
+        if (item.id == 0L) {
+            _items.value = snapshot + item.copy(id = -System.currentTimeMillis())
+        } else {
+            _items.value = snapshot.map { if (it.id == item.id) item else it }
+        }
         return try {
             val body = mutableMapOf<String, Any>().apply {
                 put("title", item.title)
@@ -1122,17 +1299,25 @@ class BmpMasterProductRepository @Inject constructor(
             }
             if (item.id == 0L) api.createMasterProduct(body)
             else api.updateMasterProduct(item.id, body)
+            // Refresh di background untuk sinkronisasi ID asli dari server
             refresh()
             OnlineWriteResult.Success
-        } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal simpan master produk") }
+        } catch (e: Exception) {
+            _items.value = snapshot  // rollback jika gagal
+            OnlineWriteResult.Error(e.message ?: "Gagal simpan master produk")
+        }
     }
 
     suspend fun delete(id: Long): OnlineWriteResult {
+        val snapshot = _items.value
+        _items.value = snapshot.filter { it.id != id }  // optimistic: hapus dulu
         return try {
             api.deleteMasterProduct(id)
-            refresh()
             OnlineWriteResult.Success
-        } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal hapus") }
+        } catch (e: Exception) {
+            _items.value = snapshot  // rollback jika gagal
+            OnlineWriteResult.Error(e.message ?: "Gagal hapus")
+        }
     }
 
     fun observe(tenantId: String): Flow<List<com.posbah.app.data.local.entities.BmpMasterProductEntity>> =
@@ -1192,6 +1377,10 @@ class BmpCashFlowRepository @Inject constructor(
     } catch (_: Exception) { emptyList() }
 
     suspend fun createEntry(entry: BmpCashflowData): Long {
+        val snapshot = _entries.value
+        val tempId = -System.currentTimeMillis()
+        val tempEntry = entry.copy(id = tempId, tenantId = securePrefs.currentTenantId ?: "")
+        _entries.value = snapshot + tempEntry
         return try {
             val resp = api.createCashflow(mapOf(
                 "transactionDate" to entry.transactionDate,
@@ -1200,11 +1389,23 @@ class BmpCashFlowRepository @Inject constructor(
                 "amount" to entry.amount,
                 "paymentRefId" to entry.paymentRefId
             ))
-            (resp.body()?.get("id") as? Number)?.toLong() ?: 0L
-        } catch (_: Exception) { 0L }
+            val newId = (resp.body()?.get("id") as? Number)?.toLong() ?: 0L
+            if (newId > 0) {
+                _entries.value = _entries.value.map { if (it.id == tempId) it.copy(id = newId) else it }
+                newId
+            } else {
+                _entries.value = snapshot
+                0L
+            }
+        } catch (_: Exception) {
+            _entries.value = snapshot
+            0L
+        }
     }
 
     suspend fun update(entry: BmpCashflowData): OnlineWriteResult {
+        val snapshot = _entries.value
+        _entries.value = snapshot.map { if (it.id == entry.id) entry else it }  // optimistic update
         return try {
             api.updateCashflow(entry.id, mapOf(
                 "transactionDate" to entry.transactionDate,
@@ -1213,14 +1414,22 @@ class BmpCashFlowRepository @Inject constructor(
                 "amount" to entry.amount
             ))
             OnlineWriteResult.Success
-        } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal update cashflow") }
+        } catch (e: Exception) {
+            _entries.value = snapshot  // rollback jika gagal
+            OnlineWriteResult.Error(e.message ?: "Gagal update cashflow")
+        }
     }
 
     suspend fun delete(id: Long): OnlineWriteResult {
+        val snapshot = _entries.value
+        _entries.value = snapshot.filter { it.id != id }  // optimistic: hapus dulu
         return try {
             api.deleteCashflow(id)
             OnlineWriteResult.Success
-        } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal hapus cashflow") }
+        } catch (e: Exception) {
+            _entries.value = snapshot  // rollback jika gagal
+            OnlineWriteResult.Error(e.message ?: "Gagal hapus cashflow")
+        }
     }
 
     fun saldo(): Double = _entries.value.sumOf {
@@ -1238,6 +1447,7 @@ class BmpCashFlowRepository @Inject constructor(
                     description = d.description,
                     amount = d.amount,
                     transactionDate = d.transactionDate,
+                    paymentRefId = d.paymentRefId,
                     isSynced = true
                 )
             }
@@ -1312,24 +1522,42 @@ class BmpEmployeeRepository @Inject constructor(
     }
 
     suspend fun upsert(emp: BmpEmployeeData): OnlineWriteResult {
+        val snapshot = _employees.value
+        // Optimistic update: perbarui state lokal sebelum request jaringan
+        if (emp.id == 0L) {
+            _employees.value = snapshot + emp.copy(id = -System.currentTimeMillis())
+        } else {
+            _employees.value = snapshot.map { if (it.id == emp.id) emp else it }
+        }
         return try {
             val body = mapOf<String, Any?>(
                 "name" to emp.name, "role" to emp.role, "salary" to emp.salary,
                 "phone" to emp.phone, "email" to emp.email, "isActive" to emp.isActive
             )
             if (emp.id == 0L) api.createBmpEmployee(body) else api.updateBmpEmployee(emp.id, body)
+            refresh()  // sinkronisasi ID asli dari server
             OnlineWriteResult.Success
-        } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal simpan karyawan") }
+        } catch (e: Exception) {
+            _employees.value = snapshot  // rollback jika gagal
+            OnlineWriteResult.Error(e.message ?: "Gagal simpan karyawan")
+        }
     }
 
     suspend fun delete(id: Long): OnlineWriteResult {
-        return try { api.deleteBmpEmployee(id); OnlineWriteResult.Success }
-        catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal hapus karyawan") }
+        val snapshot = _employees.value
+        _employees.value = snapshot.filter { it.id != id }  // optimistic: hapus dulu
+        return try {
+            api.deleteBmpEmployee(id)
+            OnlineWriteResult.Success
+        } catch (e: Exception) {
+            _employees.value = snapshot  // rollback jika gagal
+            OnlineWriteResult.Error(e.message ?: "Gagal hapus karyawan")
+        }
     }
 
     fun observe(tenantId: String): Flow<List<com.posbah.app.data.local.entities.BmpEmployeeEntity>> =
-        kotlinx.coroutines.flow.flow {
-            emit(list().map {
+        _employees.map { list ->
+            list.map {
                 com.posbah.app.data.local.entities.BmpEmployeeEntity(
                     id = it.id,
                     tenantId = it.tenantId,
@@ -1343,12 +1571,12 @@ class BmpEmployeeRepository @Inject constructor(
                     updatedAt = it.updatedAt,
                     isSynced = true
                 )
-            })
+            }
         }
 
     fun observePayrolls(tenantId: String): Flow<List<com.posbah.app.data.local.entities.BmpPayrollEntity>> =
-        kotlinx.coroutines.flow.flow {
-            emit(payrollRepo.list().map {
+        payrollRepo.payrolls.map { list ->
+            list.map {
                 com.posbah.app.data.local.entities.BmpPayrollEntity(
                     id = it.id.toString(),
                     tenantId = it.tenantId,
@@ -1359,7 +1587,7 @@ class BmpEmployeeRepository @Inject constructor(
                     dailyRate = 0.0,
                     description = it.notes ?: ""
                 )
-            })
+            }
         }
 
     suspend fun upsert(e: com.posbah.app.data.local.entities.BmpEmployeeEntity): Long {
@@ -1383,11 +1611,12 @@ class BmpEmployeeRepository @Inject constructor(
     }
 
     suspend fun insertPayroll(payroll: com.posbah.app.data.local.entities.BmpPayrollEntity): Long {
+        val empName = _employees.value.find { it.id == payroll.employeeId }?.name.orEmpty()
         val data = BmpPayrollData(
             id = 0,
             tenantId = payroll.tenantId,
             employeeId = payroll.employeeId,
-            employeeName = "",
+            employeeName = empName,
             paymentDate = payroll.paymentDate,
             amount = payroll.amount,
             notes = payroll.description,
@@ -1395,6 +1624,10 @@ class BmpEmployeeRepository @Inject constructor(
         )
         payrollRepo.createPayroll(data)
         return payroll.employeeId
+    }
+
+    suspend fun refreshPayrolls() {
+        payrollRepo.refresh()
     }
 }
 
@@ -1406,25 +1639,52 @@ class BmpPayrollRepository @Inject constructor(
     private val cashflowRepo: BmpCashFlowRepository,
     private val securePrefs: SecurePreferences
 ) {
-    suspend fun list(): List<BmpPayrollData> = try {
-        api.getPayrolls().body()?.map {
-            BmpPayrollData(
-                id = (it["id"] as? Number)?.toLong() ?: 0,
-                tenantId = it["tenantId"] as? String ?: "",
-                employeeId = (it["employeeId"] as? Number)?.toLong() ?: 0,
-                employeeName = it["employeeName"] as? String ?: "",
-                paymentDate = (it["paymentDate"] as? Number)?.toLong() ?: System.currentTimeMillis(),
-                amount = (it["amount"] as? Number)?.toDouble() ?: 0.0,
-                notes = it["notes"] as? String,
-                updatedAt = (it["updatedAt"] as? Number)?.toLong() ?: 0
-            )
-        } ?: emptyList()
-    } catch (_: Exception) { emptyList() }
+    private val _payrolls = MutableStateFlow<List<BmpPayrollData>>(emptyList())
+    val payrolls = _payrolls.asStateFlow()
+
+    suspend fun refresh() {
+        try {
+            val resp = api.getPayrolls()
+            if (resp.isSuccessful) {
+                _payrolls.value = resp.body()?.map {
+                    BmpPayrollData(
+                        id = (it["id"] as? Number)?.toLong() ?: 0,
+                        tenantId = it["tenantId"] as? String ?: "",
+                        employeeId = (it["employeeId"] as? Number)?.toLong() ?: 0,
+                        employeeName = it["employeeName"] as? String ?: "",
+                        paymentDate = (it["paymentDate"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+                        amount = (it["amount"] as? Number)?.toDouble() ?: 0.0,
+                        notes = it["notes"] as? String,
+                        updatedAt = (it["updatedAt"] as? Number)?.toLong() ?: 0
+                    )
+                } ?: emptyList()
+            }
+        } catch (_: Exception) {}
+    }
+
+    suspend fun list(): List<BmpPayrollData> = _payrolls.value.ifEmpty {
+        try {
+            api.getPayrolls().body()?.map {
+                BmpPayrollData(
+                    id = (it["id"] as? Number)?.toLong() ?: 0,
+                    tenantId = it["tenantId"] as? String ?: "",
+                    employeeId = (it["employeeId"] as? Number)?.toLong() ?: 0,
+                    employeeName = it["employeeName"] as? String ?: "",
+                    paymentDate = (it["paymentDate"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+                    amount = (it["amount"] as? Number)?.toDouble() ?: 0.0,
+                    notes = it["notes"] as? String,
+                    updatedAt = (it["updatedAt"] as? Number)?.toLong() ?: 0
+                )
+            } ?: emptyList()
+        } catch (_: Exception) { emptyList() }
+    }
 
     /**
      * Bayar gaji → POST payroll + business logic: cashflow KELUAR otomatis.
      */
     suspend fun createPayroll(payroll: BmpPayrollData): OnlineWriteResult {
+        val snapshot = _payrolls.value
+        _payrolls.value = snapshot + payroll.copy(id = -System.currentTimeMillis()) // optimistic
         return try {
             api.createPayroll(mapOf(
                 "employeeId" to payroll.employeeId,
@@ -1440,8 +1700,12 @@ class BmpPayrollRepository @Inject constructor(
                 amount = payroll.amount,
                 transactionDate = payroll.paymentDate
             ))
+            refresh()
             OnlineWriteResult.Success
-        } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal bayar gaji") }
+        } catch (e: Exception) {
+            _payrolls.value = snapshot // rollback
+            OnlineWriteResult.Error(e.message ?: "Gagal bayar gaji")
+        }
     }
 }
 
@@ -1491,8 +1755,6 @@ class BmpBahanBakuRepository @Inject constructor(
         emptyList()
     }
 
-
-
     /**
      * Simpan bahan baku + items.
      * Business logic TETAP: input bahan baku → OTOMATIS potong cashflow (KELUAR).
@@ -1500,76 +1762,132 @@ class BmpBahanBakuRepository @Inject constructor(
      suspend fun create(
         bahanBaku: BmpBahanBakuData,
         items: List<BmpBahanBakuItemData>
-     ): OnlineWriteResult {
-        return try {
-            val resp = api.createBahanBaku(mapOf(
-                "noTagihan" to bahanBaku.noTagihan,
-                "tanggal" to bahanBaku.tanggal,
-                "supplier" to bahanBaku.supplier,
-                "totalHarga" to bahanBaku.totalHarga,
-                "nominal" to bahanBaku.nominal,
-                "notaFotoPath" to bahanBaku.notaFotoPath,
-                "notaFotoUrl" to bahanBaku.notaFotoUrl,
-                "notes" to bahanBaku.notes
-            ))
-            val newId = (resp.body()?.get("id") as? Number)?.toLong() ?: 0L
+     ): OnlineWriteResult = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+          val snapshot = _bahanBaku.value
+          val tempId = -System.currentTimeMillis()
+          val tempBahanBaku = bahanBaku.copy(id = tempId)
+          _bahanBaku.value = snapshot + tempBahanBaku
 
-            // POST items
-            val itemBodies = items.map {
-                mapOf<String, Any?>(
-                    "bahanBakuId" to newId,
-                    "jenisBahan" to it.jenisBahan,
-                    "kuantitas" to it.kuantitas,
-                    "unit" to it.unit,
-                    "rate" to it.rate
-                )
+          try {
+              val resp = api.createBahanBaku(mapOf(
+                  "noTagihan" to bahanBaku.noTagihan,
+                  "tanggal" to bahanBaku.tanggal,
+                  "supplier" to bahanBaku.supplier,
+                  "totalHarga" to bahanBaku.totalHarga,
+                  "nominal" to bahanBaku.nominal,
+                  "notaFotoPath" to bahanBaku.notaFotoPath,
+                  "notaFotoUrl" to bahanBaku.notaFotoUrl,
+                  "notes" to bahanBaku.notes
+              ))
+              val newId = (resp.body()?.get("id") as? Number)?.toLong() ?: 0L
+
+              // POST items
+              val itemBodies = items.map {
+                  mapOf<String, Any?>(
+                      "bahanBakuId" to newId,
+                      "jenisBahan" to it.jenisBahan,
+                      "kuantitas" to it.kuantitas,
+                      "unit" to it.unit,
+                      "rate" to it.rate
+                  )
+              }
+              api.createBahanBakuItems(itemBodies)
+
+              // ── Business logic: input bahan baku → potong cashflow ──────────
+              cashflowRepo.createEntry(BmpCashflowData(
+                  transactionType = "KELUAR",
+                  description = "Pembelian Bahan Baku: ${bahanBaku.noTagihan}",
+                  amount = bahanBaku.totalHarga,
+                  transactionDate = bahanBaku.tanggal
+              ))
+
+              val savedBahanBaku = tempBahanBaku.copy(id = newId)
+              _bahanBaku.value = snapshot + savedBahanBaku
+
+              OnlineWriteResult.Success
+          } catch (e: Exception) {
+              _bahanBaku.value = snapshot // rollback
+              OnlineWriteResult.Error(e.message ?: "Gagal simpan bahan baku")
+          }
+     }
+
+     suspend fun update(bahanBaku: BmpBahanBakuData): OnlineWriteResult = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+          val snapshot = _bahanBaku.value
+          _bahanBaku.value = snapshot.map { if (it.id == bahanBaku.id) bahanBaku else it }
+
+          try {
+              api.updateBahanBaku(bahanBaku.id, mapOf(
+                  "noTagihan" to bahanBaku.noTagihan,
+                  "tanggal" to bahanBaku.tanggal,
+                  "supplier" to bahanBaku.supplier,
+                  "totalHarga" to bahanBaku.totalHarga,
+                  "nominal" to bahanBaku.nominal,
+                  "notaFotoPath" to bahanBaku.notaFotoPath,
+                  "notaFotoUrl" to bahanBaku.notaFotoUrl,
+                  "notes" to bahanBaku.notes
+              ))
+
+              // ── Business logic: update cashflow entry ──────────────────────
+              val cfList = cashflowRepo.list()
+              val match = cfList.find { it.description == "Pembelian Bahan Baku: ${bahanBaku.noTagihan}" }
+              if (match != null) {
+                  cashflowRepo.update(match.copy(
+                      amount = bahanBaku.totalHarga,
+                      transactionDate = bahanBaku.tanggal
+                  ))
+              } else {
+                  cashflowRepo.createEntry(BmpCashflowData(
+                      transactionType = "KELUAR",
+                      description = "Pembelian Bahan Baku: ${bahanBaku.noTagihan}",
+                      amount = bahanBaku.totalHarga,
+                      transactionDate = bahanBaku.tanggal
+                  ))
+              }
+
+              OnlineWriteResult.Success
+          } catch (e: Exception) {
+              _bahanBaku.value = snapshot // rollback
+              OnlineWriteResult.Error(e.message ?: "Gagal update bahan baku")
+          }
+     }
+
+    suspend fun delete(id: Long): OnlineWriteResult = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+        val snapshot = _bahanBaku.value
+        val target = snapshot.find { it.id == id }
+        _bahanBaku.value = snapshot.filter { it.id != id }  // optimistic: hapus dulu
+        try {
+            api.deleteBahanBaku(id)
+
+            // ── Business logic: delete cashflow entry ──────────────────────
+            if (target != null) {
+                val cfList = cashflowRepo.list()
+                val match = cfList.find { it.description == "Pembelian Bahan Baku: ${target.noTagihan}" }
+                if (match != null) {
+                    cashflowRepo.delete(match.id)
+                }
             }
-            api.createBahanBakuItems(itemBodies)
-
-            // ── Business logic: input bahan baku → potong cashflow ──────────
-            cashflowRepo.createEntry(BmpCashflowData(
-                transactionType = "KELUAR",
-                description = "Pembelian Bahan Baku: ${bahanBaku.noTagihan}",
-                amount = bahanBaku.totalHarga,
-                transactionDate = bahanBaku.tanggal
-            ))
 
             OnlineWriteResult.Success
-        } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal simpan bahan baku") }
-    }
-
-    suspend fun update(bahanBaku: BmpBahanBakuData): OnlineWriteResult {
-        return try {
-            api.updateBahanBaku(bahanBaku.id, mapOf(
-                "noTagihan" to bahanBaku.noTagihan,
-                "tanggal" to bahanBaku.tanggal,
-                "supplier" to bahanBaku.supplier,
-                "totalHarga" to bahanBaku.totalHarga,
-                "nominal" to bahanBaku.nominal,
-                "notaFotoPath" to bahanBaku.notaFotoPath,
-                "notaFotoUrl" to bahanBaku.notaFotoUrl,
-                "notes" to bahanBaku.notes
-            ))
-            OnlineWriteResult.Success
-        } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal update bahan baku") }
-    }
-
-    suspend fun delete(id: Long): OnlineWriteResult {
-        return try { api.deleteBahanBaku(id); OnlineWriteResult.Success }
-        catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal hapus bahan baku") }
+        } catch (e: Exception) {
+            _bahanBaku.value = snapshot  // rollback jika gagal
+            OnlineWriteResult.Error(e.message ?: "Gagal hapus bahan baku")
+        }
     }
 
     /** Context overload — backward compat untuk BahanBakuListViewModel */
     suspend fun delete(context: android.content.Context, tenantId: String, id: Long): OnlineWriteResult = delete(id)
 
     /** Bayar hutang bahan baku — update nominal di VPS */
-    suspend fun payDebt(context: android.content.Context, tenantId: String, id: Long, amount: Double): OnlineWriteResult {
-        return try {
+    suspend fun payDebt(context: android.content.Context, tenantId: String, id: Long, amount: Double): OnlineWriteResult = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+        val snapshot = _bahanBaku.value
+        _bahanBaku.value = snapshot.map { if (it.id == id) it.copy(nominal = amount) else it }
+        try {
             api.updateBahanBaku(id, mapOf("nominal" to amount))
-            // Refresh setelah update
-            refresh()
             OnlineWriteResult.Success
-        } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal bayar hutang") }
+        } catch (e: Exception) {
+            _bahanBaku.value = snapshot
+            OnlineWriteResult.Error(e.message ?: "Gagal bayar hutang")
+        }
     }
 
     /** Get by id — returns BmpBahanBakuEntity for backward compat */
@@ -1710,6 +2028,40 @@ class BmpBahanBakuRepository @Inject constructor(
 
     fun totalNominal(tenantId: String): kotlinx.coroutines.flow.Flow<Double> =
         _bahanBaku.map { list -> list.sumOf { it.nominal } }
+
+    suspend fun getLatestMaterialRates(tenantId: String): Map<String, Double> {
+        val bbList = list()
+        val rates = mutableMapOf<String, Double>()
+        val sortedBb = bbList.sortedByDescending { it.tanggal }
+        val targetBb = sortedBb.take(20)
+        
+        coroutineScope {
+            val deferreds = targetBb.map { bb ->
+                async {
+                    try {
+                        val resp = api.getBahanBakuItems(bb.id)
+                        if (resp.isSuccessful) {
+                            resp.body()?.map {
+                                val name = it["jenisBahan"] as? String ?: ""
+                                val rate = (it["rate"] as? Number)?.toDouble() ?: 0.0
+                                Pair(name, rate)
+                            } ?: emptyList()
+                        } else {
+                            emptyList()
+                        }
+                    } catch (_: Exception) {
+                        emptyList()
+                    }
+                }
+            }
+            awaitAll(*deferreds.toTypedArray()).flatten().forEach { (name, rate) ->
+                if (name.isNotEmpty() && !rates.containsKey(name)) {
+                    rates[name] = rate
+                }
+            }
+        }
+        return rates
+    }
 }
 
 // ── BmpStockRepository ────────────────────────────────────────────────────────
@@ -1719,6 +2071,50 @@ class BmpStockRepository @Inject constructor(
     private val api: BmpApiService,
     private val securePrefs: SecurePreferences
 ) {
+    private val _stocks = MutableStateFlow<List<com.posbah.app.data.local.entities.BmpProductStockEntity>>(emptyList())
+    val stocks = _stocks.asStateFlow()
+
+    private val _ledgers = MutableStateFlow<List<com.posbah.app.data.local.entities.BmpStockLedgerEntity>>(emptyList())
+    val ledgers = _ledgers.asStateFlow()
+
+    suspend fun refresh() {
+        try {
+            val stocksResp = api.getProductStocks()
+            if (stocksResp.isSuccessful) {
+                _stocks.value = stocksResp.body()?.map {
+                    com.posbah.app.data.local.entities.BmpProductStockEntity(
+                        id = (it["id"] as? Number)?.toLong() ?: 0,
+                        tenantId = it["tenantId"] as? String ?: "",
+                        outletId = (it["outletId"] as? Number)?.toLong(),
+                        masterProductId = (it["masterItemId"] as? Number)?.toLong() ?: 0,
+                        quantity = (it["currentStock"] as? Number)?.toDouble() ?: 0.0,
+                        minStockAlert = 0.0,
+                        isSynced = true,
+                        isDeleted = false,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                } ?: emptyList()
+            }
+            val ledgerResp = api.getStockLedger()
+            if (ledgerResp.isSuccessful) {
+                _ledgers.value = ledgerResp.body()?.map {
+                    com.posbah.app.data.local.entities.BmpStockLedgerEntity(
+                        id = (it["id"] as? Number)?.toLong() ?: 0,
+                        tenantId = it["tenantId"] as? String ?: "",
+                        masterProductId = (it["masterItemId"] as? Number)?.toLong() ?: 0,
+                        referenceId = (it["referenceId"] as? Number)?.toLong() ?: 0L,
+                        mutationType = it["mutationType"] as? String ?: "",
+                        quantityChange = (it["change"] as? Number)?.toDouble() ?: 0.0,
+                        finalStock = (it["stockAfter"] as? Number)?.toDouble() ?: 0.0,
+                        notes = it["notes"] as? String,
+                        isSynced = true,
+                        isDeleted = false,
+                        createdAt = (it["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis()
+                    )
+                } ?: emptyList()
+            }
+        } catch (_: Exception) {}
+    }
     suspend fun adjustStock(productId: Long, quantity: Double, reason: String) {
         adjustStock(productId = productId, quantity = quantity, reason = reason, refId = 0L)
     }
@@ -1739,38 +2135,70 @@ class BmpStockRepository @Inject constructor(
         referenceId: Long? = null,
         notes: String? = null
     ) {
-        try {
-            // 1. Get current stock
-            val stocks = api.getProductStocks().body()
-            val currentEntry = stocks?.find { (it["masterItemId"] as? Number)?.toLong() == masterItemId }
-            val currentStock = (currentEntry?.get("currentStock") as? Number)?.toInt() ?: 0
-            val stockEntryId = (currentEntry?.get("id") as? Number)?.toLong()
+        val stocksSnapshot = _stocks.value
+        val ledgersSnapshot = _ledgers.value
 
-            val newStock = (currentStock + change).coerceAtLeast(0)
+        // 1. Optimistic update stocks
+        val currentEntry = stocksSnapshot.find { it.masterProductId == masterItemId }
+        val currentStock = currentEntry?.quantity ?: 0.0
+        val newStock = (currentStock + change).coerceAtLeast(0.0)
 
-            // 2. Update stock
-            if (stockEntryId != null) {
-                api.createProductStock(mapOf(
-                    "masterItemId" to masterItemId,
-                    "currentStock" to newStock
-                ))
-            } else {
-                api.createProductStock(mapOf(
-                    "masterItemId" to masterItemId,
-                    "currentStock" to newStock
-                ))
+        val updatedStocks = if (currentEntry != null) {
+            stocksSnapshot.map {
+                if (it.masterProductId == masterItemId) it.copy(quantity = newStock) else it
             }
+        } else {
+            stocksSnapshot + com.posbah.app.data.local.entities.BmpProductStockEntity(
+                id = -System.currentTimeMillis(),
+                tenantId = "",
+                masterProductId = masterItemId,
+                quantity = newStock,
+                minStockAlert = 0.0,
+                isSynced = true,
+                isDeleted = false,
+                updatedAt = System.currentTimeMillis()
+            )
+        }
+        _stocks.value = updatedStocks
 
-            // 3. Append ledger entry
+        // 2. Optimistic append ledger entry
+        val newLedger = com.posbah.app.data.local.entities.BmpStockLedgerEntity(
+            id = -System.currentTimeMillis(),
+            tenantId = "",
+            masterProductId = masterItemId,
+            referenceId = referenceId ?: 0L,
+            mutationType = mutationType,
+            quantityChange = change.toDouble(),
+            finalStock = newStock,
+            notes = notes,
+            isSynced = true,
+            isDeleted = false,
+            createdAt = System.currentTimeMillis()
+        )
+        _ledgers.value = listOf(newLedger) + ledgersSnapshot
+
+        try {
+            api.createProductStock(mapOf(
+                "masterItemId" to masterItemId,
+                "currentStock" to newStock.toInt()
+            ))
+
             api.addStockLedgerEntry(mapOf(
                 "masterItemId" to masterItemId,
                 "mutationType" to mutationType,
                 "change" to change,
-                "stockAfter" to newStock,
+                "stockAfter" to newStock.toInt(),
                 "referenceId" to referenceId,
                 "notes" to notes
             ))
-        } catch (_: Exception) {}
+
+            // Background refresh to get the actual database IDs and values
+            refresh()
+        } catch (e: Exception) {
+            // Rollback on failure
+            _stocks.value = stocksSnapshot
+            _ledgers.value = ledgersSnapshot
+        }
     }
 
     suspend fun getStocksForMaster(masterItemId: Long): BmpProductStockData? {
@@ -1806,47 +2234,9 @@ class BmpStockRepository @Inject constructor(
             } ?: emptyList()
     } catch (_: Exception) { emptyList() }
 
-    fun observeStocks(tenantId: String): Flow<List<com.posbah.app.data.local.entities.BmpProductStockEntity>> =
-        kotlinx.coroutines.flow.flow {
-            try {
-                val stocks = api.getProductStocks().body()?.map {
-                    com.posbah.app.data.local.entities.BmpProductStockEntity(
-                        id = (it["id"] as? Number)?.toLong() ?: 0,
-                        tenantId = it["tenantId"] as? String ?: tenantId,
-                        outletId = (it["outletId"] as? Number)?.toLong(),
-                        masterProductId = (it["masterItemId"] as? Number)?.toLong() ?: 0,
-                        quantity = (it["currentStock"] as? Number)?.toDouble() ?: 0.0,
-                        minStockAlert = 0.0,
-                        isSynced = true,
-                        isDeleted = false,
-                        updatedAt = System.currentTimeMillis()
-                    )
-                } ?: emptyList()
-                emit(stocks)
-            } catch (_: Exception) { emit(emptyList()) }
-        }
+    fun observeStocks(tenantId: String): Flow<List<com.posbah.app.data.local.entities.BmpProductStockEntity>> = stocks
 
-    fun observeAllLedger(tenantId: String): Flow<List<com.posbah.app.data.local.entities.BmpStockLedgerEntity>> =
-        kotlinx.coroutines.flow.flow {
-            try {
-                val ledgers = api.getStockLedger().body()?.map {
-                    com.posbah.app.data.local.entities.BmpStockLedgerEntity(
-                        id = (it["id"] as? Number)?.toLong() ?: 0,
-                        tenantId = it["tenantId"] as? String ?: tenantId,
-                        masterProductId = (it["masterItemId"] as? Number)?.toLong() ?: 0,
-                        referenceId = (it["referenceId"] as? Number)?.toLong() ?: 0L,
-                        mutationType = it["mutationType"] as? String ?: "",
-                        quantityChange = (it["change"] as? Number)?.toDouble() ?: 0.0,
-                        finalStock = (it["stockAfter"] as? Number)?.toDouble() ?: 0.0,
-                        notes = it["notes"] as? String,
-                        isSynced = true,
-                        isDeleted = false,
-                        createdAt = (it["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis()
-                    )
-                } ?: emptyList()
-                emit(ledgers)
-            } catch (_: Exception) { emit(emptyList()) }
-        }
+    fun observeAllLedger(tenantId: String): Flow<List<com.posbah.app.data.local.entities.BmpStockLedgerEntity>> = ledgers
 }
 
 // ── BmpSettingsRepository ─────────────────────────────────────────────────────
@@ -1856,6 +2246,32 @@ class BmpSettingsRepository @Inject constructor(
     private val api: BmpApiService,
     private val securePrefs: SecurePreferences
 ) {
+    private val _settings = MutableStateFlow<com.posbah.app.data.local.entities.BmpSettingsEntity?>(null)
+    val settings = _settings.asStateFlow()
+
+    suspend fun refresh() {
+        val data = get()
+        if (data != null) {
+            _settings.value = com.posbah.app.data.local.entities.BmpSettingsEntity(
+                id = data.id,
+                tenantId = data.tenantId,
+                clientName = data.companyName,
+                clientLogo = data.logoUrl,
+                addressLine1 = data.address,
+                phoneNumber = data.phone,
+                emailAddress = data.email,
+                taxNumber = data.npwp,
+                listrikBulanan = data.listrikBulanan,
+                jumlahMesin = data.jumlahMesin,
+                jumlahKaryawan = data.jumlahKaryawan,
+                gajiHarian = data.gajiHarian,
+                hariKerjaSebulan = data.hariKerjaSebulan,
+                biayaKarungPer1000 = data.biayaKarungPer1000,
+                hoursPerDay = data.hoursPerDay,
+                updatedAt = data.updatedAt
+            )
+        }
+    }
     suspend fun get(): BmpSettingsData? = try {
         api.getBmpSettings().body()?.let {
             BmpSettingsData(
@@ -1904,32 +2320,7 @@ class BmpSettingsRepository @Inject constructor(
         } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal simpan settings") }
     }
 
-    fun observe(tenantId: String): Flow<com.posbah.app.data.local.entities.BmpSettingsEntity?> =
-        kotlinx.coroutines.flow.flow {
-            val data = get()
-            if (data != null) {
-                emit(com.posbah.app.data.local.entities.BmpSettingsEntity(
-                    id = data.id,
-                    tenantId = data.tenantId,
-                    clientName = data.companyName,
-                    clientLogo = data.logoUrl,
-                    addressLine1 = data.address,
-                    phoneNumber = data.phone,
-                    emailAddress = data.email,
-                    taxNumber = data.npwp,
-                    listrikBulanan = data.listrikBulanan,
-                    jumlahMesin = data.jumlahMesin,
-                    jumlahKaryawan = data.jumlahKaryawan,
-                    gajiHarian = data.gajiHarian,
-                    hariKerjaSebulan = data.hariKerjaSebulan,
-                    biayaKarungPer1000 = data.biayaKarungPer1000,
-                    hoursPerDay = data.hoursPerDay,
-                    updatedAt = data.updatedAt
-                ))
-            } else {
-                emit(null)
-            }
-        }
+    fun observe(tenantId: String): Flow<com.posbah.app.data.local.entities.BmpSettingsEntity?> = settings
 
     suspend fun get(tenantId: String): com.posbah.app.data.local.entities.BmpSettingsEntity? {
         val data = get() ?: return null
@@ -1961,42 +2352,128 @@ class PrintSettingsRepository @Inject constructor(
     private val api: PosApiService,
     private val securePrefs: SecurePreferences
 ) {
+    private val _settingsList = kotlinx.coroutines.flow.MutableStateFlow<List<PrintSettingsData>>(emptyList())
+    val settingsList = _settingsList.asStateFlow()
+
+    suspend fun refresh(moduleKey: String) {
+        try {
+            val data = get(moduleKey)
+            if (data != null) {
+                val snapshot = _settingsList.value
+                _settingsList.value = snapshot.filter { it.moduleKey != moduleKey } + data
+            }
+        } catch (_: Exception) {}
+    }
+
     suspend fun get(moduleKey: String): PrintSettingsData? = try {
-        api.getPrintSettings(moduleKey).body()?.firstOrNull()?.let {
+        api.getPrintSettings(moduleKey).body()?.firstOrNull()?.let { it ->
             PrintSettingsData(
                 id = (it["id"] as? Number)?.toLong() ?: 0,
                 tenantId = it["tenantId"] as? String ?: "",
-                moduleKey = moduleKey,
-                paperSize = it["paperSize"] as? String ?: "A4",
-                showLogo = it["showLogo"] as? Boolean ?: true,
-                showSignature = it["showSignature"] as? Boolean ?: false,
-                headerText = it["headerText"] as? String,
-                footerText = it["footerText"] as? String ?: "Terima kasih!",
-                updatedAt = (it["updatedAt"] as? Number)?.toLong() ?: 0
+                moduleKey = it["moduleKey"] as? String ?: moduleKey,
+                jpgUseLogo = it["jpgUseLogo"] as? Boolean ?: true,
+                jpgHeaderAlign = it["jpgHeaderAlign"] as? String ?: "LEFT",
+                jpgUseSignature = it["jpgUseSignature"] as? Boolean ?: true,
+                jpgSignatureSenderName = it["jpgSignatureSenderName"] as? String ?: "Admin",
+                jpgSignatureReceiverName = it["jpgSignatureReceiverName"] as? String ?: "",
+                jpgSignatureDrawnBase64 = it["jpgSignatureDrawnBase64"] as? String,
+                jpgIsColor = it["jpgIsColor"] as? Boolean ?: true,
+                sjUseLogo = it["sjUseLogo"] as? Boolean ?: true,
+                sjHeaderAlign = it["sjHeaderAlign"] as? String ?: "LEFT",
+                sjUseSignature = it["sjUseSignature"] as? Boolean ?: true,
+                sjSignatureSenderName = it["sjSignatureSenderName"] as? String ?: "Admin",
+                sjSignatureReceiverName = it["sjSignatureReceiverName"] as? String ?: "",
+                sjSignatureDrawnBase64 = it["sjSignatureDrawnBase64"] as? String,
+                sjIsColor = it["sjIsColor"] as? Boolean ?: false,
+                invoiceUseLogo = it["invoiceUseLogo"] as? Boolean ?: true,
+                invoiceHeaderAlign = it["invoiceHeaderAlign"] as? String ?: "LEFT",
+                invoiceUseSignature = it["invoiceUseSignature"] as? Boolean ?: true,
+                invoiceSignatureSenderName = it["invoiceSignatureSenderName"] as? String ?: "Admin",
+                invoiceSignatureReceiverName = it["invoiceSignatureReceiverName"] as? String ?: "",
+                invoiceSignatureDrawnBase64 = it["invoiceSignatureDrawnBase64"] as? String,
+                invoiceIsColor = it["invoiceIsColor"] as? Boolean ?: true,
+                receiptPaperWidth = it["receiptPaperWidth"] as? String ?: "MM80",
+                receiptUseLogo = it["receiptUseLogo"] as? Boolean ?: true,
+                receiptHeaderAlign = it["receiptHeaderAlign"] as? String ?: "CENTER",
+                receiptIsColor = it["receiptIsColor"] as? Boolean ?: false,
+                receiptShowItemPrice = it["receiptShowItemPrice"] as? Boolean ?: true,
+                receiptFooterText = it["receiptFooterText"] as? String ?: "Terima kasih sudah berbelanja!",
+                jpgTemplateType = it["jpgTemplateType"] as? String ?: "MODERN",
+                sjTemplateType = it["sjTemplateType"] as? String ?: "MODERN",
+                invoiceTemplateType = it["invoiceTemplateType"] as? String ?: "MODERN",
+                bankOwnerName = it["bankOwnerName"] as? String ?: "",
+                bankName = it["bankName"] as? String ?: "BCA",
+                bankAccountNumber = it["bankAccountNumber"] as? String ?: "",
+                logoPath = it["logoPath"] as? String,
+                logoUrl = it["logoUrl"] as? String ?: it["logoPath"] as? String,
+                jpgSignatureDrawnUrl = it["jpgSignatureDrawnUrl"] as? String,
+                sjSignatureDrawnUrl = it["sjSignatureDrawnUrl"] as? String,
+                invoiceSignatureDrawnUrl = it["invoiceSignatureDrawnUrl"] as? String,
+                createdAt = (it["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+                updatedAt = (it["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis()
             )
         }
     } catch (_: Exception) { null }
 
     suspend fun save(settings: PrintSettingsData): OnlineWriteResult {
+        val snapshot = _settingsList.value
+        _settingsList.value = snapshot.filter { it.moduleKey != settings.moduleKey } + settings
         return try {
             api.savePrintSettings(mapOf(
+                "id" to settings.id,
+                "tenantId" to settings.tenantId,
                 "moduleKey" to settings.moduleKey,
-                "paperSize" to settings.paperSize,
-                "showLogo" to settings.showLogo,
-                "showSignature" to settings.showSignature,
-                "headerText" to settings.headerText,
-                "footerText" to settings.footerText
+                "jpgUseLogo" to settings.jpgUseLogo,
+                "jpgHeaderAlign" to settings.jpgHeaderAlign,
+                "jpgUseSignature" to settings.jpgUseSignature,
+                "jpgSignatureSenderName" to settings.jpgSignatureSenderName,
+                "jpgSignatureReceiverName" to settings.jpgSignatureReceiverName,
+                "jpgSignatureDrawnBase64" to settings.jpgSignatureDrawnBase64,
+                "jpgIsColor" to settings.jpgIsColor,
+                "sjUseLogo" to settings.sjUseLogo,
+                "sjHeaderAlign" to settings.sjHeaderAlign,
+                "sjUseSignature" to settings.sjUseSignature,
+                "sjSignatureSenderName" to settings.sjSignatureSenderName,
+                "sjSignatureReceiverName" to settings.sjSignatureReceiverName,
+                "sjSignatureDrawnBase64" to settings.sjSignatureDrawnBase64,
+                "sjIsColor" to settings.sjIsColor,
+                "invoiceUseLogo" to settings.invoiceUseLogo,
+                "invoiceHeaderAlign" to settings.invoiceHeaderAlign,
+                "invoiceUseSignature" to settings.invoiceUseSignature,
+                "invoiceSignatureSenderName" to settings.invoiceSignatureSenderName,
+                "invoiceSignatureReceiverName" to settings.invoiceSignatureReceiverName,
+                "invoiceSignatureDrawnBase64" to settings.invoiceSignatureDrawnBase64,
+                "invoiceIsColor" to settings.invoiceIsColor,
+                "receiptPaperWidth" to settings.receiptPaperWidth,
+                "receiptUseLogo" to settings.receiptUseLogo,
+                "receiptHeaderAlign" to settings.receiptHeaderAlign,
+                "receiptIsColor" to settings.receiptIsColor,
+                "receiptShowItemPrice" to settings.receiptShowItemPrice,
+                "receiptFooterText" to settings.receiptFooterText,
+                "jpgTemplateType" to settings.jpgTemplateType,
+                "sjTemplateType" to settings.sjTemplateType,
+                "invoiceTemplateType" to settings.invoiceTemplateType,
+                "bankOwnerName" to settings.bankOwnerName,
+                "bankName" to settings.bankName,
+                "bankAccountNumber" to settings.bankAccountNumber,
+                "logoPath" to settings.logoPath,
+                "logoUrl" to settings.logoUrl,
+                "jpgSignatureDrawnUrl" to settings.jpgSignatureDrawnUrl,
+                "sjSignatureDrawnUrl" to settings.sjSignatureDrawnUrl,
+                "invoiceSignatureDrawnUrl" to settings.invoiceSignatureDrawnUrl,
+                "createdAt" to settings.createdAt,
+                "updatedAt" to settings.updatedAt
             ))
             OnlineWriteResult.Success
-        } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal simpan print settings") }
+        } catch (e: Exception) {
+            _settingsList.value = snapshot
+            OnlineWriteResult.Error(e.message ?: "Gagal simpan print settings")
+        }
     }
 
     /**
      * Observe print settings sebagai Flow — backward compat untuk ViewModel lama.
-     * Fetch sekali dari VPS dan emit hasilnya.
      */
     fun observe(tenantId: String, moduleKey: String): kotlinx.coroutines.flow.Flow<PrintSettingsData?> =
-        kotlinx.coroutines.flow.flow {
-            emit(get(moduleKey))
-        }
+        _settingsList.map { list -> list.find { it.moduleKey == moduleKey } }
 }

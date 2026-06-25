@@ -114,22 +114,8 @@ class OutletRepository @Inject constructor(
         } catch (_: Exception) {}
     }
 
-    fun observe(tenantId: String): kotlinx.coroutines.flow.Flow<List<com.posbah.app.data.local.entities.Outlet>> =
+    fun observe(tenantId: String): kotlinx.coroutines.flow.Flow<List<OutletData>> =
         kotlinx.coroutines.flow.flow {
-            emit(list().map {
-                com.posbah.app.data.local.entities.Outlet(
-                    id = it.id,
-                    tenantId = it.tenantId,
-                    name = it.name,
-                    address = it.address,
-                    phone = it.phone,
-                    isDefault = it.isDefault,
-                    isOpen = it.isOpen,
-                    currentEmployee = null,
-                    createdAt = it.updatedAt,
-                    updatedAt = it.updatedAt,
-                    isSynced = true
-                )
-            })
+            emit(list())
         }
 }

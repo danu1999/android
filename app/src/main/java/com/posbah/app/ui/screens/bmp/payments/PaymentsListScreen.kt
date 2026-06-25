@@ -34,12 +34,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.posbah.app.data.local.PosBahDatabase
-import com.posbah.app.data.local.dao.BmpPaymentDao
 import com.posbah.app.data.local.entities.BmpInvoicePaymentEntity
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpInvoiceRepository
-import com.posbah.app.data.remote.SupabaseSyncManager
 import com.posbah.app.ui.components.EmptyState
 import com.posbah.app.ui.components.PosBahTopBar
 import com.posbah.app.util.Formatters
@@ -81,32 +78,24 @@ data class PaymentWithContext(
 
 @HiltViewModel
 class PaymentsListViewModel @Inject constructor(
-    private val dao: BmpPaymentDao,
     private val invoiceRepo: BmpInvoiceRepository,
     private val clientRepo: BmpClientRepository,
     private val api: com.posbah.app.data.remote.api.BmpApiService,
-    private val db: PosBahDatabase,
     private val authRepository: AuthRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     val tenantId = authRepository.activeTenantId().orEmpty()
     
-    private val paymentsFlow = kotlinx.coroutines.flow.flow {
-        try {
-            val response = api.getPayments()
-            if (response.isSuccessful) {
-                val list = response.body()?.map { it.toBmpPaymentData() } ?: emptyList()
-                emit(list)
-            } else {
-                emit(emptyList())
-            }
-        } catch (_: Exception) {
-            emit(emptyList())
+    init {
+        viewModelScope.launch {
+            invoiceRepo.refreshPayments()
+            clientRepo.refresh()
+            invoiceRepo.refresh()
         }
     }
 
     val paymentsWithContext: StateFlow<UiState<List<PaymentWithContext>>> = combine(
-        paymentsFlow,
+        invoiceRepo.allPayments,
         invoiceRepo.allInvoices,
         clientRepo.allClients
     ) { rawPayments, invoices, clients ->
@@ -158,10 +147,9 @@ class PaymentsListViewModel @Inject constructor(
         val editing = state.editingPayment ?: return
         val amt = state.newPaymentAmount.replace(",", ".").toDoubleOrNull() ?: return
         if (amt <= 0) return
+        cancelEditPayment()
         viewModelScope.launch {
             invoiceRepo.editPayment(context, tenantId, editing.id, amt, state.newPaymentMethod, notes = editing.notes)
-            SupabaseSyncManager.syncAll(context, db, tenantId)
-            cancelEditPayment()
         }
     }
 
@@ -175,10 +163,9 @@ class PaymentsListViewModel @Inject constructor(
 
     fun confirmDeletePayment() {
         val paymentId = _uiState.value.confirmDeletePaymentId ?: return
+        cancelDeletePayment()
         viewModelScope.launch {
             invoiceRepo.deletePayment(context, tenantId, paymentId)
-            SupabaseSyncManager.syncAll(context, db, tenantId)
-            cancelDeletePayment()
         }
     }
 }

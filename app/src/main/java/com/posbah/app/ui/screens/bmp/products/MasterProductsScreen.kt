@@ -46,7 +46,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.posbah.app.data.local.entities.BmpMasterProductEntity
 import com.posbah.app.data.local.entities.BmpSettingsEntity
-import com.posbah.app.data.local.entities.ActivityLogEntity
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpMasterProductRepository
 import com.posbah.app.data.repository.OnlineWriteResult
@@ -81,8 +80,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 import android.content.Context
-import com.posbah.app.data.local.PosBahDatabase
-import com.posbah.app.data.remote.SupabaseSyncManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 
@@ -91,7 +88,7 @@ class MasterProductsViewModel @Inject constructor(
     private val repo: BmpMasterProductRepository,
     private val settingsRepo: com.posbah.app.data.repository.BmpSettingsRepository,
     private val authRepository: AuthRepository,
-    private val db: PosBahDatabase,
+    private val bahanBakuRepo: com.posbah.app.data.repository.BmpBahanBakuRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
@@ -111,12 +108,11 @@ class MasterProductsViewModel @Inject constructor(
     init {
         viewModelScope.launch(Dispatchers.IO) {
             repo.refresh()
-            val materials = db.bmpBahanBakuItemDao().getDistinctBahanBaku(tenantId)
-            val ratesMap = materials.associateWith { material ->
-                db.bmpBahanBakuItemDao().getLatestRate(tenantId, material) ?: 0.0
-            }
-            _distinctMaterials.value = materials
-            _latestRates.value = ratesMap
+            try {
+                val ratesMap = bahanBakuRepo.getLatestMaterialRates(tenantId)
+                _distinctMaterials.value = ratesMap.keys.toList()
+                _latestRates.value = ratesMap
+            } catch (_: Exception) {}
         }
     }
 
@@ -200,6 +196,8 @@ class MasterProductsViewModel @Inject constructor(
             isDeleted = finalProduct.isDeleted,
             updatedAt = System.currentTimeMillis()
         )
+        // Optimistic: tutup form langsung sebelum menunggu network
+        _form.update { FormState() }
         val result = repo.upsert(data)
         when (result) {
             is OnlineWriteResult.Success -> {
@@ -209,14 +207,16 @@ class MasterProductsViewModel @Inject constructor(
                     logActivity("EDIT PRODUK BMP", "Mengubah master produk: ${e.title} (Harga: Rp ${e.price})")
                 }
                 Toast.makeText(context, "Produk berhasil disimpan!", Toast.LENGTH_SHORT).show()
-                SupabaseSyncManager.enqueueFullSync(context, db, tenantId, null)
-                _form.update { FormState() }
             }
             is OnlineWriteResult.Error -> {
+                // Rollback: buka kembali form dengan data yang sama
+                _form.update { FormState(editing = e, show = true) }
                 _error.value = result.message
                 Toast.makeText(context, "Gagal menyimpan: ${result.message}", Toast.LENGTH_LONG).show()
             }
             is OnlineWriteResult.NoConnection -> {
+                // Rollback: buka kembali form dengan data yang sama
+                _form.update { FormState(editing = e, show = true) }
                 _error.value = "Tidak ada koneksi internet. Data tidak tersimpan."
                 Toast.makeText(context, "Tidak ada koneksi internet. Data tidak tersimpan.", Toast.LENGTH_LONG).show()
             }
@@ -224,16 +224,14 @@ class MasterProductsViewModel @Inject constructor(
     }
 
     fun delete(id: Long) = viewModelScope.launch {
-        val p = repo.getById(id)
+        // Ambil nama produk dari state lokal (tidak perlu network call)
+        val productName = products.value.find { it.id == id }?.title ?: "#$id"
         _error.value = null
         val result = repo.delete(id)
         when (result) {
             is OnlineWriteResult.Success -> {
-                if (p != null) {
-                    logActivity("HAPUS PRODUK BMP", "Menghapus master produk: ${p.title}")
-                }
+                logActivity("HAPUS PRODUK BMP", "Menghapus master produk: $productName")
                 Toast.makeText(context, "Produk berhasil dihapus!", Toast.LENGTH_SHORT).show()
-                SupabaseSyncManager.enqueueFullSync(context, db, tenantId, null)
             }
             is OnlineWriteResult.Error -> {
                 _error.value = result.message
@@ -247,19 +245,7 @@ class MasterProductsViewModel @Inject constructor(
     }
 
     private fun logActivity(action: String, description: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val user = authRepository.getActiveUser()
-            val employeeName = user?.displayName ?: "Owner"
-            db.activityLogDao().insertLog(
-                ActivityLogEntity(
-                    tenantId = tenantId,
-                    action = action,
-                    description = description,
-                    employeeName = employeeName,
-                    appMode = "BMP"
-                )
-            )
-        }
+        // No-op in full online mode
     }
 }
 

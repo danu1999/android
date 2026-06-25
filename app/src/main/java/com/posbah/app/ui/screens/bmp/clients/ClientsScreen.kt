@@ -66,6 +66,7 @@ fun ClientsScreen(
     viewModel: ClientsViewModel = hiltViewModel()
 ) {
     val clients by viewModel.clients.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
     val ui by viewModel.ui.collectAsState()
     val invoiceSummaryState by viewModel.clientInvoiceSummary.collectAsState()
     val context = LocalContext.current
@@ -99,7 +100,7 @@ fun ClientsScreen(
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
             OutlinedTextField(
-                value = "",
+                value = searchQuery,
                 onValueChange = viewModel::setQuery,
                 placeholder = { Text("Cari klien\u2026") },
                 leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },

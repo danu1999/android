@@ -64,15 +64,12 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 import android.content.Context
-import com.posbah.app.data.local.PosBahDatabase
-import com.posbah.app.data.remote.SupabaseSyncManager
 
 @HiltViewModel
 class CashFlowViewModel @Inject constructor(
     private val repo: BmpCashFlowRepository,
     private val authRepository: AuthRepository,
     private val api: BmpApiService,
-    private val db: PosBahDatabase,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
@@ -94,6 +91,24 @@ class CashFlowViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            kotlinx.coroutines.flow.combine(repo.observe(tenantId), selectedMonth) { cashflows, month ->
+                Pair(cashflows, month)
+            }.collect { (cashflows, month) ->
+                val sdf = java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.getDefault())
+                val filtered = cashflows.filter {
+                    try {
+                        sdf.format(java.util.Date(it.transactionDate)) == month
+                    } catch (_: Exception) {
+                        false
+                    }
+                }
+                _flows.value = filtered
+                _totalIn.value = filtered.filter { it.transactionType == "MASUK" }.sumOf { it.amount }
+                _totalOut.value = filtered.filter { it.transactionType == "KELUAR" }.sumOf { it.amount }
+            }
+        }
+
+        viewModelScope.launch {
             selectedMonth.collect { month ->
                 refreshCashFlow(month)
             }
@@ -102,26 +117,7 @@ class CashFlowViewModel @Inject constructor(
 
     fun refreshCashFlow(month: String) = viewModelScope.launch {
         try {
-            val resp = api.getCashFlow(tenantId, month = month)
-            if (resp.isSuccessful) {
-                val dataList = resp.body()?.map { it.toBmpCashflowData() } ?: emptyList()
-                val entityList = dataList.map { d ->
-                    BmpCashFlowEntity(
-                        id = d.id,
-                        tenantId = d.tenantId,
-                        transactionType = d.transactionType,
-                        description = d.description,
-                        amount = d.amount,
-                        transactionDate = d.transactionDate,
-                        paymentRefId = d.paymentRefId,
-                        isSynced = true
-                    )
-                }
-                _flows.value = entityList
-                _totalIn.value = entityList.filter { it.transactionType == "MASUK" }.sumOf { it.amount }
-                _totalOut.value = entityList.filter { it.transactionType == "KELUAR" }.sumOf { it.amount }
-            }
-
+            repo.refresh()
             val paymentsResp = api.getPayments()
             if (paymentsResp.isSuccessful) {
                 val paymentList = paymentsResp.body()?.map { it.toBmpPaymentData() } ?: emptyList()
@@ -143,12 +139,6 @@ class CashFlowViewModel @Inject constructor(
                 amount = amount
             )
         )
-        try {
-            SupabaseSyncManager.syncAll(context, db, tenantId)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        refreshCashFlow(selectedMonth.value)
     }
 }
 

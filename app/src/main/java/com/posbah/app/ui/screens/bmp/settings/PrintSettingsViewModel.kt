@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.posbah.app.data.local.PosBahDatabase
 import com.posbah.app.data.local.entities.PrintSettingsEntity
 import com.posbah.app.data.local.entities.Tenant
 import com.posbah.app.data.repository.AuthRepository
@@ -24,7 +23,6 @@ import javax.inject.Inject
 class PrintSettingsViewModel @Inject constructor(
     private val printSettingsRepo: PrintSettingsRepository,
     private val authRepository: AuthRepository,
-    private val db: PosBahDatabase,
     private val securePrefs: com.posbah.app.security.SecurePreferences,
     @ApplicationContext private val context: Context,
     savedStateHandle: SavedStateHandle
@@ -55,17 +53,45 @@ class PrintSettingsViewModel @Inject constructor(
                         id = d.id,
                         tenantId = tenantId,
                         moduleKey = moduleKey,
-                        receiptPaperWidth = d.paperWidth,
-                        receiptUseLogo = d.useLogo,
-                        receiptHeaderAlign = d.headerAlign,
-                        receiptIsColor = d.isColor,
-                        receiptShowItemPrice = d.showItemPrice,
-                        receiptFooterText = d.footerText,
+                        jpgUseLogo = d.jpgUseLogo,
+                        jpgHeaderAlign = d.jpgHeaderAlign,
+                        jpgUseSignature = d.jpgUseSignature,
+                        jpgSignatureSenderName = d.jpgSignatureSenderName,
+                        jpgSignatureReceiverName = d.jpgSignatureReceiverName,
+                        jpgSignatureDrawnBase64 = d.jpgSignatureDrawnBase64,
+                        jpgIsColor = d.jpgIsColor,
+                        sjUseLogo = d.sjUseLogo,
+                        sjHeaderAlign = d.sjHeaderAlign,
+                        sjUseSignature = d.sjUseSignature,
+                        sjSignatureSenderName = d.sjSignatureSenderName,
+                        sjSignatureReceiverName = d.sjSignatureReceiverName,
+                        sjSignatureDrawnBase64 = d.sjSignatureDrawnBase64,
+                        sjIsColor = d.sjIsColor,
+                        invoiceUseLogo = d.invoiceUseLogo,
+                        invoiceHeaderAlign = d.invoiceHeaderAlign,
+                        invoiceUseSignature = d.invoiceUseSignature,
+                        invoiceSignatureSenderName = d.invoiceSignatureSenderName,
+                        invoiceSignatureReceiverName = d.invoiceSignatureReceiverName,
+                        invoiceSignatureDrawnBase64 = d.invoiceSignatureDrawnBase64,
+                        invoiceIsColor = d.invoiceIsColor,
+                        receiptPaperWidth = d.receiptPaperWidth,
+                        receiptUseLogo = d.receiptUseLogo,
+                        receiptHeaderAlign = d.receiptHeaderAlign,
+                        receiptIsColor = d.receiptIsColor,
+                        receiptShowItemPrice = d.receiptShowItemPrice,
+                        receiptFooterText = d.receiptFooterText,
+                        jpgTemplateType = d.jpgTemplateType,
+                        sjTemplateType = d.sjTemplateType,
+                        invoiceTemplateType = d.invoiceTemplateType,
                         bankOwnerName = d.bankOwnerName,
                         bankName = d.bankName,
                         bankAccountNumber = d.bankAccountNumber,
+                        logoPath = d.logoPath,
                         logoUrl = d.logoUrl,
-                        logoPath = d.logoUrl,
+                        jpgSignatureDrawnUrl = d.jpgSignatureDrawnUrl,
+                        sjSignatureDrawnUrl = d.sjSignatureDrawnUrl,
+                        invoiceSignatureDrawnUrl = d.invoiceSignatureDrawnUrl,
+                        createdAt = d.createdAt,
                         updatedAt = d.updatedAt
                     )
                 }
@@ -153,7 +179,7 @@ class PrintSettingsViewModel @Inject constructor(
                 // Upload ke VPS secara background — folder terisolasi per tenantId
                 // Logo disimpan di: /logos/{tenantId}/logo.png di server
                 if (tenantId.isNotBlank()) {
-                    val logoUrl = com.posbah.app.data.remote.SupabaseSyncManager.uploadLogoToVps(
+                    val logoUrl = com.posbah.app.data.remote.VpsImageUploader.uploadLogoToVps(
                         context,
                         bytes,
                         tenantId
@@ -210,7 +236,7 @@ class PrintSettingsViewModel @Inject constructor(
                         d.jpgSignatureDrawnBase64!!.removePrefix("data:image/png;base64,"),
                         android.util.Base64.NO_WRAP
                     )
-                    val url = com.posbah.app.data.remote.SupabaseSyncManager.uploadTtdPengirimToVps(
+                    val url = com.posbah.app.data.remote.VpsImageUploader.uploadTtdPengirimToVps(
                         context, bytes, tenantId, moduleKey, "jpg"
                     )
                     if (url != null) {
@@ -227,7 +253,7 @@ class PrintSettingsViewModel @Inject constructor(
                         d.sjSignatureDrawnBase64!!.removePrefix("data:image/png;base64,"),
                         android.util.Base64.NO_WRAP
                     )
-                    val url = com.posbah.app.data.remote.SupabaseSyncManager.uploadTtdPengirimToVps(
+                    val url = com.posbah.app.data.remote.VpsImageUploader.uploadTtdPengirimToVps(
                         context, bytes, tenantId, moduleKey, "sj"
                     )
                     if (url != null) {
@@ -244,7 +270,7 @@ class PrintSettingsViewModel @Inject constructor(
                         d.invoiceSignatureDrawnBase64!!.removePrefix("data:image/png;base64,"),
                         android.util.Base64.NO_WRAP
                     )
-                    val url = com.posbah.app.data.remote.SupabaseSyncManager.uploadTtdPengirimToVps(
+                    val url = com.posbah.app.data.remote.VpsImageUploader.uploadTtdPengirimToVps(
                         context, bytes, tenantId, moduleKey, "invoice"
                     )
                     if (url != null) {
@@ -264,26 +290,58 @@ class PrintSettingsViewModel @Inject constructor(
             id = updateWithTime.id,
             tenantId = tenantId,
             moduleKey = updateWithTime.moduleKey,
-            paperWidth = updateWithTime.receiptPaperWidth,
-            useLogo = updateWithTime.receiptUseLogo,
-            headerAlign = updateWithTime.receiptHeaderAlign,
-            isColor = updateWithTime.receiptIsColor,
-            showItemPrice = updateWithTime.receiptShowItemPrice,
-            footerText = updateWithTime.receiptFooterText,
+            jpgUseLogo = updateWithTime.jpgUseLogo,
+            jpgHeaderAlign = updateWithTime.jpgHeaderAlign,
+            jpgUseSignature = updateWithTime.jpgUseSignature,
+            jpgSignatureSenderName = updateWithTime.jpgSignatureSenderName,
+            jpgSignatureReceiverName = updateWithTime.jpgSignatureReceiverName,
+            jpgSignatureDrawnBase64 = updateWithTime.jpgSignatureDrawnBase64,
+            jpgIsColor = updateWithTime.jpgIsColor,
+            sjUseLogo = updateWithTime.sjUseLogo,
+            sjHeaderAlign = updateWithTime.sjHeaderAlign,
+            sjUseSignature = updateWithTime.sjUseSignature,
+            sjSignatureSenderName = updateWithTime.sjSignatureSenderName,
+            sjSignatureReceiverName = updateWithTime.sjSignatureReceiverName,
+            sjSignatureDrawnBase64 = updateWithTime.sjSignatureDrawnBase64,
+            sjIsColor = updateWithTime.sjIsColor,
+            invoiceUseLogo = updateWithTime.invoiceUseLogo,
+            invoiceHeaderAlign = updateWithTime.invoiceHeaderAlign,
+            invoiceUseSignature = updateWithTime.invoiceUseSignature,
+            invoiceSignatureSenderName = updateWithTime.invoiceSignatureSenderName,
+            invoiceSignatureReceiverName = updateWithTime.invoiceSignatureReceiverName,
+            invoiceSignatureDrawnBase64 = updateWithTime.invoiceSignatureDrawnBase64,
+            invoiceIsColor = updateWithTime.invoiceIsColor,
+            receiptPaperWidth = updateWithTime.receiptPaperWidth,
+            receiptUseLogo = updateWithTime.receiptUseLogo,
+            receiptHeaderAlign = updateWithTime.receiptHeaderAlign,
+            receiptIsColor = updateWithTime.receiptIsColor,
+            receiptShowItemPrice = updateWithTime.receiptShowItemPrice,
+            receiptFooterText = updateWithTime.receiptFooterText,
+            jpgTemplateType = updateWithTime.jpgTemplateType,
+            sjTemplateType = updateWithTime.sjTemplateType,
+            invoiceTemplateType = updateWithTime.invoiceTemplateType,
             bankOwnerName = updateWithTime.bankOwnerName,
             bankName = updateWithTime.bankName,
             bankAccountNumber = updateWithTime.bankAccountNumber,
+            logoPath = updateWithTime.logoPath,
             logoUrl = updateWithTime.logoUrl ?: updateWithTime.logoPath,
+            jpgSignatureDrawnUrl = updateWithTime.jpgSignatureDrawnUrl,
+            sjSignatureDrawnUrl = updateWithTime.sjSignatureDrawnUrl,
+            invoiceSignatureDrawnUrl = updateWithTime.invoiceSignatureDrawnUrl,
+            createdAt = updateWithTime.createdAt,
             updatedAt = updateWithTime.updatedAt
         )
-        val vpsResult = printSettingsRepo.save(dataToSave)
-        if (vpsResult !is OnlineWriteResult.Success) {
-            onError(if (vpsResult is OnlineWriteResult.Error) vpsResult.message else "Tidak ada koneksi internet. Pengaturan tidak tersimpan.")
-            return@launch
-        }
 
-        // Tenant name update disimpan di draftTenant untuk UI saja
-        // Data sudah tersimpan di VPS via printSettingsRepo.save() di atas
-        onDone()
+        viewModelScope.launch {
+            val vpsResult = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                printSettingsRepo.save(dataToSave)
+            }
+            if (vpsResult is OnlineWriteResult.Success) {
+                onDone()
+            } else {
+                val msg = if (vpsResult is OnlineWriteResult.Error) vpsResult.message else "Tidak ada koneksi internet. Pengaturan tidak tersimpan."
+                onError(msg)
+            }
+        }
     }
 }

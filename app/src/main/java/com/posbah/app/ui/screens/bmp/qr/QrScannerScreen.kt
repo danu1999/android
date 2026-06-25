@@ -50,7 +50,6 @@ import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
-import com.posbah.app.data.local.dao.TenantDao
 import com.posbah.app.data.local.entities.LocalUser
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.ui.components.PosBahTopBar
@@ -79,8 +78,7 @@ data class QrScannerUiState(
 
 @HiltViewModel
 class QrScannerViewModel @Inject constructor(
-    private val authRepository: AuthRepository,
-    private val tenantDao: TenantDao
+    private val authRepository: AuthRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(QrScannerUiState())
@@ -110,8 +108,7 @@ class QrScannerViewModel @Inject constructor(
                 return@launch
             }
 
-            val tenant = tenantDao.getById(tenantId)
-            val businessMode = tenant?.businessMode ?: "BMP"
+            val businessMode = user.businessMode ?: "BMP"
 
             val localUser = LocalUser(
                 googleSub = user.googleSub,

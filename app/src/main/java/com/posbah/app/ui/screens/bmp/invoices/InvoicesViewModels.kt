@@ -34,13 +34,19 @@ import java.io.FileOutputStream
 @HiltViewModel
 class InvoicesListViewModel @Inject constructor(
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context,
-    private val db: com.posbah.app.data.local.PosBahDatabase,
     private val invoiceRepo: BmpInvoiceRepository,
     private val clientRepo: BmpClientRepository,
     private val authRepository: AuthRepository,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
+
+    init {
+        viewModelScope.launch {
+            invoiceRepo.refresh()
+            clientRepo.refresh()
+        }
+    }
 
     val initialClientId: Long? = savedStateHandle.get<String>("clientId")?.toLongOrNull()
 
@@ -137,13 +143,14 @@ class InvoicesListViewModel @Inject constructor(
     fun clearDeleteError() { _deleteError.value = null }
 
     fun delete(id: Long) = viewModelScope.launch {
+        android.widget.Toast.makeText(context, "Invoice berhasil dihapus!", android.widget.Toast.LENGTH_SHORT).show()
         val result = invoiceRepo.deleteInvoice(context, tenantId, id)
         if (result is com.posbah.app.data.repository.OnlineWriteResult.Error) {
             _deleteError.value = result.message
+            android.widget.Toast.makeText(context, "Gagal hapus invoice: ${result.message}", android.widget.Toast.LENGTH_LONG).show()
         } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
-            _deleteError.value = "Tidak ada koneksi internet. Hapus dibatalkan."
-        } else {
-            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, null)
+            _deleteError.value = "Tidak ada koneksi internet."
+            android.widget.Toast.makeText(context, "Gagal hapus invoice: Tidak ada internet", android.widget.Toast.LENGTH_LONG).show()
         }
     }
 }
@@ -169,7 +176,6 @@ data class InvoiceDetailUi(
 @HiltViewModel
 class InvoiceDetailViewModel @Inject constructor(
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context,
-    private val db: com.posbah.app.data.local.PosBahDatabase,
     private val invoiceRepo: BmpInvoiceRepository,
     private val clientRepo: BmpClientRepository,
     private val settingsRepo: BmpSettingsRepository,
@@ -269,7 +275,6 @@ class InvoiceDetailViewModel @Inject constructor(
                 } catch (_: Exception) {}
             }
             val inv = invoiceRepo.getById(invoiceId)
-            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, null)
             _ui.update { it.copy(invoice = inv, showAddPayment = false, newPaymentAmount = "") }
         }
     }
@@ -295,7 +300,6 @@ class InvoiceDetailViewModel @Inject constructor(
                 return@launch
             }
             val inv = invoiceRepo.getById(invoiceId)
-            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, null)
             _ui.update { it.copy(invoice = inv, editingPayment = null, newPaymentAmount = "", newPaymentMethod = "TRANSFER") }
         }
     }
@@ -311,7 +315,6 @@ class InvoiceDetailViewModel @Inject constructor(
                 return@launch
             }
             val inv = invoiceRepo.getById(invoiceId)
-            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, null)
             _ui.update { it.copy(invoice = inv) }
         }
     }
@@ -434,17 +437,15 @@ class InvoiceDetailViewModel @Inject constructor(
     }
 
     fun deleteInvoice(onDone: () -> Unit) {
+        onDone()
+        android.widget.Toast.makeText(context, "Invoice berhasil dihapus!", android.widget.Toast.LENGTH_SHORT).show()
         viewModelScope.launch {
             val result = invoiceRepo.deleteInvoice(context, tenantId, invoiceId)
             if (result is com.posbah.app.data.repository.OnlineWriteResult.Error) {
-                _ui.update { it.copy(pollingError = result.message) }
-                return@launch
+                android.widget.Toast.makeText(context, "Gagal hapus invoice: ${result.message}", android.widget.Toast.LENGTH_LONG).show()
             } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
-                _ui.update { it.copy(pollingError = "Tidak ada koneksi internet. Hapus dibatalkan.") }
-                return@launch
+                android.widget.Toast.makeText(context, "Gagal hapus invoice: Tidak ada internet", android.widget.Toast.LENGTH_LONG).show()
             }
-            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, tenantId, null)
-            onDone()
         }
     }
 
@@ -469,7 +470,6 @@ data class InvoiceFormUi(
 @HiltViewModel
 class InvoiceFormViewModel @Inject constructor(
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context,
-    private val db: com.posbah.app.data.local.PosBahDatabase,
     private val invoiceRepo: BmpInvoiceRepository,
     private val clientRepo: BmpClientRepository,
     private val masterRepo: BmpMasterProductRepository,
@@ -569,7 +569,9 @@ class InvoiceFormViewModel @Inject constructor(
     fun save() {
         val inv = _ui.value.invoice ?: return
         viewModelScope.launch {
-            _ui.update { it.copy(isLoading = true, saveError = null) }
+            // Optimistic: navigate back immediately
+            _ui.update { it.copy(saved = true) }
+            
             val result = if (inv.id == 0L) {
                 val (_, r) = invoiceRepo.createInvoice(context, inv, _ui.value.productLines)
                 r
@@ -577,12 +579,9 @@ class InvoiceFormViewModel @Inject constructor(
                 invoiceRepo.updateInvoice(context, inv, _ui.value.productLines)
             }
             if (result is com.posbah.app.data.repository.OnlineWriteResult.Error) {
-                _ui.update { it.copy(isLoading = false, saveError = result.message) }
+                android.widget.Toast.makeText(context, "Gagal simpan invoice: ${result.message}", android.widget.Toast.LENGTH_LONG).show()
             } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
-                _ui.update { it.copy(isLoading = false, saveError = "Tidak ada koneksi internet. Data tidak tersimpan.") }
-            } else {
-                com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(context, db, inv.tenantId, null)
-                _ui.update { it.copy(isLoading = false, saved = true) }
+                android.widget.Toast.makeText(context, "Gagal simpan invoice: Tidak ada internet", android.widget.Toast.LENGTH_LONG).show()
             }
         }
     }

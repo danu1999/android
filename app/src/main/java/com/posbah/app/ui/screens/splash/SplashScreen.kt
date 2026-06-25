@@ -34,6 +34,7 @@ fun SplashScreen(
     onGoLogin: () -> Unit,
     onGoLock: () -> Unit,
     onGoBmpDashboard: () -> Unit,
+    onGoMigration: () -> Unit = {},
     viewModel: SplashViewModel = hiltViewModel()
 ) {
     val route by viewModel.route.collectAsStateWithLifecycle()
@@ -43,6 +44,7 @@ fun SplashScreen(
             SplashRoute.GoToLogin -> onGoLogin()
             SplashRoute.GoToLock -> onGoLock()
             SplashRoute.GoToBmpDashboard -> onGoBmpDashboard()
+            SplashRoute.GoToMigration -> onGoMigration()
             else -> {}
         }
     }

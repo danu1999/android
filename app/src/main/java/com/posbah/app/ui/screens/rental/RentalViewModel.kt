@@ -2,7 +2,6 @@ package com.posbah.app.ui.screens.rental
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.posbah.app.data.local.LocalDataSeeder
 import com.posbah.app.data.local.entities.ProductEntity
 import com.posbah.app.data.local.entities.TransactionEntity
 import com.posbah.app.data.local.entities.TransactionItemEntity
@@ -51,9 +50,7 @@ class RentalViewModel @Inject constructor(
     private val customerRepository: CustomerRepository,
     private val transactionRepository: TransactionRepository,
     private val outletRepository: OutletRepository,
-    private val localDataSeeder: LocalDataSeeder,
     private val securePrefs: SecurePreferences,
-    private val db: com.posbah.app.data.local.PosBahDatabase, // kept for SupabaseSyncManager stubs
     private val printSettingsRepository: PrintSettingsRepository,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context
 ) : ViewModel() {
@@ -139,13 +136,6 @@ class RentalViewModel @Inject constructor(
 
     val vehicles: StateFlow<List<Vehicle>> = combine(products, transactions) { prodList, txList ->
         val filtered = prodList.filter { it.category == "MOBIL" || it.category == "MOTOR" }
-        
-        if (filtered.isEmpty() && prodList.isEmpty()) {
-            viewModelScope.launch {
-                localDataSeeder.seedDefaultVehicles(tenantId, currentOutletId)
-            }
-        }
-        
         filtered.map { p ->
             var activeRenter: String? = null
             var expiry: Long? = null
@@ -215,6 +205,7 @@ class RentalViewModel @Inject constructor(
         imageFile: java.io.File?,
         onDone: () -> Unit
     ) {
+        onDone()
         viewModelScope.launch {
             var base64Url: String? = null
             if (imageFile != null && imageFile.exists()) {
@@ -238,7 +229,7 @@ class RentalViewModel @Inject constructor(
                 name = name,
                 price = pricePerDay,
                 costPrice = costPrice,
-                stock = 1, // 1 = available
+                stock = 1,
                 unit = "hari",
                 barcode = plateNumber,
                 category = type,
@@ -247,14 +238,6 @@ class RentalViewModel @Inject constructor(
             )
             productRepository.upsert(p)
             logActivity("TAMBAH KENDARAAN", "Menambahkan armada baru: $name ($plateNumber) Jual: $pricePerDay Modal: $costPrice")
-            onDone()
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
         }
     }
 
@@ -270,6 +253,7 @@ class RentalViewModel @Inject constructor(
         keepExistingImage: Boolean,
         onDone: () -> Unit
     ) {
+        onDone()
         viewModelScope.launch {
             val idVal = vehicleId.toLongOrNull() ?: return@launch
             val product = productRepository.getById(idVal) ?: return@launch
@@ -301,32 +285,17 @@ class RentalViewModel @Inject constructor(
             )
             productRepository.upsert(updated)
             logActivity("EDIT KENDARAAN", "Mengubah armada: $name ($plateNumber) Jual: $pricePerDay Modal: $costPrice")
-            onDone()
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
         }
     }
 
     fun deleteVehicle(vehicleId: String, onDone: () -> Unit) {
+        onDone()
         viewModelScope.launch {
             val idVal = vehicleId.toLongOrNull()
             if (idVal != null) {
                 val p = productRepository.getById(idVal)
                 productRepository.delete(idVal)
                 logActivity("HAPUS KENDARAAN", "Menghapus armada: ${p?.name ?: vehicleId}")
-            }
-            onDone()
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                try {
-                    com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
             }
         }
     }
@@ -340,6 +309,54 @@ class RentalViewModel @Inject constructor(
         rentDate: Long?,
         onDone: (RentalOrder) -> Unit
     ) {
+        val total = vehicle.pricePerDay * days
+        val receiptNum = "TEMP-RN-" + java.util.UUID.randomUUID().toString().take(6).uppercase()
+        val txDate = rentDate ?: System.currentTimeMillis()
+
+        val tx = TransactionEntity(
+            tenantId = tenantId,
+            outletId = currentOutletId,
+            employeeId = 1L,
+            customerId = vehicle.id.toLongOrNull(),
+            customerName = customerName,
+            receiptNumber = receiptNum,
+            date = txDate,
+            subtotal = total,
+            total = total,
+            paymentMethod = "CASH",
+            amountPaid = cashPaid,
+            change = cashPaid - total,
+            status = "COMPLETED",
+            orderStatus = "ACTIVE",
+            queueNumber = days,
+            notes = whatsapp,
+            deliveryDate = txDate + days * 24 * 60 * 60 * 1000L
+        )
+
+        val line = TransactionItemEntity(
+            transactionId = 0,
+            productId = vehicle.id.toLong(),
+            variantId = null,
+            variantName = null,
+            quantity = 1,
+            price = vehicle.pricePerDay,
+            costPrice = vehicle.costPrice
+        )
+
+        val mappedOrder = RentalOrder(
+            id = tx.receiptNumber,
+            vehicleId = vehicle.id,
+            vehicleName = vehicle.name,
+            customerName = customerName,
+            whatsapp = whatsapp,
+            days = days,
+            total = total,
+            paid = cashPaid,
+            rentDate = tx.date,
+            status = "ACTIVE"
+        )
+        onDone(mappedOrder)
+
         viewModelScope.launch {
             val c = com.posbah.app.data.local.entities.CustomerEntity(
                 tenantId = tenantId,
@@ -349,98 +366,46 @@ class RentalViewModel @Inject constructor(
             )
             customerRepository.upsert(c)
 
-            val total = vehicle.pricePerDay * days
-            val receiptNum = transactionRepository.generateReceiptNumberForType("RN", currentOutletId)
-            val txDate = rentDate ?: System.currentTimeMillis()
-            
-            val tx = TransactionEntity(
-                tenantId = tenantId,
-                outletId = currentOutletId,
-                employeeId = 1L,
-                customerId = vehicle.id.toLongOrNull(), // Store vehicle ID in customerId
-                customerName = customerName,
-                receiptNumber = receiptNum,
-                date = txDate,
-                subtotal = total,
-                total = total,
-                paymentMethod = "CASH",
-                amountPaid = cashPaid,
-                change = cashPaid - total,
-                status = "COMPLETED",
-                orderStatus = "ACTIVE",
-                queueNumber = days,
-                notes = whatsapp,
-                deliveryDate = txDate + days * 24 * 60 * 60 * 1000L
-            )
-            
-            val line = TransactionItemEntity(
-                transactionId = 0,
-                productId = vehicle.id.toLong(),
-                variantId = null,
-                variantName = null,
-                quantity = 1,
-                price = vehicle.pricePerDay,
-                costPrice = vehicle.costPrice
-            )
-            
-            transactionRepository.checkout(tx, listOf(line), productRepository)
-            
-            val p = productRepository.getById(vehicle.id.toLong())
-            if (p != null) {
-                val info = VehicleRentalInfo(
-                    renterName = customerName,
-                    expiry = tx.deliveryDate ?: System.currentTimeMillis(),
-                    days = days,
-                    receiptNumber = receiptNum
-                )
-                val infoJson = Json.encodeToString(VehicleRentalInfo.serializer(), info)
-                productRepository.upsert(p.copy(stock = 0, variants = infoJson))
-            }
-
-            logActivity("SEWA KENDARAAN", "Sewa kendaraan ${vehicle.name} kepada $customerName selama $days hari (Struk: $receiptNum)")
-
-            val mappedOrder = RentalOrder(
-                id = tx.receiptNumber,
-                vehicleId = vehicle.id,
-                vehicleName = vehicle.name,
-                customerName = customerName,
-                whatsapp = whatsapp,
-                days = days,
-                total = total,
-                paid = cashPaid,
-                rentDate = tx.date,
-                status = "ACTIVE"
-            )
-            onDone(mappedOrder)
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
+            val realTx = transactionRepository.checkout(tx, listOf(line), productRepository)
+            if (realTx.id > 0L) {
+                val p = productRepository.getById(vehicle.id.toLong())
+                if (p != null) {
+                    val info = VehicleRentalInfo(
+                        renterName = customerName,
+                        expiry = tx.deliveryDate ?: System.currentTimeMillis(),
+                        days = days,
+                        receiptNumber = realTx.receiptNumber
+                    )
+                    val infoJson = Json.encodeToString(VehicleRentalInfo.serializer(), info)
+                    productRepository.upsert(p.copy(stock = 0, variants = infoJson))
+                }
+                logActivity("SEWA KENDARAAN", "Sewa kendaraan ${vehicle.name} kepada $customerName selama $days hari (Struk: ${realTx.receiptNumber})")
+            } else {
+                android.widget.Toast.makeText(appContext, "Gagal memproses transaksi sewa di server.", android.widget.Toast.LENGTH_LONG).show()
             }
         }
     }
 
     fun returnVehicle(order: RentalOrder, lateDays: Int, onDone: () -> Unit) {
+        onDone()
         viewModelScope.launch {
             val tx = transactions.value.find { it.receiptNumber == order.id } ?: return@launch
-            
+
             val pricePerDay = order.total / order.days
             val lateFee = lateDays * pricePerDay * 1.5
-            
+
             val updatedTx = tx.copy(
                 orderStatus = "RETURNED",
                 total = tx.total + lateFee,
                 notes = tx.notes + if (lateDays > 0) " (Denda keterlambatan: ${lateDays} hari, +${lateFee})" else ""
             )
             transactionRepository.update(updatedTx)
-            
+
             val p = productRepository.getById(order.vehicleId.toLong())
             if (p != null) {
                 productRepository.upsert(p.copy(stock = 1, variants = null))
             }
             logActivity("PENGEMBALIAN KENDARAAN", "Pengembalian kendaraan ${order.vehicleName} (Terlambat: $lateDays hari, Denda: $lateFee)")
-            onDone()
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
-            }
         }
     }
 
@@ -455,6 +420,7 @@ class RentalViewModel @Inject constructor(
     }
 
     fun addCustomer(name: String, phone: String, address: String, onDone: () -> Unit) {
+        onDone()
         viewModelScope.launch {
             val c = com.posbah.app.data.local.entities.CustomerEntity(
                 tenantId = tenantId,
@@ -464,11 +430,11 @@ class RentalViewModel @Inject constructor(
             )
             customerRepository.upsert(c)
             logActivity("TAMBAH PELANGGAN", "Menambahkan pelanggan baru: $name")
-            onDone()
         }
     }
 
     fun addExpense(description: String, amount: Double, dateMillis: Long, onDone: () -> Unit) {
+        onDone()
         viewModelScope.launch {
             val todayStr = java.text.SimpleDateFormat("yyMMdd", java.util.Locale.US).format(java.util.Date(dateMillis))
             val prefix = "EXP-RN"
@@ -489,10 +455,6 @@ class RentalViewModel @Inject constructor(
             )
             transactionRepository.checkout(expenseTx, emptyList<com.posbah.app.data.local.entities.TransactionItemEntity>(), productRepository)
             logActivity("CATAT PENGELUARAN", "Mencatat pengeluaran: $description senilai Rp $amount")
-            onDone()
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                com.posbah.app.data.remote.SupabaseSyncManager.syncAll(appContext, db, tenantId)
-            }
         }
     }
 }

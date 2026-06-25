@@ -128,13 +128,20 @@ fun TenantPickerScreen(
                         modifier = Modifier.fillMaxWidth().testTag("new-tenant-name")
                     )
                     Spacer(Modifier.height(4.dp))
-                    Text("Pilih Sistem / Mode Bisnis:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    val modes = listOf(
-                        "FNB" to "FnB / Kasir",
-                        "LAUNDRY" to "Laundry",
-                        "RENTAL" to "Rental Mobil/Motor",
-                        "BMP" to "Bahan Baku & Manufaktur"
-                    )
+                    val userEmail = viewModel.getActiveUserEmail()?.lowercase()?.trim()
+                    val modes = if (userEmail == "mulyakus84@gmail.com") {
+                        listOf(
+                            "FNB" to "FnB / Kasir",
+                            "LAUNDRY" to "Laundry"
+                        )
+                    } else {
+                        listOf(
+                            "FNB" to "FnB / Kasir",
+                            "LAUNDRY" to "Laundry",
+                            "RENTAL" to "Rental Mobil/Motor",
+                            "BMP" to "Bahan Baku & Manufaktur"
+                        )
+                    }
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         modes.forEach { (code, label) ->
                             val selected = selectedMode == code

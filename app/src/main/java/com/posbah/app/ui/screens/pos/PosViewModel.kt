@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.compose.runtime.mutableStateListOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.posbah.app.data.local.LocalDataSeeder
 import com.posbah.app.data.local.entities.CustomerEntity
 import com.posbah.app.data.local.entities.ProductEntity
 import com.posbah.app.data.local.entities.TransactionEntity
@@ -88,12 +87,10 @@ class PosViewModel @Inject constructor(
     private val customerRepository: CustomerRepository,
     private val transactionRepository: TransactionRepository,
     private val outletRepository: OutletRepository,
-    private val localDataSeeder: LocalDataSeeder,
     private val authRepository: AuthRepository,
     private val printSettingsRepository: PrintSettingsRepository,
     private val sessionState: SessionState,
-    private val securePrefs: SecurePreferences,
-    private val db: com.posbah.app.data.local.PosBahDatabase // kept for SupabaseSyncManager stubs
+    private val securePrefs: SecurePreferences
 ) : ViewModel() {
 
     private val tenantId = authRepository.activeTenantId().orEmpty()
@@ -176,33 +173,6 @@ class PosViewModel @Inject constructor(
      * again, without requiring the customer to do anything manually.
      */
     private fun autoRepairTransactionDates() {
-        val seededTenants = setOf(
-            "bahteramulyap@gmail.com",
-            "ten_premium_bahteramulyap_gmail_com",
-            "hanafiariful@gmail.com",
-            "demo_tenant"
-        )
-        val isSeedTenant = seededTenants.any { tenantId == it } ||
-            tenantId.contains("hanafiariful_gmail_com") ||
-            tenantId.startsWith("demo_tenant_")
-        if (!isSeedTenant) return
-
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            try {
-                val prefs = appContext.getSharedPreferences("posbah_seeder_meta", android.content.Context.MODE_PRIVATE)
-                val repairVersion = prefs.getInt("date_repair_v", 0)
-                // Version 3 = fix for parseSqlTimestamp bug on transaction dates
-                if (repairVersion < 3) {
-                    _uiState.update { it.copy(isSeeding = true) }
-                    localDataSeeder.seedFromSqlDump(appContext, tenantId, currentOutletId)
-                    _uiState.update { it.copy(isSeeding = false) }
-                    prefs.edit().putInt("date_repair_v", 3).apply()
-                }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(isSeeding = false) }
-                android.util.Log.e("PosViewModel", "autoRepairTransactionDates failed", e)
-            }
-        }
     }
 
     // Reactive streams from database
@@ -452,92 +422,92 @@ class PosViewModel @Inject constructor(
         if (cart.isEmpty()) return
         val currentUi = _uiState.value
 
-        viewModelScope.launch {
-            val txDate = currentUi.selectedTransactionDate ?: System.currentTimeMillis()
-            val dueDateMs = if (currentUi.paymentMethod == "HUTANG" && currentUi.debtDueDate.isNotBlank()) {
-                try {
-                    val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-                    sdf.parse(currentUi.debtDueDate.trim())?.time
-                } catch (e: Exception) {
-                    null
-                }
-            } else {
+        val txDate = currentUi.selectedTransactionDate ?: System.currentTimeMillis()
+        val dueDateMs = if (currentUi.paymentMethod == "HUTANG" && currentUi.debtDueDate.isNotBlank()) {
+            try {
+                val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                sdf.parse(currentUi.debtDueDate.trim())?.time
+            } catch (e: Exception) {
                 null
             }
+        } else {
+            null
+        }
 
-            val txId = System.currentTimeMillis()
-            val receiptNum = transactionRepository.generateReceiptNumberForType("FNB", currentOutletId)
+        val tempId = -System.currentTimeMillis()
+        val receiptNum = "TEMP-" + java.util.UUID.randomUUID().toString().take(6).uppercase()
 
-            val tx = TransactionEntity(
-                id = txId,
-                tenantId = tenantId,
-                outletId = currentOutletId,
-                employeeId = 1L,
-                customerId = currentUi.customerId,
-                customerName = currentUi.customerName ?: "Umum",
-                receiptNumber = receiptNum,
-                date = txDate,
-                subtotal = getSubtotal(),
-                discountType = if (getDiscountAmt() > 0) currentUi.discountType else null,
-                discountInput = currentUi.discountInput.toDoubleOrNull() ?: 0.0,
-                discountAmt = getDiscountAmt(),
-                total = getTotal(),
-                discount = getDiscountAmt(),
-                paymentMethod = if (isQueue) "PENDING" else currentUi.paymentMethod,
-                amountPaid = if (isQueue) null else currentUi.amountPaid.toDoubleOrNull(),
-                change = if (isQueue) null else (currentUi.amountPaid.toDoubleOrNull() ?: getTotal()) - getTotal(),
-                status = if (isQueue) "PENDING" else "COMPLETED",
-                notes = currentUi.notes.takeIf { it.isNotBlank() },
-                queueNumber = currentUi.queueNumber.toIntOrNull(),
-                deliveryDate = dueDateMs
+        val tx = TransactionEntity(
+            id = tempId,
+            tenantId = tenantId,
+            outletId = currentOutletId,
+            employeeId = 1L,
+            customerId = currentUi.customerId,
+            customerName = currentUi.customerName ?: "Umum",
+            receiptNumber = receiptNum,
+            date = txDate,
+            subtotal = getSubtotal(),
+            discountType = if (getDiscountAmt() > 0) currentUi.discountType else null,
+            discountInput = currentUi.discountInput.toDoubleOrNull() ?: 0.0,
+            discountAmt = getDiscountAmt(),
+            total = getTotal(),
+            discount = getDiscountAmt(),
+            paymentMethod = if (isQueue) "PENDING" else currentUi.paymentMethod,
+            amountPaid = if (isQueue) null else currentUi.amountPaid.toDoubleOrNull(),
+            change = if (isQueue) null else (currentUi.amountPaid.toDoubleOrNull() ?: getTotal()) - getTotal(),
+            status = if (isQueue) "PENDING" else "COMPLETED",
+            notes = currentUi.notes.takeIf { it.isNotBlank() },
+            queueNumber = currentUi.queueNumber.toIntOrNull(),
+            deliveryDate = dueDateMs
+        )
+
+        val lines = cart.mapIndexed { idx, it ->
+            TransactionItemEntity(
+                id = tempId + idx,
+                transactionId = tempId,
+                productId = it.product.id,
+                variantId = it.variantId,
+                variantName = it.variantName,
+                quantity = it.quantity,
+                price = getItemUnitPrice(it),
+                costPrice = it.product.costPrice,
+                discount = it.discount,
+                note = it.note
             )
+        }
 
-            val itemSeed = System.currentTimeMillis()
-            val lines = cart.mapIndexed { idx, it ->
-                TransactionItemEntity(
-                    id = itemSeed + idx,
-                    transactionId = txId,
-                    productId = it.product.id,
-                    variantId = it.variantId,
-                    variantName = it.variantName,
-                    quantity = it.quantity,
-                    price = getItemUnitPrice(it),
-                    costPrice = it.product.costPrice,
-                    discount = it.discount,
-                    note = it.note
-                )
-            }
+        clearCart()
+        _uiState.update {
+            it.copy(
+                showPayModal = false,
+                activeReceipt = tx,
+                activeReceiptItems = lines,
+                showReceiptDialog = !isQueue,
+                checkoutError = null
+            )
+        }
 
-            val result = com.posbah.app.data.remote.SupabaseSyncManager.checkoutWriteThrough(appContext, tenantId, tx, lines)
-            when (result) {
-                is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Success -> {
-                    val savedTx = transactionRepository.checkout(tx, lines, productRepository)
-                    val savedItems = transactionRepository.listItemsForTransaction(savedTx.id)
+        viewModelScope.launch {
+            val savedTx = transactionRepository.checkout(tx, lines, productRepository)
+            if (savedTx.id <= 0) {
+                android.widget.Toast.makeText(appContext, "Gagal memproses transaksi di server. Stok di-rollback.", android.widget.Toast.LENGTH_LONG).show()
+            } else {
+                val logAction = if (isQueue) "BUAT ANTRIAN" else "CHECKOUT"
+                val logDesc = if (isQueue) {
+                    "Membuat antrian #${tx.queueNumber} senilai Rp ${tx.total}"
+                } else {
+                    "Transaksi ${savedTx.receiptNumber} (${tx.paymentMethod}) senilai Rp ${tx.total}"
+                }
+                logActivity(logAction, logDesc)
 
-                    val logAction = if (isQueue) "BUAT ANTRIAN" else "CHECKOUT"
-                    val logDesc = if (isQueue) {
-                        "Membuat antrian #${tx.queueNumber} senilai Rp ${tx.total}"
-                    } else {
-                        "Transaksi ${savedTx.receiptNumber} (${tx.paymentMethod}) senilai Rp ${tx.total}"
-                    }
-                    logActivity(logAction, logDesc)
-
-                    clearCart()
+                if (_uiState.value.activeReceipt?.id == tempId) {
+                    val savedItems = try { transactionRepository.listItemsForTransaction(savedTx.id) } catch (_: Exception) { lines }
                     _uiState.update {
                         it.copy(
-                            showPayModal = false,
                             activeReceipt = savedTx,
-                            activeReceiptItems = savedItems,
-                            showReceiptDialog = !isQueue,
-                            checkoutError = null
+                            activeReceiptItems = savedItems
                         )
                     }
-                }
-                is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Error -> {
-                    _uiState.update { it.copy(checkoutError = result.message) }
-                }
-                is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.NoConnection -> {
-                    _uiState.update { it.copy(checkoutError = "Koneksi internet terputus. Silakan periksa jaringan Anda.") }
                 }
             }
         }
@@ -560,7 +530,6 @@ class PosViewModel @Inject constructor(
                 )
             }
 
-            // Load products back to cart
             for (line in items) {
                 val prod = productRepository.getById(line.productId) ?: continue
                 val vars = parseVariants(prod)
@@ -580,60 +549,38 @@ class PosViewModel @Inject constructor(
                     )
                 )
             }
-            // Delete this pending transaction now that it is loaded back into editing
             transactionRepository.cancelTransaction(tx.id, productRepository)
-            // Push via global syncScope agar tidak ikut dibatalkan saat ViewModel di-clear.
-            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(
-                appContext, db, tenantId, authRepository.activeUserEmail()
-            )
         }
     }
 
     fun completeQueue(tx: TransactionEntity, method: String) {
-        viewModelScope.launch {
-            val updateObj = mapOf<String, Any?>(
-                "status" to "COMPLETED",
-                "paymentMethod" to method,
-                "amountPaid" to tx.total,
-                "change" to 0.0,
-                "updatedAt" to System.currentTimeMillis()
+        _uiState.update {
+            it.copy(
+                showQueueModal = false,
+                checkoutError = null
             )
-            val result = com.posbah.app.data.remote.SupabaseSyncManager.patchRowDirectly(appContext, "transactions", tx.id, updateObj, tenantId)
-            when (result) {
-                is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Success -> {
-                    transactionRepository.completePendingTransaction(
-                        id = tx.id,
-                        method = method,
-                        amountPaid = tx.total,
-                        change = 0.0
-                    )
-                    val items = transactionRepository.listItemsForTransaction(tx.id)
-                    _uiState.update {
-                        it.copy(
-                            showQueueModal = false,
-                            activeReceipt = tx.copy(status = "COMPLETED", paymentMethod = method, amountPaid = tx.total, change = 0.0),
-                            activeReceiptItems = items,
-                            showReceiptDialog = true,
-                            checkoutError = null
-                        )
-                    }
-                }
-                is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.Error -> {
-                    _uiState.update { it.copy(checkoutError = result.message) }
-                }
-                is com.posbah.app.data.remote.SupabaseSyncManager.SyncResult.NoConnection -> {
-                    _uiState.update { it.copy(checkoutError = "Koneksi internet terputus. Silakan periksa jaringan Anda.") }
-                }
+        }
+        viewModelScope.launch {
+            val items = try { transactionRepository.listItemsForTransaction(tx.id) } catch (_: Exception) { emptyList() }
+            _uiState.update {
+                it.copy(
+                    activeReceipt = tx.copy(status = "COMPLETED", paymentMethod = method, amountPaid = tx.total, change = 0.0),
+                    activeReceiptItems = items,
+                    showReceiptDialog = true
+                )
             }
+            transactionRepository.completePendingTransaction(
+                id = tx.id,
+                method = method,
+                amountPaid = tx.total,
+                change = 0.0
+            )
         }
     }
 
     fun cancelQueue(txId: Long) {
         viewModelScope.launch {
             transactionRepository.cancelTransaction(txId, productRepository)
-            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(
-                appContext, db, tenantId, authRepository.activeUserEmail()
-            )
         }
     }
 
@@ -648,6 +595,7 @@ class PosViewModel @Inject constructor(
         minStockAlert: Int,
         onDone: () -> Unit
     ) {
+        onDone()
         viewModelScope.launch {
             var base64Url: String? = null
             if (imageFile != null && imageFile.exists()) {
@@ -675,14 +623,11 @@ class PosViewModel @Inject constructor(
                 minStockAlert = minStockAlert
             )
             val newId = productRepository.upsert(p)
-            logActivity("TAMBAH PRODUK", "Menambahkan produk baru: $name (Jual: Rp $price, Beli: Rp $costPrice)")
-            onDone()
-            // Push langsung ke VPS via global syncScope (tidak ikut dibatalkan saat
-            // ViewModel di-clear / user logout). Ini memastikan produk tersimpan
-            // realtime di server meski user langsung logout / uninstall setelah simpan.
-            com.posbah.app.data.remote.SupabaseSyncManager.pushProductImmediate(
-                appContext, db, tenantId, newId
-            )
+            if (newId > 0L) {
+                logActivity("TAMBAH PRODUK", "Menambahkan produk baru: $name (Jual: Rp $price, Beli: Rp $costPrice)")
+            } else {
+                android.widget.Toast.makeText(appContext, "Gagal menambah produk di server. Rollback otomatis.", android.widget.Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -699,6 +644,7 @@ class PosViewModel @Inject constructor(
         minStockAlert: Int,
         onDone: () -> Unit
     ) {
+        onDone()
         viewModelScope.launch {
             var base64Url = if (keepExistingImage) product.image else null
             if (imageFile != null && imageFile.exists()) {
@@ -724,13 +670,11 @@ class PosViewModel @Inject constructor(
                 updatedAt = System.currentTimeMillis()
             )
             val editedId = productRepository.upsert(updated)
-            logActivity("EDIT PRODUK", "Mengubah produk: $name (Jual: Rp $price, Beli: Rp $costPrice)")
-            onDone()
-            // Push langsung perubahan ke VPS via global syncScope.
-            val pushId = if (editedId > 0L) editedId else product.id
-            com.posbah.app.data.remote.SupabaseSyncManager.pushProductImmediate(
-                appContext, db, tenantId, pushId
-            )
+            if (editedId > 0L) {
+                logActivity("EDIT PRODUK", "Mengubah produk: $name (Jual: Rp $price, Beli: Rp $costPrice)")
+            } else {
+                android.widget.Toast.makeText(appContext, "Gagal mengupdate produk di server. Rollback otomatis.", android.widget.Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -739,14 +683,11 @@ class PosViewModel @Inject constructor(
             val p = productRepository.getById(productId) ?: return@launch
             productRepository.delete(productId)
             logActivity("HAPUS PRODUK", "Menghapus produk: ${p.name}")
-            // Hapus langsung di VPS via global syncScope.
-            com.posbah.app.data.remote.SupabaseSyncManager.deleteProductImmediate(
-                appContext, db, tenantId, productId
-            )
         }
     }
 
     fun addCustomer(name: String, phone: String, address: String, onDone: () -> Unit) {
+        onDone()
         viewModelScope.launch {
             val c = CustomerEntity(
                 tenantId = tenantId,
@@ -756,12 +697,11 @@ class PosViewModel @Inject constructor(
                 address = address.takeIf { it.isNotBlank() }
             )
             val newCustomerId = customerRepository.upsert(c)
-            logActivity("TAMBAH PELANGGAN", "Menambahkan pelanggan baru: $name")
-            onDone()
-            // Push langsung pelanggan baru ke VPS via global syncScope.
-            com.posbah.app.data.remote.SupabaseSyncManager.pushCustomerImmediate(
-                appContext, db, tenantId, newCustomerId
-            )
+            if (newCustomerId > 0L) {
+                logActivity("TAMBAH PELANGGAN", "Menambahkan pelanggan baru: $name")
+            } else {
+                android.widget.Toast.makeText(appContext, "Gagal menambah pelanggan di server. Rollback otomatis.", android.widget.Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -785,25 +725,18 @@ class PosViewModel @Inject constructor(
             )
             transactionRepository.update(updated)
             logActivity("LUNAS PIUTANG", "Melunasi piutang struk ${tx.receiptNumber} sebesar Rp ${tx.total}")
-            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(
-                appContext, db, tenantId, authRepository.activeUserEmail()
-            )
         }
     }
 
     /**
      * Hapus riwayat transaksi secara permanen.
-     * Soft-delete lokal + push delete ke server saat syncAll berikutnya.
-     * Jika transaksi COMPLETED, stok produk dikembalikan.
+     * Hapus langsung dari server via TransactionRepository secara optimistic.
      */
     fun deleteTransaction(transactionId: Long) {
         viewModelScope.launch {
             val tx = transactionRepository.getById(transactionId) ?: return@launch
             transactionRepository.deleteTransaction(transactionId, productRepository)
             logActivity("HAPUS TRANSAKSI", "Menghapus transaksi ${tx.receiptNumber} (${tx.paymentMethod}) senilai Rp ${tx.total}")
-            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(
-                appContext, db, tenantId, authRepository.activeUserEmail()
-            )
         }
     }
 
@@ -820,17 +753,8 @@ class PosViewModel @Inject constructor(
         }
     }
 
-    // DB Imports/Seeder
     fun importDemoData() {
-        _uiState.update { it.copy(isSeeding = true, seedError = null) }
-        viewModelScope.launch {
-            try {
-                localDataSeeder.seedFromSqlDump(appContext, tenantId, currentOutletId)
-                _uiState.update { it.copy(isSeeding = false) }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(isSeeding = false, seedError = e.localizedMessage) }
-            }
-        }
+        android.widget.Toast.makeText(appContext, "Data demo tidak tersedia dalam mode online.", android.widget.Toast.LENGTH_LONG).show()
     }
 
     // Parsing helpers
@@ -868,13 +792,11 @@ class PosViewModel @Inject constructor(
             )
             transactionRepository.update(updated)
             logActivity("EDIT STRUK", "Mengedit struk ${tx.receiptNumber} (${tx.paymentMethod} -> $paymentMethod, Total: Rp $total)")
-            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(
-                appContext, db, tenantId, authRepository.activeUserEmail()
-            )
         }
     }
 
     fun addExpense(description: String, amount: Double, dateMillis: Long, onDone: () -> Unit) {
+        onDone()
         viewModelScope.launch {
             val todayStr = java.text.SimpleDateFormat("yyMMdd", java.util.Locale.US).format(java.util.Date(dateMillis))
             val prefix = "EXP-FNB"
@@ -895,10 +817,6 @@ class PosViewModel @Inject constructor(
             )
             transactionRepository.checkout(expenseTx, emptyList<com.posbah.app.data.local.entities.TransactionItemEntity>(), productRepository)
             logActivity("CATAT PENGELUARAN", "Mencatat pengeluaran: $description senilai Rp $amount")
-            onDone()
-            com.posbah.app.data.remote.SupabaseSyncManager.enqueueFullSync(
-                appContext, db, tenantId, authRepository.activeUserEmail()
-            )
         }
     }
 }
