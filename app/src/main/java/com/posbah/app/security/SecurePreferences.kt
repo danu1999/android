@@ -59,6 +59,10 @@ class SecurePreferences @Inject constructor(
         get() = prefs.getInt(KEY_FAILED_PIN, 0)
         set(value) = prefs.edit().putInt(KEY_FAILED_PIN, value).apply()
 
+    var lastFailedAttemptTime: Long
+        get() = prefs.getLong("last_failed_attempt_time", 0L)
+        set(value) = prefs.edit().putLong("last_failed_attempt_time", value).apply()
+
     var lockoutUntil: Long
         get() = prefs.getLong(KEY_LOCKOUT_UNTIL, 0L)
         set(value) = prefs.edit().putLong(KEY_LOCKOUT_UNTIL, value).apply()

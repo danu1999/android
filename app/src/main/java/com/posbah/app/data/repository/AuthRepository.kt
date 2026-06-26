@@ -662,8 +662,14 @@ class AuthRepository @Inject constructor(
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun incrementFailedAttempts(now: Long): LoginOutcome {
-        val attempts = securePrefs.failedPinAttempts + 1
+        val lastAttempt = securePrefs.lastFailedAttemptTime
+        val attempts = if (now - lastAttempt > 10 * 60 * 1000L) { // 10-minute window
+            1
+        } else {
+            securePrefs.failedPinAttempts + 1
+        }
         securePrefs.failedPinAttempts = attempts
+        securePrefs.lastFailedAttemptTime = now
         if (attempts >= 5) {
             securePrefs.lockoutUntil = now + 5 * 60 * 1000L
             return LoginOutcome.Locked
