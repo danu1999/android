@@ -6820,7 +6820,10 @@ func autoDetectApkVersion() {
 		return
 	}
 
-	files, err := filepath.Glob("./posbah-v*.apk")
+	files, err := filepath.Glob("/home/muizz9900/posbah-v*.apk")
+	if err != nil || len(files) == 0 {
+		files, err = filepath.Glob("./posbah-v*.apk")
+	}
 	if err != nil || len(files) == 0 {
 		return
 	}
