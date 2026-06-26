@@ -89,6 +89,7 @@ func main() {
 	http.HandleFunc("/api/admin/confirm-payment", handleAdminConfirmPayment)
 	http.HandleFunc("/api/admin/apk-config", handleAdminApkConfig)
 	http.HandleFunc("/api/admin/upload-apk", handleAdminUploadApk)
+	http.HandleFunc("/api/admin/upload-apk-chunk", handleAdminUploadApkChunk)
 	http.HandleFunc("/api/admin/diagnose", handleAdminDiagnose)
 	http.HandleFunc("/status", handleStatus)
 	http.HandleFunc("/api/admin/deploy", handleAdminDeploy)
@@ -6750,6 +6751,128 @@ func handleAdminUploadApk(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"message": "APK berhasil diupload ke " + destPath,
+	})
+}
+
+func handleAdminUploadApkChunk(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !isAdminAuthenticated(r) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Max 15 MB per chunk
+	if err := r.ParseMultipartForm(15 << 20); err != nil {
+		http.Error(w, "Gagal parse form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "File tidak ditemukan: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	filename := r.FormValue("filename")
+	filename = filepath.Base(filename)
+	if !strings.HasPrefix(filename, "posbah-v") || !strings.HasSuffix(filename, ".apk") {
+		http.Error(w, "Nama file tidak valid", http.StatusBadRequest)
+		return
+	}
+
+	chunkIndexStr := r.FormValue("chunkIndex")
+	totalChunksStr := r.FormValue("totalChunks")
+	chunkIndex, errIdx := strconv.Atoi(chunkIndexStr)
+	totalChunks, errTot := strconv.Atoi(totalChunksStr)
+	if errIdx != nil || errTot != nil || chunkIndex < 0 || totalChunks <= 0 || chunkIndex >= totalChunks {
+		http.Error(w, "Format chunkIndex atau totalChunks tidak valid", http.StatusBadRequest)
+		return
+	}
+
+	// Save temp path
+	tmpDir := "/home/muizz9900"
+	if _, err := os.Stat(tmpDir); err != nil {
+		tmpDir = "./"
+	}
+	partPath := filepath.Join(tmpDir, fmt.Sprintf("%s.part%d", filename, chunkIndex))
+
+	out, err := os.OpenFile(partPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		http.Error(w, "Gagal membuat part file: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	_, err = io.Copy(out, file)
+	out.Close()
+	if err != nil {
+		http.Error(w, "Gagal menulis part file: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Check if all chunks are uploaded
+	allDone := true
+	for i := 0; i < totalChunks; i++ {
+		p := filepath.Join(tmpDir, fmt.Sprintf("%s.part%d", filename, i))
+		if _, err := os.Stat(p); err != nil {
+			allDone = false
+			break
+		}
+	}
+
+	if allDone {
+		// Reassemble
+		destPath := filepath.Join(tmpDir, filename)
+		finalFile, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+		if err != nil {
+			http.Error(w, "Gagal membuat file akhir: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer finalFile.Close()
+
+		for i := 0; i < totalChunks; i++ {
+			p := filepath.Join(tmpDir, fmt.Sprintf("%s.part%d", filename, i))
+			partFile, err := os.Open(p)
+			if err != nil {
+				http.Error(w, "Gagal membuka part file saat reassembly: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			_, err = io.Copy(finalFile, partFile)
+			partFile.Close()
+			if err != nil {
+				http.Error(w, "Gagal reassembly file: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			// Delete temp part
+			_ = os.Remove(p)
+		}
+		
+		log.Printf("[AutoUpdate] Reassembled APK successfully: %s", destPath)
+		
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": "APK berhasil diunggah penuh dan direkonstruksi di " + destPath,
+			"merged": true,
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": fmt.Sprintf("Chunk %d/%d berhasil diupload", chunkIndex+1, totalChunks),
+		"merged": false,
 	})
 }
 

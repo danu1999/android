@@ -278,19 +278,53 @@ if (-not $SkipDeploy) {
 
             # Fallback upload via HTTP API jika SCP gagal
             if ($scpFailed -and -not $SkipApkUpload) {
-                Write-Step "Upload APK ke VPS via HTTP API fallback"
-                Write-Info "Mengunggah: $apkLocalPath ke $AdminUrl/api/admin/upload-apk"
+                Write-Step "Upload APK ke VPS via Chunked HTTP API fallback"
+                Write-Info "Membaca dan memotong APK: $apkLocalPath"
                 try {
+                    $fileBytes = [System.IO.File]::ReadAllBytes($apkLocalPath)
+                    $chunkSize = 4 * 1024 * 1024 # 4MB
+                    $totalChunks = [Math]::Ceiling($fileBytes.Length / $chunkSize)
+                    Write-Info "Total ukuran: $($fileBytes.Length) bytes, dipecah menjadi $totalChunks chunk (@4MB)"
+                    
+                    $uploadUrl = "$AdminUrl/api/admin/upload-apk-chunk"
                     $headersArg = "Authorization: Bearer $($loginResp.token)"
-                    $fileArg = "file=@$apkLocalPath"
-                    & curl.exe -X POST -H $headersArg -F $fileArg "$AdminUrl/api/admin/upload-apk"
-                    if ($LASTEXITCODE -eq 0) {
-                        Write-OK "APK berhasil diupload via HTTP API fallback!"
-                    } else {
-                        Write-Fail "Upload APK via HTTP API fallback gagal dengan exit code $LASTEXITCODE"
+                    
+                    # Buat temporary folder untuk chunk lokal
+                    $tempChunkDir = Join-Path $env:TEMP "posbah_chunks"
+                    if (-not (Test-Path $tempChunkDir)) {
+                        New-Item -ItemType Directory -Path $tempChunkDir | Out-Null
                     }
+                    
+                    for ($i = 0; $i -lt $totalChunks; $i++) {
+                        $offset = $i * $chunkSize
+                        $length = [Math]::Min($chunkSize, $fileBytes.Length - $offset)
+                        
+                        $chunkBytes = New-Object byte[] $length
+                        [Array]::Copy($fileBytes, $offset, $chunkBytes, 0, $length)
+                        
+                        $chunkPath = Join-Path $tempChunkDir "chunk_$i.part"
+                        [System.IO.File]::WriteAllBytes($chunkPath, $chunkBytes)
+                        
+                        Write-Info "Mengunggah chunk $($i+1)/$totalChunks ($($length) bytes)..."
+                        
+                        # Jalankan curl.exe untuk mengirim chunk
+                        & curl.exe -s -X POST -H $headersArg `
+                            -F "filename=$apkFileName" `
+                            -F "chunkIndex=$i" `
+                            -F "totalChunks=$totalChunks" `
+                            -F "file=@$chunkPath" `
+                            $uploadUrl | Out-Null
+                            
+                        # Hapus chunk lokal setelah dikirim
+                        Remove-Item $chunkPath -ErrorAction SilentlyContinue
+                        
+                        if ($LASTEXITCODE -ne 0) {
+                            throw "Gagal mengunggah chunk $($i+1)"
+                        }
+                    }
+                    Write-OK "APK berhasil diupload penuh via Chunked HTTP API!"
                 } catch {
-                    Write-Fail "Upload APK via HTTP API fallback error: $_"
+                    Write-Fail "Upload APK via Chunked HTTP API fallback gagal: $_"
                 }
             }
 
