@@ -7714,16 +7714,24 @@ func runDatabaseInterconnectSyncAutomation() {
 			if err := rows.Scan(&email, &status); err == nil {
 				cleanEmail := strings.TrimSpace(strings.ToLower(email))
 				if status == "DELETED" || status == "PENDING_USER_CONFIRM" || status == "PENDING_ADMIN_APPROVE" {
-					// Ensure they are blocked/inactive in local_users
+					// Ensure they are blocked/inactive in local_users & employees
 					_, err := db.Exec(`UPDATE "local_users" SET "isActive" = FALSE, "updatedAt" = $1 WHERE TRIM(LOWER("email")) = $2`, time.Now().UnixNano()/1e6, cleanEmail)
 					if err != nil {
-						log.Printf("[Automation] Failed to set inactive for %s: %v", cleanEmail, err)
+						log.Printf("[Automation] Failed to set inactive in local_users for %s: %v", cleanEmail, err)
+					}
+					_, err2 := db.Exec(`UPDATE "employees" SET "isActive" = FALSE, "updatedAt" = $1 WHERE TRIM(LOWER("email")) = $2`, time.Now().UnixNano()/1e6, cleanEmail)
+					if err2 != nil {
+						log.Printf("[Automation] Failed to set inactive in employees for %s: %v", cleanEmail, err2)
 					}
 				} else if status == "REJOINED" || status == "ACTIVE" {
-					// Ensure they are active in local_users
+					// Ensure they are active in local_users & employees
 					_, err := db.Exec(`UPDATE "local_users" SET "isActive" = TRUE, "updatedAt" = $1 WHERE TRIM(LOWER("email")) = $2`, time.Now().UnixNano()/1e6, cleanEmail)
 					if err != nil {
-						log.Printf("[Automation] Failed to set active for %s: %v", cleanEmail, err)
+						log.Printf("[Automation] Failed to set active in local_users for %s: %v", cleanEmail, err)
+					}
+					_, err2 := db.Exec(`UPDATE "employees" SET "isActive" = TRUE, "updatedAt" = $1 WHERE TRIM(LOWER("email")) = $2`, time.Now().UnixNano()/1e6, cleanEmail)
+					if err2 != nil {
+						log.Printf("[Automation] Failed to set active in employees for %s: %v", cleanEmail, err2)
 					}
 				}
 			}

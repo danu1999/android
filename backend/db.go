@@ -494,11 +494,11 @@ func initSchema() error {
 
 		`INSERT INTO "employees" ("id", "tenantId", "name", "email", "role", "pinHash", "isActive", "createdAt", "updatedAt")
 		VALUES (10001, 'ten_premium_hanafiariful_gmail_com', 'PISANG KEJU RAMAYANA', 'hanafiariful@gmail.com', 'OWNER', '20710a82f8d6b458af10d49fbb1f985ac8aaf696e6b32e776d4f4ebbc30d08565e2bb5e1902ace18297d8db47ad35e49c086669125b1d6ac867c0d2d7e265e50', true, 1685642632000, 1685642632000)
-		ON CONFLICT ("id", "tenantId") DO UPDATE SET "role" = EXCLUDED."role", "pinHash" = EXCLUDED."pinHash";`,
+		ON CONFLICT ("id", "tenantId") DO UPDATE SET "role" = EXCLUDED."role", "pinHash" = EXCLUDED."pinHash", "isActive" = EXCLUDED."isActive";`,
 
 		`INSERT INTO "employees" ("id", "tenantId", "name", "email", "role", "pinHash", "isActive", "createdAt", "updatedAt")
 		VALUES (10002, 'ten_premium_hanafiariful_gmail_com', 'FahriP', 'fahrup22@gmail.com', 'ADMIN', '63e71711d1481b6da8b756e114aa2ac71a704929c0accf46f419706a5c1416ae1a312899ae84d3d8e33d255811e98fd4d17e59371a08e2f9c21c01d1b1c13a8d', true, 1685642632000, 1685642632000)
-		ON CONFLICT ("id", "tenantId") DO UPDATE SET "role" = EXCLUDED."role", "pinHash" = EXCLUDED."pinHash";`,
+		ON CONFLICT ("id", "tenantId") DO UPDATE SET "role" = EXCLUDED."role", "pinHash" = EXCLUDED."pinHash", "isActive" = EXCLUDED."isActive";`,
 
 		`UPDATE "bmp_payrolls" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
 		`UPDATE "bmp_clients" SET "tenantId" = 'ten_premium_hanafiariful_gmail_com' WHERE "tenantId" = 'hanafiariful@gmail.com';`,
@@ -531,7 +531,7 @@ func initSchema() error {
 
 		`INSERT INTO "employees" ("id", "tenantId", "name", "email", "role", "pinHash", "isActive", "createdAt", "updatedAt")
 		VALUES (20001, 'ten_premium_bahteramulyap_gmail_com', 'CV. BAHTERA MULYA PLASTIK', 'bahteramulyap@gmail.com', 'OWNER', '8a0ff1f8926195dfde55af7e68c028591602dacc30dc3c7caef27a949ca45142b25514004cf4540c46eca830100d06517c6facc0faf77fc57140e9df5fe5ffc7', true, 1685642632000, 1685642632000)
-		ON CONFLICT ("id", "tenantId") DO UPDATE SET "role" = EXCLUDED."role", "pinHash" = EXCLUDED."pinHash";`,
+		ON CONFLICT ("id", "tenantId") DO UPDATE SET "role" = EXCLUDED."role", "pinHash" = EXCLUDED."pinHash", "isActive" = EXCLUDED."isActive";`,
 
 		// PlayStore Review Premium Account Insertion
 		`INSERT INTO "tenants" ("id", "name", "ownerEmail", "businessMode", "isActive", "createdAt", "updatedAt")
@@ -544,7 +544,7 @@ func initSchema() error {
 
 		`INSERT INTO "employees" ("id", "tenantId", "name", "email", "role", "pinHash", "isActive", "createdAt", "updatedAt")
 		VALUES (10005, 'ten_premium_playstoretest_gmail_com', 'PlayStore Reviewer', 'playstoretest@gmail.com', 'OWNER', 'f93226ab6fd88288603a9ea14137015f3667f84ea23e34c32fad092883b3994546a681e423e9c1d087a5ea6f7238dcf8d3b7a27b93d2315addfde043c01cbf1a', true, 1685642632000, 1685642632000)
-		ON CONFLICT ("id", "tenantId") DO UPDATE SET "role" = EXCLUDED."role", "pinHash" = EXCLUDED."pinHash";`,
+		ON CONFLICT ("id", "tenantId") DO UPDATE SET "role" = EXCLUDED."role", "pinHash" = EXCLUDED."pinHash", "isActive" = EXCLUDED."isActive";`,
 
 		`UPDATE "bmp_payrolls" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
 		`UPDATE "bmp_clients" SET "tenantId" = 'ten_premium_bahteramulyap_gmail_com' WHERE "tenantId" = 'bahteramulyap@gmail.com';`,
@@ -780,6 +780,35 @@ func initSchema() error {
 	// Ensure bahteramulyap@gmail.com is active in local_users
 	_, _ = db.Exec(`UPDATE "local_users" SET "isActive" = TRUE, "updatedAt" = $1 WHERE TRIM(LOWER("email")) = 'bahteramulyap@gmail.com'`,
 		time.Now().UnixNano()/int64(time.Millisecond))
+
+	// Ensure bahteramulyap@gmail.com is active in employees
+	_, _ = db.Exec(`UPDATE "employees" SET "isActive" = TRUE, "updatedAt" = $1 WHERE TRIM(LOWER("email")) = 'bahteramulyap@gmail.com'`,
+		time.Now().UnixNano()/int64(time.Millisecond))
+
+	// Deduplicate employees table to resolve duplicate/conflict rows (keeping correct ones)
+	_, errDeduplicate := db.Exec(`
+		WITH duplicate_employees AS (
+			SELECT id, "tenantId",
+			       ROW_NUMBER() OVER (
+			         PARTITION BY TRIM(LOWER(email))
+			         ORDER BY 
+			           CASE WHEN "isActive" = TRUE THEN 1 ELSE 2 END,
+			           CASE WHEN "pinHash" IS NOT NULL AND "pinHash" <> '' THEN 1 ELSE 2 END,
+			           id DESC
+			       ) as rn
+			FROM "employees"
+			WHERE email IS NOT NULL AND email <> ''
+		)
+		DELETE FROM "employees"
+		WHERE (id, "tenantId") IN (
+			SELECT id, "tenantId" 
+			FROM duplicate_employees 
+			WHERE rn > 1
+		)
+	`)
+	if errDeduplicate != nil {
+		log.Printf("[Deduplicate] Warning: failed to deduplicate employees: %v", errDeduplicate)
+	}
 	// Migration: tambah outletId ke tabel BMP & activity_logs untuk isolasi per-outlet
 	outletIdMigrations := []string{
 		`ALTER TABLE "bmp_cashflow"      ADD COLUMN IF NOT EXISTS "outletId" BIGINT;`,

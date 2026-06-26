@@ -296,7 +296,7 @@ class AuthRepository @Inject constructor(
             if (isStatic) {
                 // ── Static / hardcoded premium or demo user ──────────────────
                 val isPremiumUser = staticInfo != null
-                val (hash, displayName, tenantId) = staticInfo ?: staticDemoInfo!!
+                val (hash, defaultDisplayName, defaultTenantId) = staticInfo ?: staticDemoInfo!!
 
                 // Try verifying against fetched VPS employee first, then fallback to static hash
                 val dbPinHash = vpsEmployee?.optString("pinHash")
@@ -313,11 +313,16 @@ class AuthRepository @Inject constructor(
                 securePrefs.failedPinAttempts = 0
                 securePrefs.lockoutUntil = 0L
 
-                val isBmpTenant = tenantId.contains("bahteramulyap")
+                // Resolve tenantId & displayName dynamically from VPS employee if available
+                val vpsTenantId = vpsEmployee?.optString("tenantId")
+                val tenantId = if (!vpsTenantId.isNullOrBlank()) vpsTenantId else defaultTenantId
+                val displayName = vpsEmployee?.optString("name") ?: defaultDisplayName
+
+                val isBmpTenant = tenantId.lowercase().contains("bahteramulyap")
                 val mode = when {
                     isBmpTenant -> "BMP"
-                    tenantId.endsWith("_LAUNDRY") -> "LAUNDRY"
-                    tenantId.endsWith("_RENTAL") -> "RENTAL"
+                    tenantId.endsWith("_LAUNDRY") || tenantId.lowercase().contains("laundry") -> "LAUNDRY"
+                    tenantId.endsWith("_RENTAL") || tenantId.lowercase().contains("rental") -> "RENTAL"
                     else -> "FNB"
                 }
 
@@ -325,7 +330,7 @@ class AuthRepository @Inject constructor(
                 val tenantName = tenantObj?.optString("name") ?: when {
                     isBmpTenant -> "CV. BAHTERA MULYA PLASTIK"
                     tenantId.contains("demo") -> "User Demo (Trial)"
-                    else -> "PISANG KEJU RAMAYANA"
+                    else -> displayName
                 }
                 val tenantMode = tenantObj?.optString("businessMode") ?: mode
 
