@@ -852,7 +852,7 @@ body {
         color: black !important;
     }
     
-    #app-container, .top-nav, .sidebar, .content-area, .overlay, #login-overlay, #invoice-detail-overlay, .modal-overlay {
+    #app-container, .top-nav, .sidebar, .content-area, .overlay, #login-overlay, #invoice-detail-overlay, .modal-overlay, #landing-page {
         display: none !important;
     }
 

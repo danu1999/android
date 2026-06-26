@@ -1355,36 +1355,68 @@ function triggerInvoicePrint() {
     const accentBg = "#EFF6FF";
     const statusColor = currentInvoice.status === "PAID" ? "#10B981" : (currentInvoice.status === "PARTIAL" ? "#3B82F6" : "#6B7280");
 
-    const bankInfoHtmlContent = (printSettings && printSettings.bankOwnerName && printSettings.bankAccountNumber) ? `
-        <div style="font-size: 13px; margin-bottom: 15px; color: #000; text-align: left; margin-right: 15px;">
-            <strong>Info Pembayaran :</strong><br>
-            bank : ${printSettings.bankName} : ${printSettings.bankAccountNumber}<br>
-            atas nama : ${printSettings.bankOwnerName}
-        </div>
-    ` : "";
+    const paperSize = document.getElementById("select-paper-size").value;
+    const isTraditional = (paperSize !== "A4");
+    const rowCount = items.length;
+    let scale = 1.0;
+    if (isTraditional) {
+        if (rowCount > 8) {
+            scale = Math.max(0.7, 1 - (rowCount - 8) * 0.05);
+        }
+    } else {
+        if (rowCount > 3) {
+            scale = Math.max(0.65, 1 - (rowCount - 3) * 0.08);
+        }
+    }
+    const actualTtdHeight = isTraditional ? Math.round(50 * scale) : 60;
+    const actualTtdMargin = isTraditional ? "2px" : "5px";
 
-    const receiverSig = currentInvoice.receiverSignatureUrl || "";
-    const receiverName = currentInvoice.receiverNameActual || (printSettings ? printSettings.invoiceSignatureReceiverName || "" : "");
-    const senderName = printSettings ? printSettings.invoiceSignatureSenderName || "Admin" : "Admin";
+    const bankNameVal = printSettings ? (printSettings.bankName || printSettings.bank_name || "") : "";
+    const bankAccountVal = printSettings ? (printSettings.bankAccountNumber || printSettings.bank_account_number || "") : "";
+    const bankOwnerVal = printSettings ? (printSettings.bankOwnerName || printSettings.bank_owner_name || "") : "";
+
+    let bankInfoHtmlContent = "";
+    if (bankNameVal || bankAccountVal || bankOwnerVal) {
+        if (isTraditional) {
+            bankInfoHtmlContent = `
+                <div class="bank-info-box" style="font-size: 10px; margin-bottom: 2px; color: #000; text-align: left;">
+                    <strong>Info Pembayaran:</strong> ${bankNameVal} ${bankAccountVal} A/N ${bankOwnerVal}
+                </div>
+            `;
+        } else {
+            bankInfoHtmlContent = `
+                <div class="bank-info-box" style="font-size: 13px; margin-bottom: 15px; color: #000; text-align: left; margin-right: 15px;">
+                    <strong>Info Pembayaran :</strong><br>
+                    bank : ${bankNameVal} : ${bankAccountVal}<br>
+                    atas nama : ${bankOwnerVal}
+                </div>
+            `;
+        }
+    }
+
+    let receiverSig = currentInvoice.receiverSignatureUrl || "";
+    const receiverName = currentInvoice.receiverNameActual || (printSettings ? (printSettings.invoiceSignatureReceiverName || printSettings.invoice_signature_receiver_name || "") : "");
+
+    const senderSig = printSettings ? (printSettings.invoiceSignatureDrawnBase64 || printSettings.invoice_signature_drawn_base64 || "") : "";
+    const senderName = printSettings ? (printSettings.invoiceSignatureSenderName || printSettings.invoice_signature_sender_name || "Admin") : "Admin";
 
     const signatureHtml = `
-        <table class="signature-section">
+        <table class="signature-section" style="width: 100%; border-collapse: collapse; margin-top: ${isTraditional ? '15px' : '50px'}; page-break-inside: avoid; break-inside: avoid;">
             <tr>
-                <td class="signature-col" style="vertical-align: top;">
-                    Penerima,<br>
-                    ${receiverSig ? `<img src="${receiverSig}" style="height: 60px; width: auto; margin: 5px auto; display: block;" />` : `<div style="height: 60px;"></div>`}
+                <td class="signature-col" style="vertical-align: top; text-align: center; width: 50%; font-size: ${isTraditional ? 'inherit' : '13px'}; page-break-inside: avoid; break-inside: avoid;">
+                    Penerima,
+                    ${receiverSig ? `<img src="${receiverSig}" style="height: ${actualTtdHeight}px; width: auto; margin: ${actualTtdMargin} auto; display: block;" />` : `<div class="sig-placeholder" style="height: ${actualTtdHeight}px; border: 1px dashed #333; width: 150px; margin: 5px auto; background-color: #fafafa; border-radius: 4px;"></div>`}
                     ( <strong>${receiverName || " _____________________ "}</strong> )
                 </td>
-                <td class="signature-col" style="vertical-align: top;">
-                    Hormat Kami,<br>
-                    <div style="height: 60px;"></div>
+                <td class="signature-col" style="vertical-align: top; text-align: center; width: 50%; font-size: ${isTraditional ? 'inherit' : '13px'}; page-break-inside: avoid; break-inside: avoid;">
+                    Hormat Kami,
+                    ${senderSig ? `<img src="${senderSig}" style="height: ${actualTtdHeight}px; width: auto; margin: ${actualTtdMargin} auto; display: block;" />` : `<div class="sig-placeholder" style="height: ${actualTtdHeight}px; border: 1px dashed #333; width: 150px; margin: 5px auto; background-color: #fafafa; border-radius: 4px;"></div>`}
                     ( <strong>${senderName || " _____________________ "}</strong> )
                 </td>
             </tr>
         </table>
     `;
 
-    const paperSize = document.getElementById("select-paper-size").value;
     let sizeStyle = "";
     if (paperSize === "A4") {
         sizeStyle = `
@@ -1403,56 +1435,65 @@ function triggerInvoicePrint() {
             }
         `;
     } else {
+        const baseFontSize = (12 * scale).toFixed(1);
+        const paddingSize = Math.round(6 * scale);
+        const ttdHeight = actualTtdHeight;
         sizeStyle = `
             @page {
-                size: 240mm 93mm !important;
-                margin: 0.2cm 0.5cm 0.3cm 0.5cm !important;
+                size: 240mm 279mm !important;
+                margin: 0.5cm !important;
             }
             #print-area {
-                width: 160mm !important;
-                height: 85mm !important;
-                max-height: 85mm !important;
+                width: 215mm !important;
+                height: auto !important;
                 box-sizing: border-box !important;
-                overflow: hidden !important;
                 position: relative !important;
                 padding: 0 !important;
-                font-size: 7.5px !important;
-                line-height: 1.1 !important;
+                font-size: ${baseFontSize}px !important;
+                line-height: 1.3 !important;
             }
             #print-area .company-name, 
             #print-area .doc-title {
-                font-size: 11px !important;
+                font-size: 16px !important;
             }
             #print-area .header-table, 
             #print-area .info-table, 
             #print-area .details-table {
-                margin-bottom: 4px !important;
+                margin-bottom: 12px !important;
             }
             #print-area .details-table th, 
             #print-area .details-table td {
-                padding: 2px 4px !important;
-                font-size: 7.5px !important;
+                padding: ${paddingSize}px 6px !important;
+                font-size: ${baseFontSize}px !important;
             }
             #print-area .totals-table td {
-                padding: 1px 4px !important;
-                font-size: 7.5px !important;
+                padding: 4px 6px !important;
+                font-size: ${baseFontSize}px !important;
             }
             #print-area .signature-section {
-                margin-top: 4px !important;
+                margin-top: 15px !important;
             }
             #print-area .signature-col {
-                font-size: 7.5px !important;
+                font-size: ${baseFontSize}px !important;
             }
             #print-area .signature-col img {
-                height: 25px !important;
+                height: ${ttdHeight}px !important;
+            }
+            #print-area .sig-placeholder {
+                height: ${ttdHeight}px !important;
+            }
+            #print-area .bank-info-box {
+                font-size: ${baseFontSize}px !important;
+                margin-bottom: 8px !important;
+                margin-top: 8px !important;
             }
             #print-area hr {
-                margin-bottom: 4px !important;
+                margin-bottom: 12px !important;
             }
             #print-area .footer {
-                margin-top: 4px !important;
-                font-size: 7px !important;
-                padding-top: 2px !important;
+                margin-top: 15px !important;
+                font-size: 9px !important;
+                padding-top: 4px !important;
             }
         `;
     }
@@ -1460,6 +1501,26 @@ function triggerInvoicePrint() {
     const printHtml = `
         <style>
             ${sizeStyle}
+            @media print {
+                body > *:not(#print-area) {
+                    display: none !important;
+                }
+                html, body {
+                    height: auto !important;
+                    overflow: visible !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    background: white !important;
+                }
+                #print-area {
+                    display: block !important;
+                    position: relative !important;
+                    width: 215mm !important;
+                    height: auto !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }
+            }
             #print-area {
                 display: block !important;
                 font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -1573,8 +1634,12 @@ function triggerInvoicePrint() {
 
         ${signatureHtml}
 
+        <div style="text-align: center; margin-top: 10px; font-size: ${isTraditional ? '9px' : '11px'}; color: #000; font-weight: bold; width: 100%; page-break-inside: avoid; break-inside: avoid;">
+            Tanda tangan ini dicetak secara luring dan sah oleh POSBah.
+        </div>
+
         <div class="footer">
-            Terima kasih atas kerja sama Anda.<br>
+            Terima kasih atas kerja sama Anda.${isTraditional ? " " : "<br>"}
             Faktur ini dihasilkan secara luring oleh POSBah.
         </div>
     `;
@@ -1607,33 +1672,50 @@ function triggerSjPrint() {
         `;
     });
 
-    const receiverSig = currentInvoice.receiverSignatureUrl || "";
-    const receiverName = currentInvoice.receiverNameActual || (printSettings ? printSettings.invoiceSignatureReceiverName || "" : "");
-    const senderName = printSettings ? printSettings.invoiceSignatureSenderName || "Admin" : "Admin";
+    let receiverSig = currentInvoice.receiverSignatureUrl || "";
+    const receiverName = currentInvoice.receiverNameActual || (printSettings ? (printSettings.invoiceSignatureReceiverName || printSettings.invoice_signature_receiver_name || "") : "");
+
+    const senderSig = printSettings ? (printSettings.invoiceSignatureDrawnBase64 || printSettings.invoice_signature_drawn_base64 || "") : "";
+    const senderName = printSettings ? (printSettings.invoiceSignatureSenderName || printSettings.invoice_signature_sender_name || "Admin") : "Admin";
+
+    const paperSize = document.getElementById("select-paper-size").value;
+    const isTraditional = (paperSize !== "A4");
+    const rowCount = items.length;
+    let scale = 1.0;
+    if (isTraditional) {
+        if (rowCount > 10) {
+            scale = Math.max(0.7, 1 - (rowCount - 10) * 0.05);
+        }
+    } else {
+        if (rowCount > 3) {
+            scale = Math.max(0.65, 1 - (rowCount - 3) * 0.08);
+        }
+    }
+    const actualTtdHeight = isTraditional ? Math.round(50 * scale) : 60;
+    const actualTtdMargin = isTraditional ? "2px" : "5px";
 
     const signatureHtml = `
-        <table class="signature-section">
+        <table class="signature-section" style="width: 100%; border-collapse: collapse; margin-top: ${isTraditional ? '15px' : '50px'}; page-break-inside: avoid; break-inside: avoid;">
             <tr>
-                <td class="signature-col">
-                    Penerima,<br>
-                    ${receiverSig ? `<img src="${receiverSig}" style="height: 60px; width: auto; margin: 5px auto; display: block;" />` : `<div style="height: 60px;"></div>`}
+                <td class="signature-col" style="vertical-align: top; text-align: center; width: 33%; font-size: ${isTraditional ? 'inherit' : '13px'}; page-break-inside: avoid; break-inside: avoid;">
+                    Penerima,
+                    ${receiverSig ? `<img src="${receiverSig}" style="height: ${actualTtdHeight}px; width: auto; margin: ${actualTtdMargin} auto; display: block;" />` : `<div class="sig-placeholder" style="height: ${actualTtdHeight}px; border: 1px dashed #333; width: 130px; margin: 5px auto; background-color: #fafafa; border-radius: 4px;"></div>`}
                     ( <strong>${receiverName || " _____________________ "}</strong> )
                 </td>
-                <td class="signature-col">
-                    Pengirim / Sopir,<br><br>
-                    <div style="height: 60px;"></div>
+                <td class="signature-col" style="vertical-align: top; text-align: center; width: 33%; font-size: ${isTraditional ? 'inherit' : '13px'}; page-break-inside: avoid; break-inside: avoid;">
+                    Sopir / Kurir,
+                    <div class="sig-placeholder" style="height: ${actualTtdHeight}px; border: 1px dashed #333; width: 130px; margin: 5px auto; background-color: #fafafa; border-radius: 4px;"></div>
                     ( <strong> _____________________ </strong> )
                 </td>
-                <td class="signature-col" style="vertical-align: top;">
-                    Hormat Kami (Gudang),<br>
-                    <div style="height: 60px;"></div>
+                <td class="signature-col" style="vertical-align: top; text-align: center; width: 33%; font-size: ${isTraditional ? 'inherit' : '13px'}; page-break-inside: avoid; break-inside: avoid;">
+                    Hormat Kami (Gudang),
+                    ${senderSig ? `<img src="${senderSig}" style="height: ${actualTtdHeight}px; width: auto; margin: ${actualTtdMargin} auto; display: block;" />` : `<div class="sig-placeholder" style="height: ${actualTtdHeight}px; border: 1px dashed #333; width: 130px; margin: 5px auto; background-color: #fafafa; border-radius: 4px;"></div>`}
                     ( <strong>${senderName || " _____________________ "}</strong> )
                 </td>
             </tr>
         </table>
     `;
 
-    const paperSize = document.getElementById("select-paper-size").value;
     let sizeStyle = "";
     if (paperSize === "A4") {
         sizeStyle = `
@@ -1652,52 +1734,56 @@ function triggerSjPrint() {
             }
         `;
     } else {
+        const baseFontSize = (12 * scale).toFixed(1);
+        const paddingSize = Math.round(6 * scale);
+        const ttdHeight = actualTtdHeight;
         sizeStyle = `
             @page {
-                size: 240mm 93mm !important;
-                margin: 0.2cm 0.5cm 0.3cm 0.5cm !important;
+                size: 240mm 279mm !important;
+                margin: 0.5cm !important;
             }
             #print-area {
-                width: 160mm !important;
-                height: 85mm !important;
-                max-height: 85mm !important;
+                width: 215mm !important;
+                height: auto !important;
                 box-sizing: border-box !important;
-                overflow: hidden !important;
                 position: relative !important;
                 padding: 0 !important;
-                font-size: 7.5px !important;
-                line-height: 1.1 !important;
+                font-size: ${baseFontSize}px !important;
+                line-height: 1.3 !important;
             }
             #print-area .company-name, 
             #print-area .doc-title {
-                font-size: 11px !important;
+                font-size: 16px !important;
             }
             #print-area .header-table, 
             #print-area .info-table, 
             #print-area .details-table {
-                margin-bottom: 4px !important;
+                margin-bottom: 12px !important;
             }
             #print-area .details-table th, 
             #print-area .details-table td {
-                padding: 2px 4px !important;
-                font-size: 7.5px !important;
+                padding: ${paddingSize}px 6px !important;
+                font-size: ${baseFontSize}px !important;
             }
             #print-area .signature-section {
-                margin-top: 4px !important;
+                margin-top: 15px !important;
             }
             #print-area .signature-col {
-                font-size: 7.5px !important;
+                font-size: ${baseFontSize}px !important;
             }
             #print-area .signature-col img {
-                height: 25px !important;
+                height: ${ttdHeight}px !important;
+            }
+            #print-area .sig-placeholder {
+                height: ${ttdHeight}px !important;
             }
             #print-area hr {
-                margin-bottom: 4px !important;
+                margin-bottom: 12px !important;
             }
             #print-area .footer {
-                margin-top: 4px !important;
-                font-size: 7px !important;
-                padding-top: 2px !important;
+                margin-top: 15px !important;
+                font-size: 9px !important;
+                padding-top: 4px !important;
             }
         `;
     }
@@ -1705,6 +1791,26 @@ function triggerSjPrint() {
     const printHtml = `
         <style>
             ${sizeStyle}
+            @media print {
+                body > *:not(#print-area) {
+                    display: none !important;
+                }
+                html, body {
+                    height: auto !important;
+                    overflow: visible !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    background: white !important;
+                }
+                #print-area {
+                    display: block !important;
+                    position: relative !important;
+                    width: 215mm !important;
+                    height: auto !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                }
+            }
             #print-area {
                 display: block !important;
                 font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
@@ -1787,6 +1893,10 @@ function triggerSjPrint() {
         </table>
 
         ${signatureHtml}
+
+        <div style="text-align: center; margin-top: 10px; font-size: ${isTraditional ? '9px' : '11px'}; color: #000; font-weight: bold; width: 100%; page-break-inside: avoid; break-inside: avoid;">
+            Tanda tangan ini dicetak secara luring dan sah oleh POSBah.
+        </div>
 
         <div class="footer">
             Surat Jalan ini sah dan diterbitkan secara luring oleh POSBah.

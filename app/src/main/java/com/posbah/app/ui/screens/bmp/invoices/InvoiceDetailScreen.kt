@@ -712,14 +712,12 @@ private fun generateInvoiceHtml(
     val accentBg = if (isColor) "#EFF6FF" else "#ffffff"
 
     val isTraditional = printConfig.templateType == "TRADITIONAL"
-    val pageSizeCss = if (isTraditional) "size: 240mm 93mm; margin: 0.2cm 0.5cm 0.3cm 0.5cm;" else "size: 240mm 297mm; margin: 0.5cm;"
+    val pageSizeCss = if (isTraditional) "size: 240mm 279mm; margin: 0.5cm;" else "size: 240mm 297mm; margin: 0.5cm;"
     val printContainerCss = if (isTraditional) """
         .print-container {
-            width: 160mm;
-            height: 85mm;
-            max-height: 85mm;
+            width: 215mm;
+            height: auto;
             box-sizing: border-box;
-            overflow: hidden;
             position: relative;
         }
     """.trimIndent() else """
@@ -885,53 +883,61 @@ private fun generateInvoiceHtml(
                     letter-spacing: 1px;
                 }
                 
-                /* Overrides Khusus Traditional (Continuous 240x93mm) */
+                /* Overrides Khusus Traditional (Continuous 240x279mm) */
                 .print-container.traditional {
-                    font-size: 7.5px !important;
-                    line-height: 1.1 !important;
+                    font-size: 12px !important;
+                    line-height: 1.3 !important;
                 }
                 .print-container.traditional h1 {
-                    font-size: 11px !important;
+                    font-size: 16px !important;
                 }
                 .print-container.traditional .company-name, 
                 .print-container.traditional .nota-title h1 {
-                    font-size: 11px !important;
+                    font-size: 16px !important;
                 }
                 .print-container.traditional .client-info {
-                    font-size: 7.5px !important;
-                    margin-bottom: 2px !important;
-                    padding-bottom: 2px !important;
+                    font-size: 12px !important;
+                    margin-bottom: 12px !important;
+                    padding-bottom: 6px !important;
                 }
                 .print-container.traditional .client-info span {
-                    font-size: 7.5px !important;
+                    font-size: 12px !important;
                 }
                 .print-container.traditional .table-items {
-                    margin-bottom: 4px !important;
+                    margin-bottom: 12px !important;
                 }
                 .print-container.traditional .table-items th {
-                    font-size: 8px !important;
-                    padding: 2px 3px !important;
+                    font-size: 12px !important;
+                    padding: 6px 8px !important;
                 }
                 .print-container.traditional .table-items td {
-                    font-size: 7.5px !important;
-                    padding: 2px 3px !important;
+                    font-size: 12px !important;
+                    padding: 6px 8px !important;
                 }
                 .print-container.traditional .totals-table td {
-                    font-size: 7.5px !important;
-                    padding: 1px 3px !important;
+                    font-size: 12px !important;
+                    padding: 4px 6px !important;
                 }
                 .print-container.traditional .signature-section {
-                    margin-top: 4px !important;
+                    margin-top: 15px !important;
                 }
                 .print-container.traditional .signature-section td {
-                    font-size: 7.5px !important;
+                    font-size: 12px !important;
                 }
                 .print-container.traditional .signature-section img {
-                    height: 25px !important;
+                    height: 50px !important;
+                }
+                .print-container.traditional .sig-placeholder {
+                    height: 50px !important;
+                }
+                .print-container.traditional .bank-info-box {
+                    font-size: 12px !important;
+                    margin-bottom: 8px !important;
+                    padding-top: 4px !important;
                 }
                 .print-container.traditional .stempel-lunas {
-                    font-size: 9px !important;
-                    padding: 1px 3px !important;
+                    font-size: 12px !important;
+                    padding: 2px 4px !important;
                 }
             </style>
         </head>
@@ -1025,47 +1031,38 @@ private fun generateInvoiceHtml(
                 var tableHeaders = document.querySelectorAll('.table-items th');
 
                 var isTrad = document.querySelector('.print-container').classList.contains('traditional');
-                var baseFontSize = isTrad ? 7.5 : 10;
-                var paddingSize = isTrad ? 2 : 3;
-                var logoHeight = isTrad ? 25 : 35;
-                var ttdHeight = isTrad ? 25 : 40;
+                var baseFontSize = isTrad ? 12 : 10;
+                var paddingSize = isTrad ? 6 : 3;
+                var logoHeight = isTrad ? 45 : 35;
+                var ttdHeight = isTrad ? 50 : 40;
 
-                if (rowCount > 3) {
-                    var scale = Math.max(0.65, 1 - (rowCount - 3) * 0.08);
-                    
-                    body.style.fontSize = (baseFontSize * scale) + 'px';
-                    if (logoImg) {
-                        logoImg.style.maxHeight = Math.round(logoHeight * scale) + 'px';
+                var scale = 1.0;
+                if (isTrad) {
+                    if (rowCount > 8) {
+                        scale = Math.max(0.7, 1 - (rowCount - 8) * 0.05);
                     }
-                    if (ttdContainer) {
-                        ttdContainer.style.height = Math.round(ttdHeight * scale) + 'px';
-                    }
-                    
-                    tableHeaders.forEach(function(th) {
-                        th.style.fontSize = (11 * (isTrad ? 0.8 : 1) * scale) + 'px';
-                        th.style.padding = (paddingSize * scale) + 'px 4px';
-                    });
-                    tableCells.forEach(function(td) {
-                        td.style.fontSize = (10 * (isTrad ? 0.85 : 1) * scale) + 'px';
-                        td.style.padding = (paddingSize * scale) + 'px 4px';
-                    });
                 } else {
-                    body.style.fontSize = baseFontSize + 'px';
-                    if (logoImg) {
-                        logoImg.style.maxHeight = logoHeight + 'px';
+                    if (rowCount > 3) {
+                        scale = Math.max(0.65, 1 - (rowCount - 3) * 0.08);
                     }
-                    if (ttdContainer) {
-                        ttdContainer.style.height = ttdHeight + 'px';
-                    }
-                    tableHeaders.forEach(function(th) {
-                        th.style.fontSize = isTrad ? '8px' : '11px';
-                        th.style.padding = isTrad ? '2px 3px' : '4px 5px';
-                    });
-                    tableCells.forEach(function(td) {
-                        td.style.fontSize = isTrad ? '7.5px' : '10px';
-                        td.style.padding = isTrad ? '2px 3px' : '3px 5px';
-                    });
                 }
+                
+                body.style.fontSize = (baseFontSize * scale) + 'px';
+                if (logoImg) {
+                    logoImg.style.maxHeight = Math.round(logoHeight * scale) + 'px';
+                }
+                if (ttdContainer) {
+                    ttdContainer.style.height = Math.round(ttdHeight * scale) + 'px';
+                }
+                
+                tableHeaders.forEach(function(th) {
+                    th.style.fontSize = ((isTrad ? 12 : 11) * scale) + 'px';
+                    th.style.padding = (paddingSize * scale) + 'px 4px';
+                });
+                tableCells.forEach(function(td) {
+                    td.style.fontSize = ((isTrad ? 11 : 10) * scale) + 'px';
+                    td.style.padding = (paddingSize * scale) + 'px 4px';
+                });
             };
 
             function handleTtdError(img) {
@@ -1129,14 +1126,12 @@ private fun generateSuratJalanHtml(
     val isColor = printConfig.isColor
 
     val isTraditional = printConfig.templateType == "TRADITIONAL"
-    val pageSizeCss = if (isTraditional) "size: 240mm 93mm; margin: 0.2cm 0.5cm 0.3cm 0.5cm;" else "size: 240mm 297mm; margin: 0.5cm;"
+    val pageSizeCss = if (isTraditional) "size: 240mm 279mm; margin: 0.5cm;" else "size: 240mm 297mm; margin: 0.5cm;"
     val printContainerCss = if (isTraditional) """
         .print-container {
-            width: 160mm;
-            height: 85mm;
-            max-height: 85mm;
+            width: 215mm;
+            height: auto;
             box-sizing: border-box;
-            overflow: hidden;
             position: relative;
         }
     """.trimIndent() else """
@@ -1343,45 +1338,45 @@ private fun generateSuratJalanHtml(
                     color: #000000;
                 }
                 
-                /* Overrides Khusus Traditional (Continuous 240x93mm) */
+                /* Overrides Khusus Traditional (Continuous 240x279mm) */
                 .print-container.traditional {
-                    font-size: 7.5px !important;
-                    line-height: 1.1 !important;
+                    font-size: 12px !important;
+                    line-height: 1.3 !important;
                 }
                 .print-container.traditional h1 {
-                    font-size: 11px !important;
+                    font-size: 16px !important;
                 }
                 .print-container.traditional .company-name, 
                 .print-container.traditional .nota-title h1 {
-                    font-size: 11px !important;
+                    font-size: 16px !important;
                 }
                 .print-container.traditional .client-info {
-                    font-size: 7.5px !important;
-                    margin-bottom: 2px !important;
-                    padding-bottom: 2px !important;
+                    font-size: 12px !important;
+                    margin-bottom: 12px !important;
+                    padding-bottom: 6px !important;
                 }
                 .print-container.traditional .client-info span {
-                    font-size: 7.5px !important;
+                    font-size: 12px !important;
                 }
                 .print-container.traditional .table-items {
-                    margin-bottom: 4px !important;
+                    margin-bottom: 12px !important;
                 }
                 .print-container.traditional .table-items th {
-                    font-size: 8px !important;
-                    padding: 2px 3px !important;
+                    font-size: 12px !important;
+                    padding: 6px 8px !important;
                 }
                 .print-container.traditional .table-items td {
-                    font-size: 7.5px !important;
-                    padding: 2px 3px !important;
+                    font-size: 12px !important;
+                    padding: 6px 8px !important;
                 }
                 .print-container.traditional .signature-section {
-                    margin-top: 4px !important;
+                    margin-top: 15px !important;
                 }
                 .print-container.traditional .signature-section td {
-                    font-size: 7.5px !important;
+                    font-size: 12px !important;
                 }
                 .print-container.traditional .signature-section img {
-                    height: 25px !important;
+                    height: 50px !important;
                 }
             </style>
         </head>
@@ -1446,9 +1441,9 @@ private fun printHtml(context: Context, html: String, jobName: String, isColor: 
             
             // Gunakan batas ukuran kustom berdasarkan tipe kertas
             val mediaSizeWidth = 9449 // 240mm dalam mils
-            val mediaSizeHeight = if (isTraditional) 3661 else 11693 // 93mm vs 297mm dalam mils
+            val mediaSizeHeight = if (isTraditional) 11000 else 11693 // 279mm (11 inch) vs 297mm (A4) dalam mils
             val mediaSizeId = if (isTraditional) "continuous_9_5_11" else "a4_custom"
-            val mediaSizeLabel = if (isTraditional) "Continuous 9.5x11 (240x93 mm)" else "A4 Custom (240x297 mm)"
+            val mediaSizeLabel = if (isTraditional) "Continuous 9.5x11 (240x279 mm)" else "A4 Custom (240x297 mm)"
             
             val customMediaSize = PrintAttributes.MediaSize(
                 mediaSizeId,
