@@ -101,7 +101,7 @@ app/src/main/assets/capacitor.plugins.json
 app/src/main/res/xml/config.xml
 
 # Backend compiled binaries and temporary test files
-# backend/posbah-backend*
+backend/posbah-backend*
 backend/*.exe
 backend/test_bin*
 query.sql
