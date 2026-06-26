@@ -1389,27 +1389,33 @@ function triggerInvoicePrint() {
     if (paperSize === "A4") {
         sizeStyle = `
             @page {
-                size: A4 portrait !important;
-                margin: 20mm 15mm 20mm 15mm !important;
+                size: 240mm 297mm !important;
+                margin: 0.5cm !important;
             }
             #print-area {
                 width: 100% !important;
-                height: auto !important;
-                padding: 0 !important;
+                height: 138mm !important;
+                max-height: 138mm !important;
                 box-sizing: border-box !important;
+                overflow: hidden !important;
+                position: relative !important;
+                padding: 0 !important;
             }
         `;
     } else {
         sizeStyle = `
             @page {
-                size: landscape !important;
-                margin: 0 !important;
+                size: 240mm 93mm !important;
+                margin: 0.2cm 0.5cm 0.3cm 0.5cm !important;
             }
             #print-area {
-                width: 100% !important;
-                height: auto !important;
-                padding: 0.1in 0.3in 0.3in 0.3in !important;
+                width: 180mm !important;
+                height: 85mm !important;
+                max-height: 85mm !important;
                 box-sizing: border-box !important;
+                overflow: hidden !important;
+                position: relative !important;
+                padding: 0 !important;
             }
         `;
     }
@@ -1595,27 +1601,33 @@ function triggerSjPrint() {
     if (paperSize === "A4") {
         sizeStyle = `
             @page {
-                size: A4 portrait !important;
-                margin: 20mm 15mm 20mm 15mm !important;
+                size: 240mm 297mm !important;
+                margin: 0.5cm !important;
             }
             #print-area {
                 width: 100% !important;
-                height: auto !important;
-                padding: 0 !important;
+                height: 138mm !important;
+                max-height: 138mm !important;
                 box-sizing: border-box !important;
+                overflow: hidden !important;
+                position: relative !important;
+                padding: 0 !important;
             }
         `;
     } else {
         sizeStyle = `
             @page {
-                size: landscape !important;
-                margin: 0 !important;
+                size: 240mm 93mm !important;
+                margin: 0.2cm 0.5cm 0.3cm 0.5cm !important;
             }
             #print-area {
-                width: 100% !important;
-                height: auto !important;
-                padding: 0.1in 0.3in 0.3in 0.3in !important;
+                width: 180mm !important;
+                height: 85mm !important;
+                max-height: 85mm !important;
                 box-sizing: border-box !important;
+                overflow: hidden !important;
+                position: relative !important;
+                padding: 0 !important;
             }
         `;
     }
