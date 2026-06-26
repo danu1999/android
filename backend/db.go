@@ -770,6 +770,16 @@ func initSchema() error {
 		VALUES ('syerlirahma7@gmail.com', 'ACTIVE', $1)
 		ON CONFLICT ("email") DO UPDATE SET "status" = 'ACTIVE', "updatedAt" = EXCLUDED."updatedAt";`,
 		time.Now().UnixNano()/int64(time.Millisecond))
+
+	// Protect bahteramulyap@gmail.com: mark as ACTIVE in deleted_users so she is never blocked or purged
+	_, _ = db.Exec(`INSERT INTO "deleted_users" ("email", "status", "updatedAt")
+		VALUES ('bahteramulyap@gmail.com', 'ACTIVE', $1)
+		ON CONFLICT ("email") DO UPDATE SET "status" = 'ACTIVE', "updatedAt" = EXCLUDED."updatedAt";`,
+		time.Now().UnixNano()/int64(time.Millisecond))
+
+	// Ensure bahteramulyap@gmail.com is active in local_users
+	_, _ = db.Exec(`UPDATE "local_users" SET "isActive" = TRUE, "updatedAt" = $1 WHERE TRIM(LOWER("email")) = 'bahteramulyap@gmail.com'`,
+		time.Now().UnixNano()/int64(time.Millisecond))
 	// Migration: tambah outletId ke tabel BMP & activity_logs untuk isolasi per-outlet
 	outletIdMigrations := []string{
 		`ALTER TABLE "bmp_cashflow"      ADD COLUMN IF NOT EXISTS "outletId" BIGINT;`,
