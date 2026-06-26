@@ -7348,13 +7348,13 @@ func handleAdminDiagnose(w http.ResponseWriter, r *http.Request) {
 		},
 		"files_check": func() []string {
 			var filesInfo []string
-			homeDirFiles, _ := filepath.Glob("/home/muizz9900/posbah-v*")
+			homeDirFiles, _ := filepath.Glob("/home/muizz9900/*")
 			for _, f := range homeDirFiles {
 				if fi, errSt := os.Stat(f); errSt == nil {
 					filesInfo = append(filesInfo, fmt.Sprintf("/home/muizz9900/%s (%d bytes, mode %v)", filepath.Base(f), fi.Size(), fi.Mode()))
 				}
 			}
-			currentDirFiles, _ := filepath.Glob("./posbah-v*")
+			currentDirFiles, _ := filepath.Glob("./*")
 			for _, f := range currentDirFiles {
 				if fi, errSt := os.Stat(f); errSt == nil {
 					filesInfo = append(filesInfo, fmt.Sprintf("./%s (%d bytes, mode %v)", filepath.Base(f), fi.Size(), fi.Mode()))
