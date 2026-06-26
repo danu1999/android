@@ -738,6 +738,9 @@ func runAutoDeploy() {
 		return
 	}
 
+	// Permanent fix: clean up stale binary in repository folder to ensure it doesn't skip compile next time
+	_ = os.Remove(backendDir + "/posbah-backend")
+
 	// 2. Go build (or use pre-compiled binary if present)
 	usePrecompiled := false
 	srcBin := backendDir + "/posbah-backend"
