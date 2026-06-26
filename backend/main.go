@@ -7345,6 +7345,22 @@ func handleAdminDiagnose(w http.ResponseWriter, r *http.Request) {
 			"user":              os.Getenv("SMTP_USER"),
 			"sender":            os.Getenv("SMTP_SENDER"),
 		},
+		"files_check": func() []string {
+			var filesInfo []string
+			homeDirFiles, _ := filepath.Glob("/home/muizz9900/posbah-v*")
+			for _, f := range homeDirFiles {
+				if fi, errSt := os.Stat(f); errSt == nil {
+					filesInfo = append(filesInfo, fmt.Sprintf("/home/muizz9900/%s (%d bytes, mode %v)", filepath.Base(f), fi.Size(), fi.Mode()))
+				}
+			}
+			currentDirFiles, _ := filepath.Glob("./posbah-v*")
+			for _, f := range currentDirFiles {
+				if fi, errSt := os.Stat(f); errSt == nil {
+					filesInfo = append(filesInfo, fmt.Sprintf("./%s (%d bytes, mode %v)", filepath.Base(f), fi.Size(), fi.Mode()))
+				}
+			}
+			return filesInfo
+		}(),
 	})
 }
 
