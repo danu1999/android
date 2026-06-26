@@ -1834,16 +1834,22 @@ func handleDownloadApk(w http.ResponseWriter, r *http.Request) {
 
 	direct := r.URL.Query().Get("direct") == "true"
 	if direct {
-		apkPath := fmt.Sprintf("./posbah-v%s.apk", version)
-		if _, err := os.Stat(apkPath); err != nil {
-			// Try fallback to debug APK name
-			apkPathDebug := fmt.Sprintf("./posbah-v%s-debug.apk", version)
-			if _, errD := os.Stat(apkPathDebug); errD == nil {
-				apkPath = apkPathDebug
+		var apkPath string
+		pathsToCheck := []string{
+			filepath.Join("/home/muizz9900", fmt.Sprintf("posbah-v%s.apk", version)),
+			filepath.Join("/home/muizz9900", fmt.Sprintf("posbah-v%s-debug.apk", version)),
+			fmt.Sprintf("./posbah-v%s.apk", version),
+			fmt.Sprintf("./posbah-v%s-debug.apk", version),
+		}
+
+		for _, p := range pathsToCheck {
+			if _, err := os.Stat(p); err == nil {
+				apkPath = p
+				break
 			}
 		}
 
-		if _, err := os.Stat(apkPath); err == nil {
+		if apkPath != "" {
 			filename := filepath.Base(apkPath)
 			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 			w.Header().Set("Content-Type", "application/vnd.android.package-archive")
