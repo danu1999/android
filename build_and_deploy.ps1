@@ -200,7 +200,11 @@ if (-not $SkipGitPush) {
     Push-Location $ProjectRoot
     try {
         git add -A
-        $hasChanges = (git status --porcelain).Trim()
+        $statusOut = git status --porcelain
+        $hasChanges = ""
+        if ($statusOut) {
+            $hasChanges = ($statusOut -join "`n").Trim()
+        }
         if ($hasChanges) {
             $commitMsg = "release: v$versionName (versionCode $versionCode)"
             git commit -m $commitMsg
