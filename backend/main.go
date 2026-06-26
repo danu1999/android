@@ -872,6 +872,7 @@ func compareApkVersions(a, b string) int {
 	extractVer := func(name string) []int {
 		name = strings.TrimPrefix(name, "posbah-v")
 		name = strings.TrimSuffix(name, ".apk")
+		name = strings.Split(name, "-")[0]
 		parts := strings.Split(name, ".")
 		nums := make([]int, len(parts))
 		for i, p := range parts {
