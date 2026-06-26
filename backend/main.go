@@ -88,6 +88,7 @@ func main() {
 	http.HandleFunc("/api/admin/toggle-block", handleAdminToggleBlock)
 	http.HandleFunc("/api/admin/confirm-payment", handleAdminConfirmPayment)
 	http.HandleFunc("/api/admin/apk-config", handleAdminApkConfig)
+	http.HandleFunc("/api/admin/upload-apk", handleAdminUploadApk)
 	http.HandleFunc("/api/admin/diagnose", handleAdminDiagnose)
 	http.HandleFunc("/status", handleStatus)
 	http.HandleFunc("/api/admin/deploy", handleAdminDeploy)
@@ -6685,6 +6686,70 @@ func handleAdminConfirmPayment(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success":  true,
 		"password": passwordGenerated,
+	})
+}
+
+func handleAdminUploadApk(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if !isAdminAuthenticated(r) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Max 100 MB for APK
+	if err := r.ParseMultipartForm(100 << 20); err != nil {
+		http.Error(w, "Gagal parse form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "File tidak ditemukan dalam form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	filename := filepath.Base(header.Filename)
+	if !strings.HasPrefix(filename, "posbah-v") || !strings.HasSuffix(filename, ".apk") {
+		http.Error(w, "Nama file harus berformat posbah-v*.apk", http.StatusBadRequest)
+		return
+	}
+
+	// Save destination
+	destPath := filepath.Join("/home/muizz9900", filename)
+	// fallback if dir doesn't exist
+	if _, err := os.Stat("/home/muizz9900"); err != nil {
+		destPath = filepath.Join("./", filename)
+	}
+
+	out, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		http.Error(w, "Gagal membuat file tujuan: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, file)
+	if err != nil {
+		http.Error(w, "Gagal menyalin file: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "APK berhasil diupload ke " + destPath,
 	})
 }
 

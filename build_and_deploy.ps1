@@ -223,6 +223,7 @@ if (-not $SkipGitPush) {
 # ============================================================
 # STEP 4: UPLOAD APK KE VPS VIA SCP
 # ============================================================
+$scpFailed = $false
 if (-not $SkipApkUpload) {
     Write-Step "Upload APK ke VPS via SCP"
 
@@ -231,14 +232,15 @@ if (-not $SkipApkUpload) {
     if (-not $scpExe) {
         Write-Fail "scp tidak ditemukan. Install OpenSSH atau gunakan PuTTY/WinSCP."
         Write-Info "Upload manual: scp `"$apkLocalPath`" ${VpsHost}:${VpsApkDir}/${apkFileName}"
+        $scpFailed = $true
     } else {
         $scpArgs = @("-i", $VpsPemKey, "-o", "StrictHostKeyChecking=no")
         $vpsTarget = "${VpsHost}:${VpsApkDir}/${apkFileName}"
         Write-Info "Upload: $apkLocalPath -> $vpsTarget"
         scp @scpArgs "$apkLocalPath" $vpsTarget
         if ($LASTEXITCODE -ne 0) {
-            Write-Fail "SCP upload gagal. Coba upload manual:"
-            Write-Info "  scp `"$apkLocalPath`" $vpsTarget"
+            Write-Fail "SCP upload gagal. Akan dicoba fallback via HTTP API di Step 5."
+            $scpFailed = $true
         } else {
             Write-OK "APK berhasil diupload ke VPS"
         }
@@ -268,12 +270,29 @@ if (-not $SkipDeploy) {
             -Body (@{ email = $AdminEmail; password = $AdminPassword } | ConvertTo-Json) `
             -ContentType "application/json" `
             -SessionVariable "sess"
-
         if (-not $loginResp.success) {
             Write-Fail "Login gagal: $($loginResp.message)"
             Write-Info "Deploy manual via: $AdminUrl/admin"
         } else {
             Write-OK "Login berhasil"
+
+            # Fallback upload via HTTP API jika SCP gagal
+            if ($scpFailed -and -not $SkipApkUpload) {
+                Write-Step "Upload APK ke VPS via HTTP API fallback"
+                Write-Info "Mengunggah: $apkLocalPath ke $AdminUrl/api/admin/upload-apk"
+                try {
+                    $headersArg = "Authorization: Bearer $($loginResp.token)"
+                    $fileArg = "file=@$apkLocalPath"
+                    & curl.exe -X POST -H $headersArg -F $fileArg "$AdminUrl/api/admin/upload-apk"
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-OK "APK berhasil diupload via HTTP API fallback!"
+                    } else {
+                        Write-Fail "Upload APK via HTTP API fallback gagal dengan exit code $LASTEXITCODE"
+                    }
+                } catch {
+                    Write-Fail "Upload APK via HTTP API fallback error: $_"
+                }
+            }
 
             # Trigger deploy
             Write-Info "Mengirim perintah deploy..."
