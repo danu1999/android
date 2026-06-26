@@ -282,9 +282,9 @@ if (-not $SkipDeploy) {
                 Write-Info "Membaca dan memotong APK: $apkLocalPath"
                 try {
                     $fileBytes = [System.IO.File]::ReadAllBytes($apkLocalPath)
-                    $chunkSize = 4 * 1024 * 1024 # 4MB
+                    $chunkSize = 900 * 1024 # 900KB (below Nginx 1MB client_max_body_size limit)
                     $totalChunks = [Math]::Ceiling($fileBytes.Length / $chunkSize)
-                    Write-Info "Total ukuran: $($fileBytes.Length) bytes, dipecah menjadi $totalChunks chunk (@4MB)"
+                    Write-Info "Total ukuran: $($fileBytes.Length) bytes, dipecah menjadi $totalChunks chunk (@900KB)"
                     
                     $uploadUrl = "$AdminUrl/api/admin/upload-apk-chunk"
                     $headersArg = "Authorization: Bearer $($loginResp.token)"
