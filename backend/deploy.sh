@@ -67,6 +67,8 @@ cp "$SCRIPT_DIR/app.js"      /home/muizz9900/web/app.js    2>/dev/null || true
 cp "$SCRIPT_DIR/style.css"   /home/muizz9900/web/style.css 2>/dev/null || true
 cp "$SCRIPT_DIR/privacy.html" /home/muizz9900/web/privacy.html 2>/dev/null || true
 cp "$SCRIPT_DIR/terms.html"   /home/muizz9900/web/terms.html 2>/dev/null || true
+cp "$SCRIPT_DIR/invoice-pdf.html" /home/muizz9900/invoice-pdf.html 2>/dev/null || true
+cp "$SCRIPT_DIR/surat-jalan-pdf.html" /home/muizz9900/surat-jalan-pdf.html 2>/dev/null || true
 
 log "Menyalin APK dan release notes..."
 cp "$SCRIPT_DIR"/posbah-v*.apk /home/muizz9900/ 2>/dev/null || true
