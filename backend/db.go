@@ -760,9 +760,9 @@ func initSchema() error {
 		ON CONFLICT ("email") DO UPDATE SET "passwordHash" = EXCLUDED."passwordHash";`, defaultAdminHash, time.Now().UnixNano()/int64(time.Millisecond))
 
 
-	// Seed default apk_config — v2.17.55
+	// Seed default apk_config — v2.17.56
 	_, _ = db.Exec(`INSERT INTO "apk_config" ("id", "version", "description", "downloadUrl", "updatedAt")
-		VALUES (1, '2.17.55', 'Pembaruan Ukuran Cetak Nota Traditional & Perbaikan Info Rekening: 1. Penyesuaian ukuran kertas traditional/continuous form menjadi 9.5" x 11" (240mm x 279mm) dengan tata letak otomatis dan proporsional. 2. Memunculkan kolom tanda tangan fisik bergaris putus-putus jika dicetak kosong secara luring, lengkap dengan kalimat sertifikasi keabsahan cetak luring oleh POSBah. 3. Pemuatan tanda tangan penerima secara offline pada HP menggunakan penyimpanan lokal, dan secara online via VPS pada website agar sinkron.', '/api/download-apk', $1)
+		VALUES (1, '2.17.56', 'Pembaruan Keamanan & Validasi Versi Aplikasi: 1. Validasi Versi Global: Peningkatan validasi x-client-version secara terpusat pada seluruh API endpoint VPS POSBah (POS, Invoice, & Manufaktur) untuk mencegah penggunaan aplikasi versi lama. 2. Penanganan Error yang Lebih Baik: Menolak otentikasi login pada aplikasi versi lama secara aman dengan menyajikan instruksi pembaruan langsung.', '/api/download-apk', $1)
 		ON CONFLICT ("id") DO UPDATE SET "version" = EXCLUDED."version", "description" = EXCLUDED."description", "updatedAt" = EXCLUDED."updatedAt";`, time.Now().UnixNano()/int64(time.Millisecond))
 	
 	// Protect syerlirahma7@gmail.com: mark as ACTIVE in deleted_users so she is never purged again

@@ -128,6 +128,7 @@ class MainActivity : FragmentActivity() {
                                             val url = java.net.URL("https://www.zedmz.cloud/api/sync/employees?email=eq.${java.net.URLEncoder.encode(activeEmail.lowercase().trim(), "UTF-8")}&tenantId=eq.$tenantId")
                                             val conn = url.openConnection() as java.net.HttpURLConnection
                                             conn.requestMethod = "GET"
+                                            conn.setRequestProperty("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
                                             conn.connectTimeout = 5000
                                             conn.readTimeout = 5000
                                             if (conn.responseCode in 200..299) {

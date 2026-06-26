@@ -37,6 +37,7 @@ object NetworkModule {
             val request = chain.request().newBuilder()
                 .addHeader("Authorization", "Bearer $token")
                 .addHeader("Content-Type", "application/json")
+                .addHeader("x-client-version", com.posbah.app.BuildConfig.VERSION_NAME)
                 .build()
             chain.proceed(request)
         }

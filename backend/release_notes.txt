@@ -1,11 +1,9 @@
-POSBah v2.17.55 - Pembaruan Ukuran Cetak Nota Traditional & Perbaikan Info Rekening
+POSBah v2.17.56 - Pembaruan Keamanan & Validasi Versi Aplikasi
 
-Halo Kak! POSBah v2.17.55 hadir dengan pembaruan cetak nota tradisional dan peningkatan kestabilan data:
-1. Pembaruan Ukuran Cetak Tradisional (Continuous Form): Ukuran cetak Invoice dan Surat Jalan untuk kertas traditional / continuous form kini telah disesuaikan menjadi 9.5" x 11" (240mm x 279mm). Tata letak, logo, nama toko, serta tanda tangan penerima/pengirim kini diatur otomatis agar tampil lebih rapi, proporsional, dan tidak saling menumpuk.
-2. Perbaikan Info Rekening & Kolom Tanda Tangan: Mengatasi kendala data Info Pembayaran (rekening bank) dan memunculkan kotak kolom tanda tangan putus-putus untuk tanda tangan fisik jika dicetak kosong secara luring dari website, lengkap dengan kalimat sertifikasi keabsahan cetak luring oleh POSBah.
-3. Kestabilan Cetak Offline & Sinkronisasi Tanda Tangan: Mengoptimalkan pemuatan tanda tangan penerima di aplikasi HP agar tetap muncul secara offline/luring menggunakan penyimpanan lokal HP. Sedangkan untuk cetak melalui website/browser, tanda tangan akan selalu dimuat langsung secara online dari server VPS utama agar data tanda tangan pelanggan yang tersimpan terpusat selalu sinkron.
+Halo Kak! POSBah v2.17.56 hadir dengan peningkatan keamanan dan validasi versi aplikasi:
+1. Validasi Versi Global: Peningkatan validasi x-client-version secara terpusat pada seluruh API endpoint VPS POSBah (POS, Invoice, & Manufaktur) untuk mencegah penggunaan aplikasi versi lama yang rentan terhadap kendala kegagalan sinkronisasi data transaksi.
+2. Penanganan Error yang Lebih Baik: Apabila Anda menggunakan aplikasi versi lama, sistem akan menolak otentikasi login secara aman dan menampilkan notifikasi instruksi pembaruan secara langsung untuk mengunduh versi terbaru.
 
 Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
 
 ---
-

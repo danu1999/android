@@ -92,40 +92,61 @@ class AuthRepository @Inject constructor(
         object Locked : LoginOutcome()
     }
 
+    class VersionOutdatedException(message: String) : Exception(message)
+
     // ── Helper: HTTP GET ──────────────────────────────────────────────────────
 
     private fun httpGet(url: String): Pair<Int, String?> {
         var conn: HttpURLConnection? = null
-        return try {
+        var isOutdated = false
+        val result = try {
             conn = URL(url).openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
             conn.setRequestProperty("x-client-version", BuildConfig.VERSION_NAME)
             conn.connectTimeout = CONNECT_TIMEOUT
             conn.readTimeout = READ_TIMEOUT
             val code = conn.responseCode
+            if (code == 426) {
+                isOutdated = true
+            }
             val body = if (code in 200..299) conn.inputStream.bufferedReader().use { it.readText() }
                        else conn.errorStream?.bufferedReader()?.use { it.readText() }
             Pair(code, body)
         } catch (e: Exception) { Pair(-1, null) }
         finally { conn?.disconnect() }
+
+        if (isOutdated) {
+            throw VersionOutdatedException("Pembaruan aplikasi wajib dilakukan. Silakan unduh versi terbaru untuk melanjutkan.")
+        }
+        return result
     }
 
     private fun httpPost(url: String, bearerToken: String? = null): Pair<Int, String?> {
         var conn: HttpURLConnection? = null
-        return try {
+        var isOutdated = false
+        val result = try {
             conn = URL(url).openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.connectTimeout = CONNECT_TIMEOUT
             conn.readTimeout = READ_TIMEOUT
+            conn.setRequestProperty("x-client-version", BuildConfig.VERSION_NAME)
             if (bearerToken != null) {
                 conn.setRequestProperty("Authorization", "Bearer $bearerToken")
             }
             val code = conn.responseCode
+            if (code == 426) {
+                isOutdated = true
+            }
             val body = if (code in 200..299) conn.inputStream.bufferedReader().use { it.readText() }
                        else conn.errorStream?.bufferedReader()?.use { it.readText() }
             Pair(code, body)
         } catch (e: Exception) { Pair(-1, null) }
         finally { conn?.disconnect() }
+
+        if (isOutdated) {
+            throw VersionOutdatedException("Pembaruan aplikasi wajib dilakukan. Silakan unduh versi terbaru untuk melanjutkan.")
+        }
+        return result
     }
 
     // ── Fetch user profile from VPS (new local_users endpoint) ───────────────
@@ -186,90 +207,97 @@ class AuthRepository @Inject constructor(
         val name = identity.displayName ?: cleanEmail.substringBefore("@")
         val sub = identity.sub
 
-        // Check if deleted/blocked
-        val (checkCode, checkBody) = httpGet("$BASE_URL/api/auth/check-deleted?email=${URLEncoder.encode(cleanEmail, "UTF-8")}")
-        if (checkCode in 200..299 && !checkBody.isNullOrBlank()) {
-            val checkObj = JSONObject(checkBody)
-            if (checkObj.optBoolean("deleted", false)) {
-                if (checkObj.optString("status") == "REJOINED") {
-                    securePrefs.wipe()
-                    httpPost("$BASE_URL/api/auth/complete-rejoin?email=${URLEncoder.encode(cleanEmail, "UTF-8")}")
-                } else {
-                    return@withContext LoginOutcome.Error("Gagal login karena database tidak ada. Silakan hubungi admin.", cleanEmail)
+        try {
+            // Check if deleted/blocked
+            val (checkCode, checkBody) = httpGet("$BASE_URL/api/auth/check-deleted?email=${URLEncoder.encode(cleanEmail, "UTF-8")}")
+            if (checkCode in 200..299 && !checkBody.isNullOrBlank()) {
+                val checkObj = JSONObject(checkBody)
+                if (checkObj.optBoolean("deleted", false)) {
+                    if (checkObj.optString("status") == "REJOINED") {
+                        securePrefs.wipe()
+                        httpPost("$BASE_URL/api/auth/complete-rejoin?email=${URLEncoder.encode(cleanEmail, "UTF-8")}")
+                    } else {
+                        return@withContext LoginOutcome.Error("Gagal login karena database tidak ada. Silakan hubungi admin.", cleanEmail)
+                    }
                 }
             }
-        }
 
-        val isPremiumUser = cleanEmail in premiumEmailSet
+            val isPremiumUser = cleanEmail in premiumEmailSet
 
-        // Fetch user from VPS
-        val vpsUser = fetchUserFromVps(cleanEmail)
-        val isPremiumFromServer = vpsUser?.optBoolean("isPremium", false) ?: false
-        val isActiveFromServer = vpsUser?.optBoolean("isActive", true) ?: true
-        val tenantIdFromServer = vpsUser?.optString("tenantId")?.takeIf { it.isNotBlank() }
+            // Fetch user from VPS
+            val vpsUser = fetchUserFromVps(cleanEmail)
+            val isPremiumFromServer = vpsUser?.optBoolean("isPremium", false) ?: false
+            val isActiveFromServer = vpsUser?.optBoolean("isActive", true) ?: true
+            val tenantIdFromServer = vpsUser?.optString("tenantId")?.takeIf { it.isNotBlank() }
 
-        if (!isActiveFromServer) {
-            return@withContext LoginOutcome.Error("Akun Anda diblokir secara permanen. Hubungi muhammadmuizz8@gmail.com.")
-        }
+            if (!isActiveFromServer) {
+                return@withContext LoginOutcome.Error("Akun Anda diblokir secara permanen. Hubungi muhammadmuizz8@gmail.com.")
+            }
 
-        // Check if employee
-        val vpsEmployee = fetchEmployeeFromVps(cleanEmail)
-        val isEmployee = vpsEmployee != null
-        val userRole = if (vpsEmployee != null) {
-            vpsEmployee.optString("role", "KASIR")
-        } else {
-            "OWNER"
-        }
+            // Check if employee
+            val vpsEmployee = fetchEmployeeFromVps(cleanEmail)
+            val isEmployee = vpsEmployee != null
+            val userRole = if (vpsEmployee != null) {
+                vpsEmployee.optString("role", "KASIR")
+            } else {
+                "OWNER"
+            }
 
-        val isPremiumFinal = isPremiumUser || isEmployee || isPremiumFromServer
-        if (isPremiumFinal) {
-            return@withContext LoginOutcome.Error("Email Anda terdaftar sebagai akun Premium. Silakan masuk melalui tab Premium (Email) menggunakan Email dan Password/PIN.")
-        }
+            val isPremiumFinal = isPremiumUser || isEmployee || isPremiumFromServer
+            if (isPremiumFinal) {
+                return@withContext LoginOutcome.Error("Email Anda terdaftar sebagai akun Premium. Silakan masuk melalui tab Premium (Email) menggunakan Email dan Password/PIN.")
+            }
 
-        val targetTenantId = if (vpsEmployee != null) {
-            vpsEmployee.optString("tenantId").takeIf { it.isNotBlank() }
-        } else {
-            tenantIdFromServer
-        }
+            val targetTenantId = if (vpsEmployee != null) {
+                vpsEmployee.optString("tenantId").takeIf { it.isNotBlank() }
+            } else {
+                tenantIdFromServer
+            }
 
-        val businessMode = if (targetTenantId != null) {
-            val tenantObj = fetchTenantFromVps(targetTenantId)
-            tenantObj?.optString("businessMode", "FNB") ?: "FNB"
-        } else null
+            val businessMode = if (targetTenantId != null) {
+                val tenantObj = fetchTenantFromVps(targetTenantId)
+                tenantObj?.optString("businessMode", "FNB") ?: "FNB"
+            } else null
 
-        val user = UserSession(
-            googleSub = sub,
-            email = cleanEmail,
-            displayName = name,
-            photoUrl = null,
-            role = userRole,
-            tenantId = targetTenantId,
-            businessMode = businessMode,
-            isPremium = isPremiumFinal,
-            businessModeLocked = isPremiumFinal,
-            apkVersion = BuildConfig.VERSION_NAME
-        )
-
-        if (targetTenantId != null) {
-            val tenantObj = fetchTenantFromVps(targetTenantId)
-            val tenant = TenantSession(
-                id = targetTenantId,
-                name = tenantObj?.optString("name", "Tenant") ?: "Tenant",
-                ownerEmail = cleanEmail,
-                businessMode = businessMode ?: "FNB"
+            val user = UserSession(
+                googleSub = sub,
+                email = cleanEmail,
+                displayName = name,
+                photoUrl = null,
+                role = userRole,
+                tenantId = targetTenantId,
+                businessMode = businessMode,
+                isPremium = isPremiumFinal,
+                businessModeLocked = isPremiumFinal,
+                apkVersion = BuildConfig.VERSION_NAME
             )
-            securePrefs.setActiveSession(sub, cleanEmail)
-            securePrefs.currentTenantId = targetTenantId
-            securePrefs.currentBusinessMode = businessMode
-            // Set default outlet from VPS
-            val outletId = vpsUser?.optLong("outletId")?.takeIf { it > 0 }
-            if (outletId != null) securePrefs.currentOutletId = outletId
-            return@withContext LoginOutcome.Success(user, tenant)
-        } else {
-            val dummyTenant = TenantSession("dummy_tenant", "Needs Selection", cleanEmail, "FNB")
-            securePrefs.setActiveSession(sub, cleanEmail)
-            securePrefs.currentTenantId = null
-            return@withContext LoginOutcome.Success(user, dummyTenant)
+
+            if (targetTenantId != null) {
+                val tenantObj = fetchTenantFromVps(targetTenantId)
+                val tenant = TenantSession(
+                    id = targetTenantId,
+                    name = tenantObj?.optString("name", "Tenant") ?: "Tenant",
+                    ownerEmail = cleanEmail,
+                    businessMode = businessMode ?: "FNB"
+                )
+                securePrefs.setActiveSession(sub, cleanEmail)
+                securePrefs.currentTenantId = targetTenantId
+                securePrefs.currentBusinessMode = businessMode
+                // Set default outlet from VPS
+                val outletId = vpsUser?.optLong("outletId")?.takeIf { it > 0 }
+                if (outletId != null) securePrefs.currentOutletId = outletId
+                return@withContext LoginOutcome.Success(user, tenant)
+            } else {
+                val dummyTenant = TenantSession("dummy_tenant", "Needs Selection", cleanEmail, "FNB")
+                securePrefs.setActiveSession(sub, cleanEmail)
+                securePrefs.currentTenantId = null
+                return@withContext LoginOutcome.Success(user, dummyTenant)
+            }
+        } catch (e: VersionOutdatedException) {
+            return@withContext LoginOutcome.Error(e.message ?: "Pembaruan aplikasi wajib dilakukan.")
+        } catch (e: Exception) {
+            android.util.Log.e("AuthRepository", "Error in loginWithGoogle", e)
+            return@withContext LoginOutcome.Error("Gagal otentikasi Google: ${e.localizedMessage}")
         }
     }
 
@@ -427,6 +455,8 @@ class AuthRepository @Inject constructor(
 
                 return@withContext LoginOutcome.Success(user, tenant)
             }
+        } catch (e: VersionOutdatedException) {
+            return@withContext LoginOutcome.Error(e.message ?: "Pembaruan aplikasi wajib dilakukan.")
         } catch (e: Exception) {
             android.util.Log.e("AuthRepository", "Error in loginWithEmailPassword", e)
             return@withContext LoginOutcome.Error("Gagal masuk: ${e.localizedMessage}")

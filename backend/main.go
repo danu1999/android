@@ -204,7 +204,7 @@ func main() {
 	http.HandleFunc("/api/auth/pin-login", handlePinLogin)
 
 	log.Printf("Server listening on port %s", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
+	if err := http.ListenAndServe(":"+port, versionCheckMiddleware(http.DefaultServeMux)); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}
 }
@@ -3876,19 +3876,6 @@ func handleSyncCheckStatus(w http.ResponseWriter, r *http.Request) {
 
 // handleSyncRoute acts as a gateway for both GET (query) and POST (upsert) requests on /api/sync/
 func handleSyncRoute(w http.ResponseWriter, r *http.Request) {
-	clientVersion := strings.TrimSpace(r.Header.Get("x-client-version"))
-	latestVersion := getLatestVersionFromDb()
-	if clientVersion != "web" && (clientVersion == "" || compareVersions(clientVersion, latestVersion) < 0) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUpgradeRequired)
-		json.NewEncoder(w).Encode(map[string]string{
-			"error":         "Upgrade Required",
-			"message":       "Pembaruan wajib untuk kelancaran sinkronisasi data transaksi dan peningkatan keamanan sistem POSBah Anda. Silakan unduh versi terbaru untuk melanjutkan.",
-			"latestVersion": latestVersion,
-		})
-		return
-	}
-
 	// Check for active login conflicts on employees and local_users
 	parts := strings.Split(r.URL.Path, "/")
 	if r.Method == http.MethodGet && len(parts) >= 4 {
@@ -8180,5 +8167,35 @@ func handleUploadTtdPengirim(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"url":     ttdURL,
+	})
+}
+
+func versionCheckMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		if strings.HasPrefix(path, "/api/") {
+			isExempt := strings.HasPrefix(path, "/api/admin/") ||
+				path == "/api/download-apk" ||
+				path == "/api/dowload-apk" ||
+				path == "/api/apk-version" ||
+				strings.HasPrefix(path, "/api/store/") ||
+				strings.HasPrefix(path, "/api/sign/")
+
+			if !isExempt {
+				clientVersion := strings.TrimSpace(r.Header.Get("x-client-version"))
+				latestVersion := getLatestVersionFromDb()
+				if clientVersion != "web" && (clientVersion == "" || compareVersions(clientVersion, latestVersion) < 0) {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusUpgradeRequired) // 426
+					json.NewEncoder(w).Encode(map[string]string{
+						"error":         "Upgrade Required",
+						"message":       "Pembaruan wajib untuk kelancaran sinkronisasi data transaksi dan peningkatan keamanan sistem POSBah Anda. Silakan unduh versi terbaru untuk melanjutkan.",
+						"latestVersion": latestVersion,
+					})
+					return
+				}
+			}
+		}
+		next.ServeHTTP(w, r)
 	})
 }
