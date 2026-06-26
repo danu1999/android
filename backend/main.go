@@ -5621,7 +5621,7 @@ func handleQrAuthorize(w http.ResponseWriter, r *http.Request) {
 	session["email"] = authReq.Email
 	session["role"] = authReq.Role
 	session["googleSub"] = authReq.GoogleSub
-	session["isPremium"] = authReq.IsPremium
+	session["isPremium"] = authReq.IsPremium || isPremiumEmail(authReq.Email) || strings.HasPrefix(authReq.TenantId, "ten_premium_")
 	qrSessionsMu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
@@ -5666,7 +5666,7 @@ func handleQrConfirm(w http.ResponseWriter, r *http.Request) {
 	session["email"] = reqData.User.Email
 	session["role"] = reqData.User.Role
 	session["googleSub"] = reqData.User.Id
-	session["isPremium"] = !reqData.User.IsDemo
+	session["isPremium"] = !reqData.User.IsDemo || isPremiumEmail(reqData.User.Email) || strings.HasPrefix(reqData.User.TenantId, "ten_premium_")
 	session["businessMode"] = reqData.User.BusinessMode
 	qrSessionsMu.Unlock()
 

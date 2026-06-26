@@ -451,13 +451,18 @@ class AuthRepository @Inject constructor(
         val sub = securePrefs.currentGoogleSub ?: return null
         val email = securePrefs.currentEmail ?: return null
         val tenantId = securePrefs.currentTenantId
+        val cleanEmail = email.lowercase().trim()
+        val isPremiumFinal = (tenantId?.startsWith("ten_premium_") == true) || (cleanEmail in premiumEmailSet)
         return UserSession(
             googleSub = sub,
             email = email,
             displayName = email.substringBefore("@"),
             photoUrl = null,
+            role = securePrefs.currentRole ?: "OWNER",
             tenantId = tenantId,
-            businessMode = securePrefs.currentBusinessMode
+            businessMode = securePrefs.currentBusinessMode,
+            isPremium = isPremiumFinal,
+            businessModeLocked = isPremiumFinal
         )
     }
 
