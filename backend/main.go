@@ -6846,7 +6846,7 @@ func autoDetectApkVersion() {
 		return
 	}
 
-	if latestVersion != currentVersion {
+	if latestVersion != currentVersion && compareVersions(latestVersion, currentVersion) > 0 {
 		description := ""
 		notesBytes, err := os.ReadFile("./release_notes.txt")
 		if err == nil {
