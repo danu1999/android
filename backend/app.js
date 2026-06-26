@@ -1416,6 +1416,43 @@ function triggerInvoicePrint() {
                 overflow: hidden !important;
                 position: relative !important;
                 padding: 0 !important;
+                font-size: 7.5px !important;
+                line-height: 1.1 !important;
+            }
+            #print-area .company-name, 
+            #print-area .doc-title {
+                font-size: 11px !important;
+            }
+            #print-area .header-table, 
+            #print-area .info-table, 
+            #print-area .details-table {
+                margin-bottom: 4px !important;
+            }
+            #print-area .details-table th, 
+            #print-area .details-table td {
+                padding: 2px 4px !important;
+                font-size: 7.5px !important;
+            }
+            #print-area .totals-table td {
+                padding: 1px 4px !important;
+                font-size: 7.5px !important;
+            }
+            #print-area .signature-section {
+                margin-top: 4px !important;
+            }
+            #print-area .signature-col {
+                font-size: 7.5px !important;
+            }
+            #print-area .signature-col img {
+                height: 25px !important;
+            }
+            #print-area hr {
+                margin-bottom: 4px !important;
+            }
+            #print-area .footer {
+                margin-top: 4px !important;
+                font-size: 7px !important;
+                padding-top: 2px !important;
             }
         `;
     }
@@ -1628,6 +1665,39 @@ function triggerSjPrint() {
                 overflow: hidden !important;
                 position: relative !important;
                 padding: 0 !important;
+                font-size: 7.5px !important;
+                line-height: 1.1 !important;
+            }
+            #print-area .company-name, 
+            #print-area .doc-title {
+                font-size: 11px !important;
+            }
+            #print-area .header-table, 
+            #print-area .info-table, 
+            #print-area .details-table {
+                margin-bottom: 4px !important;
+            }
+            #print-area .details-table th, 
+            #print-area .details-table td {
+                padding: 2px 4px !important;
+                font-size: 7.5px !important;
+            }
+            #print-area .signature-section {
+                margin-top: 4px !important;
+            }
+            #print-area .signature-col {
+                font-size: 7.5px !important;
+            }
+            #print-area .signature-col img {
+                height: 25px !important;
+            }
+            #print-area hr {
+                margin-bottom: 4px !important;
+            }
+            #print-area .footer {
+                margin-top: 4px !important;
+                font-size: 7px !important;
+                padding-top: 2px !important;
             }
         `;
     }

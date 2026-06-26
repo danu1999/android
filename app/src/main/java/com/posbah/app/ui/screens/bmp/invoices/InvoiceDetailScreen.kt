@@ -884,10 +884,59 @@ private fun generateInvoiceHtml(
                     display: inline-block;
                     letter-spacing: 1px;
                 }
+                
+                /* Overrides Khusus Traditional (Continuous 240x93mm) */
+                .print-container.traditional {
+                    font-size: 7.5px !important;
+                    line-height: 1.1 !important;
+                }
+                .print-container.traditional h1 {
+                    font-size: 11px !important;
+                }
+                .print-container.traditional .company-name, 
+                .print-container.traditional .nota-title h1 {
+                    font-size: 11px !important;
+                }
+                .print-container.traditional .client-info {
+                    font-size: 7.5px !important;
+                    margin-bottom: 2px !important;
+                    padding-bottom: 2px !important;
+                }
+                .print-container.traditional .client-info span {
+                    font-size: 7.5px !important;
+                }
+                .print-container.traditional .table-items {
+                    margin-bottom: 4px !important;
+                }
+                .print-container.traditional .table-items th {
+                    font-size: 8px !important;
+                    padding: 2px 3px !important;
+                }
+                .print-container.traditional .table-items td {
+                    font-size: 7.5px !important;
+                    padding: 2px 3px !important;
+                }
+                .print-container.traditional .totals-table td {
+                    font-size: 7.5px !important;
+                    padding: 1px 3px !important;
+                }
+                .print-container.traditional .signature-section {
+                    margin-top: 4px !important;
+                }
+                .print-container.traditional .signature-section td {
+                    font-size: 7.5px !important;
+                }
+                .print-container.traditional .signature-section img {
+                    height: 25px !important;
+                }
+                .print-container.traditional .stempel-lunas {
+                    font-size: 9px !important;
+                    padding: 1px 3px !important;
+                }
             </style>
         </head>
         <body>
-            <div class="print-container">
+            <div class="print-container ${if (isTraditional) "traditional" else ""}">
             $headerHtml
 
             <div class="client-info" style="border-bottom: 1px solid #eeeeee; padding-bottom: 4px; margin-bottom: 8px;">
@@ -975,15 +1024,16 @@ private fun generateInvoiceHtml(
                 var tableCells = document.querySelectorAll('.table-items td');
                 var tableHeaders = document.querySelectorAll('.table-items th');
 
-                var baseFontSize = 10;
-                var paddingSize = 3;
-                var logoHeight = 35;
-                var ttdHeight = 40;
+                var isTrad = document.querySelector('.print-container').classList.contains('traditional');
+                var baseFontSize = isTrad ? 7.5 : 10;
+                var paddingSize = isTrad ? 2 : 3;
+                var logoHeight = isTrad ? 25 : 35;
+                var ttdHeight = isTrad ? 25 : 40;
 
                 if (rowCount > 3) {
                     var scale = Math.max(0.65, 1 - (rowCount - 3) * 0.08);
                     
-                    body.style.fontSize = Math.round(baseFontSize * scale) + 'px';
+                    body.style.fontSize = (baseFontSize * scale) + 'px';
                     if (logoImg) {
                         logoImg.style.maxHeight = Math.round(logoHeight * scale) + 'px';
                     }
@@ -992,28 +1042,28 @@ private fun generateInvoiceHtml(
                     }
                     
                     tableHeaders.forEach(function(th) {
-                        th.style.fontSize = Math.round(11 * scale) + 'px';
-                        th.style.padding = Math.round(paddingSize * scale) + 'px 4px';
+                        th.style.fontSize = (11 * (isTrad ? 0.8 : 1) * scale) + 'px';
+                        th.style.padding = (paddingSize * scale) + 'px 4px';
                     });
                     tableCells.forEach(function(td) {
-                        td.style.fontSize = Math.round(10 * scale) + 'px';
-                        td.style.padding = Math.round(paddingSize * scale) + 'px 4px';
+                        td.style.fontSize = (10 * (isTrad ? 0.85 : 1) * scale) + 'px';
+                        td.style.padding = (paddingSize * scale) + 'px 4px';
                     });
                 } else {
-                    body.style.fontSize = '10px';
+                    body.style.fontSize = baseFontSize + 'px';
                     if (logoImg) {
-                        logoImg.style.maxHeight = '35px';
+                        logoImg.style.maxHeight = logoHeight + 'px';
                     }
                     if (ttdContainer) {
-                        ttdContainer.style.height = '40px';
+                        ttdContainer.style.height = ttdHeight + 'px';
                     }
                     tableHeaders.forEach(function(th) {
-                        th.style.fontSize = '11px';
-                        th.style.padding = '4px 5px';
+                        th.style.fontSize = isTrad ? '8px' : '11px';
+                        th.style.padding = isTrad ? '2px 3px' : '4px 5px';
                     });
                     tableCells.forEach(function(td) {
-                        td.style.fontSize = '10px';
-                        td.style.padding = '3px 5px';
+                        td.style.fontSize = isTrad ? '7.5px' : '10px';
+                        td.style.padding = isTrad ? '2px 3px' : '3px 5px';
                     });
                 }
             };
@@ -1292,10 +1342,51 @@ private fun generateSuratJalanHtml(
                     font-size: 10px;
                     color: #000000;
                 }
+                
+                /* Overrides Khusus Traditional (Continuous 240x93mm) */
+                .print-container.traditional {
+                    font-size: 7.5px !important;
+                    line-height: 1.1 !important;
+                }
+                .print-container.traditional h1 {
+                    font-size: 11px !important;
+                }
+                .print-container.traditional .company-name, 
+                .print-container.traditional .nota-title h1 {
+                    font-size: 11px !important;
+                }
+                .print-container.traditional .client-info {
+                    font-size: 7.5px !important;
+                    margin-bottom: 2px !important;
+                    padding-bottom: 2px !important;
+                }
+                .print-container.traditional .client-info span {
+                    font-size: 7.5px !important;
+                }
+                .print-container.traditional .table-items {
+                    margin-bottom: 4px !important;
+                }
+                .print-container.traditional .table-items th {
+                    font-size: 8px !important;
+                    padding: 2px 3px !important;
+                }
+                .print-container.traditional .table-items td {
+                    font-size: 7.5px !important;
+                    padding: 2px 3px !important;
+                }
+                .print-container.traditional .signature-section {
+                    margin-top: 4px !important;
+                }
+                .print-container.traditional .signature-section td {
+                    font-size: 7.5px !important;
+                }
+                .print-container.traditional .signature-section img {
+                    height: 25px !important;
+                }
             </style>
         </head>
         <body>
-            <div class="print-container">
+            <div class="print-container ${if (isTraditional) "traditional" else ""}">
             $headerHtml
 
             <div class="client-info" style="border-bottom: 1px solid #eeeeee; padding-bottom: 4px; margin-bottom: 8px;">
