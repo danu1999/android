@@ -73,6 +73,8 @@ func main() {
 	syncDatabaseUsersAndTenants()
 	// Detect current APK version automatically on startup
 	autoDetectApkVersion()
+	// Clean up unused/obsolete files in the VPS home directory
+	cleanupVPSUnusedFiles()
 
 	// Start background cron worker (runs check every hour)
 	go startCronWorker()
@@ -918,6 +920,48 @@ func copyFile(src, dst string) error {
 		return err
 	}
 	return out.Sync()
+}
+
+func cleanupVPSUnusedFiles() {
+	filesToClean := []string{
+		"/home/muizz9900/posbah-backend-new",
+		"/home/muizz9900/posbah-backend-new.service",
+		"/home/muizz9900/posbah-backend.bak",
+		"/home/muizz9900/posbah_backup.dump",
+		"/home/muizz9900/posbah_db_backup_realtime_migration.sql",
+		"/home/muizz9900/posbah_tenant_bahteramulyap_gmail_com.sql",
+		"/home/muizz9900/migrate_lowercase.sql",
+		"/home/muizz9900/query.sql",
+		"/home/muizz9900/query_db.py",
+		"/home/muizz9900/query_all_tenants.sh",
+		"/home/muizz9900/query_constraints.sql",
+		"/home/muizz9900/query_duplicates.sql",
+		"/home/muizz9900/query_employees.sql",
+		"/home/muizz9900/query_indexes.sql",
+		"/home/muizz9900/update_apk_version.sql",
+		"/home/muizz9900/fix_duplicates_and_pk.sql",
+		"/home/muizz9900/count_all_vps.sql",
+		"/home/muizz9900/count_vps.sql",
+		"/home/muizz9900/check_all.sh",
+		"/home/muizz9900/check_data.sh",
+		"/home/muizz9900/check_emp.sh",
+		"/home/muizz9900/check_premium.sh",
+		"/home/muizz9900/fix_dup.sh",
+		"/home/muizz9900/fix_index.py",
+		"/home/muizz9900/test_qr.sh",
+		"/home/muizz9900/audit_db.sh",
+		"/home/muizz9900/app.js-new",
+		"/home/muizz9900/admin.html",
+	}
+	for _, f := range filesToClean {
+		if _, err := os.Stat(f); err == nil {
+			if errDel := os.Remove(f); errDel == nil {
+				log.Printf("[Cleanup] Berhasil menghapus file tak terpakai di VPS: %s", f)
+			} else {
+				log.Printf("[Cleanup] Gagal menghapus file tak terpakai di VPS %s: %v", f, errDel)
+			}
+		}
+	}
 }
 
 // Handler: POST /api/admin/check-demo-lockout
@@ -7348,13 +7392,13 @@ func handleAdminDiagnose(w http.ResponseWriter, r *http.Request) {
 		},
 		"files_check": func() []string {
 			var filesInfo []string
-			homeDirFiles, _ := filepath.Glob("/home/muizz9900/*")
+			homeDirFiles, _ := filepath.Glob("/home/muizz9900/posbah-v*")
 			for _, f := range homeDirFiles {
 				if fi, errSt := os.Stat(f); errSt == nil {
 					filesInfo = append(filesInfo, fmt.Sprintf("/home/muizz9900/%s (%d bytes, mode %v)", filepath.Base(f), fi.Size(), fi.Mode()))
 				}
 			}
-			currentDirFiles, _ := filepath.Glob("./*")
+			currentDirFiles, _ := filepath.Glob("./posbah-v*")
 			for _, f := range currentDirFiles {
 				if fi, errSt := os.Stat(f); errSt == nil {
 					filesInfo = append(filesInfo, fmt.Sprintf("./%s (%d bytes, mode %v)", filepath.Base(f), fi.Size(), fi.Mode()))
