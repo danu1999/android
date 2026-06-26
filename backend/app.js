@@ -1409,7 +1409,7 @@ function triggerInvoicePrint() {
                 margin: 0.2cm 0.5cm 0.3cm 0.5cm !important;
             }
             #print-area {
-                width: 180mm !important;
+                width: 160mm !important;
                 height: 85mm !important;
                 max-height: 85mm !important;
                 box-sizing: border-box !important;
@@ -1658,7 +1658,7 @@ function triggerSjPrint() {
                 margin: 0.2cm 0.5cm 0.3cm 0.5cm !important;
             }
             #print-area {
-                width: 180mm !important;
+                width: 160mm !important;
                 height: 85mm !important;
                 max-height: 85mm !important;
                 box-sizing: border-box !important;

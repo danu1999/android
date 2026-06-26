@@ -715,7 +715,7 @@ private fun generateInvoiceHtml(
     val pageSizeCss = if (isTraditional) "size: 240mm 93mm; margin: 0.2cm 0.5cm 0.3cm 0.5cm;" else "size: 240mm 297mm; margin: 0.5cm;"
     val printContainerCss = if (isTraditional) """
         .print-container {
-            width: 180mm;
+            width: 160mm;
             height: 85mm;
             max-height: 85mm;
             box-sizing: border-box;
@@ -1132,7 +1132,7 @@ private fun generateSuratJalanHtml(
     val pageSizeCss = if (isTraditional) "size: 240mm 93mm; margin: 0.2cm 0.5cm 0.3cm 0.5cm;" else "size: 240mm 297mm; margin: 0.5cm;"
     val printContainerCss = if (isTraditional) """
         .print-container {
-            width: 180mm;
+            width: 160mm;
             height: 85mm;
             max-height: 85mm;
             box-sizing: border-box;
