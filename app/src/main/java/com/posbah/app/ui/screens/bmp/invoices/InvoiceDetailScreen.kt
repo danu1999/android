@@ -118,7 +118,7 @@ fun InvoiceDetailScreen(
                         IconButton(
                             onClick = {
                                 val html = generateInvoiceHtml(context, inv, ui.products, ui.client, ui.settings, ui.printConfig.invoice, ui.printConfig)
-                                printHtml(context, html, "Invoice_${inv.number}", ui.printConfig.invoice.isColor)
+                                printHtml(context, html, "Invoice_${inv.number}", ui.printConfig.invoice.isColor, ui.printConfig.invoice.templateType == "TRADITIONAL")
                             },
                             modifier = Modifier.testTag("btn-print-top")
                         ) {
@@ -247,7 +247,7 @@ fun InvoiceDetailScreen(
                             modifier = Modifier
                                 .clickable {
                                     val html = generateInvoiceHtml(context, inv, ui.products, ui.client, ui.settings, ui.printConfig.invoice, ui.printConfig)
-                                    printHtml(context, html, "Invoice_${inv.number}", ui.printConfig.invoice.isColor)
+                                    printHtml(context, html, "Invoice_${inv.number}", ui.printConfig.invoice.isColor, ui.printConfig.invoice.templateType == "TRADITIONAL")
                                 }
                                 .background(Color.Transparent)
                         )
@@ -268,7 +268,7 @@ fun InvoiceDetailScreen(
                             modifier = Modifier
                                 .clickable {
                                     val html = generateSuratJalanHtml(context, inv, ui.products, ui.client, ui.settings, ui.printConfig.sj, ui.printConfig)
-                                    printHtml(context, html, "SuratJalan_${inv.number}", ui.printConfig.sj.isColor)
+                                    printHtml(context, html, "SuratJalan_${inv.number}", ui.printConfig.sj.isColor, ui.printConfig.sj.templateType == "TRADITIONAL")
                                 }
                                 .background(Color.Transparent)
                         )
@@ -711,6 +711,28 @@ private fun generateInvoiceHtml(
     val themeColor = if (isColor) "#1E3A8A" else "#000000"
     val accentBg = if (isColor) "#EFF6FF" else "#ffffff"
 
+    val isTraditional = printConfig.templateType == "TRADITIONAL"
+    val pageSizeCss = if (isTraditional) "size: 240mm 93mm; margin: 0.2cm 0.5cm 0.3cm 0.5cm;" else "size: 240mm 297mm; margin: 0.5cm;"
+    val printContainerCss = if (isTraditional) """
+        .print-container {
+            width: 180mm;
+            height: 85mm;
+            max-height: 85mm;
+            box-sizing: border-box;
+            overflow: hidden;
+            position: relative;
+        }
+    """.trimIndent() else """
+        .print-container {
+            width: 100%;
+            height: 138mm;
+            max-height: 138mm;
+            box-sizing: border-box;
+            overflow: hidden;
+            position: relative;
+        }
+    """.trimIndent()
+
     val headerHtml = """
         <table style="width: 100%; border-bottom: 1.5px solid #000000; margin-bottom: 8px; padding-bottom: 5px;">
             <tr>
@@ -802,17 +824,9 @@ private fun generateInvoiceHtml(
             <title>Faktur - $companyName</title>
             <style>
                 @page {
-                    size: A4 portrait;
-                    margin: 0.5cm;
+                    $pageSizeCss
                 }
-                .print-container {
-                    width: 100%;
-                    height: 138mm;
-                    max-height: 138mm;
-                    box-sizing: border-box;
-                    overflow: hidden;
-                    position: relative;
-                }
+                $printContainerCss
                 body {
                     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
                     color: #000000;
@@ -1064,6 +1078,28 @@ private fun generateSuratJalanHtml(
     val logoBase64 = if (printConfig.useLogo) com.posbah.app.ui.print.ReceiptPrinter.getUriOrAssetBase64(context, globalConfig.logoPath, "logo.jpg") else ""
     val isColor = printConfig.isColor
 
+    val isTraditional = printConfig.templateType == "TRADITIONAL"
+    val pageSizeCss = if (isTraditional) "size: 240mm 93mm; margin: 0.2cm 0.5cm 0.3cm 0.5cm;" else "size: 240mm 297mm; margin: 0.5cm;"
+    val printContainerCss = if (isTraditional) """
+        .print-container {
+            width: 180mm;
+            height: 85mm;
+            max-height: 85mm;
+            box-sizing: border-box;
+            overflow: hidden;
+            position: relative;
+        }
+    """.trimIndent() else """
+        .print-container {
+            width: 100%;
+            height: 138mm;
+            max-height: 138mm;
+            box-sizing: border-box;
+            overflow: hidden;
+            position: relative;
+        }
+    """.trimIndent()
+
     val companyName = settings?.clientName ?: "CV. Bahtera Mulya Plastik"
     val companyAddress = settings?.addressLine1 ?: "Sidoarjo, Jawa Timur"
     val companyPhone = settings?.phoneNumber ?: "082652626237"
@@ -1206,17 +1242,9 @@ private fun generateSuratJalanHtml(
             <title>Surat Jalan - $companyName</title>
             <style>
                 @page {
-                    size: A4 portrait;
-                    margin: 0.5cm;
+                    $pageSizeCss
                 }
-                .print-container {
-                    width: 100%;
-                    height: 138mm;
-                    max-height: 138mm;
-                    box-sizing: border-box;
-                    overflow: hidden;
-                    position: relative;
-                }
+                $printContainerCss
                 body {
                     font-family: Helvetica, Arial, sans-serif;
                     color: #333333;
@@ -1315,15 +1343,31 @@ private fun getAssetBase64(context: Context, fileName: String): String {
     }
 }
 
-private fun printHtml(context: Context, html: String, jobName: String, isColor: Boolean) {
+private fun printHtml(context: Context, html: String, jobName: String, isColor: Boolean, isTraditional: Boolean = false) {
     val webView = WebView(context)
     webView.webViewClient = object : WebViewClient() {
         override fun onPageFinished(view: WebView?, url: String?) {
             val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
             val printAdapter = webView.createPrintDocumentAdapter(jobName)
-            val printAttributes = PrintAttributes.Builder()
+            
+            val printAttributesBuilder = PrintAttributes.Builder()
                 .setColorMode(if (isColor) PrintAttributes.COLOR_MODE_COLOR else PrintAttributes.COLOR_MODE_MONOCHROME)
-                .build()
+            
+            // Gunakan batas ukuran kustom berdasarkan tipe kertas
+            val mediaSizeWidth = 9449 // 240mm dalam mils
+            val mediaSizeHeight = if (isTraditional) 3661 else 11693 // 93mm vs 297mm dalam mils
+            val mediaSizeId = if (isTraditional) "continuous_9_5_11" else "a4_custom"
+            val mediaSizeLabel = if (isTraditional) "Continuous 9.5x11 (240x93 mm)" else "A4 Custom (240x297 mm)"
+            
+            val customMediaSize = PrintAttributes.MediaSize(
+                mediaSizeId,
+                mediaSizeLabel,
+                mediaSizeWidth,
+                mediaSizeHeight
+            )
+            printAttributesBuilder.setMediaSize(customMediaSize)
+            
+            val printAttributes = printAttributesBuilder.build()
             printManager.print(jobName, printAdapter, printAttributes)
         }
     }
