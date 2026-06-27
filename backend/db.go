@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -1012,4 +1014,132 @@ func dynamicUpsertTx(tx *sql.Tx, tableName string, rows []map[string]interface{}
 		}
 	}
 	return nil
+}
+
+func backupBahanBakuAndRelations() {
+	if db == nil {
+		log.Println("[Backup Error] Database instance is nil.")
+		return
+	}
+
+	log.Println("[Backup] Checking raw material tables and running auto-backup/restore...")
+
+	// 1. Create backup tables if they don't exist
+	_, err1 := db.Exec(`CREATE TABLE IF NOT EXISTS "backup_bmp_bahan_baku" (LIKE "bmp_bahan_baku" INCLUDING ALL)`)
+	_, err2 := db.Exec(`CREATE TABLE IF NOT EXISTS "backup_bmp_bahan_baku_item" (LIKE "bmp_bahan_baku_item" INCLUDING ALL)`)
+	if err1 != nil {
+		log.Printf("[Backup Error] Failed to create backup_bmp_bahan_baku: %v", err1)
+	}
+	if err2 != nil {
+		log.Printf("[Backup Error] Failed to create backup_bmp_bahan_baku_item: %v", err2)
+	}
+
+	// 2. Query row counts to determine if we should restore or refresh backup
+	var countMain, countBackup int
+	_ = db.QueryRow(`SELECT count(*) FROM "bmp_bahan_baku"`).Scan(&countMain)
+	_ = db.QueryRow(`SELECT count(*) FROM "backup_bmp_bahan_baku"`).Scan(&countBackup)
+
+	var countItemsMain, countItemsBackup int
+	_ = db.QueryRow(`SELECT count(*) FROM "bmp_bahan_baku_item"`).Scan(&countItemsMain)
+	_ = db.QueryRow(`SELECT count(*) FROM "backup_bmp_bahan_baku_item"`).Scan(&countItemsBackup)
+
+	log.Printf("[Backup] Main count: %d, Backup count: %d. Items main count: %d, Items backup count: %d.",
+		countMain, countBackup, countItemsMain, countItemsBackup)
+
+	// Case A: Main tables are completely empty, but backup tables have data -> Restore!
+	if countMain == 0 && countBackup > 0 {
+		log.Printf("[Backup] Main table is empty, restoring %d headers from backup table...", countBackup)
+		_, err := db.Exec(`INSERT INTO "bmp_bahan_baku" SELECT * FROM "backup_bmp_bahan_baku"`)
+		if err != nil {
+			log.Printf("[Backup Error] Restoring headers failed: %v", err)
+		} else {
+			log.Println("[Backup] Restoring headers completed successfully.")
+			countMain = countBackup
+		}
+	}
+
+	if countItemsMain == 0 && countItemsBackup > 0 {
+		log.Printf("[Backup] Main item table is empty, restoring %d items from backup table...", countItemsBackup)
+		_, err := db.Exec(`INSERT INTO "bmp_bahan_baku_item" SELECT * FROM "backup_bmp_bahan_baku_item"`)
+		if err != nil {
+			log.Printf("[Backup Error] Restoring items failed: %v", err)
+		} else {
+			log.Println("[Backup] Restoring items completed successfully.")
+			countItemsMain = countItemsBackup
+		}
+	}
+
+	// Case B: Main tables have data -> Refresh/overwrite the backup tables with the latest state
+	if countMain > 0 {
+		log.Println("[Backup] Refreshing database backup tables...")
+		_, err3 := db.Exec(`TRUNCATE TABLE "backup_bmp_bahan_baku" CASCADE`)
+		if err3 == nil {
+			_, err4 := db.Exec(`INSERT INTO "backup_bmp_bahan_baku" SELECT * FROM "bmp_bahan_baku"`)
+			if err4 != nil {
+				log.Printf("[Backup Error] Failed to populate backup_bmp_bahan_baku: %v", err4)
+			}
+		} else {
+			log.Printf("[Backup Error] Failed to truncate backup_bmp_bahan_baku: %v", err3)
+		}
+
+		_, err5 := db.Exec(`TRUNCATE TABLE "backup_bmp_bahan_baku_item" CASCADE`)
+		if err5 == nil {
+			_, err6 := db.Exec(`INSERT INTO "backup_bmp_bahan_baku_item" SELECT * FROM "bmp_bahan_baku_item"`)
+			if err6 != nil {
+				log.Printf("[Backup Error] Failed to populate backup_bmp_bahan_baku_item: %v", err6)
+			}
+		} else {
+			log.Printf("[Backup Error] Failed to truncate backup_bmp_bahan_baku_item: %v", err5)
+		}
+		log.Println("[Backup] Database backup tables refreshed successfully.")
+	}
+
+	// 3. Export to file backups for extra redundancy
+	backupBahanBakuToJSON()
+}
+
+func backupBahanBakuToJSON() {
+	// Query header rows
+	rows1, err := db.Query(`SELECT * FROM "bmp_bahan_baku"`)
+	if err != nil {
+		log.Printf("[Backup Error] Query bmp_bahan_baku failed: %v", err)
+		return
+	}
+	defer rows1.Close()
+	headerJSON := rowsToJSON(rows1)
+
+	// Query item rows
+	rows2, err := db.Query(`SELECT * FROM "bmp_bahan_baku_item"`)
+	if err != nil {
+		log.Printf("[Backup Error] Query bmp_bahan_baku_item failed: %v", err)
+		return
+	}
+	defer rows2.Close()
+	itemsJSON := rowsToJSON(rows2)
+
+	// Create backup map
+	backupData := map[string]interface{}{
+		"timestamp": time.Now().UnixMilli(),
+		"headers":   headerJSON,
+		"items":     itemsJSON,
+	}
+
+	// Serialize
+	dataBytes, err := json.MarshalIndent(backupData, "", "  ")
+	if err != nil {
+		log.Printf("[Backup Error] JSON marshal failed: %v", err)
+		return
+	}
+
+	// Write to file
+	backupDir := "/home/muizz9900/backups"
+	_ = os.MkdirAll(backupDir, 0755)
+	backupFile := filepath.Join(backupDir, "bahanbaku_backup.json")
+	err = os.WriteFile(backupFile, dataBytes, 0644)
+	if err != nil {
+		// Fallback to current dir
+		backupFile = "./bahanbaku_backup.json"
+		_ = os.WriteFile(backupFile, dataBytes, 0644)
+	}
+	log.Printf("[Backup Success] Exported raw material data to file: %s", backupFile)
 }

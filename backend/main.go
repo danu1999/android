@@ -69,6 +69,9 @@ func main() {
 	if err := initDatabase(dbURL); err != nil {
 		log.Printf("Warning: local database initialization failed: %v", err)
 	}
+	// Backup raw materials and relations for safety
+	backupBahanBakuAndRelations()
+
 	// Run initial synchronization of local users and tenants
 	syncDatabaseUsersAndTenants()
 	// Detect current APK version automatically on startup
