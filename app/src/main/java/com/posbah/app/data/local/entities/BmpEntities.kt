@@ -183,6 +183,7 @@ data class BmpBahanBakuEntity(
     val outletId: Long? = null,
     val tanggal: Long = System.currentTimeMillis(),
     val noTagihan: String,
+    val supplier: String? = null,
     val totalHarga: Double = 0.0,
     val nominal: Double = 0.0,
     val notes: String? = null,

@@ -34,7 +34,6 @@ fun SplashScreen(
     onGoLogin: () -> Unit,
     onGoLock: () -> Unit,
     onGoBmpDashboard: () -> Unit,
-    onGoMigration: () -> Unit = {},
     viewModel: SplashViewModel = hiltViewModel()
 ) {
     val route by viewModel.route.collectAsStateWithLifecycle()
@@ -44,7 +43,6 @@ fun SplashScreen(
             SplashRoute.GoToLogin -> onGoLogin()
             SplashRoute.GoToLock -> onGoLock()
             SplashRoute.GoToBmpDashboard -> onGoBmpDashboard()
-            SplashRoute.GoToMigration -> onGoMigration()
             else -> {}
         }
     }
@@ -75,17 +73,22 @@ fun SplashScreen(
                     )
                 }
             }
-            Spacer(Modifier.height(20.dp))
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             Text(
                 "POSBah",
-                style = MaterialTheme.typography.displayMedium,
-                color = MaterialTheme.colorScheme.onBackground
+                style = MaterialTheme.typography.headlineLarge.copy(
+                    fontWeight = FontWeight.Bold
+                ),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 8.dp)
             )
-            Spacer(Modifier.height(8.dp))
+
             Text(
-                "Aman • Native • Offline-first",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                "Aman • Cepat • Real-Time Online",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center
             )
 

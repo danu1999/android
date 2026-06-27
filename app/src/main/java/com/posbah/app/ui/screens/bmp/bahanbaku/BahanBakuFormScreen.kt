@@ -180,6 +180,15 @@ fun BahanBakuFormScreen(
                         Spacer(Modifier.height(10.dp))
 
                         OutlinedTextField(
+                            value = header.supplier ?: "",
+                            onValueChange = { viewModel.updateHeader { h -> h.copy(supplier = it.ifBlank { null }) } },
+                            label = { Text("Pemasok / Supplier") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().testTag("bb-supplier")
+                        )
+                        Spacer(Modifier.height(10.dp))
+
+                        OutlinedTextField(
                             value = if (header.nominal > 0)
                                 header.nominal.toBigDecimal().stripTrailingZeros().toPlainString()
                             else "",

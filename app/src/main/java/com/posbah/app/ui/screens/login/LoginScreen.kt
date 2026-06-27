@@ -180,7 +180,7 @@ fun LoginScreen(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "Terenkripsi SQLCipher • Keystore hardware-backed",
+                    "Koneksi Enkripsi SSL • Cloud Real-time Online",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center

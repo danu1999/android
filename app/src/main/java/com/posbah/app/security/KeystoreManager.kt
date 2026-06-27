@@ -65,27 +65,6 @@ class KeystoreManager @Inject constructor() {
         return cipher.doFinal(ct)
     }
 
-    /**
-     * Derive a stable, device-bound passphrase for SQLCipher.
-     * The seed is generated once and stored encrypted in keystore-protected prefs.
-     * Result: Even if the DB file is copied off-device, it cannot be decrypted
-     * without the per-device Keystore-backed key.
-     */
-    fun deriveDatabaseKey(context: Context): ByteArray {
-        val prefs = context.getSharedPreferences(SECURE_PREFS, Context.MODE_PRIVATE)
-        val storedEnc = prefs.getString(DB_SEED_KEY, null)
-
-        val seed: ByteArray = if (storedEnc == null) {
-            val newSeed = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
-            val enc = encrypt(DB_KEY_ALIAS, newSeed)
-            prefs.edit().putString(DB_SEED_KEY, android.util.Base64.encodeToString(enc, android.util.Base64.NO_WRAP)).apply()
-            newSeed
-        } else {
-            decrypt(DB_KEY_ALIAS, android.util.Base64.decode(storedEnc, android.util.Base64.NO_WRAP))
-        }
-        return seed
-    }
-
     fun deleteKey(alias: String) {
         runCatching { keyStore.deleteEntry(alias) }
     }
@@ -96,11 +75,7 @@ class KeystoreManager @Inject constructor() {
         private const val GCM_IV_LENGTH = 12
         private const val GCM_TAG_BITS = 128
 
-        const val DB_KEY_ALIAS = "posbah_db_master"
         const val PIN_KEY_ALIAS = "posbah_pin_master"
         const val SESSION_KEY_ALIAS = "posbah_session_master"
-
-        private const val SECURE_PREFS = "posbah_secure_prefs"
-        private const val DB_SEED_KEY = "db_seed_enc"
     }
 }

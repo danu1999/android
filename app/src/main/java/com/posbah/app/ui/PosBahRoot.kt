@@ -117,11 +117,6 @@ fun PosBahRoot(
                 },
                 onGoBmpDashboard = {
                     goDashboard(Screen.Splash.route)
-                },
-                onGoMigration = {
-                    nav.navigate(Screen.Migration.route) {
-                        popUpTo(Screen.Splash.route) { inclusive = true }
-                    }
                 }
             )
         }
@@ -357,13 +352,7 @@ fun PosBahRoot(
             )
         }
 
-        composable(Screen.Migration.route) {
-            com.posbah.app.ui.screens.migration.MigrationScreen(
-                onMigrationDone = {
-                    goDashboard(Screen.Migration.route)
-                }
-            )
-        }
+
     }
 
     // Real-time Non-blocking Connection status bar (like WhatsApp)

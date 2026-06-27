@@ -1797,7 +1797,7 @@ class BmpBahanBakuRepository @Inject constructor(
               cashflowRepo.createEntry(BmpCashflowData(
                   transactionType = "KELUAR",
                   description = "Pembelian Bahan Baku: ${bahanBaku.noTagihan}",
-                  amount = bahanBaku.totalHarga,
+                  amount = bahanBaku.nominal,
                   transactionDate = bahanBaku.tanggal
               ))
 
@@ -1832,14 +1832,14 @@ class BmpBahanBakuRepository @Inject constructor(
               val match = cfList.find { it.description == "Pembelian Bahan Baku: ${bahanBaku.noTagihan}" }
               if (match != null) {
                   cashflowRepo.update(match.copy(
-                      amount = bahanBaku.totalHarga,
+                      amount = bahanBaku.nominal,
                       transactionDate = bahanBaku.tanggal
                   ))
               } else {
                   cashflowRepo.createEntry(BmpCashflowData(
                       transactionType = "KELUAR",
                       description = "Pembelian Bahan Baku: ${bahanBaku.noTagihan}",
-                      amount = bahanBaku.totalHarga,
+                      amount = bahanBaku.nominal,
                       transactionDate = bahanBaku.tanggal
                   ))
               }
@@ -1893,14 +1893,14 @@ class BmpBahanBakuRepository @Inject constructor(
               val match = cfList.find { it.description == "Pembelian Bahan Baku: ${bahanBaku.noTagihan}" }
               if (match != null) {
                   cashflowRepo.update(match.copy(
-                      amount = bahanBaku.totalHarga,
+                      amount = bahanBaku.nominal,
                       transactionDate = bahanBaku.tanggal
                   ))
               } else {
                   cashflowRepo.createEntry(BmpCashflowData(
                       transactionType = "KELUAR",
                       description = "Pembelian Bahan Baku: ${bahanBaku.noTagihan}",
-                      amount = bahanBaku.totalHarga,
+                      amount = bahanBaku.nominal,
                       transactionDate = bahanBaku.tanggal
                   ))
               }
@@ -1941,9 +1941,21 @@ class BmpBahanBakuRepository @Inject constructor(
     /** Bayar hutang bahan baku — update nominal di VPS */
     suspend fun payDebt(context: android.content.Context, tenantId: String, id: Long, amount: Double): OnlineWriteResult = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
         val snapshot = _bahanBaku.value
+        val target = snapshot.find { it.id == id }
+        val originalNominal = target?.nominal ?: 0.0
+        val paymentAmount = amount - originalNominal
         _bahanBaku.value = snapshot.map { if (it.id == id) it.copy(nominal = amount) else it }
         try {
             api.updateBahanBaku(id, mapOf("nominal" to amount))
+            if (paymentAmount > 0.0 && target != null) {
+                cashflowRepo.createEntry(BmpCashflowData(
+                    transactionType = "KELUAR",
+                    description = "Pembayaran Hutang Bahan Baku: ${target.noTagihan}",
+                    amount = paymentAmount,
+                    transactionDate = System.currentTimeMillis()
+                ))
+                cashflowRepo.refreshEntries()
+            }
             OnlineWriteResult.Success
         } catch (e: Exception) {
             _bahanBaku.value = snapshot
@@ -1961,6 +1973,7 @@ class BmpBahanBakuRepository @Inject constructor(
             tenantId = data.tenantId,
             noTagihan = data.noTagihan,
             tanggal = data.tanggal,
+            supplier = data.supplier,
             totalHarga = data.totalHarga,
             nominal = data.nominal,
             notes = data.notes,
@@ -1976,7 +1989,7 @@ class BmpBahanBakuRepository @Inject constructor(
         } catch (_: Exception) { null } ?: return null
         return com.posbah.app.data.local.entities.BmpBahanBakuEntity(
             id = data.id, tenantId = data.tenantId, noTagihan = data.noTagihan,
-            tanggal = data.tanggal, totalHarga = data.totalHarga, nominal = data.nominal, notes = data.notes,
+            tanggal = data.tanggal, supplier = data.supplier, totalHarga = data.totalHarga, nominal = data.nominal, notes = data.notes,
             notaFotoPath = data.notaFotoPath,
             notaFotoUrl = data.notaFotoUrl
         )
@@ -2002,7 +2015,7 @@ class BmpBahanBakuRepository @Inject constructor(
     suspend fun updateHeaderOnly(entity: com.posbah.app.data.local.entities.BmpBahanBakuEntity): OnlineWriteResult {
         return update(BmpBahanBakuData(
             id = entity.id, tenantId = entity.tenantId, noTagihan = entity.noTagihan,
-            tanggal = entity.tanggal, totalHarga = entity.totalHarga,
+            tanggal = entity.tanggal, supplier = entity.supplier, totalHarga = entity.totalHarga,
             nominal = entity.nominal, notes = entity.notes,
             notaFotoPath = entity.notaFotoPath, notaFotoUrl = entity.notaFotoUrl
         ))
@@ -2015,7 +2028,7 @@ class BmpBahanBakuRepository @Inject constructor(
     ): OnlineWriteResult {
         val data = BmpBahanBakuData(
             id = entity.id, tenantId = entity.tenantId, noTagihan = entity.noTagihan,
-            tanggal = entity.tanggal, totalHarga = entity.totalHarga,
+            tanggal = entity.tanggal, supplier = entity.supplier, totalHarga = entity.totalHarga,
             nominal = entity.nominal, notes = entity.notes,
             notaFotoPath = entity.notaFotoPath, notaFotoUrl = entity.notaFotoUrl
         )
@@ -2074,6 +2087,7 @@ class BmpBahanBakuRepository @Inject constructor(
                     tenantId = d.tenantId,
                     noTagihan = d.noTagihan,
                     tanggal = d.tanggal,
+                    supplier = d.supplier,
                     totalHarga = d.totalHarga,
                     nominal = d.nominal,
                     notes = d.notes,

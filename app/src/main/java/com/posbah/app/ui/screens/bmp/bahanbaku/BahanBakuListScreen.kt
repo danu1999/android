@@ -325,6 +325,13 @@ private fun BahanBakuCard(
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onBackground
                     )
+                    if (!entry.supplier.isNullOrBlank()) {
+                        Text(
+                            "Supplier: ${entry.supplier}",
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                     Text(
                         Formatters.dateLong(entry.tanggal),
                         style = MaterialTheme.typography.bodySmall,

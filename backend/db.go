@@ -701,6 +701,9 @@ func initSchema() error {
 		// v2.17.9: Tambah kolom image pada bmp_master_products
 		`ALTER TABLE "bmp_master_products" ADD COLUMN IF NOT EXISTS "image" TEXT;`,
 
+		// v2.17.58: Tambah kolom supplier pada bmp_bahan_baku untuk relasi pemasok
+		`ALTER TABLE "bmp_bahan_baku" ADD COLUMN IF NOT EXISTS "supplier" VARCHAR(255);`,
+
 		// v2.17.6: Ubah primary key print_settings menjadi composite (id, tenantId) untuk mencegah duplikasi key error
 		`ALTER TABLE "print_settings" DROP CONSTRAINT IF EXISTS "print_settings_pkey";`,
 		`ALTER TABLE "print_settings" ADD PRIMARY KEY ("id", "tenantId");`,

@@ -3,7 +3,6 @@ package com.posbah.app.ui.screens.splash
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.posbah.app.data.remote.OnlineMigrationManager
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.security.DeviceIntegrityGuard
 import com.posbah.app.security.IntegrityChecker
@@ -21,7 +20,6 @@ sealed class SplashRoute {
     object GoToLogin : SplashRoute()
     object GoToLock : SplashRoute()
     object GoToBmpDashboard : SplashRoute()
-    object GoToMigration : SplashRoute()
     data class Blocked(val reason: String) : SplashRoute()
 }
 
@@ -30,7 +28,6 @@ class SplashViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val authRepository: AuthRepository,
     private val integrityChecker: IntegrityChecker,
-    private val migrationManager: OnlineMigrationManager,
     private val db: com.posbah.app.data.local.PosBahDatabase,
     private val sessionState: com.posbah.app.data.repository.SessionState
 ) : ViewModel() {
@@ -90,16 +87,10 @@ class SplashViewModel @Inject constructor(
             }
 
             // 5) Determine target route immediately (no network wait)
-            var targetRoute: SplashRoute = when {
+            val targetRoute: SplashRoute = when {
                 sub == null  -> SplashRoute.GoToLogin
                 tenant == null -> SplashRoute.GoToLogin
                 else -> SplashRoute.GoToLock // require biometric/PIN to resume
-            }
-
-            // 5b) Check if offline→online migration is needed BEFORE going to lock/dashboard
-            if (targetRoute == SplashRoute.GoToLock &&
-                migrationManager.isMigrationNeeded(appContext)) {
-                targetRoute = SplashRoute.GoToMigration
             }
 
             // 6) Premium upgrade check for demo users — fire-and-forget.

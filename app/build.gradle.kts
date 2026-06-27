@@ -15,8 +15,8 @@ android {
         applicationId = "com.posbah.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 96
-        versionName = "2.17.57"
+        versionCode = 97
+        versionName = "2.17.58"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -162,8 +162,8 @@ dependencies {
     // implementation(libs.androidx.room.runtime)
     // implementation(libs.androidx.room.ktx)
     // ksp(libs.androidx.room.compiler)
-    implementation(libs.sqlcipher.android)
-    implementation(libs.androidx.sqlite.ktx)
+    // implementation(libs.sqlcipher.android)
+    // implementation(libs.androidx.sqlite.ktx)
 
     // Coroutines & Serialization
     implementation(libs.kotlinx.coroutines.android)
