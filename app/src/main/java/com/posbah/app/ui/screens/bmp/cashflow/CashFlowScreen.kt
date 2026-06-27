@@ -17,11 +17,15 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import android.widget.Toast
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -30,6 +34,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -70,6 +75,7 @@ class CashFlowViewModel @Inject constructor(
     private val repo: BmpCashFlowRepository,
     private val authRepository: AuthRepository,
     private val api: BmpApiService,
+    private val settingsRepo: com.posbah.app.data.repository.BmpSettingsRepository,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
@@ -89,7 +95,18 @@ class CashFlowViewModel @Inject constructor(
     private val _paymentToInvoice = MutableStateFlow<Map<Long, Long>>(emptyMap())
     val paymentToInvoice = _paymentToInvoice.asStateFlow()
 
+    private val _settings = MutableStateFlow<com.posbah.app.data.local.entities.BmpSettingsEntity?>(null)
+    val settings = _settings.asStateFlow()
+
     init {
+        viewModelScope.launch {
+            try {
+                _settings.value = settingsRepo.get(tenantId)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
         viewModelScope.launch {
             kotlinx.coroutines.flow.combine(repo.observe(tenantId), selectedMonth) { cashflows, month ->
                 Pair(cashflows, month)
@@ -140,6 +157,37 @@ class CashFlowViewModel @Inject constructor(
             )
         )
     }
+
+    fun postMonthlyOverhead() = viewModelScope.launch {
+        val s = _settings.value ?: return@launch
+        val totalGaji = s.jumlahKaryawan * s.gajiHarian * s.hariKerjaSebulan
+        
+        // 1. Post Gaji Karyawan
+        if (totalGaji > 0) {
+            repo.insert(
+                BmpCashFlowEntity(
+                    tenantId = tenantId,
+                    transactionDate = System.currentTimeMillis(),
+                    transactionType = "KELUAR",
+                    description = "Gaji Karyawan Bulanan (Rutin)",
+                    amount = totalGaji
+                )
+            )
+        }
+        // 2. Post Listrik Bulanan
+        if (s.listrikBulanan > 0) {
+            repo.insert(
+                BmpCashFlowEntity(
+                    tenantId = tenantId,
+                    transactionDate = System.currentTimeMillis(),
+                    transactionType = "KELUAR",
+                    description = "Listrik Bulanan (Rutin)",
+                    amount = s.listrikBulanan
+                )
+            )
+        }
+        refreshCashFlow(selectedMonth.value)
+    }
 }
 
 @Composable
@@ -159,6 +207,8 @@ fun CashFlowScreen(
     var formDesc by remember { mutableStateOf("") }
     var formAmt by remember { mutableStateOf("") }
     var dropdownExpanded by remember { mutableStateOf(false) }
+    var showPostOverheadDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     val monthsList = remember {
         val sdf = java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.getDefault())
@@ -189,26 +239,43 @@ fun CashFlowScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             item {
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    OutlinedButton(
-                        onClick = { dropdownExpanded = true },
-                        modifier = Modifier.fillMaxWidth().testTag("btn-select-month")
-                    ) {
-                        Text("Periode: $selectedMonthState")
-                    }
-                    DropdownMenu(
-                        expanded = dropdownExpanded,
-                        onDismissRequest = { dropdownExpanded = false }
-                    ) {
-                        monthsList.forEach { m ->
-                            DropdownMenuItem(
-                                text = { Text(m) },
-                                onClick = {
-                                    viewModel.selectedMonth.value = m
-                                    dropdownExpanded = false
-                                }
-                            )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        OutlinedButton(
+                            onClick = { dropdownExpanded = true },
+                            modifier = Modifier.fillMaxWidth().testTag("btn-select-month")
+                        ) {
+                            Text("Periode: $selectedMonthState")
                         }
+                        DropdownMenu(
+                            expanded = dropdownExpanded,
+                            onDismissRequest = { dropdownExpanded = false }
+                        ) {
+                            monthsList.forEach { m ->
+                                DropdownMenuItem(
+                                    text = { Text(m) },
+                                    onClick = {
+                                        viewModel.selectedMonth.value = m
+                                        dropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    Button(
+                        onClick = { showPostOverheadDialog = true },
+                        modifier = Modifier.weight(1f).testTag("btn-post-overhead"),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    ) {
+                        Text("Posting Biaya Rutin", maxLines = 1)
                     }
                 }
             }
@@ -329,5 +396,61 @@ fun CashFlowScreen(
             },
             dismissButton = { TextButton(onClick = { showForm = false }) { Text("Batal") } }
         )
+    }
+
+    val settingsState by viewModel.settings.collectAsState()
+
+    if (showPostOverheadDialog) {
+        val s = settingsState
+        if (s == null) {
+            AlertDialog(
+                onDismissRequest = { showPostOverheadDialog = false },
+                title = { Text("Posting Biaya Rutin") },
+                text = { Text("Memuat data pengaturan toko...") },
+                confirmButton = { TextButton(onClick = { showPostOverheadDialog = false }) { Text("OK") } }
+            )
+        } else {
+            val totalGaji = s.jumlahKaryawan * s.gajiHarian * s.hariKerjaSebulan
+            val totalOverhead = s.listrikBulanan + totalGaji
+
+            AlertDialog(
+                onDismissRequest = { showPostOverheadDialog = false },
+                title = { Text("Posting Biaya Rutin") },
+                text = {
+                    Column {
+                        Text("Apakah Anda yakin ingin memposting biaya operasional bulanan rutin ke kas keluar?", style = MaterialTheme.typography.bodyMedium)
+                        Spacer(Modifier.padding(top = 12.dp))
+                        Text("Rincian Biaya (Dari Pengaturan):", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+                        Spacer(Modifier.padding(top = 4.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("1. Gaji Karyawan (${s.jumlahKaryawan} org x ${s.hariKerjaSebulan} hari):", style = MaterialTheme.typography.bodySmall)
+                            Text(Formatters.rupiah(totalGaji), fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall)
+                        }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("2. Listrik Bulanan:", style = MaterialTheme.typography.bodySmall)
+                            Text(Formatters.rupiah(s.listrikBulanan), fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall)
+                        }
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Total Kas Keluar:", fontWeight = FontWeight.Bold)
+                            Text(Formatters.rupiah(totalOverhead), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            viewModel.postMonthlyOverhead()
+                            showPostOverheadDialog = false
+                            Toast.makeText(context, "Biaya rutin berhasil diposting ke kas keluar!", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.testTag("btn-confirm-post-overhead")
+                    ) { Text("Posting Sekarang") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showPostOverheadDialog = false }) { Text("Batal") }
+                }
+            )
+        }
     }
 }

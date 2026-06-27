@@ -1727,6 +1727,9 @@ class BmpBahanBakuRepository @Inject constructor(
     private val _bahanBaku = MutableStateFlow<List<BmpBahanBakuData>>(emptyList())
     val bahanBaku = _bahanBaku.asStateFlow()
 
+    private val _suppliers = MutableStateFlow<List<String>>(emptyList())
+    val suppliers = _suppliers.asStateFlow()
+
     suspend fun addUsage(materialId: Long, quantity: Double, reason: String) {
         addUsage(materialId = materialId, quantity = quantity, reason = reason, refId = 0L)
     }
@@ -1742,11 +1745,23 @@ class BmpBahanBakuRepository @Inject constructor(
         } catch (_: Exception) {}
     }
 
+    suspend fun refreshSuppliers() {
+        try {
+            val resp = api.getSuppliers()
+            if (resp.isSuccessful) {
+                _suppliers.value = resp.body() ?: emptyList()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     suspend fun refresh() {
         try {
             val resp = api.getBahanBaku()
             if (resp.isSuccessful) {
                 _bahanBaku.value = resp.body()?.map { it.toBmpBahanBakuData() } ?: emptyList()
+                refreshSuppliers()
             } else {
                 android.util.Log.e("BmpBahanBakuRepo", "refresh failed: ${resp.errorBody()?.string()}")
             }

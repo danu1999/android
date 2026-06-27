@@ -31,6 +31,7 @@ import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material.icons.outlined.Inventory
 import androidx.compose.material.icons.outlined.PrecisionManufacturing
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Analytics
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -119,6 +120,7 @@ fun BmpDashboardScreen(
             BmpMenuItem("Produksi", "Catatan produksi harian", Icons.Outlined.PrecisionManufacturing, "bmp/production", "menu-production"),
             BmpMenuItem("Pembayaran", "Catat & lihat penerimaan", Icons.Outlined.Payments, "bmp/payments", "menu-payments"),
             BmpMenuItem("Arus Kas", "Cashflow masuk/keluar", Icons.Outlined.AccountBalance, "bmp/cashflow", "menu-cashflow"),
+            BmpMenuItem("Analisis Keuangan", "Laba rugi & ekspor Excel", Icons.Outlined.Analytics, "bmp/reports/financial", "menu-financial-report"),
             BmpMenuItem("Karyawan", "Data & kontrol staf", Icons.Outlined.Badge, "bmp/employees", "menu-employees"),
             BmpMenuItem("Penggajian", "Payroll & rekap", Icons.Outlined.PriceChange, "bmp/payroll", "menu-payroll"),
             BmpMenuItem("Pengaturan", "Profil perusahaan & sistem", Icons.Outlined.Settings, "bmp/settings", "menu-settings"),
@@ -306,7 +308,7 @@ fun BmpDashboardScreen(
                         Spacer(Modifier.height(4.dp))
                         OverdueInvoiceCard(
                             overdueCount = kpiData.overdueCount,
-                            onClick = { onNavigate(Screen.BmpInvoices.build(null)) }
+                            onClick = { onNavigate(Screen.BmpInvoices.build(null, filterOverdue = true)) }
                         )
                     }
                     
@@ -334,38 +336,7 @@ fun BmpDashboardScreen(
                     }
                 }
 
-                item {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "AKSI CEPAT",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        QuickActionButton(
-                            label = "Buat Invoice",
-                            icon = Icons.Outlined.Description,
-                            onClick = { navController.navigate("create_invoice") },
-                            modifier = Modifier.weight(1f)
-                        )
-                        QuickActionButton(
-                            label = "Catat Produksi",
-                            icon = Icons.Outlined.PrecisionManufacturing,
-                            onClick = { navController.navigate("add_production") },
-                            modifier = Modifier.weight(1f)
-                        )
-                        QuickActionButton(
-                            label = "Beli Bahan Baku",
-                            icon = Icons.Outlined.Science,
-                            onClick = { navController.navigate("buy_material") },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
+
 
                 item {
                     Spacer(Modifier.height(8.dp))

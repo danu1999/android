@@ -196,6 +196,7 @@ func main() {
 	http.HandleFunc("/api/rt/bmp/bahan-baku", handleRtBmpBahanBaku)
 	http.HandleFunc("/api/rt/bmp/bahan-baku/", handleRtBmpBahanBakuById)
 	http.HandleFunc("/api/rt/bmp/bahan-baku-items", handleRtBmpBahanBakuItems)
+	http.HandleFunc("/api/rt/bmp/suppliers", handleRtBmpSuppliers)
 	http.HandleFunc("/api/rt/bmp/production-logs", handleRtBmpProductionLogs)
 	http.HandleFunc("/api/rt/bmp/production-logs/", handleRtBmpProductionLogsById)
 	http.HandleFunc("/api/rt/bmp/product-stocks", handleRtBmpProductStocks)
@@ -204,6 +205,8 @@ func main() {
 	http.HandleFunc("/api/rt/print-settings", handleRtPrintSettings)
 	http.HandleFunc("/api/rt/product-targets", handleRtProductTargets)
 	http.HandleFunc("/api/rt/product-targets/", handleRtProductTargetsById)
+	http.HandleFunc("/api/rt/bmp/reports/financial", handleRtBmpFinancialReport)
+	http.HandleFunc("/api/rt/bmp/reports/export", handleRtBmpExportReport)
 
 	// PIN Login for kasir (full online)
 	http.HandleFunc("/api/auth/pin-login", handlePinLogin)

@@ -7,6 +7,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -1082,4 +1083,341 @@ func handleRtProductTargetsById(w http.ResponseWriter, r *http.Request) {
 	default:
 		jsonErr(w, 405, "method not allowed")
 	}
+}
+
+func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	
+	if r.Method != http.MethodGet {
+		jsonErr(w, 405, "method not allowed")
+		return
+	}
+
+	periodType := r.URL.Query().Get("periodType") // MONTHLY, QUARTERLY, ANNUALLY
+	dateStr := r.URL.Query().Get("date")          // "2026-06", "2026-Q1", "2026"
+	if dateStr == "" {
+		jsonErr(w, 400, "date is required")
+		return
+	}
+
+	var startMs, endMs int64
+	loc, _ := time.LoadLocation("Asia/Jakarta")
+
+	if periodType == "MONTHLY" {
+		t, err := time.ParseInLocation("2006-01", dateStr, loc)
+		if err != nil {
+			jsonErr(w, 400, "invalid monthly date format, use YYYY-MM")
+			return
+		}
+		startMs = t.UnixNano() / 1e6
+		endMs = t.AddDate(0, 1, 0).UnixNano() / 1e6
+	} else if periodType == "QUARTERLY" {
+		parts := strings.Split(dateStr, "-Q")
+		if len(parts) != 2 {
+			jsonErr(w, 400, "invalid quarterly date format, use YYYY-QX")
+			return
+		}
+		year, _ := strconv.Atoi(parts[0])
+		quarter, _ := strconv.Atoi(parts[1])
+		if year < 1900 || quarter < 1 || quarter > 4 {
+			jsonErr(w, 400, "invalid quarter or year")
+			return
+		}
+		monthOffset := (quarter - 1) * 3
+		t := time.Date(year, time.Month(monthOffset+1), 1, 0, 0, 0, 0, loc)
+		startMs = t.UnixNano() / 1e6
+		endMs = t.AddDate(0, 3, 0).UnixNano() / 1e6
+	} else if periodType == "ANNUALLY" {
+		t, err := time.ParseInLocation("2006", dateStr, loc)
+		if err != nil {
+			jsonErr(w, 400, "invalid annual date format, use YYYY")
+			return
+		}
+		startMs = t.UnixNano() / 1e6
+		endMs = t.AddDate(1, 0, 0).UnixNano() / 1e6
+	} else {
+		jsonErr(w, 400, "invalid periodType, use MONTHLY, QUARTERLY, or ANNUALLY")
+		return
+	}
+
+	// 1. Query Omzet
+	var omzet float64
+	err := db.QueryRow(`
+		SELECT COALESCE(SUM("totalAmount"), 0) 
+		FROM bmp_invoices 
+		WHERE "tenantId"=$1 AND "createdAt" >= $2 AND "createdAt" < $3 AND "isDeleted"=FALSE
+	`, tenantId, startMs, endMs).Scan(&omzet)
+	if err != nil { jsonErr(w, 500, err.Error()); return }
+
+	// 2. Query COGS (HPP Terjual)
+	var cogs float64
+	err = db.QueryRow(`
+		SELECT COALESCE(SUM(bp.quantity * COALESCE(mp."hppTotalPcs", 0)), 0)
+		FROM bmp_products bp
+		JOIN bmp_invoices bi ON bp."invoiceId" = bi.id
+		LEFT JOIN bmp_master_products mp ON bp."masterItemID" = mp.id
+		WHERE bi."tenantId"=$1 AND bi."createdAt" >= $2 AND bi."createdAt" < $3 
+		  AND bi."isDeleted"=FALSE AND bp."isDeleted"=FALSE
+	`, tenantId, startMs, endMs).Scan(&cogs)
+	if err != nil { jsonErr(w, 500, err.Error()); return }
+
+	// 3. Query OPEX (Operating Expenses)
+	var opex float64
+	err = db.QueryRow(`
+		SELECT COALESCE(SUM("amount"), 0) 
+		FROM bmp_cashflow 
+		WHERE "tenantId"=$1 AND "transactionType"='KELUAR' 
+		  AND "transactionDate" >= $2 AND "transactionDate" < $3 AND "isDeleted"=FALSE
+	`, tenantId, startMs, endMs).Scan(&opex)
+	if err != nil { jsonErr(w, 500, err.Error()); return }
+
+	labaKotor := omzet - cogs
+	labaBersih := labaKotor - opex
+
+	// 4. Calculate BEP
+	var bep float64
+	if omzet > 0 && (omzet-cogs) > 0 {
+		marginRatio := (omzet - cogs) / omzet
+		bep = opex / marginRatio
+	}
+
+	cogsPercentage := 0.0
+	marginPercentage := 0.0
+	if omzet > 0 {
+		cogsPercentage = (cogs / omzet) * 100.0
+		marginPercentage = (labaKotor / omzet) * 100.0
+	}
+
+	// 5. Query Top Products
+	type TopProduct struct {
+		Name     string  `json:"name"`
+		QtySold  float64 `json:"qtySold"`
+		Revenue  float64 `json:"revenue"`
+	}
+	topProducts := []TopProduct{}
+	rows, err := db.Query(`
+		SELECT COALESCE(mp.title, bp.title), SUM(bp.quantity) as qty, SUM(bp.quantity * bp.price) as rev
+		FROM bmp_products bp
+		JOIN bmp_invoices bi ON bp."invoiceId" = bi.id
+		LEFT JOIN bmp_master_products mp ON bp."masterItemID" = mp.id
+		WHERE bi."tenantId"=$1 AND bi."createdAt" >= $2 AND bi."createdAt" < $3 
+		  AND bi."isDeleted"=FALSE AND bp."isDeleted"=FALSE
+		GROUP BY COALESCE(mp.title, bp.title)
+		ORDER BY qty DESC
+		LIMIT 5
+	`, tenantId, startMs, endMs)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var tp TopProduct
+			if errS := rows.Scan(&tp.Name, &tp.QtySold, &tp.Revenue); errS == nil {
+				topProducts = append(topProducts, tp)
+			}
+		}
+	}
+
+	response := map[string]interface{}{
+		"period":           dateStr,
+		"omzet":            omzet,
+		"cogs":             cogs,
+		"labaKotor":        labaKotor,
+		"opex":             opex,
+		"labaBersih":       labaBersih,
+		"bep":              bep,
+		"cogsPercentage":   cogsPercentage,
+		"marginPercentage": marginPercentage,
+		"topProducts":      topProducts,
+	}
+
+	jsonOK(w, response)
+}
+
+func handleRtBmpExportReport(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+
+	if r.Method != http.MethodGet {
+		jsonErr(w, 405, "method not allowed")
+		return
+	}
+
+	periodType := r.URL.Query().Get("periodType") // MONTHLY, QUARTERLY, ANNUALLY
+	dateStr := r.URL.Query().Get("date")          // "2026-06", "2026-Q1", "2026"
+	if dateStr == "" {
+		jsonErr(w, 400, "date is required")
+		return
+	}
+
+	var startMs, endMs int64
+	loc, _ := time.LoadLocation("Asia/Jakarta")
+
+	if periodType == "MONTHLY" {
+		t, _ := time.ParseInLocation("2006-01", dateStr, loc)
+		startMs = t.UnixNano() / 1e6
+		endMs = t.AddDate(0, 1, 0).UnixNano() / 1e6
+	} else if periodType == "QUARTERLY" {
+		parts := strings.Split(dateStr, "-Q")
+		year, _ := strconv.Atoi(parts[0])
+		quarter, _ := strconv.Atoi(parts[1])
+		monthOffset := (quarter - 1) * 3
+		t := time.Date(year, time.Month(monthOffset+1), 1, 0, 0, 0, 0, loc)
+		startMs = t.UnixNano() / 1e6
+		endMs = t.AddDate(0, 3, 0).UnixNano() / 1e6
+	} else { // ANNUALLY
+		t, _ := time.ParseInLocation("2006", dateStr, loc)
+		startMs = t.UnixNano() / 1e6
+		endMs = t.AddDate(1, 0, 0).UnixNano() / 1e6
+	}
+
+	// Fetch Summary Metrics
+	var omzet, cogs, opex float64
+	_ = db.QueryRow(`
+		SELECT COALESCE(SUM("totalAmount"), 0) FROM bmp_invoices 
+		WHERE "tenantId"=$1 AND "createdAt" >= $2 AND "createdAt" < $3 AND "isDeleted"=FALSE
+	`, tenantId, startMs, endMs).Scan(&omzet)
+
+	_ = db.QueryRow(`
+		SELECT COALESCE(SUM(bp.quantity * COALESCE(mp."hppTotalPcs", 0)), 0)
+		FROM bmp_products bp
+		JOIN bmp_invoices bi ON bp."invoiceId" = bi.id
+		LEFT JOIN bmp_master_products mp ON bp."masterItemID" = mp.id
+		WHERE bi."tenantId"=$1 AND bi."createdAt" >= $2 AND bi."createdAt" < $3 
+		  AND bi."isDeleted"=FALSE AND bp."isDeleted"=FALSE
+	`, tenantId, startMs, endMs).Scan(&cogs)
+
+	_ = db.QueryRow(`
+		SELECT COALESCE(SUM("amount"), 0) FROM bmp_cashflow 
+		WHERE "tenantId"=$1 AND "transactionType"='KELUAR' 
+		  AND "transactionDate" >= $2 AND "transactionDate" < $3 AND "isDeleted"=FALSE
+	`, tenantId, startMs, endMs).Scan(&opex)
+
+	labaKotor := omzet - cogs
+	labaBersih := labaKotor - opex
+
+	// Set CSV Headers
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	filename := fmt.Sprintf("Laporan_Keuangan_POSBah_%s.csv", dateStr)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+
+	writer := csv.NewWriter(w)
+	writer.Comma = ';' // Titik koma agar Excel regional Indonesia langsung memisah kolom
+
+	// BOM untuk UTF-8
+	_, _ = w.Write([]byte{0xEF, 0xBB, 0xBF})
+
+	// 1. Header Ringkasan Keuangan
+	_ = writer.Write([]string{"LAPORAN KEUANGAN POSBAH (MANUFAKTUR)"})
+	_ = writer.Write([]string{"Periode", dateStr})
+	_ = writer.Write([]string{"Tipe Laporan", periodType})
+	_ = writer.Write([]string{""})
+
+	_ = writer.Write([]string{"IKHTISAR LABA RUGI"})
+	_ = writer.Write([]string{"Pos Keuangan", "Nominal (Rupiah)"})
+	_ = writer.Write([]string{"OMZET (Pendapatan Kotor)", fmt.Sprintf("%.2f", omzet)})
+	_ = writer.Write([]string{"HARGA POKOK PENJUALAN (COGS / HPP)", fmt.Sprintf("%.2f", cogs)})
+	_ = writer.Write([]string{"LABA KOTOR", fmt.Sprintf("%.2f", labaKotor)})
+	_ = writer.Write([]string{"BEBAN OPERASIONAL (OPEX)", fmt.Sprintf("%.2f", opex)})
+	_ = writer.Write([]string{"LABA BERSIH", fmt.Sprintf("%.2f", labaBersih)})
+	_ = writer.Write([]string{""})
+	_ = writer.Write([]string{""})
+
+	// 2. Jurnal Penjualan
+	_ = writer.Write([]string{"DETAIL JURNAL PENJUALAN (INVOICES)"})
+	_ = writer.Write([]string{"ID", "Nomor Invoice", "Nama Pelanggan", "Tanggal Faktur", "Jatuh Tempo", "Total Tagihan", "Telah Dibayar", "Status"})
+	
+	rowsInv, errInv := db.Query(`
+		SELECT bi.id, bi.number, COALESCE(bc."clientName", '-'), bi."createdAt", bi."dueDate", bi."totalAmount", bi."paidAmount", bi.status
+		FROM bmp_invoices bi
+		LEFT JOIN bmp_clients bc ON bi."clientId" = bc.id
+		WHERE bi."tenantId"=$1 AND bi."createdAt" >= $2 AND bi."createdAt" < $3 AND bi."isDeleted"=FALSE
+		ORDER BY bi.id ASC
+	`, tenantId, startMs, endMs)
+	
+	if errInv == nil {
+		defer rowsInv.Close()
+		for rowsInv.Next() {
+			var id int64
+			var number, clientName, status string
+			var createdAt, dueDate int64
+			var totalAmt, paidAmt float64
+			if errS := rowsInv.Scan(&id, &number, &clientName, &createdAt, &dueDate, &totalAmt, &paidAmt, &status); errS == nil {
+				createdDate := time.Unix(createdAt/1000, 0).In(loc).Format("2006-01-02 15:04")
+				dueDateStr := "-"
+				if dueDate > 0 {
+					dueDateStr = time.Unix(dueDate/1000, 0).In(loc).Format("2006-01-02")
+				}
+				_ = writer.Write([]string{
+					strconv.FormatInt(id, 10),
+					number,
+					clientName,
+					createdDate,
+					dueDateStr,
+					fmt.Sprintf("%.2f", totalAmt),
+					fmt.Sprintf("%.2f", paidAmt),
+					status,
+				})
+			}
+		}
+	}
+	_ = writer.Write([]string{""})
+	_ = writer.Write([]string{""})
+
+	// 3. Buku Kas Keluar
+	_ = writer.Write([]string{"DETAIL PENGELUARAN OPERASIONAL (CASHFLOW KELUAR)"})
+	_ = writer.Write([]string{"ID", "Tanggal Transaksi", "Deskripsi Pengeluaran", "Jumlah (Rupiah)"})
+
+	rowsCF, errCF := db.Query(`
+		SELECT id, "transactionDate", description, amount
+		FROM bmp_cashflow
+		WHERE "tenantId"=$1 AND "transactionType"='KELUAR' AND "transactionDate" >= $2 AND "transactionDate" < $3 AND "isDeleted"=FALSE
+		ORDER BY id ASC
+	`, tenantId, startMs, endMs)
+	
+	if errCF == nil {
+		defer rowsCF.Close()
+		for rowsCF.Next() {
+			var id int64
+			var transDate int64
+			var desc string
+			var amount float64
+			if errS := rowsCF.Scan(&id, &transDate, &desc, &amount); errS == nil {
+				dateStrFormatted := time.Unix(transDate/1000, 0).In(loc).Format("2006-01-02 15:04")
+				_ = writer.Write([]string{
+					strconv.FormatInt(id, 10),
+					dateStrFormatted,
+					desc,
+					fmt.Sprintf("%.2f", amount),
+				})
+			}
+		}
+	}
+
+	writer.Flush()
+}
+
+func handleRtBmpSuppliers(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	if r.Method != http.MethodGet {
+		jsonErr(w, 405, "method not allowed")
+		return
+	}
+	rows, err := db.Query(`
+		SELECT DISTINCT supplier 
+		FROM bmp_bahan_baku 
+		WHERE "tenantId"=$1 AND "isDeleted"=FALSE AND supplier IS NOT NULL AND TRIM(supplier) != ''
+		ORDER BY supplier ASC
+	`, tenantId)
+	if err != nil { jsonErr(w, 500, err.Error()); return }
+	defer rows.Close()
+	
+	list := []string{}
+	for rows.Next() {
+		var s string
+		if errS := rows.Scan(&s); errS == nil {
+			list = append(list, s)
+		}
+	}
+	jsonOK(w, list)
 }

@@ -49,6 +49,7 @@ class InvoicesListViewModel @Inject constructor(
     }
 
     val initialClientId: Long? = savedStateHandle.get<String>("clientId")?.toLongOrNull()
+    val initialFilterOverdue = savedStateHandle.get<String>("filterOverdue")?.toBoolean() ?: false
 
     val invoices = invoiceRepo.observe(tenantId)
         .map { list ->
@@ -81,12 +82,16 @@ class InvoicesListViewModel @Inject constructor(
     private val _filterPartial = MutableStateFlow(false)
     val filterPartial = _filterPartial.asStateFlow()
 
+    private val _filterOverdue = MutableStateFlow(initialFilterOverdue)
+    val filterOverdue = _filterOverdue.asStateFlow()
+
     val filteredInvoices = combine(
         invoiceRepo.observe(tenantId),
         _filterClientId,
         _filterStartDate,
-        _filterEndDate
-    ) { rawList, clientId, start, end ->
+        _filterEndDate,
+        _filterOverdue
+    ) { rawList, clientId, start, end, overdueOnly ->
         var list = rawList
         if (clientId != null) {
             list = list.filter { it.clientId == clientId }
@@ -96,6 +101,9 @@ class InvoicesListViewModel @Inject constructor(
         }
         if (end != null) {
             list = list.filter { it.createdAt <= end + 24 * 60 * 60 * 1000L - 1 }
+        }
+        if (overdueOnly) {
+            list = list.filter { it.status == "OVERDUE" }
         }
         list
     }.combine(
@@ -115,6 +123,10 @@ class InvoicesListViewModel @Inject constructor(
         }
         res
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun toggleFilterOverdue(enabled: Boolean) {
+        _filterOverdue.value = enabled
+    }
 
     fun setClientFilter(clientId: Long?) {
         _filterClientId.value = clientId

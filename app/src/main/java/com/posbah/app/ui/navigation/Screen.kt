@@ -19,8 +19,9 @@ sealed class Screen(val route: String) {
     object BmpClientEdit : Screen("bmp/clients/edit?id={id}") {
         fun build(id: Long? = null) = "bmp/clients/edit?id=${id ?: -1}"
     }
-    object BmpInvoices : Screen("bmp/invoices?clientId={clientId}") {
-        fun build(clientId: Long? = null) = if (clientId != null) "bmp/invoices?clientId=$clientId" else "bmp/invoices"
+    object BmpInvoices : Screen("bmp/invoices?clientId={clientId}&filterOverdue={filterOverdue}") {
+        fun build(clientId: Long? = null, filterOverdue: Boolean = false) =
+            "bmp/invoices?clientId=${clientId ?: ""}&filterOverdue=$filterOverdue"
     }
     object BmpInvoiceDetail : Screen("bmp/invoices/{id}") {
         fun build(id: Long) = "bmp/invoices/$id"
@@ -50,6 +51,7 @@ sealed class Screen(val route: String) {
     }
     object BmpStock : Screen("bmp/stock")
     object BmpProductionLog : Screen("bmp/production")
+    object BmpFinancialReport : Screen("bmp/reports/financial")
     object AdminPanel : Screen("admin/panel")
 
     object OutletControl : Screen("owner/outlet_control")

@@ -61,11 +61,19 @@ import coil.compose.AsyncImage
 import androidx.compose.foundation.background
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.outlined.Payments
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BahanBakuListScreen(
     onBack: () -> Unit,
@@ -86,6 +94,13 @@ fun BahanBakuListScreen(
     var payDebtTarget by remember { mutableStateOf<BmpBahanBakuEntity?>(null) }
     var payAmount by remember { mutableStateOf("") }
     var showCalendarDialog by remember { mutableStateOf(false) }
+    var showPayGlobalDialog by remember { mutableStateOf(false) }
+    var globalPayAmount by remember { mutableStateOf("") }
+    var globalPayMethod by remember { mutableStateOf("TRANSFER") }
+    var globalPayNotes by remember { mutableStateOf("") }
+    val suppliers by viewModel.suppliers.collectAsState()
+    var globalPaySupplier by remember { mutableStateOf("") }
+    var globalPaySupplierDropdownExpanded by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -147,6 +162,22 @@ fun BahanBakuListScreen(
                         MaterialTheme.colorScheme.error
                     else Color(0xFF22C57E)
                 )
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = {
+                        showPayGlobalDialog = true
+                        globalPayAmount = ""
+                        globalPayMethod = "TRANSFER"
+                        globalPaySupplier = ""
+                        globalPayNotes = ""
+                    },
+                    modifier = Modifier.fillMaxWidth().testTag("btn-pay-global-bb"),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Icon(imageVector = Icons.Outlined.Payments, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Bayar Global (TF/Cash)", fontWeight = FontWeight.Bold)
+                }
             }
 
             if (list.isEmpty()) {
@@ -290,6 +321,124 @@ fun BahanBakuListScreen(
                 TextButton(
                     onClick = { payDebtTarget = null; payAmount = "" }
                 ) { Text("Batal") }
+            }
+        )
+    }
+
+    if (showPayGlobalDialog) {
+        AlertDialog(
+            onDismissRequest = { showPayGlobalDialog = false },
+            title = { Text("Bayar Supplier (Global)") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Catat pengeluaran pembayaran bahan baku ke supplier tanpa mencocokkan faktur/tagihan tertentu.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = globalPayAmount,
+                        onValueChange = { globalPayAmount = it },
+                        label = { Text("Jumlah Pembayaran (Rp)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("global-pay-amount")
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    
+                    // Supplier Autocomplete Dropdown
+                    ExposedDropdownMenuBox(
+                        expanded = globalPaySupplierDropdownExpanded,
+                        onExpandedChange = { globalPaySupplierDropdownExpanded = it }
+                    ) {
+                        OutlinedTextField(
+                            value = globalPaySupplier,
+                            onValueChange = {
+                                globalPaySupplier = it
+                                globalPaySupplierDropdownExpanded = true
+                            },
+                            label = { Text("Pemasok / Supplier") },
+                            singleLine = true,
+                            modifier = Modifier
+                                .menuAnchor()
+                                .fillMaxWidth()
+                                .testTag("global-pay-supplier"),
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = globalPaySupplierDropdownExpanded) },
+                            colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+                        )
+                        val filteredSuppliers = suppliers.filter {
+                            it.contains(globalPaySupplier, ignoreCase = true)
+                        }
+                        if (filteredSuppliers.isNotEmpty()) {
+                            ExposedDropdownMenu(
+                                expanded = globalPaySupplierDropdownExpanded,
+                                onDismissRequest = { globalPaySupplierDropdownExpanded = false }
+                            ) {
+                                filteredSuppliers.forEach { suggestion ->
+                                    DropdownMenuItem(
+                                        text = { Text(suggestion) },
+                                        onClick = {
+                                            globalPaySupplier = suggestion
+                                            globalPaySupplierDropdownExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    
+                    Text("Metode Pembayaran:", style = MaterialTheme.typography.labelSmall)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf("TRANSFER" to "Transfer Bank", "CASH" to "Tunai (Cash)").forEach { (method, label) ->
+                            val isSelected = globalPayMethod == method
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
+                                color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f) else Color.Transparent,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { globalPayMethod = method }
+                                    .padding(vertical = 8.dp),
+                                contentColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            ) {
+                                Text(
+                                    text = label,
+                                    textAlign = TextAlign.Center,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    OutlinedTextField(
+                        value = globalPayNotes,
+                        onValueChange = { globalPayNotes = it },
+                        label = { Text("Catatan / Keterangan") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("global-pay-notes")
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val amt = globalPayAmount.toDoubleOrNull() ?: 0.0
+                        if (amt > 0.0) {
+                            viewModel.payGlobal(globalPayMethod, amt, globalPaySupplier, globalPayNotes)
+                            showPayGlobalDialog = false
+                            android.widget.Toast.makeText(context, "Berhasil mencatat pembayaran global!", android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            android.widget.Toast.makeText(context, "Masukkan jumlah bayar yang valid!", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.testTag("btn-confirm-pay-global")
+                ) { Text("Simpan", fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPayGlobalDialog = false }) { Text("Batal") }
             }
         )
     }

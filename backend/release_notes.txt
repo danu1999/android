@@ -1,52 +1,8 @@
-POSBah v2.18.3 - Varian Produk, Harga Grosir, Rincian HPP, dan Target Penjualan Outlet
+POSBah v2.18.7 - Pembersihan Dashboard & Fitur Pembayaran Global Bahan Baku (Tunai/Transfer)
 
-Halo Kak! POSBah v2.18.3 hadir dengan peningkatan fitur komprehensif pada modul POS FnB:
-1. Varian Produk POS FnB: Tambahkan pilihan varian seperti coklat, ukuran L, ukuran M secara fleksibel saat input produk, pilih varian saat transaksi POS, dan cetak varian terpilih di struk belanja.
-2. Harga Grosir Dinamis: Tetapkan harga grosir dan batas jumlah minimum pembelian. POS otomatis menghitung harga grosir ketika jumlah pembelian di keranjang tercapai.
-3. Rincian Komponen HPP: Penambahan komponen HPP produk (misal: Nasi, Lele, Kertas) yang otomatis terakumulasi sebagai Harga Beli produk untuk mempermudah analisis laba kotor.
-4. Target Penjualan Harian per Outlet: Pemilik bisnis dapat menetapkan target penjualan harian per produk untuk masing-masing outlet. Target harian bersifat immutable (history aman) dan otomatis terisi dengan template target default.
-5. Pembatasan Hak Akses: Proses penambahan dan pengubahan produk kini dibatasi secara ketat hanya dapat dilakukan oleh Owner atau Administrator/Admin.
+Halo Kak! POSBah v2.18.7 kini hadir dengan pembaruan fitur baru untuk mempermudah operasional Anda:
+1. Pembersihan Dashboard: Bagian Aksi Cepat yang redundan telah dihapus dari halaman utama untuk tampilan yang lebih bersih dan ringkas.
+2. Filter Invoice Jatuh Tempo Instan: Mengklik banner invoice jatuh tempo di halaman utama kini otomatis menyaring daftar untuk hanya menampilkan invoice jatuh tempo saja.
+3. Pembayaran Global Bahan Baku (TF/Cash): Sekarang Anda dapat mencatat pembayaran tunai atau transfer ke supplier bahan baku secara langsung tanpa perlu mencocokkan faktur/tagihan hutang tertentu. Sisa hutang supplier dan arus kas akan terpotong secara otomatis.
 
 Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
-
----
-
-POSBah v2.18.2 - Pembersihan Komponen Migrasi Offline & Pembaruan Tampilan
-
-Halo Kak! POSBah v2.18.2 hadir dengan pembersihan sistem migrasi:
-1. Pembersihan Komponen Migrasi Offline: Menghapus instruksi "Jangan uninstall" dan indikator sinkronisasi lokal pada layar pembaruan wajib. Karena seluruh data transaksi Anda sudah terpusat dan aman 100% di cloud, Anda sekarang bebas melakukan uninstall/reinstall aplikasi kapan saja tanpa takut kehilangan data.
-
-Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
-
----
-
-POSBah v2.18.1 - Pembaruan Jenis Bahan Baku PP
-
-Halo Kak! POSBah v2.18.1 hadir dengan pembaruan khusus:
-1. Pemisahan Jenis Bahan PP: Pilihan jenis bahan PP kini dibagi lebih detail menjadi PP Original, PP Peletan, dan PP Gilingan pada form pencatatan Bahan Baku untuk akurasi pencatatan inventori manufaktur Anda.
-
-Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
-
----
-
-POSBah v2.18.0 - Peningkatan Performa, Cache Memori & Pembersihan Otomatis
-
-Halo Kak! POSBah v2.18.0 hadir dengan peningkatan performa dan efisiensi memori yang signifikan:
-1. Pembersihan Memori HP Otomatis: Aplikasi sekarang otomatis mendeteksi dan menghapus berkas database lama (offline-first) dari memori internal HP Anda setelah migrasi full online untuk membebaskan ruang penyimpanan.
-2. Fitur Cache Memori Statis (Read-Only Cache): Menghindari request API berulang-ulang untuk data statis (Outlet, Karyawan, dan Master Produk), sehingga aplikasi menjadi jauh lebih cepat, hemat kuota, dan responsif.
-3. Pembaruan Kecepatan (Optimistic UI): Peningkatan respon penginputan data pada POS, Invoice, dan Manufaktur.
-4. Gzip Compression: Mengaktifkan kompresi data transfer di server VPS agar loading data berukuran besar menjadi 70% lebih cepat dan irit kuota.
-
-Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
-
----
-
-POSBah v2.17.56 - Pembaruan Keamanan & Validasi Versi Aplikasi
-
-Halo Kak! POSBah v2.17.56 hadir dengan peningkatan keamanan dan validasi versi aplikasi:
-1. Validasi Versi Global: Peningkatan validasi x-client-version secara terpusat pada seluruh API endpoint VPS POSBah (POS, Invoice, & Manufaktur) untuk mencegah penggunaan aplikasi versi lama yang rentan terhadap kendala kegagalan sinkronisasi data transaksi.
-2. Penanganan Error yang Lebih Baik: Apabila Anda menggunakan aplikasi versi lama, sistem akan menolak otentikasi login secara aman dan menampilkan notifikasi instruksi pembaruan secara langsung untuk mengunduh versi terbaru.
-
-Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
-
----

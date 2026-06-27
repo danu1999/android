@@ -39,6 +39,7 @@ import com.posbah.app.ui.screens.admin.AdminPanelScreen
 import com.posbah.app.ui.screens.bmp.qr.QrScannerScreen
 import com.posbah.app.ui.screens.bmp.stock.BmpStockScreen
 import com.posbah.app.ui.screens.bmp.production.BmpProductionLogScreen
+import com.posbah.app.ui.screens.bmp.reports.FinancialAnalysisScreen
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -248,7 +249,10 @@ fun PosBahRoot(
 
         composable(
             route = Screen.BmpInvoices.route,
-            arguments = listOf(navArgument("clientId") { type = NavType.StringType; nullable = true; defaultValue = null })
+            arguments = listOf(
+                navArgument("clientId") { type = NavType.StringType; nullable = true; defaultValue = null },
+                navArgument("filterOverdue") { type = NavType.StringType; nullable = true; defaultValue = "false" }
+            )
         ) {
             InvoicesListScreen(
                 onBack = { nav.popBackStack() },
@@ -339,6 +343,10 @@ fun PosBahRoot(
 
         composable(Screen.BmpProductionLog.route) {
             BmpProductionLogScreen(onBack = { nav.popBackStack() })
+        }
+
+        composable(Screen.BmpFinancialReport.route) {
+            FinancialAnalysisScreen(onBack = { nav.popBackStack() })
         }
 
         composable(Screen.AdminPanel.route) {

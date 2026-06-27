@@ -86,6 +86,8 @@ fun BahanBakuFormScreen(
     viewModel: BahanBakuFormViewModel = hiltViewModel()
 ) {
     val ui by viewModel.ui.collectAsState()
+    val suppliers by viewModel.suppliers.collectAsState()
+    var dropdownExpanded by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     LaunchedEffect(ui.saved) {
@@ -179,13 +181,45 @@ fun BahanBakuFormScreen(
                         )
                         Spacer(Modifier.height(10.dp))
 
-                        OutlinedTextField(
-                            value = header.supplier ?: "",
-                            onValueChange = { viewModel.updateHeader { h -> h.copy(supplier = it.ifBlank { null }) } },
-                            label = { Text("Pemasok / Supplier") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth().testTag("bb-supplier")
-                        )
+                        ExposedDropdownMenuBox(
+                            expanded = dropdownExpanded,
+                            onExpandedChange = { dropdownExpanded = it }
+                        ) {
+                            OutlinedTextField(
+                                value = header.supplier ?: "",
+                                onValueChange = {
+                                    viewModel.updateHeader { h -> h.copy(supplier = it.ifBlank { null }) }
+                                    dropdownExpanded = true
+                                },
+                                label = { Text("Pemasok / Supplier") },
+                                singleLine = true,
+                                modifier = Modifier
+                                    .menuAnchor()
+                                    .fillMaxWidth()
+                                    .testTag("bb-supplier"),
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dropdownExpanded) },
+                                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+                            )
+                            val filteredSuppliers = suppliers.filter {
+                                it.contains(header.supplier ?: "", ignoreCase = true)
+                            }
+                            if (filteredSuppliers.isNotEmpty()) {
+                                ExposedDropdownMenu(
+                                    expanded = dropdownExpanded,
+                                    onDismissRequest = { dropdownExpanded = false }
+                                ) {
+                                    filteredSuppliers.forEach { suggestion ->
+                                        DropdownMenuItem(
+                                            text = { Text(suggestion) },
+                                            onClick = {
+                                                viewModel.updateHeader { h -> h.copy(supplier = suggestion) }
+                                                dropdownExpanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
                         Spacer(Modifier.height(10.dp))
 
                         OutlinedTextField(

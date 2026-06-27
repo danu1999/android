@@ -753,7 +753,7 @@ private fun generateInvoiceHtml(
                                     $companyAddress
                                 </p>
                                 <p style="margin: 1px 0; font-size: 9px; color: #333333;">
-                                    Telp: $companyPhone | Email: $companyEmail
+                                    Telp: $companyPhone<br>Email: $companyEmail
                                 </p>
                             </td>
                         </tr>
@@ -765,7 +765,7 @@ private fun generateInvoiceHtml(
                         <h1 style="margin: 0; font-size: 16px; letter-spacing: 1px; color: #000000; line-height: 1; font-weight: bold;">FAKTUR</h1>
                         <p style="margin: 4px 0 1px 0; font-size: 9px; line-height: 1.3;">
                             No: #<span id="invoice-number-val">${invoice.number}</span><br>
-                            Tgl: <span id="created-date-val">${Formatters.dateLong(invoice.createdAt)}</span> | 
+                            Tgl: <span id="created-date-val">${Formatters.dateLong(invoice.createdAt)}</span><br>
                             Jatuh Tempo: <span id="due-date-val">${invoice.dueDate?.let { Formatters.dateLong(it) } ?: "-"}</span>
                         </p>
                     </div>

@@ -169,4 +169,21 @@ interface BmpApiService {
 
     @POST("api/rt/bmp/settings")
     suspend fun saveBmpSettings(@Body body: Map<String, Any?>): Response<Map<String, Any?>>
+
+    @GET("api/rt/bmp/suppliers")
+    suspend fun getSuppliers(): Response<List<String>>
+
+    // ── BMP Reports ───────────────────────────────────────────────────────────
+    @GET("api/rt/bmp/reports/financial")
+    suspend fun getFinancialReport(
+        @Query("periodType") periodType: String,
+        @Query("date") date: String
+    ): Response<Map<String, Any?>>
+
+    @GET("api/rt/bmp/reports/export")
+    @Streaming
+    suspend fun downloadFinancialReportExcel(
+        @Query("periodType") periodType: String,
+        @Query("date") date: String
+    ): Response<okhttp3.ResponseBody>
 }

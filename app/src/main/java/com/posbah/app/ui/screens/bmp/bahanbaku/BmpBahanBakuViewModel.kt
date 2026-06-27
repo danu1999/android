@@ -41,6 +41,9 @@ class BahanBakuListViewModel @Inject constructor(
     val list = repo.observe(tenantId)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<BmpBahanBakuEntity>())
 
+    val suppliers = repo.suppliers
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     val totalHarga = repo.totalHarga(tenantId)
         .stateIn(viewModelScope, SharingStarted.Eagerly, 0.0)
 
@@ -117,6 +120,34 @@ class BahanBakuListViewModel @Inject constructor(
             _error.value = result.message
         } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
             _error.value = "Tidak ada koneksi internet."
+        }
+    }
+
+    fun payGlobal(method: String, amount: Double, supplier: String, notes: String) = viewModelScope.launch {
+        val noTagihan = if (method == "TRANSFER") "BAYAR-TF" else "BAYAR-CASH"
+        val paymentBaku = com.posbah.app.data.repository.BmpBahanBakuData(
+            id = 0,
+            tenantId = tenantId,
+            tanggal = System.currentTimeMillis(),
+            noTagihan = noTagihan,
+            supplier = supplier,
+            totalHarga = 0.0,
+            nominal = amount,
+            notaFotoPath = null,
+            notaFotoUrl = null,
+            notes = notes
+        )
+        val result = repo.create(paymentBaku, emptyList())
+        if (result is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+            _error.value = result.message
+        } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
+            _error.value = "Tidak ada koneksi internet."
+        } else {
+            try {
+                repo.refresh()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 }
@@ -197,6 +228,9 @@ class BahanBakuFormViewModel @Inject constructor(
         )
     )
     val ui = _ui.asStateFlow()
+
+    val suppliers = repo.suppliers
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     init {
         if (editingId > 0) viewModelScope.launch {

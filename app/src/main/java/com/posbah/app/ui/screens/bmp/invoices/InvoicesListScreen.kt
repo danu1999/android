@@ -86,6 +86,7 @@ fun InvoicesListScreen(
     val filterPaid by viewModel.filterPaid.collectAsState()
     val filterBelumBayar by viewModel.filterBelumBayar.collectAsState()
     val filterPartial by viewModel.filterPartial.collectAsState()
+    val filterOverdue by viewModel.filterOverdue.collectAsState()
 
     val selectedClient = remember(clients, selectedClientId) {
         clients.find { it.id == selectedClientId }
@@ -114,7 +115,7 @@ fun InvoicesListScreen(
                         Icon(
                             imageVector = Icons.Outlined.DateRange,
                             contentDescription = "Kalender",
-                            tint = if (filterStartDate != null || filterEndDate != null || filterPaid || filterBelumBayar || filterPartial)
+                            tint = if (filterStartDate != null || filterEndDate != null || filterPaid || filterBelumBayar || filterPartial || filterOverdue)
                                 MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onBackground
                         )
@@ -136,7 +137,7 @@ fun InvoicesListScreen(
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {
             
             // Active Filter Chips Row
-            val activeFiltersExist = selectedClientId != null || filterStartDate != null || filterEndDate != null || filterPaid || filterBelumBayar || filterPartial
+            val activeFiltersExist = selectedClientId != null || filterStartDate != null || filterEndDate != null || filterPaid || filterBelumBayar || filterPartial || filterOverdue
             if (activeFiltersExist) {
                 Row(
                     modifier = Modifier
@@ -205,6 +206,14 @@ fun InvoicesListScreen(
                                 )
                             }
                         }
+                        if (filterOverdue) {
+                            item {
+                                ActiveFilterChip(
+                                    label = "Jatuh Tempo",
+                                    onClear = { viewModel.toggleFilterOverdue(false) }
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -222,6 +231,7 @@ fun InvoicesListScreen(
                                 viewModel.toggleFilterPaid(false)
                                 viewModel.toggleFilterBelumBayar(false)
                                 viewModel.toggleFilterPartial(false)
+                                viewModel.toggleFilterOverdue(false)
                             } else {
                                 onCreate()
                             }
