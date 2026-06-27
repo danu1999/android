@@ -138,27 +138,38 @@ private fun decodeBase64Image(imageStr: String?): Any? {
     return imageStr
 }
 
-private fun serializeHppComponents(components: List<Pair<String, Double>>): String {
+data class HppComponent(
+    val name: String,
+    val cost: Double,
+    val yield: Double = 1.0,
+    val category: String = "BAHAN_BAKU"
+)
+
+private fun serializeHppComponents(components: List<HppComponent>): String {
     val arr = org.json.JSONArray()
-    components.forEach { (name, cost) ->
+    components.forEach { comp ->
         val obj = org.json.JSONObject()
-        obj.put("name", name)
-        obj.put("cost", cost)
+        obj.put("name", comp.name)
+        obj.put("cost", comp.cost)
+        obj.put("yield", comp.yield)
+        obj.put("category", comp.category)
         arr.put(obj)
     }
     return arr.toString()
 }
 
-private fun deserializeHppComponents(json: String?): List<Pair<String, Double>> {
+private fun deserializeHppComponents(json: String?): List<HppComponent> {
     if (json.isNullOrBlank()) return emptyList()
-    val list = mutableListOf<Pair<String, Double>>()
+    val list = mutableListOf<HppComponent>()
     try {
         val arr = org.json.JSONArray(json)
         for (i in 0 until arr.length()) {
             val obj = arr.getJSONObject(i)
             val name = obj.getString("name")
             val cost = obj.optDouble("cost", 0.0)
-            list.add(Pair(name, cost))
+            val yield = obj.optDouble("yield", 1.0)
+            val category = obj.optString("category", "BAHAN_BAKU")
+            list.add(HppComponent(name, cost, yield, category))
         }
     } catch (e: Exception) {
         e.printStackTrace()
@@ -232,9 +243,11 @@ fun PosScreen(
     var newProdWholesalePrice by remember { mutableStateOf("") }
     var newProdMinWholesaleQty by remember { mutableStateOf("") }
     var newProdVariants by remember { mutableStateOf("") }
-    val newProdHppComponents = remember { mutableStateListOf<Pair<String, Double>>() }
+    val newProdHppComponents = remember { mutableStateListOf<HppComponent>() }
     var newHppNameInput by remember { mutableStateOf("") }
     var newHppCostInput by remember { mutableStateOf("") }
+    var newHppYieldInput by remember { mutableStateOf("1") }
+    var newHppCategoryInput by remember { mutableStateOf("BAHAN_BAKU") }
 
     var newCustName by remember { mutableStateOf("") }
     var newCustPhone by remember { mutableStateOf("") }
@@ -254,9 +267,11 @@ fun PosScreen(
     var editProdWholesalePrice by remember { mutableStateOf("") }
     var editProdMinWholesaleQty by remember { mutableStateOf("") }
     var editProdVariants by remember { mutableStateOf("") }
-    val editProdHppComponents = remember { mutableStateListOf<Pair<String, Double>>() }
+    val editProdHppComponents = remember { mutableStateListOf<HppComponent>() }
     var editHppNameInput by remember { mutableStateOf("") }
     var editHppCostInput by remember { mutableStateOf("") }
+    var editHppYieldInput by remember { mutableStateOf("1") }
+    var editHppCategoryInput by remember { mutableStateOf("BAHAN_BAKU") }
 
     var showTransactionsHistoryDialog by remember { mutableStateOf(false) }
     var showEditReceiptDialog by remember { mutableStateOf(false) }
@@ -1241,11 +1256,17 @@ fun PosScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("${index + 1}. ${comp.first} : Rp ${comp.second.toInt()}", fontSize = 13.sp)
+                                val costPerUnit = if (comp.yield > 0) comp.cost / comp.yield else comp.cost
+                                val catLabel = when (comp.category) {
+                                    "OVERHEAD" -> "Overhead"
+                                    "TENAGA_KERJA" -> "Jasa"
+                                    else -> "Bahan"
+                                }
+                                Text("${index + 1}. ${comp.name} ($catLabel): Rp ${comp.cost.toInt()} / ${comp.yield.toInt()} porsi = Rp ${costPerUnit.toInt()}/porsi", fontSize = 12.sp)
                                 IconButton(
                                     onClick = {
                                         newProdHppComponents.removeAt(index)
-                                        val sum = newProdHppComponents.sumOf { it.second }
+                                        val sum = newProdHppComponents.sumOf { if (it.yield > 0) it.cost / it.yield else it.cost }
                                         newProdCostPrice = sum.toInt().toString()
                                     },
                                     modifier = Modifier.size(24.dp)
@@ -1269,19 +1290,55 @@ fun PosScreen(
                             OutlinedTextField(
                                 value = newHppCostInput,
                                 onValueChange = { newHppCostInput = it },
-                                label = { Text("Biaya") },
+                                label = { Text("Biaya (Rp)") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 singleLine = true,
                                 modifier = Modifier.weight(1f)
                             )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = newHppYieldInput,
+                                onValueChange = { newHppYieldInput = it },
+                                label = { Text("Hasil (Porsi)") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Column(modifier = Modifier.weight(1.5f)) {
+                                Text("Kategori", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.height(2.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    val cats = listOf("BAHAN_BAKU" to "Bahan", "OVERHEAD" to "Overhead", "TENAGA_KERJA" to "Jasa")
+                                    cats.forEach { (cat, label) ->
+                                        val active = newHppCategoryInput == cat
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                            contentColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clickable { newHppCategoryInput = cat }
+                                        ) {
+                                            Text(label, fontSize = 9.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(vertical = 8.dp), fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
                             Button(
                                 onClick = {
                                     val cost = newHppCostInput.toDoubleOrNull() ?: 0.0
+                                    val yield = newHppYieldInput.toDoubleOrNull() ?: 1.0
                                     if (newHppNameInput.isNotBlank() && cost > 0.0) {
-                                        newProdHppComponents.add(Pair(newHppNameInput.trim(), cost))
+                                        newProdHppComponents.add(HppComponent(newHppNameInput.trim(), cost, yield, newHppCategoryInput))
                                         newHppNameInput = ""
                                         newHppCostInput = ""
-                                        val sum = newProdHppComponents.sumOf { it.second }
+                                        newHppYieldInput = "1"
+                                        val sum = newProdHppComponents.sumOf { if (it.yield > 0) it.cost / it.yield else it.cost }
                                         newProdCostPrice = sum.toInt().toString()
                                     }
                                 },
@@ -1410,6 +1467,106 @@ fun PosScreen(
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
+
+                        // HPP Components Edit UI
+                        Text("Komponen HPP (Harga Pokok Penjualan)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        editProdHppComponents.forEachIndexed { index, comp ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                val costPerUnit = if (comp.yield > 0) comp.cost / comp.yield else comp.cost
+                                val catLabel = when (comp.category) {
+                                    "OVERHEAD" -> "Overhead"
+                                    "TENAGA_KERJA" -> "Jasa"
+                                    else -> "Bahan"
+                                }
+                                Text("${index + 1}. ${comp.name} ($catLabel): Rp ${comp.cost.toInt()} / ${comp.yield.toInt()} porsi = Rp ${costPerUnit.toInt()}/porsi", fontSize = 12.sp)
+                                IconButton(
+                                    onClick = {
+                                        editProdHppComponents.removeAt(index)
+                                        val sum = editProdHppComponents.sumOf { if (it.yield > 0) it.cost / it.yield else it.cost }
+                                        editProdCostPrice = sum.toInt().toString()
+                                    },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(Icons.Outlined.Delete, contentDescription = "Hapus", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = editHppNameInput,
+                                onValueChange = { editHppNameInput = it },
+                                label = { Text("Bahan/Komponen") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1.5f)
+                            )
+                            OutlinedTextField(
+                                value = editHppCostInput,
+                                onValueChange = { editHppCostInput = it },
+                                label = { Text("Biaya (Rp)") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = editHppYieldInput,
+                                onValueChange = { editHppYieldInput = it },
+                                label = { Text("Hasil (Porsi)") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Column(modifier = Modifier.weight(1.5f)) {
+                                Text("Kategori", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.height(2.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    val cats = listOf("BAHAN_BAKU" to "Bahan", "OVERHEAD" to "Overhead", "TENAGA_KERJA" to "Jasa")
+                                    cats.forEach { (cat, label) ->
+                                        val active = editHppCategoryInput == cat
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                            contentColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clickable { editHppCategoryInput = cat }
+                                        ) {
+                                            Text(label, fontSize = 9.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(vertical = 8.dp), fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                            Button(
+                                onClick = {
+                                    val cost = editHppCostInput.toDoubleOrNull() ?: 0.0
+                                    val yield = editHppYieldInput.toDoubleOrNull() ?: 1.0
+                                    if (editHppNameInput.isNotBlank() && cost > 0.0) {
+                                        editProdHppComponents.add(HppComponent(editHppNameInput.trim(), cost, yield, editHppCategoryInput))
+                                        editHppNameInput = ""
+                                        editHppCostInput = ""
+                                        editHppYieldInput = "1"
+                                        val sum = editProdHppComponents.sumOf { if (it.yield > 0) it.cost / it.yield else it.cost }
+                                        editProdCostPrice = sum.toInt().toString()
+                                    }
+                                },
+                                modifier = Modifier.height(56.dp)
+                            ) {
+                                Text("+")
+                            }
+                        }
 
                         // Real-time margin calculator
                         val jual = editProdPrice.toDoubleOrNull() ?: 0.0

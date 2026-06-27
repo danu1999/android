@@ -429,6 +429,7 @@ fun MarginAnalysisScreen(
     val netProfit = grossProfit - totalExpenses
     val marginPercent = if (totalRevenue > 0) (grossProfit / totalRevenue) * 100.0 else 0.0
     val netMarginPercent = if (totalRevenue > 0) (netProfit / totalRevenue) * 100.0 else 0.0
+    val markupPercent = if (totalCogs > 0) (grossProfit / totalCogs) * 100.0 else 0.0
 
     // Menu Engineering & Product margin analysis calculations
     val productAnalysisItems = remember(products, filteredTx, transactionItems) {
@@ -918,10 +919,11 @@ fun MarginAnalysisScreen(
                                 .padding(10.dp)
                         ) {
                             Column {
-                                Text("Margin Laba %", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF6A1B9A))
+                                Text("Analisis Laba %", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF6A1B9A))
                                 Spacer(Modifier.height(2.dp))
-                                Text("Kotor: ${String.format("%.1f%%", marginPercent)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4A148C))
-                                Text("Bersih: ${String.format("%.1f%%", netMarginPercent)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4A148C))
+                                Text("M. Kotor: ${String.format("%.1f%%", marginPercent)}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4A148C))
+                                Text("M. Bersih: ${String.format("%.1f%%", netMarginPercent)}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4A148C))
+                                Text("Markup: ${String.format("%.1f%%", markupPercent)}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4A148C))
                             }
                         }
                     }
@@ -1497,7 +1499,8 @@ fun MarginAnalysisScreen(
                                 verticalAlignment = Alignment.Top
                             ) {
                                 Column(modifier = Modifier.weight(1.5f)) {
-                                    Text(prod?.name ?: "Produk Terhapus", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    val displayName = item.productName.takeIf { it.isNotBlank() } ?: prod?.name ?: "Produk Terhapus"
+                                    Text(displayName, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                                     Text("$quantityStr x ${Formatters.rupiah(item.price)}", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 Column(horizontalAlignment = Alignment.End, modifier = Modifier.weight(1f)) {

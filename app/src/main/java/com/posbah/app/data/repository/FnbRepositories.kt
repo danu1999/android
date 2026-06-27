@@ -80,7 +80,9 @@ data class TransactionItemData(
     val variant: String? = null,
     val price: Double = 0.0,
     val quantity: Int = 1,
-    val subtotal: Double = 0.0
+    val subtotal: Double = 0.0,
+    val costPrice: Double = 0.0,
+    val hppBreakdown: String? = null
 )
 
 // Helper: convert API Map response to data class
@@ -140,7 +142,9 @@ fun Map<String, Any?>.toTransactionItemData() = TransactionItemData(
     productName = get("productName") as? String ?: "",
     price = (get("price") as? Number)?.toDouble() ?: 0.0,
     quantity = (get("quantity") as? Number)?.toInt() ?: 1,
-    subtotal = (get("subtotal") as? Number)?.toDouble() ?: 0.0
+    subtotal = (get("subtotal") as? Number)?.toDouble() ?: 0.0,
+    costPrice = (get("costPrice") as? Number)?.toDouble() ?: 0.0,
+    hppBreakdown = get("hppBreakdown") as? String
 )
 
 // ── ProductRepository ─────────────────────────────────────────────────────────
@@ -653,12 +657,14 @@ class TransactionRepository @Inject constructor(
                     id = (it["id"] as? Number)?.toLong() ?: 0,
                     transactionId = transactionId,
                     productId = (it["productId"] as? Number)?.toLong() ?: 0,
+                    productName = it["productName"] as? String ?: "",
                     variantName = it["variant"] as? String,
                     quantity = (it["quantity"] as? Number)?.toInt() ?: 1,
                     price = (it["price"] as? Number)?.toDouble() ?: 0.0,
-                    costPrice = 0.0,
-                    discount = 0.0,
-                    note = null
+                    costPrice = (it["costPrice"] as? Number)?.toDouble() ?: 0.0,
+                    discount = (it["discount"] as? Number)?.toDouble() ?: 0.0,
+                    note = it["note"] as? String,
+                    hppBreakdown = it["hppBreakdown"] as? String
                 )
             } ?: emptyList()
         } catch (_: Exception) { emptyList() }
@@ -743,7 +749,9 @@ class TransactionRepository @Inject constructor(
                     "variant" to it.variant,
                     "price" to it.price,
                     "quantity" to it.quantity,
-                    "subtotal" to it.subtotal
+                    "subtotal" to it.subtotal,
+                    "costPrice" to it.costPrice,
+                    "hppBreakdown" to it.hppBreakdown
                 )
             }
             val itemsResp = api.createTransactionItems(itemBodies)
@@ -1049,7 +1057,9 @@ fun com.posbah.app.data.local.entities.TransactionItemEntity.toTransactionItemDa
     variant = variantName,
     price = price,
     quantity = quantity,
-    subtotal = price * quantity
+    subtotal = price * quantity,
+    costPrice = costPrice,
+    hppBreakdown = hppBreakdown
 )
 
 // ── EmployeeRepository ────────────────────────────────────────────────────────

@@ -479,7 +479,8 @@ class PosViewModel @Inject constructor(
                 price = getItemUnitPrice(it),
                 costPrice = it.product.costPrice,
                 discount = it.discount,
-                note = it.note
+                note = it.note,
+                hppBreakdown = it.product.costPriceBreakdown
             )
         }
 

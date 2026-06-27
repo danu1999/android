@@ -860,6 +860,21 @@ func initSchema() error {
 		}
 	}
 
+	// Migration: tambah kolom relasi ke transaction_items untuk HPP akuntansi yang benar
+	// - productName : snapshot nama produk saat transaksi (historical data integrity)
+	// - hppBreakdown: snapshot JSON komponen HPP saat transaksi (audit trail COGS)
+	// - costPrice   : sudah ada, tapi sekarang akan terisi dari Android client (bug fix)
+	// Prinsip akuntansi: Historical Cost — COGS harus mencerminkan biaya pada saat transaksi
+	txItemRelationMigrations := []string{
+		`ALTER TABLE "transaction_items" ADD COLUMN IF NOT EXISTS "productName" VARCHAR(255);`,
+		`ALTER TABLE "transaction_items" ADD COLUMN IF NOT EXISTS "hppBreakdown" TEXT;`,
+	}
+	for _, q := range txItemRelationMigrations {
+		if _, err := db.Exec(q); err != nil {
+			log.Printf("[migration] transaction_items relation warning: %v", err)
+		}
+	}
+
 	// Migration: tambah tabel product_daily_targets untuk target penjualan per produk per outlet
 	targetMigrations := []string{
 		`CREATE TABLE IF NOT EXISTS "product_daily_targets" (

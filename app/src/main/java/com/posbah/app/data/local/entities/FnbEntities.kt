@@ -77,11 +77,13 @@ data class TransactionItemEntity(
     val id: Long = 0,
     val transactionId: Long,
     val productId: Long,
+    val productName: String = "",
     val variantId: Long? = null,
     val variantName: String? = null,
     val quantity: Int,
     val price: Double,
     val costPrice: Double = 0.0,
     val discount: Double = 0.0,
-    val note: String? = null
+    val note: String? = null,
+    val hppBreakdown: String? = null
 )
