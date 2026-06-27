@@ -6,6 +6,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -1026,7 +1029,7 @@ class EmployeeRepository @Inject constructor(
     suspend fun list(): List<EmployeeData> {
         val cached = _employees.value
         if (cached.isNotEmpty()) {
-            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            CoroutineScope(Dispatchers.IO).launch {
                 try { refresh() } catch (_: Exception) {}
             }
             return cached

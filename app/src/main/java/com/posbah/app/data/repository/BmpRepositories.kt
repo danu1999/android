@@ -11,6 +11,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -1271,7 +1274,7 @@ class BmpMasterProductRepository @Inject constructor(
     suspend fun list(): List<BmpMasterProductData> {
         val cached = _items.value
         if (cached.isNotEmpty()) {
-            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            CoroutineScope(Dispatchers.IO).launch {
                 try { refresh() } catch (_: Exception) {}
             }
             return cached
@@ -1516,7 +1519,7 @@ class BmpEmployeeRepository @Inject constructor(
     suspend fun list(): List<BmpEmployeeData> {
         val cached = _employees.value
         if (cached.isNotEmpty()) {
-            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            CoroutineScope(Dispatchers.IO).launch {
                 try { refresh() } catch (_: Exception) {}
             }
             return cached
@@ -2496,7 +2499,7 @@ class BmpSettingsRepository @Inject constructor(
     suspend fun get(): BmpSettingsData? {
         val current = _settings.value
         if (current != null) {
-            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            CoroutineScope(Dispatchers.IO).launch {
                 try { refresh() } catch (_: Exception) {}
             }
             return BmpSettingsData(
@@ -2638,7 +2641,7 @@ class PrintSettingsRepository @Inject constructor(
     suspend fun get(moduleKey: String): PrintSettingsData? {
         val cached = _settingsList.value.find { it.moduleKey == moduleKey }
         if (cached != null) {
-            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val fresh = api.getPrintSettings(moduleKey).body()?.firstOrNull()?.let { it ->
                         PrintSettingsData(
