@@ -163,10 +163,6 @@ func main() {
 	// Reports API
 	http.HandleFunc("/api/reports/outlet-margin", handleOutletMarginReport)
 
-	// ─── Migration API (One-Time Drain: offline-first → full online) ──────────
-	http.HandleFunc("/api/migration/verify-table", handleMigrationVerifyTable)
-	http.HandleFunc("/api/migration/check-readiness", handleMigrationCheckReadiness)
-
 	// ─── Real-time CRUD API (Full Online mode) ────────────────────────────────
 	// Core POS (FnB / Laundry / Rental)
 	http.HandleFunc("/api/rt/products", handleRtProducts)
@@ -8448,7 +8444,9 @@ func versionCheckMiddleware(next http.Handler) http.Handler {
 				path == "/api/dowload-apk" ||
 				path == "/api/apk-version" ||
 				strings.HasPrefix(path, "/api/store/") ||
-				strings.HasPrefix(path, "/api/sign/")
+				strings.HasPrefix(path, "/api/sign/") ||
+				strings.HasPrefix(path, "/api/auth/qr-") ||
+				path == "/api/auth/pin-login"
 
 			if !isExempt {
 				clientVersion := strings.TrimSpace(r.Header.Get("x-client-version"))

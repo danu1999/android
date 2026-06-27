@@ -234,7 +234,7 @@ if (-not $SkipApkUpload) {
         Write-Info "Upload manual: scp `"$apkLocalPath`" ${VpsHost}:${VpsApkDir}/${apkFileName}"
         $scpFailed = $true
     } else {
-        $scpArgs = @("-i", $VpsPemKey, "-o", "StrictHostKeyChecking=no")
+        $scpArgs = @("-i", $VpsPemKey, "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5")
         $vpsTarget = "${VpsHost}:${VpsApkDir}/${apkFileName}"
         Write-Info "Upload: $apkLocalPath -> $vpsTarget"
         scp @scpArgs "$apkLocalPath" $vpsTarget

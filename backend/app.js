@@ -89,7 +89,11 @@ async function generateQRLogin() {
     }
 
     try {
-        const response = await fetch(`${BASE_URL}/api/auth/qr-session`);
+        const response = await fetch(`${BASE_URL}/api/auth/qr-session`, {
+            headers: {
+                "x-client-version": "web"
+            }
+        });
         if (!response.ok) throw new Error("Gagal mengambil session ID dari server");
 
         const data = await response.json();
@@ -136,7 +140,11 @@ function startQrPolling(sessionId) {
 
     qrPollInterval = setInterval(async () => {
         try {
-            const response = await fetch(`${BASE_URL}/api/auth/qr-check?sessionId=${sessionId}`);
+            const response = await fetch(`${BASE_URL}/api/auth/qr-check?sessionId=${sessionId}`, {
+                headers: {
+                    "x-client-version": "web"
+                }
+            });
             if (!response.ok) return;
 
             const session = await response.json();

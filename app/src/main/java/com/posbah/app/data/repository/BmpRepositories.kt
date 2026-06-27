@@ -1816,6 +1816,9 @@ class BmpBahanBakuRepository @Inject constructor(
           _bahanBaku.value = snapshot.map { if (it.id == bahanBaku.id) bahanBaku else it }
 
           try {
+              val oldBahanBaku = snapshot.find { it.id == bahanBaku.id }
+              val oldNoTagihan = oldBahanBaku?.noTagihan ?: bahanBaku.noTagihan
+
               api.updateBahanBaku(bahanBaku.id, mapOf(
                   "noTagihan" to bahanBaku.noTagihan,
                   "tanggal" to bahanBaku.tanggal,
@@ -1829,9 +1832,10 @@ class BmpBahanBakuRepository @Inject constructor(
 
               // ── Business logic: update cashflow entry ──────────────────────
               val cfList = cashflowRepo.list()
-              val match = cfList.find { it.description == "Pembelian Bahan Baku: ${bahanBaku.noTagihan}" }
+              val match = cfList.find { it.description == "Pembelian Bahan Baku: $oldNoTagihan" }
               if (match != null) {
                   cashflowRepo.update(match.copy(
+                      description = "Pembelian Bahan Baku: ${bahanBaku.noTagihan}",
                       amount = bahanBaku.nominal,
                       transactionDate = bahanBaku.tanggal
                   ))
@@ -1843,6 +1847,18 @@ class BmpBahanBakuRepository @Inject constructor(
                       transactionDate = bahanBaku.tanggal
                   ))
               }
+
+              // Also check and update any "Pembayaran Hutang Bahan Baku: $oldNoTagihan" cashflows!
+              if (oldNoTagihan != bahanBaku.noTagihan) {
+                  val debtMatches = cfList.filter { it.description == "Pembayaran Hutang Bahan Baku: $oldNoTagihan" }
+                  debtMatches.forEach { debtCf ->
+                      cashflowRepo.update(debtCf.copy(
+                          description = "Pembayaran Hutang Bahan Baku: ${bahanBaku.noTagihan}"
+                      ))
+                  }
+              }
+
+              cashflowRepo.refreshEntries()
 
               OnlineWriteResult.Success
           } catch (e: Exception) {
@@ -1859,6 +1875,9 @@ class BmpBahanBakuRepository @Inject constructor(
           _bahanBaku.value = snapshot.map { if (it.id == bahanBaku.id) bahanBaku else it }
 
           try {
+              val oldBahanBaku = snapshot.find { it.id == bahanBaku.id }
+              val oldNoTagihan = oldBahanBaku?.noTagihan ?: bahanBaku.noTagihan
+
               // 1. Update header
               api.updateBahanBaku(bahanBaku.id, mapOf(
                   "noTagihan" to bahanBaku.noTagihan,
@@ -1890,9 +1909,10 @@ class BmpBahanBakuRepository @Inject constructor(
 
               // 4. Update cashflow entry
               val cfList = cashflowRepo.list()
-              val match = cfList.find { it.description == "Pembelian Bahan Baku: ${bahanBaku.noTagihan}" }
+              val match = cfList.find { it.description == "Pembelian Bahan Baku: $oldNoTagihan" }
               if (match != null) {
                   cashflowRepo.update(match.copy(
+                      description = "Pembelian Bahan Baku: ${bahanBaku.noTagihan}",
                       amount = bahanBaku.nominal,
                       transactionDate = bahanBaku.tanggal
                   ))
@@ -1904,6 +1924,18 @@ class BmpBahanBakuRepository @Inject constructor(
                       transactionDate = bahanBaku.tanggal
                   ))
               }
+
+              // Also check and update any "Pembayaran Hutang Bahan Baku: $oldNoTagihan" cashflows!
+              if (oldNoTagihan != bahanBaku.noTagihan) {
+                  val debtMatches = cfList.filter { it.description == "Pembayaran Hutang Bahan Baku: $oldNoTagihan" }
+                  debtMatches.forEach { debtCf ->
+                      cashflowRepo.update(debtCf.copy(
+                          description = "Pembayaran Hutang Bahan Baku: ${bahanBaku.noTagihan}"
+                      ))
+                  }
+              }
+
+              cashflowRepo.refreshEntries()
 
               OnlineWriteResult.Success
           } catch (e: Exception) {
@@ -1926,7 +1958,15 @@ class BmpBahanBakuRepository @Inject constructor(
                 if (match != null) {
                     cashflowRepo.delete(match.id)
                 }
+
+                // Also delete payments of debt for this tagihan!
+                val debtMatches = cfList.filter { it.description == "Pembayaran Hutang Bahan Baku: ${target.noTagihan}" }
+                debtMatches.forEach { debtCf ->
+                    cashflowRepo.delete(debtCf.id)
+                }
             }
+
+            cashflowRepo.refreshEntries()
 
             OnlineWriteResult.Success
         } catch (e: Exception) {

@@ -914,6 +914,64 @@
         </div>
     </div>
 
+    <!-- MODAL MARGIN REPORT PER OUTLET -->
+    <div class="modal-overlay" id="marginModalOverlay">
+        <div class="modal-card glass" id="marginModalCard" style="max-width: 800px; width: 90%;">
+            <div class="modal-header">
+                <div class="modal-icon" id="marginModalIcon" style="background: rgba(16, 185, 129, 0.1); color: #10B981;">📊</div>
+                <div class="modal-title" id="marginModalTitle">Laporan Margin Tenant</div>
+            </div>
+            <div class="modal-body" id="marginModalBody" style="max-height: 450px; overflow-y: auto; padding: 20px 0;">
+                <div style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; padding: 0 10px;">
+                    <span style="font-size: 14px; color: var(--text-secondary); font-weight: 500;">Filter Periode:</span>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn-action admin-margin-period-btn active" data-days="7" id="adminMarginPeriod7">7 Hari</button>
+                        <button class="btn-action admin-margin-period-btn" data-days="30" id="adminMarginPeriod30">30 Hari</button>
+                        <button class="btn-action admin-margin-period-btn" data-days="90" id="adminMarginPeriod90">90 Hari</button>
+                    </div>
+                </div>
+                <!-- Summary Cards inside Modal -->
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; padding: 0 10px;">
+                    <div style="background: rgba(255,255,255,0.02); padding: 15px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);">
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 5px; text-transform: uppercase;">Omzet</div>
+                        <div style="font-size: 18px; font-weight: 700; color: #fff;" id="adminMarginTotalRevenue">Rp 0</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.02); padding: 15px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);">
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 5px; text-transform: uppercase;">Total HPP</div>
+                        <div style="font-size: 18px; font-weight: 700; color: #F59E0B;" id="adminMarginTotalCogs">Rp 0</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.02); padding: 15px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1);">
+                        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 5px; text-transform: uppercase;">Margin Bersih</div>
+                        <div style="font-size: 18px; font-weight: 700; color: #10B981;" id="adminMarginTotalProfit">Rp 0 (0%)</div>
+                    </div>
+                </div>
+                <!-- Table of Margin per Outlet -->
+                <div style="padding: 0 10px;">
+                    <table class="table" style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                                <th style="padding: 10px; text-align: left; font-size: 12px; color: var(--text-secondary);">ID Outlet</th>
+                                <th style="padding: 10px; text-align: left; font-size: 12px; color: var(--text-secondary);">Nama Outlet</th>
+                                <th style="padding: 10px; text-align: left; font-size: 12px; color: var(--text-secondary);">Omzet</th>
+                                <th style="padding: 10px; text-align: left; font-size: 12px; color: var(--text-secondary);">Total HPP</th>
+                                <th style="padding: 10px; text-align: left; font-size: 12px; color: var(--text-secondary);">Laba Bersih</th>
+                                <th style="padding: 10px; text-align: left; font-size: 12px; color: var(--text-secondary);">Margin %</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminMarginTableBody">
+                            <tr>
+                                <td colspan="6" style="text-align: center; padding: 20px; color: var(--text-secondary);">Memuat data margin...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeMarginModal()">Tutup</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 1. LOGIN SCREEN -->
     <div class="login-container" id="loginScreen">
         <div class="login-card glass">
@@ -961,6 +1019,12 @@
                         <a href="#" class="nav-item" onclick="switchSection('apk', event)">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                             APK & Update Notif
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" class="nav-item" onclick="switchSection('email', event)">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                            Blast Email Update
                         </a>
                     </li>
                 </ul>
@@ -1151,6 +1215,63 @@
                 </div>
             </section>
 
+            <!-- VIEW SECTION 3: BLAST UPDATE EMAIL -->
+            <section id="viewEmail" class="section-view">
+                <div class="content-card glass">
+                    <h2 class="card-title" style="margin-bottom: 8px;">📧 Kirim Email Update ke Semua User</h2>
+                    <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 24px;">
+                        Email akan dikirim ke semua akun aktif (premium + demo) secara background. Kosongkan Subject & Pesan untuk menggunakan Release Notes v2.16.0 otomatis.
+                    </p>
+
+                    <div class="config-grid" style="margin-bottom: 24px;">
+                        <div>
+                            <div class="form-group">
+                                <label class="form-label" for="blastSubject">Subject Email (opsional)</label>
+                                <input type="text" id="blastSubject" class="form-input"
+                                    placeholder="Pembaruan POSBah - Versi Terbaru Tersedia!">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="blastMessage">Isi Pesan (opsional — kosongkan = pakai release notes terbaru)</label>
+                                <textarea id="blastMessage" class="form-input" rows="8"
+                                    style="resize: vertical; font-family: inherit; font-size: 14px;"
+                                    placeholder="Biarkan kosong untuk menggunakan catatan rilis v2.16.0 secara otomatis..."></textarea>
+                            </div>
+                            <button class="btn" id="btnBlastEmail" onclick="sendBlastEmail()"
+                                style="background: linear-gradient(135deg, #10B981, #059669); border: none; padding: 12px 24px; border-radius: 10px; color: white; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 15px;">
+                                <span>📨</span> Kirim Email ke Semua User
+                            </button>
+                        </div>
+                        <div style="background: rgba(15,23,42,0.4); border: 1px solid var(--border-color); border-radius: 12px; padding: 24px;">
+                            <h3 style="font-size: 14px; font-weight: 600; color: var(--text-secondary); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px;">Informasi</h3>
+                            <div style="display: flex; flex-direction: column; gap: 14px;">
+                                <div style="display: flex; gap: 12px; align-items: flex-start;">
+                                    <span style="font-size: 20px; flex-shrink: 0;">✅</span>
+                                    <div>
+                                        <div style="font-size: 13px; font-weight: 600; color: #fff;">Pengiriman Asinkron</div>
+                                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Email dikirim di background. Halaman tidak akan freeze. Pantau log deploy untuk hasilnya.</div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 12px; align-items: flex-start;">
+                                    <span style="font-size: 20px; flex-shrink: 0;">📋</span>
+                                    <div>
+                                        <div style="font-size: 13px; font-weight: 600; color: #fff;">Otomatis dari Release Notes</div>
+                                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Jika pesan dikosongkan, backend membaca section pertama dari release_notes.txt di VPS.</div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 12px; align-items: flex-start;">
+                                    <span style="font-size: 20px; flex-shrink: 0;">👥</span>
+                                    <div>
+                                        <div style="font-size: 13px; font-weight: 600; color: #fff;">Target: Semua User Aktif</div>
+                                        <div style="font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Dikirim ke semua akun dengan isActive = true (Premium & Demo), tidak termasuk akun yang diblokir.</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="blastEmailResult" style="display: none; margin-top: 20px; padding: 16px; border-radius: 10px; border: 1px solid;"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
         </main>
     </div>
 
@@ -1164,6 +1285,7 @@
 
         // Initialize Page
         document.addEventListener("DOMContentLoaded", () => {
+            setupAdminMarginListeners();
             if (adminToken) {
                 verifyAdminSession();
             } else {
@@ -1229,6 +1351,9 @@
                 document.getElementById('viewApk').classList.add('active');
                 document.getElementById('mainHeaderTitle').innerText = 'APK & Update Notifikasi';
                 fetchApkConfig();
+            } else if (sectionId === 'email') {
+                document.getElementById('viewEmail').classList.add('active');
+                document.getElementById('mainHeaderTitle').innerText = 'Blast Email Update';
             }
         }
 
@@ -1546,8 +1671,22 @@
                     btnUpgrade.onclick = () => confirmUserPayment(user.googleSub, user.email, user.displayName);
                 }
 
+                // Margin button
+                const btnMargin = document.createElement('button');
+                btnMargin.className = 'btn-action btn-action-success';
+                btnMargin.style.backgroundColor = '#10B981';
+                btnMargin.style.color = '#fff';
+                btnMargin.style.border = 'none';
+                btnMargin.innerText = '📊 Margin';
+                if (user.tenantId) {
+                    btnMargin.onclick = () => showOutletMarginModal(user.tenantId, user.displayName || user.email);
+                } else {
+                    btnMargin.disabled = true;
+                }
+
                 actionsGroup.appendChild(btnUpgrade);
                 actionsGroup.appendChild(btnBlock);
+                actionsGroup.appendChild(btnMargin);
 
                 // Delete button for muhammadmuizz8@gmail.com (case-insensitive with old tokens fallback)
                 const loggedInAdminEmail = (decodeTokenEmail(adminToken) || '').toLowerCase().trim();
@@ -1780,6 +1919,52 @@
             }
         }
 
+        async function sendBlastEmail() {
+            const subject = document.getElementById('blastSubject').value.trim();
+            const message = document.getElementById('blastMessage').value.trim();
+            const btn = document.getElementById('btnBlastEmail');
+            const resultEl = document.getElementById('blastEmailResult');
+
+            if (!confirm('Kirim email update ke SEMUA user aktif? Tindakan ini tidak bisa dibatalkan.')) return;
+
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳</span> Mengirim...';
+            resultEl.style.display = 'none';
+
+            try {
+                const response = await apiRequest('/api/admin/blast-update-email', {
+                    method: 'POST',
+                    body: { subject, message }
+                });
+                const data = await response.json();
+
+                resultEl.style.display = 'block';
+                if (data.success) {
+                    resultEl.style.background = 'rgba(16, 185, 129, 0.1)';
+                    resultEl.style.borderColor = '#10B981';
+                    resultEl.style.color = '#fff';
+                    resultEl.innerHTML = `<strong>✅ Berhasil!</strong><br>${data.message}`;
+                    showToast(data.message, 'success');
+                } else {
+                    resultEl.style.background = 'rgba(244, 63, 94, 0.1)';
+                    resultEl.style.borderColor = '#F43F5E';
+                    resultEl.style.color = '#fff';
+                    resultEl.innerHTML = `<strong>⚠️ Gagal:</strong><br>${data.message || 'Terjadi kesalahan.'}`;
+                    showToast('Gagal mengirim blast email.', 'error');
+                }
+            } catch (err) {
+                resultEl.style.display = 'block';
+                resultEl.style.background = 'rgba(244, 63, 94, 0.1)';
+                resultEl.style.borderColor = '#F43F5E';
+                resultEl.style.color = '#fff';
+                resultEl.innerHTML = `<strong>⚠️ Error:</strong><br>${err.message}`;
+                showToast('Koneksi gagal saat kirim blast email.', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>📨</span> Kirim Email ke Semua User';
+            }
+        }
+
         async function triggerAutoDeploy() {
             if (!confirm("Apakah Anda yakin ingin melakukan Auto-Deploy backend? Ini akan menjalankan git pull, go build, dan merestart server backend secara otomatis.")) {
                 return;
@@ -1825,6 +2010,139 @@
                 btn.disabled = false;
                 btn.innerHTML = originalText;
             }
+        }
+
+        function formatRupiah(number) {
+            return new Intl.NumberFormat("id-ID", {
+                style: "currency",
+                currency: "IDR",
+                minimumFractionDigits: 0
+            }).format(number);
+        }
+
+        let currentMarginTenantId = null;
+        let currentMarginTenantName = "";
+
+        async function showOutletMarginModal(tenantId, tenantName) {
+            currentMarginTenantId = tenantId;
+            currentMarginTenantName = tenantName;
+
+            document.getElementById('marginModalTitle').innerText = `Analisis Margin: ${tenantName} (${tenantId})`;
+            document.getElementById('marginModalOverlay').classList.add('active');
+
+            // Reset period buttons
+            document.querySelectorAll('.admin-margin-period-btn').forEach(btn => {
+                if (btn.getAttribute('data-days') === '7') {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+
+            await fetchAdminOutletMargin(7);
+        }
+
+        async function fetchAdminOutletMargin(days) {
+            const tbody = document.getElementById('adminMarginTableBody');
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: var(--text-secondary);">Memuat data margin...</td></tr>';
+
+            try {
+                // Fetch outlets for this tenant to match names & address
+                const resOutlets = await apiRequest(`/api/sync/outlets?tenantId=eq.${currentMarginTenantId}`);
+                const outlets = resOutlets.ok ? await resOutlets.json() : [];
+
+                const response = await apiRequest(`/api/reports/outlet-margin?tenantId=${currentMarginTenantId}&days=${days}`);
+                if (!response.ok) throw new Error("Gagal mengambil data margin");
+                const marginData = await response.json();
+
+                // Aggregate by outlet
+                const outletMap = {};
+                outlets.forEach(o => {
+                    outletMap[o.id] = {
+                        id: o.id,
+                        name: o.name,
+                        revenue: 0,
+                        cost: 0,
+                        margin: 0
+                    };
+                });
+
+                marginData.forEach(row => {
+                    const id = row.outletId;
+                    if (!outletMap[id]) {
+                        outletMap[id] = {
+                            id: id,
+                            name: row.outletName || `Outlet ${id}`,
+                            revenue: 0,
+                            cost: 0,
+                            margin: 0
+                        };
+                    }
+                    outletMap[id].revenue += row.revenue || 0;
+                    outletMap[id].cost += row.cost || 0;
+                    outletMap[id].margin += row.margin || 0;
+                });
+
+                const aggregated = Object.values(outletMap);
+
+                let totalRevenue = 0;
+                let totalCogs = 0;
+                let totalMargin = 0;
+
+                tbody.innerHTML = '';
+
+                if (aggregated.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 20px; color: var(--text-secondary);">Tidak ada outlet atau transaksi terdaftar.</td></tr>';
+                } else {
+                    aggregated.forEach(row => {
+                        totalRevenue += row.revenue;
+                        totalCogs += row.cost;
+                        totalMargin += row.margin;
+
+                        const marginPercent = row.revenue > 0 ? ((row.margin / row.revenue) * 100).toFixed(1) : "0.0";
+
+                        const tr = document.createElement('tr');
+                        tr.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+                        tr.innerHTML = `
+                            <td style="padding: 12px 10px; font-size: 13px; color: var(--text-main);">${row.id}</td>
+                            <td style="padding: 12px 10px; font-size: 13px; color: var(--text-main);"><strong>${row.name}</strong></td>
+                            <td style="padding: 12px 10px; font-size: 13px; color: var(--text-main);">${formatRupiah(row.revenue)}</td>
+                            <td style="padding: 12px 10px; font-size: 13px; color: var(--text-main);">${formatRupiah(row.cost)}</td>
+                            <td style="padding: 12px 10px; font-size: 13px; color: ${row.margin >= 0 ? '#10B981' : '#EF4444'}; font-weight: 700;">${formatRupiah(row.margin)}</td>
+                            <td style="padding: 12px 10px; font-size: 13px;"><span class="badge ${row.margin >= 0 ? 'badge-premium' : 'badge-blocked'}" style="padding: 2px 6px; font-size: 11px;">${marginPercent}%</span></td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                }
+
+                // Update summary values
+                document.getElementById('adminMarginTotalRevenue').innerText = formatRupiah(totalRevenue);
+                document.getElementById('adminMarginTotalCogs').innerText = formatRupiah(totalCogs);
+                
+                const totalMarginPercent = totalRevenue > 0 ? ((totalMargin / totalRevenue) * 100).toFixed(1) : "0.0";
+                document.getElementById('adminMarginTotalProfit').innerText = `${formatRupiah(totalMargin)} (${totalMarginPercent}%)`;
+
+            } catch (err) {
+                console.error("Error loading admin outlet margin:", err);
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 20px; color: var(--text-danger);">Gagal memuat: ${err.message}</td></tr>`;
+            }
+        }
+
+        function closeMarginModal() {
+            document.getElementById('marginModalOverlay').classList.remove('active');
+        }
+
+        // Period buttons listener setup
+        function setupAdminMarginListeners() {
+            const btns = document.querySelectorAll('.admin-margin-period-btn');
+            btns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    btns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    const days = Number(btn.getAttribute('data-days')) || 7;
+                    fetchAdminOutletMargin(days);
+                });
+            });
         }
 
         // Date helper format
