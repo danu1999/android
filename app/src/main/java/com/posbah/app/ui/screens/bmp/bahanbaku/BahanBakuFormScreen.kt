@@ -77,7 +77,7 @@ import com.posbah.app.util.CameraUtils
 import com.posbah.app.util.Formatters
 import java.io.File
 
-private val JENIS_BAHAN_OPTIONS = listOf("PP", "PE", "HDPE", "LDPE", "PVC", "ABS", "PS", "Lainnya")
+private val JENIS_BAHAN_OPTIONS = listOf("PP Original", "PP Peletan", "PP Gilingan", "PE", "HDPE", "LDPE", "PVC", "ABS", "PS", "Lainnya")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

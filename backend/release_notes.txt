@@ -1,3 +1,12 @@
+POSBah v2.18.1 - Pembaruan Jenis Bahan Baku PP
+
+Halo Kak! POSBah v2.18.1 hadir dengan pembaruan khusus:
+1. Pemisahan Jenis Bahan PP: Pilihan jenis bahan PP kini dibagi lebih detail menjadi PP Original, PP Peletan, dan PP Gilingan pada form pencatatan Bahan Baku untuk akurasi pencatatan inventori manufaktur Anda.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.18.0 - Peningkatan Performa, Cache Memori & Pembersihan Otomatis
 
 Halo Kak! POSBah v2.18.0 hadir dengan peningkatan performa dan efisiensi memori yang signifikan:
