@@ -2346,7 +2346,7 @@ class BmpStockRepository @Inject constructor(
     suspend fun adjustStock(productId: Long, quantity: Double, reason: String, refId: Long) {
         adjustStock(
             masterItemId = productId,
-            change = quantity.toInt(),
+            change = quantity,
             mutationType = reason,
             referenceId = refId
         )
@@ -2354,7 +2354,7 @@ class BmpStockRepository @Inject constructor(
 
     suspend fun adjustStock(
         masterItemId: Long,
-        change: Int,
+        change: Double,
         mutationType: String,
         referenceId: Long? = null,
         notes: String? = null
@@ -2392,7 +2392,7 @@ class BmpStockRepository @Inject constructor(
             masterProductId = masterItemId,
             referenceId = referenceId ?: 0L,
             mutationType = mutationType,
-            quantityChange = change.toDouble(),
+            quantityChange = change,
             finalStock = newStock,
             notes = notes,
             isSynced = true,
@@ -2404,14 +2404,14 @@ class BmpStockRepository @Inject constructor(
         try {
             api.createProductStock(mapOf(
                 "masterItemId" to masterItemId,
-                "currentStock" to newStock.toInt()
+                "currentStock" to newStock
             ))
 
             api.addStockLedgerEntry(mapOf(
                 "masterItemId" to masterItemId,
                 "mutationType" to mutationType,
                 "change" to change,
-                "stockAfter" to newStock.toInt(),
+                "stockAfter" to newStock,
                 "referenceId" to referenceId,
                 "notes" to notes
             ))

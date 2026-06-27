@@ -895,13 +895,37 @@ func handleRtBmpProductStocks(w http.ResponseWriter, r *http.Request) {
 	if !ok { jsonErr(w, 401, "unauthorized"); return }
 	switch r.Method {
 	case http.MethodGet:
-		rows, _ := db.Query(`SELECT * FROM bmp_product_stocks WHERE "tenantId"=$1 AND "isDeleted"=FALSE`, tenantId)
-		defer rows.Close(); jsonOK(w, rowsToJSON(rows))
+		rows, err := db.Query(`
+			SELECT id, "tenantId", "masterProductId" AS "masterItemId", "quantity" AS "currentStock", "minStockAlert", "isSynced", "isDeleted", "updatedAt", "outletId" 
+			FROM bmp_product_stocks 
+			WHERE "tenantId"=$1 AND "isDeleted"=FALSE`, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		defer rows.Close()
+		jsonOK(w, rowsToJSON(rows))
 	case http.MethodPost:
 		var body map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&body); body["tenantId"] = tenantId; body["updatedAt"] = nowMillis()
-		id, err := insertRow("bmp_product_stocks", body)
-		if err != nil { jsonErr(w, 500, err.Error()); return }
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid body")
+			return
+		}
+		
+		masterItemIdNum, _ := body["masterItemId"].(float64)
+		masterItemId := int64(masterItemIdNum)
+		currentStockNum, _ := body["currentStock"].(float64)
+		
+		var id int64
+		err := db.QueryRow(`
+			INSERT INTO "bmp_product_stocks" ("tenantId", "masterProductId", "quantity", "updatedAt") 
+			VALUES ($1, $2, $3, $4) 
+			ON CONFLICT ("masterProductId", "tenantId") 
+			DO UPDATE SET "quantity" = EXCLUDED."quantity", "updatedAt" = EXCLUDED."updatedAt" 
+			RETURNING id`, 
+			tenantId, masterItemId, currentStockNum, nowMillis()).Scan(&id)
+		
+		if err != nil { 
+			jsonErr(w, 500, err.Error())
+			return 
+		}
 		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
 	default:
 		jsonErr(w, 405, "method not allowed")
@@ -913,13 +937,47 @@ func handleRtBmpStockLedger(w http.ResponseWriter, r *http.Request) {
 	if !ok { jsonErr(w, 401, "unauthorized"); return }
 	switch r.Method {
 	case http.MethodGet:
-		rows, _ := db.Query(`SELECT * FROM bmp_stock_ledger WHERE "tenantId"=$1 AND "isDeleted"=FALSE ORDER BY "createdAt" DESC`, tenantId)
-		defer rows.Close(); jsonOK(w, rowsToJSON(rows))
+		rows, err := db.Query(`
+			SELECT id, "tenantId", "masterProductId" AS "masterItemId", "referenceId", "mutationType", "quantityChange" AS "change", "finalStock" AS "stockAfter", "notes", "isSynced", "isDeleted", "createdAt" 
+			FROM bmp_stock_ledger 
+			WHERE "tenantId"=$1 AND "isDeleted"=FALSE 
+			ORDER BY "createdAt" DESC`, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		defer rows.Close()
+		jsonOK(w, rowsToJSON(rows))
 	case http.MethodPost:
 		var body map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&body); body["tenantId"] = tenantId
-		id, err := insertRow("bmp_stock_ledger", body)
-		if err != nil { jsonErr(w, 500, err.Error()); return }
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid body")
+			return
+		}
+		
+		masterItemIdNum, _ := body["masterItemId"].(float64)
+		masterItemId := int64(masterItemIdNum)
+		changeNum, _ := body["change"].(float64)
+		stockAfterNum, _ := body["stockAfter"].(float64)
+		mutationType, _ := body["mutationType"].(string)
+		notes, _ := body["notes"].(string)
+		
+		var referenceId int64
+		if refVal, ok := body["referenceId"]; ok && refVal != nil {
+			if refNum, ok := refVal.(float64); ok {
+				referenceId = int64(refNum)
+			}
+		}
+		
+		var id int64
+		err := db.QueryRow(`
+			INSERT INTO "bmp_stock_ledger" 
+			("tenantId", "masterProductId", "referenceId", "mutationType", "quantityChange", "finalStock", "notes", "createdAt") 
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+			RETURNING id`, 
+			tenantId, masterItemId, referenceId, mutationType, changeNum, stockAfterNum, notes, nowMillis()).Scan(&id)
+			
+		if err != nil { 
+			jsonErr(w, 500, err.Error())
+			return 
+		}
 		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
 	default:
 		jsonErr(w, 405, "method not allowed")
