@@ -61,16 +61,35 @@ class OutletRepository @Inject constructor(
     private val api: PosApiService,
     private val securePrefs: SecurePreferences
 ) {
-    suspend fun list(): List<OutletData> {
+    private var cachedOutlets: List<OutletData>? = null
+    private var lastFetchTime: Long = 0L
+    private val cacheDurationMs = 60_000L // 1 minute cache
+
+    suspend fun list(forceRefresh: Boolean = false): List<OutletData> {
+        val now = System.currentTimeMillis()
+        if (!forceRefresh && cachedOutlets != null && (now - lastFetchTime < cacheDurationMs)) {
+            return cachedOutlets!!
+        }
         return try {
             val resp = api.getOutlets()
-            resp.body()?.map { it.toOutletData() } ?: emptyList()
-        } catch (_: Exception) { emptyList() }
+            val result = resp.body()?.map { it.toOutletData() } ?: emptyList()
+            cachedOutlets = result
+            lastFetchTime = now
+            result
+        } catch (_: Exception) {
+            cachedOutlets ?: emptyList()
+        }
+    }
+
+    fun invalidateCache() {
+        cachedOutlets = null
+        lastFetchTime = 0L
     }
 
     suspend fun getById(id: Long): OutletData? = list().find { it.id == id }
 
     suspend fun create(name: String, address: String? = null, phone: String? = null): Long {
+        invalidateCache()
         return try {
             val existing = list()
             val isDefault = existing.isEmpty()
@@ -85,6 +104,7 @@ class OutletRepository @Inject constructor(
     }
 
     suspend fun update(outlet: OutletData) {
+        invalidateCache()
         try {
             api.updateOutlet(outlet.id, mapOf(
                 "name" to outlet.name,
@@ -97,10 +117,12 @@ class OutletRepository @Inject constructor(
     }
 
     suspend fun delete(id: Long) {
+        invalidateCache()
         try { api.deleteOutlet(id) } catch (_: Exception) {}
     }
 
     suspend fun setDefault(outletId: Long) {
+        invalidateCache()
         try {
             // Reset semua outlet jadi non-default
             val all = list()

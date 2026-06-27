@@ -1024,10 +1024,15 @@ class EmployeeRepository @Inject constructor(
     }
 
     suspend fun list(): List<EmployeeData> {
-        return try {
-            val resp = api.getEmployees()
-            resp.body()?.map { it.toEmployeeData() } ?: emptyList()
-        } catch (_: Exception) { emptyList() }
+        val cached = _employees.value
+        if (cached.isNotEmpty()) {
+            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try { refresh() } catch (_: Exception) {}
+            }
+            return cached
+        }
+        refresh()
+        return _employees.value
     }
 
     suspend fun getById(id: Long): EmployeeData? {

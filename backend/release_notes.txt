@@ -1,3 +1,15 @@
+POSBah v2.18.0 - Peningkatan Performa, Cache Memori & Pembersihan Otomatis
+
+Halo Kak! POSBah v2.18.0 hadir dengan peningkatan performa dan efisiensi memori yang signifikan:
+1. Pembersihan Memori HP Otomatis: Aplikasi sekarang otomatis mendeteksi dan menghapus berkas database lama (offline-first) dari memori internal HP Anda setelah migrasi full online untuk membebaskan ruang penyimpanan.
+2. Fitur Cache Memori Statis (Read-Only Cache): Menghindari request API berulang-ulang untuk data statis (Outlet, Karyawan, dan Master Produk), sehingga aplikasi menjadi jauh lebih cepat, hemat kuota, dan responsif.
+3. Pembaruan Kecepatan (Optimistic UI): Peningkatan respon penginputan data pada POS, Invoice, dan Manufaktur.
+4. Gzip Compression: Mengaktifkan kompresi data transfer di server VPS agar loading data berukuran besar menjadi 70% lebih cepat dan irit kuota.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.17.56 - Pembaruan Keamanan & Validasi Versi Aplikasi
 
 Halo Kak! POSBah v2.17.56 hadir dengan peningkatan keamanan dan validasi versi aplikasi:

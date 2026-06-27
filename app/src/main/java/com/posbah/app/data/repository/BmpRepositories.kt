@@ -1268,9 +1268,17 @@ class BmpMasterProductRepository @Inject constructor(
         } catch (_: Exception) {}
     }
 
-    suspend fun list(): List<BmpMasterProductData> = try {
-        api.getMasterProducts().body()?.map { it.toBmpMasterProductData() } ?: emptyList()
-    } catch (_: Exception) { emptyList() }
+    suspend fun list(): List<BmpMasterProductData> {
+        val cached = _items.value
+        if (cached.isNotEmpty()) {
+            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try { refresh() } catch (_: Exception) {}
+            }
+            return cached
+        }
+        refresh()
+        return _items.value
+    }
 
     suspend fun getById(id: Long): BmpMasterProductData? = list().find { it.id == id }
 
@@ -1505,20 +1513,16 @@ class BmpEmployeeRepository @Inject constructor(
         } catch (_: Exception) {}
     }
 
-    suspend fun list(): List<BmpEmployeeData> = _employees.value.ifEmpty {
-        try { api.getBmpEmployees().body()?.map {
-            BmpEmployeeData(
-                id = (it["id"] as? Number)?.toLong() ?: 0,
-                tenantId = it["tenantId"] as? String ?: "",
-                name = it["name"] as? String ?: "",
-                role = it["role"] as? String ?: "KARYAWAN",
-                salary = (it["salary"] as? Number)?.toDouble() ?: 0.0,
-                phone = it["phone"] as? String,
-                email = it["email"] as? String,
-                isActive = it["isActive"] as? Boolean ?: true,
-                updatedAt = (it["updatedAt"] as? Number)?.toLong() ?: 0
-            )
-        } ?: emptyList() } catch (_: Exception) { emptyList() }
+    suspend fun list(): List<BmpEmployeeData> {
+        val cached = _employees.value
+        if (cached.isNotEmpty()) {
+            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try { refresh() } catch (_: Exception) {}
+            }
+            return cached
+        }
+        refresh()
+        return _employees.value
     }
 
     suspend fun upsert(emp: BmpEmployeeData): OnlineWriteResult {
@@ -2489,30 +2493,79 @@ class BmpSettingsRepository @Inject constructor(
             )
         }
     }
-    suspend fun get(): BmpSettingsData? = try {
-        api.getBmpSettings().body()?.let {
-            BmpSettingsData(
-                id = (it["id"] as? Number)?.toLong() ?: 0,
-                tenantId = it["tenantId"] as? String ?: "",
-                companyName = it["companyName"] as? String ?: "",
-                address = it["address"] as? String,
-                phone = it["phone"] as? String,
-                email = it["email"] as? String,
-                npwp = it["npwp"] as? String,
-                logoUrl = it["logoUrl"] as? String,
-                bankInfo = it["bankInfo"] as? String,
-                invoicePrefix = it["invoicePrefix"] as? String ?: "INV",
-                listrikBulanan = (it["listrikBulanan"] as? Number)?.toDouble() ?: 30_000_000.0,
-                jumlahMesin = (it["jumlahMesin"] as? Number)?.toInt() ?: 5,
-                jumlahKaryawan = (it["jumlahKaryawan"] as? Number)?.toInt() ?: 19,
-                gajiHarian = (it["gajiHarian"] as? Number)?.toDouble() ?: 80_000.0,
-                hariKerjaSebulan = (it["hariKerjaSebulan"] as? Number)?.toInt() ?: 26,
-                biayaKarungPer1000 = (it["biayaKarungPer1000"] as? Number)?.toDouble() ?: 2_100_000.0,
-                hoursPerDay = (it["hoursPerDay"] as? Number)?.toInt() ?: 24,
-                updatedAt = (it["updatedAt"] as? Number)?.toLong() ?: 0
+    suspend fun get(): BmpSettingsData? {
+        val current = _settings.value
+        if (current != null) {
+            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try { refresh() } catch (_: Exception) {}
+            }
+            return BmpSettingsData(
+                id = current.id,
+                tenantId = current.tenantId,
+                companyName = current.clientName,
+                address = current.addressLine1,
+                phone = current.phoneNumber,
+                email = current.emailAddress,
+                npwp = current.taxNumber,
+                logoUrl = current.clientLogo,
+                bankInfo = "",
+                invoicePrefix = "INV",
+                listrikBulanan = current.listrikBulanan,
+                jumlahMesin = current.jumlahMesin,
+                jumlahKaryawan = current.jumlahKaryawan,
+                gajiHarian = current.gajiHarian,
+                hariKerjaSebulan = current.hariKerjaSebulan,
+                biayaKarungPer1000 = current.biayaKarungPer1000,
+                hoursPerDay = current.hoursPerDay,
+                updatedAt = current.updatedAt
             )
         }
-    } catch (_: Exception) { null }
+        val data = try {
+            api.getBmpSettings().body()?.let {
+                BmpSettingsData(
+                    id = (it["id"] as? Number)?.toLong() ?: 0,
+                    tenantId = it["tenantId"] as? String ?: "",
+                    companyName = it["companyName"] as? String ?: "",
+                    address = it["address"] as? String,
+                    phone = it["phone"] as? String,
+                    email = it["email"] as? String,
+                    npwp = it["npwp"] as? String,
+                    logoUrl = it["logoUrl"] as? String,
+                    bankInfo = it["bankInfo"] as? String,
+                    invoicePrefix = it["invoicePrefix"] as? String ?: "INV",
+                    listrikBulanan = (it["listrikBulanan"] as? Number)?.toDouble() ?: 30_000_000.0,
+                    jumlahMesin = (it["jumlahMesin"] as? Number)?.toInt() ?: 5,
+                    jumlahKaryawan = (it["jumlahKaryawan"] as? Number)?.toInt() ?: 19,
+                    gajiHarian = (it["gajiHarian"] as? Number)?.toDouble() ?: 80_000.0,
+                    hariKerjaSebulan = (it["hariKerjaSebulan"] as? Number)?.toInt() ?: 26,
+                    biayaKarungPer1000 = (it["biayaKarungPer1000"] as? Number)?.toDouble() ?: 2_100_000.0,
+                    hoursPerDay = (it["hoursPerDay"] as? Number)?.toInt() ?: 24,
+                    updatedAt = (it["updatedAt"] as? Number)?.toLong() ?: 0
+                )
+            }
+        } catch (_: Exception) { null }
+        if (data != null) {
+            _settings.value = com.posbah.app.data.local.entities.BmpSettingsEntity(
+                id = data.id,
+                tenantId = data.tenantId,
+                clientName = data.companyName,
+                clientLogo = data.logoUrl,
+                addressLine1 = data.address,
+                phoneNumber = data.phone,
+                emailAddress = data.email,
+                taxNumber = data.npwp,
+                listrikBulanan = data.listrikBulanan,
+                jumlahMesin = data.jumlahMesin,
+                jumlahKaryawan = data.jumlahKaryawan,
+                gajiHarian = data.gajiHarian,
+                hariKerjaSebulan = data.hariKerjaSebulan,
+                biayaKarungPer1000 = data.biayaKarungPer1000,
+                hoursPerDay = data.hoursPerDay,
+                updatedAt = data.updatedAt
+            )
+        }
+        return data
+    }
 
     suspend fun save(settings: BmpSettingsData): OnlineWriteResult {
         return try {
@@ -2582,55 +2635,119 @@ class PrintSettingsRepository @Inject constructor(
         } catch (_: Exception) {}
     }
 
-    suspend fun get(moduleKey: String): PrintSettingsData? = try {
-        api.getPrintSettings(moduleKey).body()?.firstOrNull()?.let { it ->
-            PrintSettingsData(
-                id = (it["id"] as? Number)?.toLong() ?: 0,
-                tenantId = it["tenantId"] as? String ?: "",
-                moduleKey = it["moduleKey"] as? String ?: moduleKey,
-                jpgUseLogo = it["jpgUseLogo"] as? Boolean ?: true,
-                jpgHeaderAlign = it["jpgHeaderAlign"] as? String ?: "LEFT",
-                jpgUseSignature = it["jpgUseSignature"] as? Boolean ?: true,
-                jpgSignatureSenderName = it["jpgSignatureSenderName"] as? String ?: "Admin",
-                jpgSignatureReceiverName = it["jpgSignatureReceiverName"] as? String ?: "",
-                jpgSignatureDrawnBase64 = it["jpgSignatureDrawnBase64"] as? String,
-                jpgIsColor = it["jpgIsColor"] as? Boolean ?: true,
-                sjUseLogo = it["sjUseLogo"] as? Boolean ?: true,
-                sjHeaderAlign = it["sjHeaderAlign"] as? String ?: "LEFT",
-                sjUseSignature = it["sjUseSignature"] as? Boolean ?: true,
-                sjSignatureSenderName = it["sjSignatureSenderName"] as? String ?: "Admin",
-                sjSignatureReceiverName = it["sjSignatureReceiverName"] as? String ?: "",
-                sjSignatureDrawnBase64 = it["sjSignatureDrawnBase64"] as? String,
-                sjIsColor = it["sjIsColor"] as? Boolean ?: false,
-                invoiceUseLogo = it["invoiceUseLogo"] as? Boolean ?: true,
-                invoiceHeaderAlign = it["invoiceHeaderAlign"] as? String ?: "LEFT",
-                invoiceUseSignature = it["invoiceUseSignature"] as? Boolean ?: true,
-                invoiceSignatureSenderName = it["invoiceSignatureSenderName"] as? String ?: "Admin",
-                invoiceSignatureReceiverName = it["invoiceSignatureReceiverName"] as? String ?: "",
-                invoiceSignatureDrawnBase64 = it["invoiceSignatureDrawnBase64"] as? String,
-                invoiceIsColor = it["invoiceIsColor"] as? Boolean ?: true,
-                receiptPaperWidth = it["receiptPaperWidth"] as? String ?: "MM80",
-                receiptUseLogo = it["receiptUseLogo"] as? Boolean ?: true,
-                receiptHeaderAlign = it["receiptHeaderAlign"] as? String ?: "CENTER",
-                receiptIsColor = it["receiptIsColor"] as? Boolean ?: false,
-                receiptShowItemPrice = it["receiptShowItemPrice"] as? Boolean ?: true,
-                receiptFooterText = it["receiptFooterText"] as? String ?: "Terima kasih sudah berbelanja!",
-                jpgTemplateType = it["jpgTemplateType"] as? String ?: "MODERN",
-                sjTemplateType = it["sjTemplateType"] as? String ?: "MODERN",
-                invoiceTemplateType = it["invoiceTemplateType"] as? String ?: "MODERN",
-                bankOwnerName = it["bankOwnerName"] as? String ?: "",
-                bankName = it["bankName"] as? String ?: "BCA",
-                bankAccountNumber = it["bankAccountNumber"] as? String ?: "",
-                logoPath = it["logoPath"] as? String,
-                logoUrl = it["logoUrl"] as? String ?: it["logoPath"] as? String,
-                jpgSignatureDrawnUrl = it["jpgSignatureDrawnUrl"] as? String,
-                sjSignatureDrawnUrl = it["sjSignatureDrawnUrl"] as? String,
-                invoiceSignatureDrawnUrl = it["invoiceSignatureDrawnUrl"] as? String,
-                createdAt = (it["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
-                updatedAt = (it["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis()
-            )
+    suspend fun get(moduleKey: String): PrintSettingsData? {
+        val cached = _settingsList.value.find { it.moduleKey == moduleKey }
+        if (cached != null) {
+            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    val fresh = api.getPrintSettings(moduleKey).body()?.firstOrNull()?.let { it ->
+                        PrintSettingsData(
+                            id = (it["id"] as? Number)?.toLong() ?: 0,
+                            tenantId = it["tenantId"] as? String ?: "",
+                            moduleKey = it["moduleKey"] as? String ?: moduleKey,
+                            jpgUseLogo = it["jpgUseLogo"] as? Boolean ?: true,
+                            jpgHeaderAlign = it["jpgHeaderAlign"] as? String ?: "LEFT",
+                            jpgUseSignature = it["jpgUseSignature"] as? Boolean ?: true,
+                            jpgSignatureSenderName = it["jpgSignatureSenderName"] as? String ?: "Admin",
+                            jpgSignatureReceiverName = it["jpgSignatureReceiverName"] as? String ?: "",
+                            jpgSignatureDrawnBase64 = it["jpgSignatureDrawnBase64"] as? String,
+                            jpgIsColor = it["jpgIsColor"] as? Boolean ?: true,
+                            sjUseLogo = it["sjUseLogo"] as? Boolean ?: true,
+                            sjHeaderAlign = it["sjHeaderAlign"] as? String ?: "LEFT",
+                            sjUseSignature = it["sjUseSignature"] as? Boolean ?: true,
+                            sjSignatureSenderName = it["sjSignatureSenderName"] as? String ?: "Admin",
+                            sjSignatureReceiverName = it["sjSignatureReceiverName"] as? String ?: "",
+                            sjSignatureDrawnBase64 = it["sjSignatureDrawnBase64"] as? String,
+                            sjIsColor = it["sjIsColor"] as? Boolean ?: false,
+                            invoiceUseLogo = it["invoiceUseLogo"] as? Boolean ?: true,
+                            invoiceHeaderAlign = it["invoiceHeaderAlign"] as? String ?: "LEFT",
+                            invoiceUseSignature = it["invoiceUseSignature"] as? Boolean ?: true,
+                            invoiceSignatureSenderName = it["invoiceSignatureSenderName"] as? String ?: "Admin",
+                            invoiceSignatureReceiverName = it["invoiceSignatureReceiverName"] as? String ?: "",
+                            invoiceSignatureDrawnBase64 = it["invoiceSignatureDrawnBase64"] as? String,
+                            invoiceIsColor = it["invoiceIsColor"] as? Boolean ?: true,
+                            receiptPaperWidth = it["receiptPaperWidth"] as? String ?: "MM80",
+                            receiptUseLogo = it["receiptUseLogo"] as? Boolean ?: true,
+                            receiptHeaderAlign = it["receiptHeaderAlign"] as? String ?: "CENTER",
+                            receiptIsColor = it["receiptIsColor"] as? Boolean ?: false,
+                            receiptShowItemPrice = it["receiptShowItemPrice"] as? Boolean ?: true,
+                            receiptFooterText = it["receiptFooterText"] as? String ?: "Terima kasih sudah berbelanja!",
+                            jpgTemplateType = it["jpgTemplateType"] as? String ?: "MODERN",
+                            sjTemplateType = it["sjTemplateType"] as? String ?: "MODERN",
+                            invoiceTemplateType = it["invoiceTemplateType"] as? String ?: "MODERN",
+                            bankOwnerName = it["bankOwnerName"] as? String ?: "",
+                            bankName = it["bankName"] as? String ?: "BCA",
+                            bankAccountNumber = it["bankAccountNumber"] as? String ?: "",
+                            logoPath = it["logoPath"] as? String,
+                            logoUrl = it["logoUrl"] as? String ?: it["logoPath"] as? String,
+                            jpgSignatureDrawnUrl = it["jpgSignatureDrawnUrl"] as? String,
+                            sjSignatureDrawnUrl = it["sjSignatureDrawnUrl"] as? String,
+                            invoiceSignatureDrawnUrl = it["invoiceSignatureDrawnUrl"] as? String,
+                            createdAt = (it["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+                            updatedAt = (it["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis()
+                        )
+                    }
+                    if (fresh != null) {
+                        _settingsList.value = _settingsList.value.filter { it.moduleKey != moduleKey } + fresh
+                    }
+                } catch (_: Exception) {}
+            }
+            return cached
         }
-    } catch (_: Exception) { null }
+        val fresh = try {
+            api.getPrintSettings(moduleKey).body()?.firstOrNull()?.let { it ->
+                PrintSettingsData(
+                    id = (it["id"] as? Number)?.toLong() ?: 0,
+                    tenantId = it["tenantId"] as? String ?: "",
+                    moduleKey = it["moduleKey"] as? String ?: moduleKey,
+                    jpgUseLogo = it["jpgUseLogo"] as? Boolean ?: true,
+                    jpgHeaderAlign = it["jpgHeaderAlign"] as? String ?: "LEFT",
+                    jpgUseSignature = it["jpgUseSignature"] as? Boolean ?: true,
+                    jpgSignatureSenderName = it["jpgSignatureSenderName"] as? String ?: "Admin",
+                    jpgSignatureReceiverName = it["jpgSignatureReceiverName"] as? String ?: "",
+                    jpgSignatureDrawnBase64 = it["jpgSignatureDrawnBase64"] as? String,
+                    jpgIsColor = it["jpgIsColor"] as? Boolean ?: true,
+                    sjUseLogo = it["sjUseLogo"] as? Boolean ?: true,
+                    sjHeaderAlign = it["sjHeaderAlign"] as? String ?: "LEFT",
+                    sjUseSignature = it["sjUseSignature"] as? Boolean ?: true,
+                    sjSignatureSenderName = it["sjSignatureSenderName"] as? String ?: "Admin",
+                    sjSignatureReceiverName = it["sjSignatureReceiverName"] as? String ?: "",
+                    sjSignatureDrawnBase64 = it["sjSignatureDrawnBase64"] as? String,
+                    sjIsColor = it["sjIsColor"] as? Boolean ?: false,
+                    invoiceUseLogo = it["invoiceUseLogo"] as? Boolean ?: true,
+                    invoiceHeaderAlign = it["invoiceHeaderAlign"] as? String ?: "LEFT",
+                    invoiceUseSignature = it["invoiceUseSignature"] as? Boolean ?: true,
+                    invoiceSignatureSenderName = it["invoiceSignatureSenderName"] as? String ?: "Admin",
+                    invoiceSignatureReceiverName = it["invoiceSignatureReceiverName"] as? String ?: "",
+                    invoiceSignatureDrawnBase64 = it["invoiceSignatureDrawnBase64"] as? String,
+                    invoiceIsColor = it["invoiceIsColor"] as? Boolean ?: true,
+                    receiptPaperWidth = it["receiptPaperWidth"] as? String ?: "MM80",
+                    receiptUseLogo = it["receiptUseLogo"] as? Boolean ?: true,
+                    receiptHeaderAlign = it["receiptHeaderAlign"] as? String ?: "CENTER",
+                    receiptIsColor = it["receiptIsColor"] as? Boolean ?: false,
+                    receiptShowItemPrice = it["receiptShowItemPrice"] as? Boolean ?: true,
+                    receiptFooterText = it["receiptFooterText"] as? String ?: "Terima kasih sudah berbelanja!",
+                    jpgTemplateType = it["jpgTemplateType"] as? String ?: "MODERN",
+                    sjTemplateType = it["sjTemplateType"] as? String ?: "MODERN",
+                    invoiceTemplateType = it["invoiceTemplateType"] as? String ?: "MODERN",
+                    bankOwnerName = it["bankOwnerName"] as? String ?: "",
+                    bankName = it["bankName"] as? String ?: "BCA",
+                    bankAccountNumber = it["bankAccountNumber"] as? String ?: "",
+                    logoPath = it["logoPath"] as? String,
+                    logoUrl = it["logoUrl"] as? String ?: it["logoPath"] as? String,
+                    jpgSignatureDrawnUrl = it["jpgSignatureDrawnUrl"] as? String,
+                    sjSignatureDrawnUrl = it["sjSignatureDrawnUrl"] as? String,
+                    invoiceSignatureDrawnUrl = it["invoiceSignatureDrawnUrl"] as? String,
+                    createdAt = (it["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis(),
+                    updatedAt = (it["updatedAt"] as? Number)?.toLong() ?: System.currentTimeMillis()
+                )
+            }
+        } catch (_: Exception) { null }
+        if (fresh != null) {
+            _settingsList.value = _settingsList.value.filter { it.moduleKey != moduleKey } + fresh
+        }
+        return fresh
+    }
 
     suspend fun save(settings: PrintSettingsData): OnlineWriteResult {
         val snapshot = _settingsList.value
