@@ -681,7 +681,7 @@ class BmpInvoiceRepository @Inject constructor(
                 if (prod.masterItemID != null) {
                     stockRepo.adjustStock(
                         masterItemId = prod.masterItemID,
-                        change = -(prod.quantity * prod.jumlahLusin),
+                        change = -(prod.quantity * prod.jumlahLusin).toDouble(),
                         mutationType = "PENJUALAN",
                         referenceId = newId,
                         notes = "Penjualan Invoice #${invoice.number}"
@@ -767,7 +767,7 @@ class BmpInvoiceRepository @Inject constructor(
                 if (op.masterItemID != null) {
                     stockRepo.adjustStock(
                         masterItemId = op.masterItemID,
-                        change = op.quantity * op.jumlahLusin,
+                        change = (op.quantity * op.jumlahLusin).toDouble(),
                         mutationType = "PENJUALAN",
                         referenceId = invoice.id,
                         notes = "Koreksi Invoice #${invoice.number} (Kembalikan)"
@@ -806,7 +806,7 @@ class BmpInvoiceRepository @Inject constructor(
                 if (prod.masterItemID != null) {
                     stockRepo.adjustStock(
                         masterItemId = prod.masterItemID,
-                        change = -(prod.quantity * prod.jumlahLusin),
+                        change = -(prod.quantity * prod.jumlahLusin).toDouble(),
                         mutationType = "PENJUALAN",
                         referenceId = invoice.id,
                         notes = "Koreksi Invoice #${invoice.number} (Kurangi)"
@@ -848,7 +848,7 @@ class BmpInvoiceRepository @Inject constructor(
                 if (prod.masterItemID != null) {
                     stockRepo.adjustStock(
                         masterItemId = prod.masterItemID,
-                        change = prod.quantity * prod.jumlahLusin,
+                        change = (prod.quantity * prod.jumlahLusin).toDouble(),
                         mutationType = "PENJUALAN",
                         referenceId = id,
                         notes = "Hapus Invoice #${inv?.number ?: id}"
