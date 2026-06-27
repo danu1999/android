@@ -9,4 +9,23 @@ import dagger.hilt.android.HiltAndroidApp
  * splash screen viewmodel to keep app cold-start fast.
  */
 @HiltAndroidApp
-class PosBahApp : Application()
+class PosBahApp : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        cleanLegacyDatabases()
+    }
+
+    private fun cleanLegacyDatabases() {
+        try {
+            val dbs = databaseList()
+            if (!dbs.isNullOrEmpty()) {
+                dbs.forEach { dbName ->
+                    val deleted = deleteDatabase(dbName)
+                    android.util.Log.i("PosBahApp", "Deleted legacy database $dbName: $deleted")
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("PosBahApp", "Failed to clean legacy databases", e)
+        }
+    }
+}
