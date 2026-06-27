@@ -136,6 +136,9 @@ interface BmpApiService {
     @POST("api/rt/bmp/bahan-baku-items")
     suspend fun createBahanBakuItems(@Body items: List<Map<String, Any?>>): Response<Map<String, Any?>>
 
+    @DELETE("api/rt/bmp/bahan-baku-items")
+    suspend fun deleteBahanBakuItems(@Query("bahanBakuId") id: Long): Response<Map<String, Any?>>
+
     // ── Production Logs ───────────────────────────────────────────────────────
     @GET("api/rt/bmp/production-logs")
     suspend fun getProductionLogs(): Response<List<Map<String, Any?>>>

@@ -15,8 +15,8 @@ android {
         applicationId = "com.posbah.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 95
-        versionName = "2.17.56"
+        versionCode = 96
+        versionName = "2.17.57"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -55,8 +55,8 @@ android {
             buildConfigField("boolean", "DEBUG_MODE", "true")
         }
         release {
-            isMinifyEnabled = false
-            isShrinkResources = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             isDebuggable = false
             buildConfigField("boolean", "DEBUG_MODE", "false")
             proguardFiles(

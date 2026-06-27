@@ -838,6 +838,18 @@ func handleRtBmpBahanBakuItems(w http.ResponseWriter, r *http.Request) {
 		json.NewDecoder(r.Body).Decode(&body)
 		for _, item := range body { item["tenantId"] = tenantId; insertRow("bmp_bahan_baku_item", item) }
 		jsonOK(w, map[string]interface{}{"ok": true, "count": len(body)})
+	case http.MethodDelete:
+		bahanBakuId := r.URL.Query().Get("bahanBakuId")
+		if bahanBakuId == "" {
+			jsonErr(w, 400, "missing bahanBakuId")
+			return
+		}
+		_, err := db.Exec(`DELETE FROM "bmp_bahan_baku_item" WHERE "bahanBakuId"=$1 AND "tenantId"=$2`, bahanBakuId, tenantId)
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonOK(w, map[string]interface{}{"ok": true})
 	default:
 		jsonErr(w, 405, "method not allowed")
 	}

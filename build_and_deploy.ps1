@@ -62,7 +62,7 @@
 
 param(
     [ValidateSet("debug", "release")]
-    [string]$BuildType = "debug",
+    [string]$BuildType = "release",
 
     [switch]$SkipBuild,
     [switch]$SkipGitPush,

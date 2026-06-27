@@ -1851,6 +1851,67 @@ class BmpBahanBakuRepository @Inject constructor(
           }
      }
 
+     suspend fun update(
+         bahanBaku: BmpBahanBakuData,
+         items: List<BmpBahanBakuItemData>
+     ): OnlineWriteResult = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+          val snapshot = _bahanBaku.value
+          _bahanBaku.value = snapshot.map { if (it.id == bahanBaku.id) bahanBaku else it }
+
+          try {
+              // 1. Update header
+              api.updateBahanBaku(bahanBaku.id, mapOf(
+                  "noTagihan" to bahanBaku.noTagihan,
+                  "tanggal" to bahanBaku.tanggal,
+                  "supplier" to bahanBaku.supplier,
+                  "totalHarga" to bahanBaku.totalHarga,
+                  "nominal" to bahanBaku.nominal,
+                  "notaFotoPath" to bahanBaku.notaFotoPath,
+                  "notaFotoUrl" to bahanBaku.notaFotoUrl,
+                  "notes" to bahanBaku.notes
+              ))
+
+              // 2. Delete old items
+              api.deleteBahanBakuItems(bahanBaku.id)
+
+              // 3. Post new items
+              if (items.isNotEmpty()) {
+                  val itemBodies = items.map {
+                      mapOf<String, Any?>(
+                          "bahanBakuId" to bahanBaku.id,
+                          "jenisBahan" to it.jenisBahan,
+                          "kuantitas" to it.kuantitas,
+                          "unit" to it.unit,
+                          "rate" to it.rate
+                      )
+                  }
+                  api.createBahanBakuItems(itemBodies)
+              }
+
+              // 4. Update cashflow entry
+              val cfList = cashflowRepo.list()
+              val match = cfList.find { it.description == "Pembelian Bahan Baku: ${bahanBaku.noTagihan}" }
+              if (match != null) {
+                  cashflowRepo.update(match.copy(
+                      amount = bahanBaku.totalHarga,
+                      transactionDate = bahanBaku.tanggal
+                  ))
+              } else {
+                  cashflowRepo.createEntry(BmpCashflowData(
+                      transactionType = "KELUAR",
+                      description = "Pembelian Bahan Baku: ${bahanBaku.noTagihan}",
+                      amount = bahanBaku.totalHarga,
+                      transactionDate = bahanBaku.tanggal
+                  ))
+              }
+
+              OnlineWriteResult.Success
+          } catch (e: Exception) {
+              _bahanBaku.value = snapshot // rollback
+              OnlineWriteResult.Error(e.message ?: "Gagal update bahan baku")
+          }
+     }
+
     suspend fun delete(id: Long): OnlineWriteResult = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
         val snapshot = _bahanBaku.value
         val target = snapshot.find { it.id == id }
@@ -1965,7 +2026,7 @@ class BmpBahanBakuRepository @Inject constructor(
                 subtotal = it.kuantitas * it.rate
             )
         }
-        return if (entity.id == 0L) create(data, itemData) else update(data)
+        return if (entity.id == 0L) create(data, itemData) else update(data, itemData)
     }
 
     suspend fun save(

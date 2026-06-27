@@ -201,9 +201,7 @@ class BahanBakuFormViewModel @Inject constructor(
         if (editingId > 0) viewModelScope.launch {
             val h = repo.getById(editingId) ?: return@launch
             originalNominal = h.nominal
-            val existingItems = repo.observeItems(editingId).stateIn(
-                viewModelScope, SharingStarted.Eagerly, emptyList()
-            ).value.map { e ->
+            val existingItems = repo.getItems(editingId).map { e ->
                 BahanBakuItemDraft(
                     id = e.id,
                     jenisBahan = e.jenisBahan,
