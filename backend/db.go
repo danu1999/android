@@ -909,76 +909,79 @@ func initSchema() error {
 		  AND mp."description" IS NOT NULL
 	`)
 	// ── Database Indexing ──────────────────────────────────────────────────────
-	// Semua index menggunakan CONCURRENTLY (tidak lock tabel selama pembuatan)
-	// dan IF NOT EXISTS (aman dijalankan berkali-kali).
+	// Semua index menggunakan IF NOT EXISTS (aman dijalankan berkali-kali).
+	// Catatan: CONCURRENTLY tidak bisa dijalankan melalui db.Exec (butuh autocommit).
+	// Index sudah terpasang langsung di VPS via psql. Block ini menjadi fallback
+	// untuk database baru / fresh install.
 	// Berdasarkan analisis pola WHERE clause di handlers_rt.go dan main.go.
 	indexMigrations := []string{
 		// ── Kelompok 1: Inti POS (Prioritas Tertinggi) ────────────────────────
 		// transactions: filter utama per tenant + date sort
-		`CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_tx_tenant_date"
+		`CREATE INDEX IF NOT EXISTS "idx_tx_tenant_date"
 			ON "transactions" ("tenantId", "date" DESC)
 			WHERE "isDeleted" = FALSE`,
 		// transactions: filter per tenant + outlet (support multi-outlet)
-		`CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_tx_tenant_outlet_date"
+		`CREATE INDEX IF NOT EXISTS "idx_tx_tenant_outlet_date"
 			ON "transactions" ("tenantId", "outletId", "date" DESC)
 			WHERE "isDeleted" = FALSE`,
 		// transaction_items: join per transactionId (detail struk & margin)
-		`CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_tx_items_txid"
+		`CREATE INDEX IF NOT EXISTS "idx_tx_items_txid"
 			ON "transaction_items" ("transactionId")`,
 		// transaction_items: agregasi COGS per produk (Margin Analysis)
-		`CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_tx_items_prodid"
+		`CREATE INDEX IF NOT EXISTS "idx_tx_items_prodid"
 			ON "transaction_items" ("productId")`,
 		// products: katalog produk per tenant+outlet
-		`CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_products_tenant_outlet"
+		`CREATE INDEX IF NOT EXISTS "idx_products_tenant_outlet"
 			ON "products" ("tenantId", "outletId")
 			WHERE "isDeleted" = FALSE`,
 
 		// ── Kelompok 2: Multi-Tenant Core ──────────────────────────────────────
-		`CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_customers_tenant"
+		`CREATE INDEX IF NOT EXISTS "idx_customers_tenant"
 			ON "customers" ("tenantId")
 			WHERE "isDeleted" = FALSE`,
-		`CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_employees_tenant"
+		`CREATE INDEX IF NOT EXISTS "idx_employees_tenant"
 			ON "employees" ("tenantId")
 			WHERE "isActive" = TRUE`,
-		`CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_outlets_tenant"
+		`CREATE INDEX IF NOT EXISTS "idx_outlets_tenant"
 			ON "outlets" ("tenantId")`,
 
 		// ── Kelompok 3: BMP Module ─────────────────────────────────────────────
-		`CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_bmp_invoices_tenant_date"
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_invoices_tenant_date"
 			ON "bmp_invoices" ("tenantId", "createdAt" DESC)
 			WHERE "isDeleted" = FALSE`,
-		`CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_bmp_cashflow_tenant_date"
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_cashflow_tenant_date"
 			ON "bmp_cashflow" ("tenantId", "transactionDate" DESC)
 			WHERE "isDeleted" = FALSE`,
-		`CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_bmp_bb_tenant"
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_bb_tenant"
 			ON "bmp_bahan_baku" ("tenantId")
 			WHERE "isDeleted" = FALSE`,
-		`CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_bmp_bbi_bahanid"
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_bbi_bahanid"
 			ON "bmp_bahan_baku_item" ("bahanBakuId")
 			WHERE "isDeleted" = FALSE`,
-		`CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_bmp_prodlogs_tenant_date"
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_prodlogs_tenant_date"
 			ON "bmp_production_logs" ("tenantId", "productionDate" DESC)
 			WHERE "isDeleted" = FALSE`,
 
 		// ── Kelompok 4: Auth — kritis untuk kecepatan login ───────────────────
-		`CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_users_email"
+		`CREATE INDEX IF NOT EXISTS "idx_users_email"
 			ON "local_users" (LOWER("email"))
 			WHERE "isActive" = TRUE`,
-		`CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_users_googlesub"
+		`CREATE INDEX IF NOT EXISTS "idx_users_googlesub"
 			ON "local_users" ("googleSub")
 			WHERE "isActive" = TRUE`,
 
 		// ── Kelompok 5: Target Penjualan Harian ───────────────────────────────
-		`CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_targets_tenant_outlet_date"
+		`CREATE INDEX IF NOT EXISTS "idx_targets_tenant_outlet_date"
 			ON "product_daily_targets" ("tenantId", "outletId", "targetDate")`,
 
-		// ── Kelompok 6: Activity Logs ──────────────────────────────────────────
-		`CREATE INDEX CONCURRENTLY IF NOT EXISTS "idx_actlogs_tenant_date"
-			ON "activity_logs" ("tenantId", "createdAt" DESC)`,
+		// ── Kelompok 6: Activity Logs (kolom: date, bukan createdAt) ───────────
+		`CREATE INDEX IF NOT EXISTS "idx_actlogs_tenant_date"
+			ON "activity_logs" ("tenantId", date DESC)`,
 	}
 	for _, q := range indexMigrations {
 		if _, err := db.Exec(q); err != nil {
-			// CONCURRENTLY tidak bisa dijalankan dalam transaksi, error ini non-fatal
+			// IF NOT EXISTS membuat ini idempotent — error hanya terjadi jika
+			// ada perbedaan definisi, bukan duplikat
 			log.Printf("[migration] index warning (non-fatal): %v", err)
 		}
 	}
