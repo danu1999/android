@@ -2096,8 +2096,110 @@ class BmpBahanBakuRepository @Inject constructor(
         originalNominal: Double,
         entity: com.posbah.app.data.local.entities.BmpBahanBakuEntity,
         items: List<com.posbah.app.data.local.entities.BmpBahanBakuItemEntity>
-    ): OnlineWriteResult {
-        return save(entity, items)
+    ): OnlineWriteResult = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+        val snapshot = _bahanBaku.value
+        val data = BmpBahanBakuData(
+            id = entity.id,
+            tenantId = entity.tenantId,
+            noTagihan = entity.noTagihan,
+            tanggal = entity.tanggal,
+            supplier = entity.supplier,
+            totalHarga = entity.totalHarga,
+            nominal = entity.nominal,
+            notes = entity.notes,
+            notaFotoPath = entity.notaFotoPath,
+            notaFotoUrl = entity.notaFotoUrl
+        )
+        val itemData = items.map {
+            BmpBahanBakuItemData(
+                id = it.id,
+                bahanBakuId = it.bahanBakuId,
+                jenisBahan = it.jenisBahan,
+                kuantitas = it.kuantitas,
+                unit = it.unit,
+                rate = it.rate,
+                subtotal = it.kuantitas * it.rate
+            )
+        }
+
+        _bahanBaku.value = snapshot.map { if (it.id == entity.id) data else it }
+
+        try {
+            val oldBahanBaku = snapshot.find { it.id == entity.id }
+            val oldNoTagihan = oldBahanBaku?.noTagihan ?: entity.noTagihan
+
+            // 1. Update header
+            api.updateBahanBaku(entity.id, mapOf(
+                "noTagihan" to entity.noTagihan,
+                "tanggal" to entity.tanggal,
+                "supplier" to entity.supplier,
+                "totalHarga" to entity.totalHarga,
+                "nominal" to entity.nominal,
+                "notaFotoPath" to entity.notaFotoPath,
+                "notaFotoUrl" to entity.notaFotoUrl,
+                "notes" to entity.notes
+            ))
+
+            // 2. Delete old items
+            api.deleteBahanBakuItems(entity.id)
+
+            // 3. Post new items
+            if (itemData.isNotEmpty()) {
+                val itemBodies = itemData.map {
+                    mapOf<String, Any?>(
+                        "bahanBakuId" to entity.id,
+                        "jenisBahan" to it.jenisBahan,
+                        "kuantitas" to it.kuantitas,
+                        "unit" to it.unit,
+                        "rate" to it.rate
+                    )
+                }
+                api.createBahanBakuItems(itemBodies)
+            }
+
+            // 4. Update cashflow entry
+            val cfList = cashflowRepo.list()
+            val match = cfList.find { it.description == "Pembelian Bahan Baku: $oldNoTagihan" }
+            
+            // Perhitungan nominal cashflow pembelian yang benar:
+            // nominal pembelian = (nominal baru) - (semua pembayaran hutang yang tercatat di cashflow)
+            val debtMatches = cfList.filter { it.description == "Pembayaran Hutang Bahan Baku: $oldNoTagihan" }
+            val totalPaidDebt = debtMatches.sumOf { it.amount }
+            
+            // Nominal awal pembelian yang baru = nominal baru di form - total cicilan hutang yang sudah dibayar
+            // Ini mencegah double counting karena cicilan hutang tetap tercatat di cashflow tersendiri.
+            val newInitialNominal = (entity.nominal - totalPaidDebt).coerceAtLeast(0.0)
+
+            if (match != null) {
+                cashflowRepo.update(match.copy(
+                    description = "Pembelian Bahan Baku: ${entity.noTagihan}",
+                    amount = newInitialNominal,
+                    transactionDate = entity.tanggal
+                ))
+            } else {
+                cashflowRepo.createEntry(BmpCashflowData(
+                    transactionType = "KELUAR",
+                    description = "Pembelian Bahan Baku: ${entity.noTagihan}",
+                    amount = newInitialNominal,
+                    transactionDate = entity.tanggal
+                ))
+            }
+
+            // Update nama tagihan di pembayaran hutang jika berubah
+            if (oldNoTagihan != entity.noTagihan) {
+                debtMatches.forEach { debtCf ->
+                    cashflowRepo.update(debtCf.copy(
+                        description = "Pembayaran Hutang Bahan Baku: ${entity.noTagihan}"
+                    ))
+                }
+            }
+
+            cashflowRepo.refreshEntries()
+            OnlineWriteResult.Success
+        } catch (e: Exception) {
+            _bahanBaku.value = snapshot // rollback
+            OnlineWriteResult.Error(e.message ?: "Gagal update bahan baku")
+        }
     }
 
     suspend fun getItems(bahanBakuId: Long): List<BmpBahanBakuItemData> = try {

@@ -151,6 +151,7 @@ enum class FotoUploadStatus {
 data class BahanBakuFormUiState(
     val header: BmpBahanBakuEntity? = null,
     val items: List<BahanBakuItemDraft> = listOf(BahanBakuItemDraft()),
+    val nominalInput: String = "",
     val isLoading: Boolean = false,
     val saved: Boolean = false,
     val saveError: String? = null,
@@ -214,6 +215,7 @@ class BahanBakuFormViewModel @Inject constructor(
                 it.copy(
                     header = h,
                     items = existingItems.ifEmpty { listOf(BahanBakuItemDraft()) },
+                    nominalInput = if (h.nominal > 0.0) h.nominal.toBigDecimal().stripTrailingZeros().toPlainString() else "",
                     notaFotoPath = h.notaFotoPath,
                     notaFotoUrl = h.notaFotoUrl,
                     fotoFileSizeKb = com.posbah.app.util.CameraUtils.fileSizeKb(context, h.notaFotoPath),
@@ -230,6 +232,10 @@ class BahanBakuFormViewModel @Inject constructor(
     fun updateHeader(transform: (BmpBahanBakuEntity) -> BmpBahanBakuEntity) {
         val h = _ui.value.header ?: return
         _ui.update { it.copy(header = transform(h)) }
+    }
+
+    fun updateNominalInput(input: String) {
+        _ui.update { it.copy(nominalInput = input) }
     }
 
     fun addItem() {
@@ -402,10 +408,11 @@ class BahanBakuFormViewModel @Inject constructor(
             }
 
         val total = entities.sumOf { it.kuantitas * it.rate }
+        val enteredNominal = _ui.value.nominalInput.replace(",", ".").toDoubleOrNull() ?: 0.0
         // Pastikan path & URL foto tersimpan ke entity
         val finalHeader = h.copy(
             totalHarga = total,
-            nominal = if (h.nominal <= 0.0) total else h.nominal,
+            nominal = if (enteredNominal <= 0.0) total else enteredNominal,
             notaFotoPath = _ui.value.notaFotoPath,
             notaFotoUrl = _ui.value.notaFotoUrl
         )

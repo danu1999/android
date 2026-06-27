@@ -189,13 +189,8 @@ fun BahanBakuFormScreen(
                         Spacer(Modifier.height(10.dp))
 
                         OutlinedTextField(
-                            value = if (header.nominal > 0)
-                                header.nominal.toBigDecimal().stripTrailingZeros().toPlainString()
-                            else "",
-                            onValueChange = {
-                                val v = it.replace(",", ".").toDoubleOrNull() ?: 0.0
-                                viewModel.updateHeader { h -> h.copy(nominal = v) }
-                            },
+                            value = ui.nominalInput,
+                            onValueChange = { viewModel.updateNominalInput(it) },
                             label = { Text("Nominal Bayar Kas (Rp)") },
                             supportingText = { Text("Sisa akan dicatat sebagai hutang supplier") },
                             singleLine = true,
@@ -358,9 +353,10 @@ private fun FotoNotaSection(
                 // Preview foto
                 Box(modifier = Modifier.fillMaxWidth()) {
                     AsyncImage(
-                        model = uiState.notaFotoPath?.takeIf { path ->
-                            if (path.startsWith("content://")) true else File(path).exists()
-                        } ?: uiState.notaFotoUrl,
+                        model = uiState.notaFotoUrl.takeIf { !it.isNullOrBlank() }
+                            ?: uiState.notaFotoPath?.takeIf { path ->
+                                if (path.startsWith("content://")) true else File(path).exists()
+                            },
                         contentDescription = "Foto nota bahan baku",
                         contentScale = ContentScale.Fit,
                         modifier = Modifier
