@@ -117,7 +117,7 @@ fun InvoiceDetailScreen(
                     if (inv != null) {
                         IconButton(
                             onClick = {
-                                val html = generateInvoiceHtml(context, inv, ui.products, ui.client, ui.settings, ui.printConfig.invoice, ui.printConfig)
+                                val html = generateInvoiceHtml(context, inv, ui.products, ui.client, ui.settings, ui.printConfig.invoice, ui.printConfig, defaultCompanyName = ui.defaultCompanyName)
                                 printHtml(context, html, "Invoice_${inv.number}", ui.printConfig.invoice.isColor, ui.printConfig.invoice.templateType == "TRADITIONAL")
                             },
                             modifier = Modifier.testTag("btn-print-top")
@@ -225,7 +225,7 @@ fun InvoiceDetailScreen(
                             },
                             modifier = Modifier
                                 .clickable {
-                                    val html = generateInvoiceHtml(context, inv, ui.products, ui.client, ui.settings, ui.printConfig.jpg, ui.printConfig)
+                                    val html = generateInvoiceHtml(context, inv, ui.products, ui.client, ui.settings, ui.printConfig.jpg, ui.printConfig, defaultCompanyName = ui.defaultCompanyName)
                                     printColoredJpg(context, html, "Invoice_${inv.number}")
                                 }
                                 .background(Color.Transparent)
@@ -246,7 +246,7 @@ fun InvoiceDetailScreen(
                             },
                             modifier = Modifier
                                 .clickable {
-                                    val html = generateInvoiceHtml(context, inv, ui.products, ui.client, ui.settings, ui.printConfig.invoice, ui.printConfig)
+                                    val html = generateInvoiceHtml(context, inv, ui.products, ui.client, ui.settings, ui.printConfig.invoice, ui.printConfig, defaultCompanyName = ui.defaultCompanyName)
                                     printHtml(context, html, "Invoice_${inv.number}", ui.printConfig.invoice.isColor, ui.printConfig.invoice.templateType == "TRADITIONAL")
                                 }
                                 .background(Color.Transparent)
@@ -267,7 +267,7 @@ fun InvoiceDetailScreen(
                             },
                             modifier = Modifier
                                 .clickable {
-                                    val html = generateSuratJalanHtml(context, inv, ui.products, ui.client, ui.settings, ui.printConfig.sj, ui.printConfig)
+                                    val html = generateSuratJalanHtml(context, inv, ui.products, ui.client, ui.settings, ui.printConfig.sj, ui.printConfig, defaultCompanyName = ui.defaultCompanyName)
                                     printHtml(context, html, "SuratJalan_${inv.number}", ui.printConfig.sj.isColor, ui.printConfig.sj.templateType == "TRADITIONAL")
                                 }
                                 .background(Color.Transparent)
@@ -675,11 +675,12 @@ private fun generateInvoiceHtml(
     client: com.posbah.app.data.local.entities.BmpClientEntity?,
     settings: com.posbah.app.data.local.entities.BmpSettingsEntity?,
     printConfig: DocPrintConfig,
-    globalConfig: PrintConfig
+    globalConfig: PrintConfig,
+    defaultCompanyName: String = "CV. Bahtera Mulya Plastik"
 ): String {
     val logoBase64 = if (printConfig.useLogo) com.posbah.app.ui.print.ReceiptPrinter.getUriOrAssetBase64(context, globalConfig.logoPath, "logo.jpg") else ""
 
-    val companyName = settings?.clientName ?: "CV. Bahtera Mulya Plastik"
+    val companyName = if (!settings?.clientName.isNullOrBlank()) settings!!.clientName else defaultCompanyName
     val companyAddress = settings?.addressLine1 ?: "Sidoarjo, Jawa Timur"
     val companyPhone = settings?.phoneNumber ?: "082652626237"
     val companyEmail = settings?.emailAddress ?: "bahteramulyap@gmail.com"
@@ -1122,7 +1123,8 @@ private fun generateSuratJalanHtml(
     client: com.posbah.app.data.local.entities.BmpClientEntity?,
     settings: com.posbah.app.data.local.entities.BmpSettingsEntity?,
     printConfig: DocPrintConfig,
-    globalConfig: PrintConfig
+    globalConfig: PrintConfig,
+    defaultCompanyName: String = "CV. Bahtera Mulya Plastik"
 ): String {
     val logoBase64 = if (printConfig.useLogo) com.posbah.app.ui.print.ReceiptPrinter.getUriOrAssetBase64(context, globalConfig.logoPath, "logo.jpg") else ""
     val isColor = printConfig.isColor
@@ -1149,7 +1151,7 @@ private fun generateSuratJalanHtml(
         }
     """.trimIndent()
 
-    val companyName = settings?.clientName ?: "CV. Bahtera Mulya Plastik"
+    val companyName = if (!settings?.clientName.isNullOrBlank()) settings!!.clientName else defaultCompanyName
     val companyAddress = settings?.addressLine1 ?: "Sidoarjo, Jawa Timur"
     val companyPhone = settings?.phoneNumber ?: "082652626237"
     val companyEmail = settings?.emailAddress ?: "bahteramulyap@gmail.com"

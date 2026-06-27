@@ -170,7 +170,8 @@ data class InvoiceDetailUi(
     val pollingCountdown: Int = 180,
     val pollingError: String? = null,
     // true sesaat setelah tanda tangan berhasil diterima via link — UI harus dismiss dialog
-    val signatureReceivedRemotely: Boolean = false
+    val signatureReceivedRemotely: Boolean = false,
+    val defaultCompanyName: String = "CV. Bahtera Mulya Plastik"
 )
 
 @HiltViewModel
@@ -191,6 +192,14 @@ class InvoiceDetailViewModel @Inject constructor(
     val ui = _ui.asStateFlow()
 
     init {
+        val sessionName = authRepository.getActiveSession()?.displayName
+        val computedDefault = if (!sessionName.isNullOrBlank()) {
+            sessionName.trim()
+        } else {
+            "CV. Bahtera Mulya Plastik"
+        }
+        _ui.update { it.copy(defaultCompanyName = computedDefault) }
+
         viewModelScope.launch {
             val inv = invoiceRepo.getById(invoiceId)
             _ui.update { it.copy(invoice = inv) }
