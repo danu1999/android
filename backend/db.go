@@ -846,6 +846,20 @@ func initSchema() error {
 		}
 	}
 
+	// Migration: fix products.id sequence default — tanpa ini INSERT baru tanpa id akan gagal
+	// (null value in column "id" violates not-null constraint)
+	// Idempotent: CREATE SEQUENCE IF NOT EXISTS & ALTER COLUMN SET DEFAULT aman dijalankan berkali-kali
+	productIdSeqMigrations := []string{
+		`CREATE SEQUENCE IF NOT EXISTS "Product_id_seq" START 1;`,
+		`ALTER TABLE "products" ALTER COLUMN id SET DEFAULT nextval('"Product_id_seq"');`,
+		`SELECT setval('"Product_id_seq"', COALESCE((SELECT MAX(id) FROM "products"), 0) + 1, false);`,
+	}
+	for _, q := range productIdSeqMigrations {
+		if _, err := db.Exec(q); err != nil {
+			log.Printf("[migration] products id sequence warning: %v", err)
+		}
+	}
+
 	// Migration: tambah tabel product_daily_targets untuk target penjualan per produk per outlet
 	targetMigrations := []string{
 		`CREATE TABLE IF NOT EXISTS "product_daily_targets" (

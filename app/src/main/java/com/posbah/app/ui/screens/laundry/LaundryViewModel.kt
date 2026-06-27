@@ -128,6 +128,11 @@ class LaundryViewModel @Inject constructor(
         emit(user?.role == "OWNER")
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    val canAddService = flow {
+        val user = authRepository.getActiveUser()
+        emit(user?.role == "OWNER" || user?.role == "ADMIN")
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     val activityLogs = kotlinx.coroutines.flow.MutableStateFlow<List<com.posbah.app.data.local.entities.ActivityLogEntity>>(emptyList()).asStateFlow()
 
     val services: StateFlow<List<LaundryServiceItem>> = combine(products, transactions) { prodList, _ ->

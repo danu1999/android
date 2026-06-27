@@ -142,6 +142,7 @@ fun LaundryScreen(
 
     val isOwner by viewModel.isOwner.collectAsState()
     val canViewMargin by viewModel.canViewMargin.collectAsState()
+    val canAddService by viewModel.canAddService.collectAsState()
     val activityLogsList by viewModel.activityLogs.collectAsState()
     var showLogsDialog by remember { mutableStateOf(false) }
     var activeStoreToken by remember { mutableStateOf<String?>(null) }
@@ -330,7 +331,7 @@ fun LaundryScreen(
                                 }
                             }
                         }
-                        if (canViewMargin) {
+                        if (canAddService) {
                             IconButton(onClick = {
                                 newServiceName = ""
                                 newServiceCategory = "KILOAN"
