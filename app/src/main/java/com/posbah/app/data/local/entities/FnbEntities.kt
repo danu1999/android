@@ -24,7 +24,11 @@ data class ProductEntity(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val isDeleted: Boolean = false,
-    val isSynced: Boolean = false
+    val isSynced: Boolean = false,
+    val wholesalePrice: Double = 0.0,
+    val minWholesaleQty: Int = 0,
+    val costPriceBreakdown: String? = null,
+    val defaultDailyTarget: Int = 0
 )
 
 data class CustomerEntity(

@@ -77,7 +77,8 @@ data class PosUiState(
     val isPremium: Boolean = false,
     val isSeedTenant: Boolean = false,
     val canViewMargin: Boolean = false,
-    val checkoutError: String? = null
+    val checkoutError: String? = null,
+    val isAdminOrOwner: Boolean = false
 )
 
 @HiltViewModel
@@ -122,12 +123,14 @@ class PosViewModel @Inject constructor(
                 tenantId.contains("hanafiariful_gmail_com") ||
                 tenantId.startsWith("demo_tenant_")
 
+            val isAdmOwn = user?.role == "OWNER" || user?.role == "ADMIN" || user?.role == "ADMINISTRATOR"
             _uiState.update { 
                 it.copy(
                     isOwner = user?.role == "OWNER",
                     isPremium = user?.isPremium == true,
                     isSeedTenant = isSeed,
-                    canViewMargin = user?.role == "OWNER"
+                    canViewMargin = isAdmOwn,
+                    isAdminOrOwner = isAdmOwn
                 )
             }
         }
@@ -384,7 +387,11 @@ class PosViewModel @Inject constructor(
 
     // Cart calculations
     fun getEffectivePrice(p: ProductEntity, qty: Int): Double {
-        if (!p.wholesaleEnabled || p.wholesalePrices.isNullOrBlank()) return p.price
+        if (!p.wholesaleEnabled) return p.price
+        if (p.wholesalePrice > 0.0 && qty >= p.minWholesaleQty) {
+            return p.wholesalePrice
+        }
+        if (p.wholesalePrices.isNullOrBlank()) return p.price
         return try {
             val tiers = Json.decodeFromString<List<WholesaleTier>>(p.wholesalePrices)
             val applicable = tiers.filter { qty >= it.minQty }.maxByOrNull { it.minQty }
@@ -593,8 +600,20 @@ class PosViewModel @Inject constructor(
         barcode: String?,
         imageFile: java.io.File?,
         minStockAlert: Int,
+        wholesaleEnabled: Boolean,
+        wholesalePrice: Double,
+        minWholesaleQty: Int,
+        variants: String?,
+        costPriceBreakdown: String?,
+        defaultDailyTarget: Int,
         onDone: () -> Unit
     ) {
+        val role = securePrefs.currentRole ?: "KASIR"
+        val isAdmOwn = role == "OWNER" || role == "ADMIN" || role == "ADMINISTRATOR"
+        if (!isAdmOwn) {
+            android.widget.Toast.makeText(appContext, "Akses ditolak: Hanya Owner/Admin yang bisa menambah produk!", android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
         onDone()
         viewModelScope.launch {
             var base64Url: String? = null
@@ -620,7 +639,13 @@ class PosViewModel @Inject constructor(
                 barcode = barcode?.takeIf { it.isNotBlank() },
                 category = category.ifBlank { "Umum" },
                 image = base64Url,
-                minStockAlert = minStockAlert
+                minStockAlert = minStockAlert,
+                wholesaleEnabled = wholesaleEnabled,
+                wholesalePrice = wholesalePrice,
+                minWholesaleQty = minWholesaleQty,
+                variants = variants,
+                costPriceBreakdown = costPriceBreakdown,
+                defaultDailyTarget = defaultDailyTarget
             )
             val newId = productRepository.upsert(p)
             if (newId > 0L) {
@@ -642,8 +667,20 @@ class PosViewModel @Inject constructor(
         imageFile: java.io.File?,
         keepExistingImage: Boolean,
         minStockAlert: Int,
+        wholesaleEnabled: Boolean,
+        wholesalePrice: Double,
+        minWholesaleQty: Int,
+        variants: String?,
+        costPriceBreakdown: String?,
+        defaultDailyTarget: Int,
         onDone: () -> Unit
     ) {
+        val role = securePrefs.currentRole ?: "KASIR"
+        val isAdmOwn = role == "OWNER" || role == "ADMIN" || role == "ADMINISTRATOR"
+        if (!isAdmOwn) {
+            android.widget.Toast.makeText(appContext, "Akses ditolak: Hanya Owner/Admin yang bisa mengubah produk!", android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
         onDone()
         viewModelScope.launch {
             var base64Url = if (keepExistingImage) product.image else null
@@ -667,6 +704,12 @@ class PosViewModel @Inject constructor(
                 barcode = barcode?.takeIf { it.isNotBlank() },
                 image = base64Url,
                 minStockAlert = minStockAlert,
+                wholesaleEnabled = wholesaleEnabled,
+                wholesalePrice = wholesalePrice,
+                minWholesaleQty = minWholesaleQty,
+                variants = variants,
+                costPriceBreakdown = costPriceBreakdown,
+                defaultDailyTarget = defaultDailyTarget,
                 updatedAt = System.currentTimeMillis()
             )
             val editedId = productRepository.upsert(updated)

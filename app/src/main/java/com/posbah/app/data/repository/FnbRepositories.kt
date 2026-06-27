@@ -29,12 +29,19 @@ data class ProductData(
     val outletId: Long? = null,
     val name: String = "",
     val price: Double = 0.0,
+    val costPrice: Double = 0.0,
     val stock: Int = 0,
     val category: String? = null,
     val barcode: String? = null,
     val imageUrl: String? = null,
     val isDeleted: Boolean = false,
-    val updatedAt: Long = 0
+    val updatedAt: Long = 0,
+    val wholesaleEnabled: Boolean = false,
+    val wholesalePrice: Double = 0.0,
+    val minWholesaleQty: Int = 0,
+    val variants: String? = null,
+    val costPriceBreakdown: String? = null,
+    val defaultDailyTarget: Int = 0
 )
 
 data class CustomerData(
@@ -70,6 +77,7 @@ data class TransactionItemData(
     val transactionId: Long = 0,
     val productId: Long = 0,
     val productName: String = "",
+    val variant: String? = null,
     val price: Double = 0.0,
     val quantity: Int = 1,
     val subtotal: Double = 0.0
@@ -82,12 +90,19 @@ fun Map<String, Any?>.toProductData() = ProductData(
     outletId = (get("outletId") as? Number)?.toLong(),
     name = get("name") as? String ?: "",
     price = (get("price") as? Number)?.toDouble() ?: 0.0,
+    costPrice = (get("costPrice") as? Number)?.toDouble() ?: 0.0,
     stock = (get("stock") as? Number)?.toInt() ?: 0,
     category = get("category") as? String,
     barcode = get("barcode") as? String,
     imageUrl = (get("image") ?: get("imageUrl")) as? String,
     isDeleted = get("isDeleted") as? Boolean ?: false,
-    updatedAt = (get("updatedAt") as? Number)?.toLong() ?: 0
+    updatedAt = (get("updatedAt") as? Number)?.toLong() ?: 0,
+    wholesaleEnabled = get("wholesaleEnabled") as? Boolean ?: false,
+    wholesalePrice = (get("wholesalePrice") as? Number)?.toDouble() ?: 0.0,
+    minWholesaleQty = (get("minWholesaleQty") as? Number)?.toInt() ?: 0,
+    variants = get("variants") as? String,
+    costPriceBreakdown = get("costPriceBreakdown") as? String,
+    defaultDailyTarget = (get("defaultDailyTarget") as? Number)?.toInt() ?: 0
 )
 
 fun Map<String, Any?>.toCustomerData() = CustomerData(
@@ -163,12 +178,19 @@ class ProductRepository @Inject constructor(
         outletId = outletId,
         name = name,
         price = price,
+        costPrice = costPrice,
         stock = stock,
         category = category ?: "Umum",
         barcode = barcode,
         image = imageUrl,
         isDeleted = isDeleted,
-        updatedAt = updatedAt
+        updatedAt = updatedAt,
+        wholesaleEnabled = wholesaleEnabled,
+        wholesalePrice = wholesalePrice,
+        minWholesaleQty = minWholesaleQty,
+        variants = variants,
+        costPriceBreakdown = costPriceBreakdown,
+        defaultDailyTarget = defaultDailyTarget
     )
 
     fun updateStockLocal(id: Long, newStock: Int) {
@@ -207,11 +229,18 @@ class ProductRepository @Inject constructor(
             val body = mapOf<String, Any?>(
                 "name" to product.name,
                 "price" to product.price,
+                "costPrice" to product.costPrice,
                 "stock" to product.stock,
                 "category" to product.category,
                 "barcode" to product.barcode,
                 "image" to product.imageUrl,
-                "outletId" to product.outletId
+                "outletId" to product.outletId,
+                "wholesaleEnabled" to product.wholesaleEnabled,
+                "wholesalePrice" to product.wholesalePrice,
+                "minWholesaleQty" to product.minWholesaleQty,
+                "variants" to product.variants,
+                "costPriceBreakdown" to product.costPriceBreakdown,
+                "defaultDailyTarget" to product.defaultDailyTarget
             )
             val newId = if (product.id == 0L) {
                 val resp = api.createProduct(body)
@@ -248,11 +277,18 @@ class ProductRepository @Inject constructor(
             outletId = product.outletId,
             name = product.name,
             price = product.price,
+            costPrice = product.costPrice,
             stock = product.stock,
             category = product.category,
             barcode = product.barcode,
             imageUrl = product.image,
-            isDeleted = product.isDeleted
+            isDeleted = product.isDeleted,
+            wholesaleEnabled = product.wholesaleEnabled,
+            wholesalePrice = product.wholesalePrice,
+            minWholesaleQty = product.minWholesaleQty,
+            variants = product.variants,
+            costPriceBreakdown = product.costPriceBreakdown,
+            defaultDailyTarget = product.defaultDailyTarget
         ))
     }
 
@@ -295,11 +331,18 @@ class ProductRepository @Inject constructor(
                     outletId = p.outletId,
                     name = p.name,
                     price = p.price,
+                    costPrice = p.costPrice,
                     stock = p.stock,
                     category = p.category ?: "Umum",
                     barcode = p.barcode,
                     image = p.imageUrl,
-                    isDeleted = p.isDeleted
+                    isDeleted = p.isDeleted,
+                    wholesaleEnabled = p.wholesaleEnabled,
+                    wholesalePrice = p.wholesalePrice,
+                    minWholesaleQty = p.minWholesaleQty,
+                    variants = p.variants,
+                    costPriceBreakdown = p.costPriceBreakdown,
+                    defaultDailyTarget = p.defaultDailyTarget
                 )
             }
         }
@@ -314,11 +357,18 @@ class ProductRepository @Inject constructor(
                     outletId = p.outletId,
                     name = p.name,
                     price = p.price,
+                    costPrice = p.costPrice,
                     stock = p.stock,
                     category = p.category ?: "Umum",
                     barcode = p.barcode,
                     image = p.imageUrl,
-                    isDeleted = p.isDeleted
+                    isDeleted = p.isDeleted,
+                    wholesaleEnabled = p.wholesaleEnabled,
+                    wholesalePrice = p.wholesalePrice,
+                    minWholesaleQty = p.minWholesaleQty,
+                    variants = p.variants,
+                    costPriceBreakdown = p.costPriceBreakdown,
+                    defaultDailyTarget = p.defaultDailyTarget
                 )
             }
         }
@@ -450,7 +500,8 @@ class CustomerRepository @Inject constructor(
 class TransactionRepository @Inject constructor(
     private val api: PosApiService,
     private val securePrefs: SecurePreferences,
-    private val cashflowRepo: BmpCashFlowRepository
+    private val cashflowRepo: BmpCashFlowRepository,
+    private val targetRepo: ProductDailyTargetRepository
 ) {
     private val tenantId get() = securePrefs.currentTenantId ?: ""
 
@@ -602,7 +653,7 @@ class TransactionRepository @Inject constructor(
                     id = (it["id"] as? Number)?.toLong() ?: 0,
                     transactionId = transactionId,
                     productId = (it["productId"] as? Number)?.toLong() ?: 0,
-                    variantName = it["productName"] as? String ?: "",
+                    variantName = it["variant"] as? String,
                     quantity = (it["quantity"] as? Number)?.toInt() ?: 1,
                     price = (it["price"] as? Number)?.toDouble() ?: 0.0,
                     costPrice = 0.0,
@@ -689,6 +740,7 @@ class TransactionRepository @Inject constructor(
                     "transactionId" to newId,
                     "productId" to it.productId,
                     "productName" to it.productName,
+                    "variant" to it.variant,
                     "price" to it.price,
                     "quantity" to it.quantity,
                     "subtotal" to it.subtotal
@@ -708,6 +760,40 @@ class TransactionRepository @Inject constructor(
                     if (prod != null) {
                         val newStock = (prod.stock - item.quantity).coerceAtLeast(0)
                         api.updateProduct(item.productId, mapOf("stock" to newStock))
+                    }
+                }
+
+                // Update Product Daily Target
+                val outletId = transaction.outletId ?: 0L
+                if (outletId > 0L) {
+                    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                    val dateStr = sdf.format(Date(transaction.date))
+                    items.forEach { item ->
+                        val prod = productSnapshot.find { it.id == item.productId }
+                        if (prod != null) {
+                            CoroutineScope(Dispatchers.IO).launch {
+                                try {
+                                    val existingTargets = targetRepo.getTargetsForDate(outletId, dateStr)
+                                    val matched = existingTargets.find { it.productId == item.productId }
+                                    if (matched != null) {
+                                        targetRepo.upsertTarget(matched.copy(
+                                            achievedQty = matched.achievedQty + item.quantity,
+                                            updatedAt = System.currentTimeMillis()
+                                        ))
+                                    } else {
+                                        targetRepo.upsertTarget(ProductDailyTargetData(
+                                            outletId = outletId,
+                                            productId = item.productId,
+                                            targetDate = dateStr,
+                                            targetQty = prod.defaultDailyTarget,
+                                            achievedQty = item.quantity
+                                        ))
+                                    }
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -943,7 +1029,7 @@ class TransactionRepository @Inject constructor(
             notes = transaction.notes,
             date = transaction.date
         )
-        val itemsData = items.map { it.toTransactionItemData() }
+        val itemsData = items.map { it.toTransactionItemData(productRepo) }
         val result = checkout(txData, itemsData, productRepo)
         return transaction.copy(id = result.id, receiptNumber = result.receiptNumber)
     }
@@ -955,11 +1041,12 @@ class TransactionRepository @Inject constructor(
 
 // ── Extension converters ──────────────────────────────────────────────────────
 
-fun com.posbah.app.data.local.entities.TransactionItemEntity.toTransactionItemData() = TransactionItemData(
+fun com.posbah.app.data.local.entities.TransactionItemEntity.toTransactionItemData(productRepo: ProductRepository) = TransactionItemData(
     id = id,
     transactionId = transactionId,
     productId = productId,
-    productName = variantName ?: "",
+    productName = productRepo.products.value.find { it.id == productId }?.name ?: variantName ?: "",
+    variant = variantName,
     price = price,
     quantity = quantity,
     subtotal = price * quantity
@@ -1113,6 +1200,88 @@ class EmployeeRepository @Inject constructor(
     fun observeForTenant(tenantId: String): Flow<List<EmployeeData>> {
         return _employees.map { list ->
             list.filter { it.tenantId == tenantId }
+        }
+    }
+}
+
+data class ProductDailyTargetData(
+    val id: Long = 0,
+    val tenantId: String = "",
+    val outletId: Long = 0,
+    val productId: Long = 0,
+    val targetDate: String = "",
+    val targetQty: Int = 0,
+    val achievedQty: Int = 0,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+fun Map<String, Any?>.toTargetData() = ProductDailyTargetData(
+    id = (get("id") as? Number)?.toLong() ?: 0,
+    tenantId = get("tenantId") as? String ?: "",
+    outletId = (get("outletId") as? Number)?.toLong() ?: 0,
+    productId = (get("productId") as? Number)?.toLong() ?: 0,
+    targetDate = get("targetDate") as? String ?: "",
+    targetQty = (get("targetQty") as? Number)?.toInt() ?: 0,
+    achievedQty = (get("achievedQty") as? Number)?.toInt() ?: 0,
+    createdAt = (get("createdAt") as? Number)?.toLong() ?: 0,
+    updatedAt = (get("updatedAt") as? Number)?.toLong() ?: 0
+)
+
+@Singleton
+class ProductDailyTargetRepository @Inject constructor(
+    private val api: PosApiService,
+    private val securePrefs: SecurePreferences
+) {
+    private val tenantId get() = securePrefs.currentTenantId ?: ""
+
+    suspend fun getTargetsForDate(outletId: Long, dateStr: String): List<ProductDailyTargetData> {
+        return try {
+            val res = api.getProductTargets(outletId, dateStr)
+            if (res.isSuccessful) {
+                res.body()?.map { it.toTargetData() } ?: emptyList()
+            } else {
+                emptyList()
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun upsertTarget(target: ProductDailyTargetData): Long {
+        val body = mapOf(
+            "id" to target.id.takeIf { it > 0 },
+            "tenantId" to tenantId,
+            "outletId" to target.outletId,
+            "productId" to target.productId,
+            "targetDate" to target.targetDate,
+            "targetQty" to target.targetQty,
+            "achievedQty" to target.achievedQty,
+            "createdAt" to target.createdAt,
+            "updatedAt" to target.updatedAt
+        ).filterValues { it != null }
+
+        return try {
+            val resp = if (target.id == 0L) {
+                api.createProductTarget(body)
+            } else {
+                api.updateProductTarget(target.id, body)
+            }
+            if (resp.isSuccessful) {
+                (resp.body()?.get("id") as? Number)?.toLong() ?: target.id
+            } else {
+                0L
+            }
+        } catch (e: Exception) {
+            0L
+        }
+    }
+
+    suspend fun deleteTarget(id: Long) {
+        try {
+            api.deleteProductTarget(id)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 }

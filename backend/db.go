@@ -831,6 +831,42 @@ func initSchema() error {
 		}
 	}
 
+	// Migration: tambah kolom varian, grosir, dan hpp breakdown ke tabel products & transaction_items
+	fnbProductMigrations := []string{
+		`ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "wholesalePrice" DOUBLE PRECISION DEFAULT 0.0;`,
+		`ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "minWholesaleQty" INT DEFAULT 0;`,
+		`ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "variants" TEXT;`,
+		`ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "costPriceBreakdown" TEXT;`,
+		`ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "defaultDailyTarget" INT DEFAULT 0;`,
+		`ALTER TABLE "transaction_items" ADD COLUMN IF NOT EXISTS "variant" VARCHAR(100);`,
+	}
+	for _, q := range fnbProductMigrations {
+		if _, err := db.Exec(q); err != nil {
+			log.Printf("[migration] fnb products warning: %v", err)
+		}
+	}
+
+	// Migration: tambah tabel product_daily_targets untuk target penjualan per produk per outlet
+	targetMigrations := []string{
+		`CREATE TABLE IF NOT EXISTS "product_daily_targets" (
+			"id" BIGSERIAL PRIMARY KEY,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"outletId" BIGINT NOT NULL,
+			"productId" BIGINT NOT NULL,
+			"targetDate" DATE NOT NULL,
+			"targetQty" INT DEFAULT 0,
+			"achievedQty" INT DEFAULT 0,
+			"createdAt" BIGINT NOT NULL,
+			"updatedAt" BIGINT NOT NULL,
+			CONSTRAINT "uniq_target_date" UNIQUE ("tenantId", "outletId", "productId", "targetDate")
+		);`,
+	}
+	for _, q := range targetMigrations {
+		if _, err := db.Exec(q); err != nil {
+			log.Printf("[migration] target warning: %v", err)
+		}
+	}
+
 	// Backfill: isi kolom description pada bmp_products lama yang NULL
 	// dengan description dari bmp_master_products berdasarkan masterItemID.
 	// Query ini idempotent (WHERE description IS NULL) dan aman dijalankan berkali-kali.

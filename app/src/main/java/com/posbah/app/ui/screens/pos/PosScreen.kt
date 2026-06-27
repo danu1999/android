@@ -85,6 +85,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -137,6 +138,65 @@ private fun decodeBase64Image(imageStr: String?): Any? {
     return imageStr
 }
 
+private fun serializeHppComponents(components: List<Pair<String, Double>>): String {
+    val arr = org.json.JSONArray()
+    components.forEach { (name, cost) ->
+        val obj = org.json.JSONObject()
+        obj.put("name", name)
+        obj.put("cost", cost)
+        arr.put(obj)
+    }
+    return arr.toString()
+}
+
+private fun deserializeHppComponents(json: String?): List<Pair<String, Double>> {
+    if (json.isNullOrBlank()) return emptyList()
+    val list = mutableListOf<Pair<String, Double>>()
+    try {
+        val arr = org.json.JSONArray(json)
+        for (i in 0 until arr.length()) {
+            val obj = arr.getJSONObject(i)
+            val name = obj.getString("name")
+            val cost = obj.optDouble("cost", 0.0)
+            list.add(Pair(name, cost))
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+    return list
+}
+
+private fun convertVariantsStringToJsons(variantsStr: String): String? {
+    if (variantsStr.isBlank()) return null
+    val names = variantsStr.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+    if (names.isEmpty()) return null
+    val arr = org.json.JSONArray()
+    names.forEachIndexed { index, name ->
+        val obj = org.json.JSONObject()
+        obj.put("id", index + 1L)
+        obj.put("name", name)
+        obj.put("price", org.json.JSONObject.NULL)
+        obj.put("costPrice", org.json.JSONObject.NULL)
+        obj.put("stock", org.json.JSONObject.NULL)
+        arr.put(obj)
+    }
+    return arr.toString()
+}
+
+private fun convertVariantsJsonsToString(variantsJson: String?): String {
+    if (variantsJson.isNullOrBlank()) return ""
+    try {
+        val arr = org.json.JSONArray(variantsJson)
+        val list = mutableListOf<String>()
+        for (i in 0 until arr.length()) {
+            list.add(arr.getJSONObject(i).getString("name"))
+        }
+        return list.joinToString(", ")
+    } catch (e: Exception) {
+        return ""
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PosScreen(
@@ -167,6 +227,15 @@ fun PosScreen(
     var newProdCategory by remember { mutableStateOf("Umum") }
     var newProdBarcode by remember { mutableStateOf("") }
     var newProdMinStockAlert by remember { mutableStateOf("0") }
+    var newProdDefaultDailyTarget by remember { mutableStateOf("") }
+    var newProdWholesaleEnabled by remember { mutableStateOf(false) }
+    var newProdWholesalePrice by remember { mutableStateOf("") }
+    var newProdMinWholesaleQty by remember { mutableStateOf("") }
+    var newProdVariants by remember { mutableStateOf("") }
+    val newProdHppComponents = remember { mutableStateListOf<Pair<String, Double>>() }
+    var newHppNameInput by remember { mutableStateOf("") }
+    var newHppCostInput by remember { mutableStateOf("") }
+
     var newCustName by remember { mutableStateOf("") }
     var newCustPhone by remember { mutableStateOf("") }
     var newCustAddress by remember { mutableStateOf("") }
@@ -180,6 +249,14 @@ fun PosScreen(
     var editProdCategory by remember { mutableStateOf("") }
     var editProdBarcode by remember { mutableStateOf("") }
     var editProdMinStockAlert by remember { mutableStateOf("") }
+    var editProdDefaultDailyTarget by remember { mutableStateOf("") }
+    var editProdWholesaleEnabled by remember { mutableStateOf(false) }
+    var editProdWholesalePrice by remember { mutableStateOf("") }
+    var editProdMinWholesaleQty by remember { mutableStateOf("") }
+    var editProdVariants by remember { mutableStateOf("") }
+    val editProdHppComponents = remember { mutableStateListOf<Pair<String, Double>>() }
+    var editHppNameInput by remember { mutableStateOf("") }
+    var editHppCostInput by remember { mutableStateOf("") }
 
     var showTransactionsHistoryDialog by remember { mutableStateOf(false) }
     var showEditReceiptDialog by remember { mutableStateOf(false) }
@@ -380,7 +457,7 @@ fun PosScreen(
                                 )
                             }
                         }
-                        if (true) {
+                        if (ui.isAdminOrOwner) {
                             item {
                                 FooterButton(
                                     icon = Icons.Outlined.Storefront,
@@ -388,11 +465,19 @@ fun PosScreen(
                                     onClick = {
                                         newProdName = ""
                                         newProdPrice = ""
-                                        newProdCostPrice = ""
+                                        newProdCostPrice = "0"
                                         newProdStock = "999"
                                         newProdCategory = "Umum"
                                         newProdBarcode = ""
                                         newProdMinStockAlert = "0"
+                                        newProdDefaultDailyTarget = ""
+                                        newProdWholesaleEnabled = false
+                                        newProdWholesalePrice = ""
+                                        newProdMinWholesaleQty = ""
+                                        newProdVariants = ""
+                                        newProdHppComponents.clear()
+                                        newHppNameInput = ""
+                                        newHppCostInput = ""
                                         capturedPhotoFile = null
                                         showAddProductDialog = true
                                     }
@@ -541,6 +626,7 @@ fun PosScreen(
                                             newProdCategory = "Umum"
                                             newProdBarcode = ""
                                             newProdMinStockAlert = "0"
+                                        newProdDefaultDailyTarget = ""
                                             capturedPhotoFile = null
                                             showAddProductDialog = true
                                         }
@@ -582,16 +668,26 @@ fun PosScreen(
                                         }
                                     },
                                     onLongClick = {
-                                        productToEdit = p
-                                        editProdName = p.name
-                                        editProdPrice = p.price.toString()
-                                        editProdCostPrice = p.costPrice.toString()
-                                        editProdStock = p.stock.toString()
-                                        editProdCategory = p.category
-                                        editProdBarcode = p.barcode.orEmpty()
-                                        editProdMinStockAlert = p.minStockAlert.toString()
-                                        capturedPhotoFile = null
-                                        showEditProductDialog = true
+                                        if (ui.isAdminOrOwner) {
+                                            productToEdit = p
+                                            editProdName = p.name
+                                            editProdPrice = p.price.toString()
+                                            editProdCostPrice = p.costPrice.toString()
+                                            editProdStock = p.stock.toString()
+                                            editProdCategory = p.category
+                                            editProdBarcode = p.barcode.orEmpty()
+                                            editProdMinStockAlert = p.minStockAlert.toString()
+                                            editProdWholesaleEnabled = p.wholesaleEnabled
+                                            editProdWholesalePrice = p.wholesalePrice.toString()
+                                            editProdMinWholesaleQty = p.minWholesaleQty.toString()
+                                            editProdVariants = convertVariantsJsonsToString(p.variants)
+                                            editProdHppComponents.clear()
+                                            editProdHppComponents.addAll(deserializeHppComponents(p.costPriceBreakdown))
+                                            editHppNameInput = ""
+                                            editHppCostInput = ""
+                                            capturedPhotoFile = null
+                                            showEditProductDialog = true
+                                        }
                                     }
                                 )
                             }
@@ -1015,7 +1111,7 @@ fun PosScreen(
                 onDismissRequest = { showAddProductDialog = false },
                 title = { Text("Tambah Produk Baru") },
                 text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
                         OutlinedTextField(
                             value = newProdName,
                             onValueChange = { nameVal -> newProdName = nameVal },
@@ -1083,6 +1179,118 @@ fun PosScreen(
                             modifier = Modifier.fillMaxWidth().testTag("add-product-barcode")
                         )
 
+                        OutlinedTextField(
+                            value = newProdDefaultDailyTarget,
+                            onValueChange = { newProdDefaultDailyTarget = it },
+                            label = { Text("Target Penjualan Harian (Pcs)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Variants Input UI
+                        OutlinedTextField(
+                            value = newProdVariants,
+                            onValueChange = { newProdVariants = it },
+                            label = { Text("Varian (Pisahkan dengan koma, contoh: Pedas, Sedang)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Wholesale Input UI
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        ) {
+                            androidx.compose.material3.Checkbox(
+                                checked = newProdWholesaleEnabled,
+                                onCheckedChange = { newProdWholesaleEnabled = it }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Aktifkan Harga Grosir", fontWeight = FontWeight.SemiBold)
+                        }
+                        if (newProdWholesaleEnabled) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                OutlinedTextField(
+                                    value = newProdWholesalePrice,
+                                    onValueChange = { newProdWholesalePrice = it },
+                                    label = { Text("Harga Grosir (Rp)") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedTextField(
+                                    value = newProdMinWholesaleQty,
+                                    onValueChange = { newProdMinWholesaleQty = it },
+                                    label = { Text("Min. Pembelian") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+
+                        // HPP Components UI
+                        Text("Komponen HPP (Harga Pokok Penjualan)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        newProdHppComponents.forEachIndexed { index, comp ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("${index + 1}. ${comp.first} : Rp ${comp.second.toInt()}", fontSize = 13.sp)
+                                IconButton(
+                                    onClick = {
+                                        newProdHppComponents.removeAt(index)
+                                        val sum = newProdHppComponents.sumOf { it.second }
+                                        newProdCostPrice = sum.toInt().toString()
+                                    },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(Icons.Outlined.Delete, contentDescription = "Hapus", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = newHppNameInput,
+                                onValueChange = { newHppNameInput = it },
+                                label = { Text("Bahan/Komponen") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1.5f)
+                            )
+                            OutlinedTextField(
+                                value = newHppCostInput,
+                                onValueChange = { newHppCostInput = it },
+                                label = { Text("Biaya") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Button(
+                                onClick = {
+                                    val cost = newHppCostInput.toDoubleOrNull() ?: 0.0
+                                    if (newHppNameInput.isNotBlank() && cost > 0.0) {
+                                        newProdHppComponents.add(Pair(newHppNameInput.trim(), cost))
+                                        newHppNameInput = ""
+                                        newHppCostInput = ""
+                                        val sum = newProdHppComponents.sumOf { it.second }
+                                        newProdCostPrice = sum.toInt().toString()
+                                    }
+                                },
+                                modifier = Modifier.height(56.dp)
+                            ) {
+                                Text("+")
+                            }
+                        }
+
                         // Camera & Image Section
                         if (capturedPhotoFile != null) {
                             Box(
@@ -1139,7 +1347,22 @@ fun PosScreen(
                             val stock = newProdStock.toIntOrNull() ?: 0
                             val minStock = newProdMinStockAlert.toIntOrNull() ?: 0
                             if (newProdName.isNotBlank() && price > 0) {
-                                viewModel.addProduct(newProdName, price, costPrice, stock, newProdCategory, newProdBarcode, capturedPhotoFile, minStock) {
+                                viewModel.addProduct(
+                                    name = newProdName,
+                                    price = price,
+                                    costPrice = costPrice,
+                                    stock = stock,
+                                    category = newProdCategory,
+                                    barcode = newProdBarcode,
+                                    imageFile = capturedPhotoFile,
+                                    minStockAlert = minStock,
+                                    wholesaleEnabled = newProdWholesaleEnabled,
+                                    wholesalePrice = newProdWholesalePrice.toDoubleOrNull() ?: 0.0,
+                                    minWholesaleQty = newProdMinWholesaleQty.toIntOrNull() ?: 0,
+                                    variants = convertVariantsStringToJsons(newProdVariants),
+                                    costPriceBreakdown = serializeHppComponents(newProdHppComponents),
+                                    defaultDailyTarget = newProdDefaultDailyTarget.toIntOrNull() ?: 0
+                                ) {
                                     showAddProductDialog = false
                                     Toast.makeText(context, "Produk berhasil ditambahkan!", Toast.LENGTH_SHORT).show()
                                 }
@@ -1346,7 +1569,13 @@ fun PosScreen(
                                     barcode = editProdBarcode,
                                     imageFile = capturedPhotoFile,
                                     keepExistingImage = keepExisting,
-                                    minStockAlert = minStock
+                                    minStockAlert = minStock,
+                                    wholesaleEnabled = editProdWholesaleEnabled,
+                                    wholesalePrice = editProdWholesalePrice.toDoubleOrNull() ?: 0.0,
+                                    minWholesaleQty = editProdMinWholesaleQty.toIntOrNull() ?: 0,
+                                    variants = convertVariantsStringToJsons(editProdVariants),
+                                    costPriceBreakdown = serializeHppComponents(editProdHppComponents),
+                                    defaultDailyTarget = editProdDefaultDailyTarget.toIntOrNull() ?: 0
                                 ) {
                                     showEditProductDialog = false
                                     Toast.makeText(context, "Produk berhasil diubah!", Toast.LENGTH_SHORT).show()

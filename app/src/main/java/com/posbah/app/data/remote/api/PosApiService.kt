@@ -138,4 +138,27 @@ interface PosApiService {
     suspend fun pinLogin(
         @Body body: Map<String, Any?>
     ): Response<Map<String, Any?>>
+
+    // ── Product Daily Targets ──────────────────────────────────────────────────
+    @GET("api/rt/product-targets")
+    suspend fun getProductTargets(
+        @Query("outletId") outletId: Long? = null,
+        @Query("targetDate") targetDate: String? = null
+    ): Response<List<Map<String, Any?>>>
+
+    @POST("api/rt/product-targets")
+    suspend fun createProductTarget(
+        @Body body: Map<String, Any?>
+    ): Response<Map<String, Any?>>
+
+    @PUT("api/rt/product-targets/{id}")
+    suspend fun updateProductTarget(
+        @Path("id") id: Long,
+        @Body body: Map<String, Any?>
+    ): Response<Map<String, Any?>>
+
+    @DELETE("api/rt/product-targets/{id}")
+    suspend fun deleteProductTarget(
+        @Path("id") id: Long
+    ): Response<Map<String, Any?>>
 }

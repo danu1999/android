@@ -1,3 +1,16 @@
+POSBah v2.18.3 - Varian Produk, Harga Grosir, Rincian HPP, dan Target Penjualan Outlet
+
+Halo Kak! POSBah v2.18.3 hadir dengan peningkatan fitur komprehensif pada modul POS FnB:
+1. Varian Produk POS FnB: Tambahkan pilihan varian seperti coklat, ukuran L, ukuran M secara fleksibel saat input produk, pilih varian saat transaksi POS, dan cetak varian terpilih di struk belanja.
+2. Harga Grosir Dinamis: Tetapkan harga grosir dan batas jumlah minimum pembelian. POS otomatis menghitung harga grosir ketika jumlah pembelian di keranjang tercapai.
+3. Rincian Komponen HPP: Penambahan komponen HPP produk (misal: Nasi, Lele, Kertas) yang otomatis terakumulasi sebagai Harga Beli produk untuk mempermudah analisis laba kotor.
+4. Target Penjualan Harian per Outlet: Pemilik bisnis dapat menetapkan target penjualan harian per produk untuk masing-masing outlet. Target harian bersifat immutable (history aman) dan otomatis terisi dengan template target default.
+5. Pembatasan Hak Akses: Proses penambahan dan pengubahan produk kini dibatasi secara ketat hanya dapat dilakukan oleh Owner atau Administrator/Admin.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.18.2 - Pembersihan Komponen Migrasi Offline & Pembaruan Tampilan
 
 Halo Kak! POSBah v2.18.2 hadir dengan pembersihan sistem migrasi:

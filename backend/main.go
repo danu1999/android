@@ -202,6 +202,8 @@ func main() {
 	http.HandleFunc("/api/rt/bmp/stock-ledger", handleRtBmpStockLedger)
 	http.HandleFunc("/api/rt/bmp/settings", handleRtBmpSettings)
 	http.HandleFunc("/api/rt/print-settings", handleRtPrintSettings)
+	http.HandleFunc("/api/rt/product-targets", handleRtProductTargets)
+	http.HandleFunc("/api/rt/product-targets/", handleRtProductTargetsById)
 
 	// PIN Login for kasir (full online)
 	http.HandleFunc("/api/auth/pin-login", handlePinLogin)
@@ -3738,7 +3740,8 @@ var allowedSyncTables = map[string]bool{
 	"bmp_payrolls":         true,
 	"bmp_bahan_baku":       true,
 	"bmp_bahan_baku_item":  true,
-                "print_settings":       true,
+	"print_settings":       true,
+	"product_daily_targets": true,
 	"bmp_attendance_logs":  true,
 	"bmp_device_tenants":   true,
 }

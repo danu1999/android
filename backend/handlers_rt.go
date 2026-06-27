@@ -972,3 +972,56 @@ func handleRtPrintSettings(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 405, "method not allowed")
 	}
 }
+
+func handleRtProductTargets(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	outletId := r.URL.Query().Get("outletId")
+	dateStr := r.URL.Query().Get("targetDate")
+	switch r.Method {
+	case http.MethodGet:
+		var rows *sql.Rows
+		var err error
+		if outletId != "" && dateStr != "" {
+			rows, err = db.Query(`SELECT * FROM product_daily_targets WHERE "tenantId"=$1 AND "outletId"=$2 AND "targetDate"=$3 ORDER BY id ASC`, tenantId, outletId, dateStr)
+		} else if outletId != "" {
+			rows, err = db.Query(`SELECT * FROM product_daily_targets WHERE "tenantId"=$1 AND "outletId"=$2 ORDER BY "targetDate" DESC, id ASC`, tenantId, outletId)
+		} else {
+			rows, err = db.Query(`SELECT * FROM product_daily_targets WHERE "tenantId"=$1 ORDER BY "targetDate" DESC, id ASC`, tenantId)
+		}
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		defer rows.Close()
+		jsonOK(w, rowsToJSON(rows))
+	case http.MethodPost:
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body)
+		body["tenantId"] = tenantId; body["updatedAt"] = nowMillis()
+		if _, ok := body["createdAt"]; !ok { body["createdAt"] = nowMillis() }
+		id, err := insertRow("product_daily_targets", body)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+func handleRtProductTargetsById(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/product-targets/")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil { jsonErr(w, 400, "invalid id"); return }
+	switch r.Method {
+	case http.MethodPut:
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body)
+		body["updatedAt"] = nowMillis()
+		updateRow("product_daily_targets", id, tenantId, body)
+		jsonOK(w, map[string]interface{}{"ok": true})
+	case http.MethodDelete:
+		db.Exec(`DELETE FROM product_daily_targets WHERE id=$1 AND "tenantId"=$2`, id, tenantId)
+		jsonOK(w, map[string]interface{}{"ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
