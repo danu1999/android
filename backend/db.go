@@ -896,6 +896,17 @@ func initSchema() error {
 		}
 	}
 
+	// Migration: tambah kolom rawMaterialId ke tabel bmp_production_logs
+	manufakturMigrations := []string{
+		`ALTER TABLE "bmp_production_logs" ADD COLUMN IF NOT EXISTS "rawMaterialId" INT DEFAULT 0;`,
+	}
+	for _, q := range manufakturMigrations {
+		if _, err := db.Exec(q); err != nil {
+			log.Printf("[migration] manufaktur rawMaterialId warning: %v", err)
+		}
+	}
+
+
 	// Backfill: isi kolom description pada bmp_products lama yang NULL
 	// dengan description dari bmp_master_products berdasarkan masterItemID.
 	// Query ini idempotent (WHERE description IS NULL) dan aman dijalankan berkali-kali.

@@ -100,6 +100,7 @@ class BmpProductionLogRepository @Inject constructor(
                         quantityProduced = (m["quantityProduced"] as? Number)?.toDouble() ?: 0.0,
                         quantityRejected = (m["quantityRejected"] as? Number)?.toDouble() ?: 0.0,
                         rawMaterialUsedKg = (m["rawMaterialUsedKg"] as? Number)?.toDouble() ?: 0.0,
+                        rawMaterialId = (m["rawMaterialId"] as? Number)?.toLong() ?: 0L,
                         operatorName = m["operatorName"] as? String,
                         productionDate = (m["productionDate"] as? Number)?.toLong() ?: System.currentTimeMillis(),
                         isDeleted = m["isDeleted"] as? Boolean ?: false,
@@ -127,6 +128,7 @@ class BmpProductionLogRepository @Inject constructor(
                 "quantityProduced" to log.quantityProduced,
                 "quantityRejected" to log.quantityRejected,
                 "rawMaterialUsedKg" to log.rawMaterialUsedKg,
+                "rawMaterialId" to log.rawMaterialId,
                 "operatorName" to log.operatorName,
                 "productionDate" to log.productionDate
             ))

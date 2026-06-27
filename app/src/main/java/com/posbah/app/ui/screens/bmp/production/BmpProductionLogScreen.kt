@@ -71,11 +71,15 @@ class BmpProductionLogViewModel @Inject constructor(
 
     val products = masterProductRepo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val productStocks = stockRepo.observeStocks(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val rawMaterials = bahanBakuRepo.bahanBaku.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     init {
         if (tenantId.isNotBlank()) {
             viewModelScope.launch {
                 logRepo.loadAll(tenantId)
+                try {
+                    bahanBakuRepo.refresh()
+                } catch (_: Exception) {}
             }
         }
     }
@@ -99,6 +103,7 @@ class BmpProductionLogViewModel @Inject constructor(
         quantityProduced: Double,
         quantityRejected: Double,
         rawMaterialUsedKg: Double,
+        rawMaterialId: Long,
         operatorName: String
     ) = viewModelScope.launch {
         val log = BmpProductionLogEntity(
@@ -107,6 +112,7 @@ class BmpProductionLogViewModel @Inject constructor(
             quantityProduced = quantityProduced,
             quantityRejected = quantityRejected,
             rawMaterialUsedKg = rawMaterialUsedKg,
+            rawMaterialId = rawMaterialId,
             operatorName = operatorName.ifBlank { null },
             productionDate = System.currentTimeMillis()
         )
@@ -148,6 +154,7 @@ fun BmpProductionLogScreen(
     val logs by viewModel.logItems.collectAsState()
     val products by viewModel.products.collectAsState()
     val productStocks by viewModel.productStocks.collectAsState()
+    val rawMaterials by viewModel.rawMaterials.collectAsState()
     val context = LocalContext.current
     val error by viewModel.error.collectAsState()
 
@@ -160,6 +167,8 @@ fun BmpProductionLogScreen(
 
     var showAddDialog by remember { mutableStateOf(false) }
     var selectedProduct by remember { mutableStateOf<BmpMasterProductEntity?>(null) }
+    var selectedRawMaterial by remember { mutableStateOf<com.posbah.app.data.repository.BmpBahanBakuData?>(null) }
+    var rawMaterialDropdownExpanded by remember { mutableStateOf(false) }
     var quantityProducedInput by remember { mutableStateOf("") }
     var quantityRejectedInput by remember { mutableStateOf("") }
     var operatorNameInput by remember { mutableStateOf("") }
@@ -174,6 +183,7 @@ fun BmpProductionLogScreen(
             FloatingActionButton(
                 onClick = {
                     selectedProduct = products.firstOrNull()
+                    selectedRawMaterial = rawMaterials.firstOrNull()
                     quantityProducedInput = ""
                     quantityRejectedInput = "0"
                     operatorNameInput = ""
@@ -358,6 +368,48 @@ fun BmpProductionLogScreen(
                         }
                     }
 
+                    Spacer(Modifier.height(8.dp))
+
+                    // Bahan Baku Selector Dropdown
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        val displayValue = selectedRawMaterial?.let {
+                            "Tagihan: ${it.noTagihan} - ${it.supplier ?: "Tanpa Supplier"}"
+                        } ?: "Pilih Batch Bahan Baku"
+                        OutlinedTextField(
+                            value = displayValue,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Pilih Batch Bahan Baku") },
+                            trailingIcon = {
+                                IconButton(onClick = { rawMaterialDropdownExpanded = true }) {
+                                    Icon(Icons.Outlined.ArrowDropDown, contentDescription = null)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().clickable { rawMaterialDropdownExpanded = true }
+                        )
+                        DropdownMenu(
+                            expanded = rawMaterialDropdownExpanded,
+                            onDismissRequest = { rawMaterialDropdownExpanded = false },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            rawMaterials.forEach { rm ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text("No: ${rm.noTagihan}", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
+                                            Text("Supplier: ${rm.supplier ?: "Tanpa Supplier"}", style = MaterialTheme.typography.bodySmall)
+                                            Text("Tanggal: ${Formatters.dateLong(rm.tanggal)}", style = MaterialTheme.typography.bodySmall)
+                                        }
+                                    },
+                                    onClick = {
+                                        selectedRawMaterial = rm
+                                        rawMaterialDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
                     OutlinedTextField(
                         value = quantityProducedInput,
                         onValueChange = { quantityProducedInput = it },
@@ -432,6 +484,7 @@ fun BmpProductionLogScreen(
                             quantityProduced = qtyProd,
                             quantityRejected = qtyRej,
                             rawMaterialUsedKg = estimatedMaterialUsed,
+                            rawMaterialId = selectedRawMaterial?.id ?: 0L,
                             operatorName = operatorNameInput
                         )
                         showAddDialog = false

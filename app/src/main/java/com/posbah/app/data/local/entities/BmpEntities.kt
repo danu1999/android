@@ -287,6 +287,7 @@ data class BmpProductionLogEntity(
     val quantityProduced: Double,
     val quantityRejected: Double,
     val rawMaterialUsedKg: Double,
+    val rawMaterialId: Long = 0L,
     val operatorName: String? = null,
     val productionDate: Long = System.currentTimeMillis(),
     val isSynced: Boolean = false,
@@ -294,5 +295,5 @@ data class BmpProductionLogEntity(
     val createdAt: Long = System.currentTimeMillis()
 ) {
     val productId: Long get() = masterProductId
-    val rawMaterialId: Long get() = 0L
 }
+

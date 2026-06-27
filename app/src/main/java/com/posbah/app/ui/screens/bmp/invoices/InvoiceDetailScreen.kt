@@ -712,7 +712,11 @@ private fun generateInvoiceHtml(
     val accentBg = if (isColor) "#EFF6FF" else "#ffffff"
 
     val isTraditional = printConfig.templateType == "TRADITIONAL"
-    val pageSizeCss = if (isTraditional) "size: 240mm 279mm; margin: 0.5cm;" else "size: 240mm 297mm; margin: 0.5cm;"
+    val logoMaxHeight = if (isTraditional) "32px" else "58px"
+    val logoCellWidth = if (isTraditional) "50px" else "75px"
+    val logoPaddingRight = if (isTraditional) "8px" else "12px"
+
+    val pageSizeCss = if (isTraditional) "size: 240mm 279mm; margin: 0.5cm;" else "size: 210mm 297mm; margin: 1cm;"
     val printContainerCss = if (isTraditional) """
         .print-container {
             width: 215mm;
@@ -723,10 +727,8 @@ private fun generateInvoiceHtml(
     """.trimIndent() else """
         .print-container {
             width: 100%;
-            height: 138mm;
-            max-height: 138mm;
+            height: auto;
             box-sizing: border-box;
-            overflow: hidden;
             position: relative;
         }
     """.trimIndent()
@@ -738,8 +740,8 @@ private fun generateInvoiceHtml(
                     <table style="width: 100%; border: none; border-collapse: collapse;">
                         <tr>
                             ${if (logoBase64.isNotEmpty()) """
-                            <td style="width: 50px; vertical-align: top; padding-right: 10px;">
-                                <img id="logo-img" src="$logoBase64" alt="Logo" style="max-height: 35px; width: auto; display: block;" onerror="this.style.display='none';">
+                            <td style="width: $logoCellWidth; vertical-align: top; padding-right: $logoPaddingRight;">
+                                <img id="logo-img" src="$logoBase64" alt="Logo" style="max-height: $logoMaxHeight; width: auto; display: block;" onerror="this.style.display='none';">
                             </td>
                             """ else ""}
                             <td style="vertical-align: top;">
@@ -1126,7 +1128,11 @@ private fun generateSuratJalanHtml(
     val isColor = printConfig.isColor
 
     val isTraditional = printConfig.templateType == "TRADITIONAL"
-    val pageSizeCss = if (isTraditional) "size: 240mm 279mm; margin: 0.5cm;" else "size: 240mm 297mm; margin: 0.5cm;"
+    val logoMaxHeight = if (isTraditional) "32px" else "58px"
+    val logoCellWidth = if (isTraditional) "50px" else "75px"
+    val logoPaddingRight = if (isTraditional) "8px" else "12px"
+
+    val pageSizeCss = if (isTraditional) "size: 240mm 279mm; margin: 0.5cm;" else "size: 210mm 297mm; margin: 1cm;"
     val printContainerCss = if (isTraditional) """
         .print-container {
             width: 215mm;
@@ -1137,10 +1143,8 @@ private fun generateSuratJalanHtml(
     """.trimIndent() else """
         .print-container {
             width: 100%;
-            height: 138mm;
-            max-height: 138mm;
+            height: auto;
             box-sizing: border-box;
-            overflow: hidden;
             position: relative;
         }
     """.trimIndent()
@@ -1175,8 +1179,8 @@ private fun generateSuratJalanHtml(
                     <table style="width: 100%; border: none; border-collapse: collapse;">
                         <tr>
                             ${if (logoBase64.isNotEmpty()) """
-                            <td style="width: 50px; vertical-align: top; padding-right: 10px;">
-                                <img id="logo-img" src="$logoBase64" alt="Logo" style="max-height: 35px; width: auto; display: block;" onerror="this.style.display='none';">
+                            <td style="width: $logoCellWidth; vertical-align: top; padding-right: $logoPaddingRight;">
+                                <img id="logo-img" src="$logoBase64" alt="Logo" style="max-height: $logoMaxHeight; width: auto; display: block;" onerror="this.style.display='none';">
                             </td>
                             """ else ""}
                             <td style="vertical-align: top;">
@@ -1439,18 +1443,16 @@ private fun printHtml(context: Context, html: String, jobName: String, isColor: 
             val printAttributesBuilder = PrintAttributes.Builder()
                 .setColorMode(if (isColor) PrintAttributes.COLOR_MODE_COLOR else PrintAttributes.COLOR_MODE_MONOCHROME)
             
-            // Gunakan batas ukuran kustom berdasarkan tipe kertas
-            val mediaSizeWidth = 9449 // 240mm dalam mils
-            val mediaSizeHeight = if (isTraditional) 11000 else 11693 // 279mm (11 inch) vs 297mm (A4) dalam mils
-            val mediaSizeId = if (isTraditional) "continuous_9_5_11" else "a4_custom"
-            val mediaSizeLabel = if (isTraditional) "Continuous 9.5x11 (240x279 mm)" else "A4 Custom (240x297 mm)"
-            
-            val customMediaSize = PrintAttributes.MediaSize(
-                mediaSizeId,
-                mediaSizeLabel,
-                mediaSizeWidth,
-                mediaSizeHeight
-            )
+            val customMediaSize = if (isTraditional) {
+                PrintAttributes.MediaSize(
+                    "continuous_9_5_11",
+                    "Continuous 9.5x11 (240x279 mm)",
+                    9449,
+                    11000
+                )
+            } else {
+                PrintAttributes.MediaSize.ISO_A4
+            }
             printAttributesBuilder.setMediaSize(customMediaSize)
             
             val printAttributes = printAttributesBuilder.build()
