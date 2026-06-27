@@ -82,7 +82,6 @@ fun PosBahRoot(
     val scope = rememberCoroutineScope()
     val updateState by viewModel.updateState.collectAsState()
     val isOnline by viewModel.isOnline.collectAsState()
-    val backupSyncState by viewModel.backupSyncState.collectAsState()
 
     val goDashboard = { popUpRoute: String ->
         scope.launch {
@@ -390,9 +389,202 @@ fun PosBahRoot(
         val required = updateState as UpdateState.UpdateRequired
         ForcedUpdateOverlay(
             version = required.version,
-            description = required.description,
-            backupSyncState = backupSyncState,
-            onRetrySync = { viewModel.triggerBackupSync() }
+            description = required.description
+        )
+    }
+}
+
+@Composable
+fun OfflineBlockerOverlay() {
+    androidx.activity.compose.BackHandler(enabled = true) {
+        // Prevent back button when offline blocker is active
+    }
+    
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xCC0F172A))
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            shape = RoundedCornerShape(28.dp),
+            color = Color(0xFF1E293B),
+            shadowElevation = 16.dp,
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.ErrorOutline,
+                    contentDescription = "Koneksi Terputus",
+                    tint = Color(0xFFEF4444),
+                    modifier = Modifier.size(80.dp)
+                )
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                Text(
+                    text = "⚠️ Koneksi Terputus",
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    ),
+                    textAlign = TextAlign.Center
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Text(
+                    text = "Aplikasi POSBah memerlukan koneksi internet aktif untuk menjaga sinkronisasi real-time. Menghubungkan kembali...",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        color = Color(0xFF94A3B8)
+                    ),
+                    textAlign = TextAlign.Center
+                )
+                
+                Spacer(modifier = Modifier.height(32.dp))
+                
+                androidx.compose.material3.CircularProgressIndicator(
+                    color = Color(0xFFEF4444),
+                    modifier = Modifier.size(36.dp)
+                )
+            arguments = listOf(navArgument("id") { type = NavType.StringType })
+        ) {
+            InvoiceDetailScreen(
+                onBack = { nav.popBackStack() },
+                onEdit = { id -> nav.navigate(Screen.BmpCreateInvoice.build(id)) }
+            )
+        }
+
+        composable(
+            route = Screen.BmpCreateInvoice.route,
+            arguments = listOf(navArgument("id") { type = NavType.StringType; defaultValue = "-1" })
+        ) {
+            InvoiceFormScreen(onDone = { nav.popBackStack() })
+        }
+
+        composable(Screen.BmpProducts.route) {
+            MasterProductsScreen(onBack = { nav.popBackStack() })
+        }
+
+        composable(Screen.BmpPayments.route) {
+            PaymentsListScreen(onBack = { nav.popBackStack() })
+        }
+
+        composable(Screen.BmpCashFlow.route) {
+            CashFlowScreen(
+                onBack = { nav.popBackStack() },
+                onNavigateToInvoiceDetail = { id ->
+                    nav.navigate(Screen.BmpInvoiceDetail.build(id))
+                }
+            )
+        }
+
+        composable(Screen.BmpEmployees.route) {
+            EmployeesScreen(onBack = { nav.popBackStack() })
+        }
+
+        composable(Screen.BmpPayroll.route) {
+            PayrollScreen(onBack = { nav.popBackStack() })
+        }
+
+        composable(Screen.BmpSettings.route) {
+            SettingsScreen(
+                onBack = { nav.popBackStack() },
+                onNavigateToPrintSettings = { nav.navigate(Screen.PrintSettings.build("BMP")) }
+            )
+        }
+
+        composable(
+            route = Screen.PrintSettings.route,
+            arguments = listOf(
+                navArgument("moduleKey") {
+                    type = NavType.StringType
+                    defaultValue = "BMP"
+                }
+            )
+        ) {
+            PrintSettingsScreen(onBack = { nav.popBackStack() })
+        }
+
+        composable(Screen.BmpBahanBaku.route) {
+            BahanBakuListScreen(
+                onBack = { nav.popBackStack() },
+                onAdd = { nav.navigate(Screen.BmpBahanBakuForm.build(null)) },
+                onEdit = { id -> nav.navigate(Screen.BmpBahanBakuForm.build(id)) }
+            )
+        }
+
+        composable(
+            route = Screen.BmpBahanBakuForm.route,
+            arguments = listOf(navArgument("id") { type = NavType.StringType; defaultValue = "-1" })
+        ) {
+            BahanBakuFormScreen(onDone = { nav.popBackStack() })
+        }
+
+        composable(Screen.BmpStock.route) {
+            BmpStockScreen(onBack = { nav.popBackStack() })
+        }
+
+        composable(Screen.BmpProductionLog.route) {
+            BmpProductionLogScreen(onBack = { nav.popBackStack() })
+        }
+
+        composable(Screen.AdminPanel.route) {
+            AdminPanelScreen(onBack = { nav.popBackStack() })
+        }
+
+        composable(Screen.QrScanner.route) {
+            QrScannerScreen(
+                onBack = { nav.popBackStack() }
+            )
+        }
+
+
+    }
+
+    // Real-time Non-blocking Connection status bar (like WhatsApp)
+    if (!isOnline) {
+        Surface(
+            color = Color(0xFFD97706), // Warm amber color
+            contentColor = Color.White,
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .height(28.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                androidx.compose.material3.CircularProgressIndicator(
+                    color = Color.White,
+                    modifier = Modifier.size(12.dp),
+                    strokeWidth = 1.5.dp
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Menghubungkan kembali...",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                    fontSize = 11.sp
+                )
+            }
+        }
+    }
+    }
+
+    if (updateState is UpdateState.UpdateRequired) {
+        val required = updateState as UpdateState.UpdateRequired
+        ForcedUpdateOverlay(
+            version = required.version,
+            description = required.description
         )
     }
 }
@@ -465,9 +657,7 @@ fun OfflineBlockerOverlay() {
 @Composable
 fun ForcedUpdateOverlay(
     version: String,
-    description: String,
-    backupSyncState: BackupSyncState,
-    onRetrySync: () -> Unit
+    description: String
 ) {
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
     
@@ -488,7 +678,7 @@ fun ForcedUpdateOverlay(
             shadowElevation = 8.dp,
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.95f) // Slightly increased to fit warning card and status
+                .fillMaxHeight(0.95f)
         ) {
             Column(
                 modifier = Modifier
@@ -525,127 +715,7 @@ fun ForcedUpdateOverlay(
                     textAlign = TextAlign.Center
                 )
                 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Warning Card: Jangan uninstall
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color(0xFF451A03), // Dark amber/brown
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFD97706)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.ErrorOutline,
-                            contentDescription = "Peringatan",
-                            tint = Color(0xFFF59E0B),
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = "PENTING: Jangan hapus (uninstall) aplikasi lama Anda! Cukup unduh APK baru dan pasang langsung untuk menimpa versi lama agar seluruh data transaksi lokal Anda tetap aman.",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = Color(0xFFFDE68A),
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 11.sp
-                            )
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Backup / Sync Status Section
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = Color(0xFF1E293B),
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        when (backupSyncState) {
-                            is BackupSyncState.Syncing -> {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    androidx.compose.material3.CircularProgressIndicator(
-                                        color = Color(0xFF3B82F6),
-                                        modifier = Modifier.size(16.dp),
-                                        strokeWidth = 2.dp
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Menyinkronkan data lokal Anda ke cloud...",
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            color = Color(0xFF60A5FA),
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    )
-                                }
-                            }
-                            is BackupSyncState.Success -> {
-                                Text(
-                                    text = "✓ Semua data lokal Anda telah berhasil dicadangkan ke server cloud.",
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        color = Color(0xFF34D399),
-                                        fontWeight = FontWeight.Bold
-                                    ),
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                            is BackupSyncState.Error -> {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Text(
-                                        text = "⚠️ Gagal mencadangkan data ke cloud: ${backupSyncState.message}",
-                                        style = MaterialTheme.typography.bodySmall.copy(
-                                            color = Color(0xFFF87171),
-                                            fontWeight = FontWeight.Medium
-                                        ),
-                                        textAlign = TextAlign.Center
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Button(
-                                        onClick = onRetrySync,
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = Color(0xFF374151),
-                                            contentColor = Color.White
-                                        ),
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.height(32.dp)
-                                    ) {
-                                        Text(
-                                            text = "Coba Sinkronkan Lagi",
-                                            style = MaterialTheme.typography.bodySmall.copy(
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        )
-                                    }
-                                }
-                            }
-                            else -> {
-                                Text(
-                                    text = "Tidak ada data lokal yang perlu disinkronkan.",
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        color = Color(0xFF94A3B8),
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
                 Button(
                     onClick = {

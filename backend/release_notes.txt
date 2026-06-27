@@ -1,3 +1,12 @@
+POSBah v2.18.2 - Pembersihan Komponen Migrasi Offline & Pembaruan Tampilan
+
+Halo Kak! POSBah v2.18.2 hadir dengan pembersihan sistem migrasi:
+1. Pembersihan Komponen Migrasi Offline: Menghapus instruksi "Jangan uninstall" dan indikator sinkronisasi lokal pada layar pembaruan wajib. Karena seluruh data transaksi Anda sudah terpusat dan aman 100% di cloud, Anda sekarang bebas melakukan uninstall/reinstall aplikasi kapan saja tanpa takut kehilangan data.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.18.1 - Pembaruan Jenis Bahan Baku PP
 
 Halo Kak! POSBah v2.18.1 hadir dengan pembaruan khusus:

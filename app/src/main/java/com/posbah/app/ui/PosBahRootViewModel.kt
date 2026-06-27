@@ -21,13 +21,6 @@ sealed class UpdateState {
     object UpToDate : UpdateState()
 }
 
-sealed class BackupSyncState {
-    object Idle : BackupSyncState()
-    object Syncing : BackupSyncState()
-    object Success : BackupSyncState()
-    data class Error(val message: String) : BackupSyncState()
-}
-
 @HiltViewModel
 class PosBahRootViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -40,16 +33,8 @@ class PosBahRootViewModel @Inject constructor(
     private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val updateState = _updateState.asStateFlow()
 
-    private val _backupSyncState = MutableStateFlow<BackupSyncState>(BackupSyncState.Idle)
-    val backupSyncState = _backupSyncState.asStateFlow()
-
     init {
         checkForForcedUpdate()
-    }
-
-    fun triggerBackupSync() {
-        // Full online mode: tidak perlu sync karena semua data sudah real-time di VPS.
-        _backupSyncState.value = BackupSyncState.Success
     }
 
     fun checkForForcedUpdate() {
@@ -86,7 +71,6 @@ class PosBahRootViewModel @Inject constructor(
 
                     if (hasUpdate) {
                         _updateState.value = UpdateState.UpdateRequired(version, description)
-                        triggerBackupSync()
                     } else {
                         _updateState.value = UpdateState.UpToDate
                     }
