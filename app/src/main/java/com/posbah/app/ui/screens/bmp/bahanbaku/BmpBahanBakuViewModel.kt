@@ -408,11 +408,16 @@ class BahanBakuFormViewModel @Inject constructor(
             }
 
         val total = entities.sumOf { it.kuantitas * it.rate }
-        val enteredNominal = _ui.value.nominalInput.replace(",", ".").toDoubleOrNull() ?: 0.0
+        val enteredNominal = _ui.value.nominalInput.replace(",", ".").toDoubleOrNull()
+        val finalNominal = if (enteredNominal != null) {
+            enteredNominal.coerceAtLeast(0.0)
+        } else {
+            total
+        }
         // Pastikan path & URL foto tersimpan ke entity
         val finalHeader = h.copy(
             totalHarga = total,
-            nominal = if (enteredNominal <= 0.0) total else enteredNominal,
+            nominal = finalNominal,
             notaFotoPath = _ui.value.notaFotoPath,
             notaFotoUrl = _ui.value.notaFotoUrl
         )
