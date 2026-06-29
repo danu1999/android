@@ -929,9 +929,14 @@ func copyFile(src, dst string) error {
 
 func cleanupVPSUnusedFiles() {
 	filesToClean := []string{
+		// Legacy binary artifacts
 		"/home/muizz9900/posbah-backend-new",
 		"/home/muizz9900/posbah-backend-new.service",
 		"/home/muizz9900/posbah-backend.bak",
+		// Windows binaries yang mungkin ikut ter-copy ke VPS Linux
+		"/home/muizz9900/posbah-backend.exe",
+		"/home/muizz9900/server.exe",
+		// Legacy database dump/sql scripts
 		"/home/muizz9900/posbah_backup.dump",
 		"/home/muizz9900/posbah_db_backup_realtime_migration.sql",
 		"/home/muizz9900/posbah_tenant_bahteramulyap_gmail_com.sql",
@@ -947,6 +952,7 @@ func cleanupVPSUnusedFiles() {
 		"/home/muizz9900/fix_duplicates_and_pk.sql",
 		"/home/muizz9900/count_all_vps.sql",
 		"/home/muizz9900/count_vps.sql",
+		// Legacy shell scripts
 		"/home/muizz9900/check_all.sh",
 		"/home/muizz9900/check_data.sh",
 		"/home/muizz9900/check_emp.sh",
@@ -955,8 +961,16 @@ func cleanupVPSUnusedFiles() {
 		"/home/muizz9900/fix_index.py",
 		"/home/muizz9900/test_qr.sh",
 		"/home/muizz9900/audit_db.sh",
+		// Obsolete web files
 		"/home/muizz9900/app.js-new",
 		"/home/muizz9900/admin.html",
+		// Temp/scratch scripts from debugging sessions
+		"/home/muizz9900/deploy_v2.18.9.py",
+		"/home/muizz9900/inspect_db.py",
+		"/home/muizz9900/inspect_cashflow_schema.py",
+		"/home/muizz9900/inspect_bahanbaku_schema.py",
+		"/home/muizz9900/inspect_stocks_schema.py",
+		"/home/muizz9900/find_java.py",
 	}
 	for _, f := range filesToClean {
 		if _, err := os.Stat(f); err == nil {

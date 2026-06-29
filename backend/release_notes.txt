@@ -1,3 +1,14 @@
+POSBah v2.19.1 - Bug Fix: Laporan Keuangan & Akurasi Data
+
+Halo Kak! POSBah v2.19.1 adalah rilis perbaikan bug penting:
+1. Fix COGS Laporan Keuangan: Nilai Harga Pokok Penjualan (COGS) kini dihitung dengan benar dari data HPP per pcs produk jadi, bukan selalu nol seperti sebelumnya.
+2. Integritas Data Produk Invoice: Perbaikan pengiriman data nama produk ke server agar lebih akurat dan konsisten.
+3. Pembaruan APK otomatis HPP: Setiap kali data master produk disimpan, nilai HPP langsung terupdate di server.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.0 - Penyusutan Mesin & Daur Ulang Afval
 
 Halo Kak! POSBah v2.19.0 kini hadir dengan penyempurnaan laporan keuangan manufaktur:

@@ -899,23 +899,12 @@ func initSchema() error {
 	}
 
 	// Migration: tambah kolom rawMaterialId ke tabel bmp_production_logs
+	// Note: bmp_raw_material_stocks dihapus dari sini (tabel tidak memiliki endpoint/Android consumer).
 	manufakturMigrations := []string{
 		`ALTER TABLE "bmp_production_logs" ADD COLUMN IF NOT EXISTS "rawMaterialId" INT DEFAULT 0;`,
 		`ALTER TABLE "bmp_cashflow" ADD COLUMN IF NOT EXISTS "amount" DOUBLE PRECISION DEFAULT 0;`,
 		`ALTER TABLE "bmp_cashflow" ADD COLUMN IF NOT EXISTS "costType" VARCHAR(50) DEFAULT 'OPERATING_EXPENSE';`,
 		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "employeeType" VARCHAR(50) DEFAULT 'OPERATING_EXPENSE';`,
-		`CREATE TABLE IF NOT EXISTS "bmp_raw_material_stocks" (
-			"id" SERIAL PRIMARY KEY,
-			"tenantId" VARCHAR(100) NOT NULL,
-			"jenisBahan" VARCHAR(150) NOT NULL,
-			"stockInitial" DOUBLE PRECISION DEFAULT 0.0,
-			"stockEntered" DOUBLE PRECISION DEFAULT 0.0,
-			"stockConsumed" DOUBLE PRECISION DEFAULT 0.0,
-			"stockFinal" DOUBLE PRECISION DEFAULT 0.0,
-			"period" VARCHAR(50) NOT NULL,
-			"updatedAt" BIGINT,
-			CONSTRAINT "uniq_rm_stock_period" UNIQUE ("tenantId", "jenisBahan", "period")
-		);`,
 		`CREATE TABLE IF NOT EXISTS "bmp_monthly_depreciation" (
 			"id" SERIAL PRIMARY KEY,
 			"tenantId" VARCHAR(100) NOT NULL,
@@ -924,6 +913,18 @@ func initSchema() error {
 			"updatedAt" BIGINT,
 			CONSTRAINT "uniq_depreciation_period" UNIQUE ("tenantId", "period")
 		);`,
+
+		// v2.19.1: Bug fix — kolom hppTotalPcs dan hppLusin di bmp_master_products
+		// wajib ada agar query COGS di laporan keuangan tidak selalu mengembalikan 0.
+		// Handler handleRtBmpFinancialReport menggunakan COALESCE(mp."hppTotalPcs", 0)
+		// sehingga tanpa kolom ini COGS = 0 untuk semua periode.
+		`ALTER TABLE "bmp_master_products" ADD COLUMN IF NOT EXISTS "hppTotalPcs" DOUBLE PRECISION DEFAULT 0.0;`,
+		`ALTER TABLE "bmp_master_products" ADD COLUMN IF NOT EXISTS "hppLusin" DOUBLE PRECISION DEFAULT 0.0;`,
+
+		// v2.19.1: Standardisasi kolom karyawan BMP — tambah alias "role" di bmp_employees
+		// Android mengirim "role" (DIRECT_LABOR, INDIRECT_LABOR, OPERATING_EXPENSE) tapi
+		// skema lama hanya punya "position". Kolom "role" ditambahkan agar data tersimpan benar.
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "role" VARCHAR(50) DEFAULT 'KARYAWAN';`,
 	}
 	for _, q := range manufakturMigrations {
 		if _, err := db.Exec(q); err != nil {

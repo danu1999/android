@@ -667,8 +667,7 @@ class BmpInvoiceRepository @Inject constructor(
                 api.createBmpProduct(mapOf(
                     "invoiceId" to newId,
                     "masterItemID" to prod.masterItemID,
-                    "name" to prod.name,
-                    "title" to prod.name,
+                    "title" to prod.name,   // kolom DB adalah 'title', bukan 'name'
                     "description" to prod.description,
                     "unit" to prod.unit,
                     "price" to prod.price,
@@ -795,8 +794,7 @@ class BmpInvoiceRepository @Inject constructor(
                 api.createBmpProduct(mapOf(
                     "invoiceId" to invoice.id,
                     "masterItemID" to prod.masterItemID,
-                    "name" to prod.name,
-                    "title" to prod.name,
+                    "title" to prod.name,   // kolom DB adalah 'title', bukan 'name'
                     "description" to prod.description,
                     "unit" to prod.unit,
                     "price" to prod.price,
@@ -1306,6 +1304,11 @@ class BmpMasterProductRepository @Inject constructor(
                 put("cavity", item.cavity)
                 put("rejectRate", item.rejectRate)
                 put("jenisBahanBaku", item.jenisBahanBaku)
+                // v2.19.1: Kirim hppTotalPcs dan hppLusin agar COGS di laporan keuangan terisi.
+                // Nilai ini dihitung di MasterProductsScreen saat user klik Simpan.
+                // Tanpa ini, kolom DB tetap 0.0 meski sudah ada migrasi.
+                put("hppTotalPcs", item.hppTotalPcs)
+                put("hppLusin", item.hppLusin)
                 if (item.description != null) put("description", item.description)
                 if (item.uniqueID != null) put("uniqueID", item.uniqueID)
                 if (item.slug != null) put("slug", item.slug)
