@@ -1162,20 +1162,82 @@ func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
 	`, tenantId, startMs, endMs).Scan(&cogs)
 	if err != nil { jsonErr(w, 500, err.Error()); return }
 
-	// 3. Query OPEX (Operating Expenses)
+	// 3. Query Direct Materials Cost (Actual Consumption)
+	var directMaterials float64
+	err = db.QueryRow(`
+		SELECT COALESCE(SUM(pl."rawMaterialUsedKg" * COALESCE(rates.avg_rate, mp.price)), 0)
+		FROM bmp_production_logs pl
+		JOIN bmp_master_products mp ON pl."masterProductId" = mp.id AND pl."tenantId" = mp."tenantId"
+		LEFT JOIN (
+			SELECT bbi."jenisBahan", AVG(bbi.rate) as avg_rate
+			FROM bmp_bahan_baku_item bbi
+			JOIN bmp_bahan_baku bb ON bbi."bahanBakuId" = bb.id AND bbi."tenantId" = bb."tenantId"
+			WHERE bb."tenantId" = $1 AND bb."isDeleted" = FALSE AND bbi."isDeleted" = FALSE
+			GROUP BY bbi."jenisBahan"
+		) rates ON mp."jenisBahanBaku" = rates."jenisBahan"
+		WHERE pl."tenantId" = $1 AND pl."productionDate" >= $2 AND pl."productionDate" < $3 AND pl."isDeleted" = FALSE
+	`, tenantId, startMs, endMs).Scan(&directMaterials)
+	if err != nil { jsonErr(w, 500, err.Error()); return }
+
+	// 4. Query Direct Labor Cost
+	var directLabor float64
+	err = db.QueryRow(`
+		SELECT COALESCE(
+			(SELECT SUM(bp.amount)
+			 FROM bmp_payrolls bp
+			 JOIN bmp_employees be ON bp."employeeId" = be.id AND bp."tenantId" = be."tenantId"
+			 WHERE bp."tenantId" = $1 AND bp."paymentDate" >= $2 AND bp."paymentDate" < $3
+			   AND be."employeeType" = 'DIRECT_LABOR'), 0)
+		+ COALESCE(
+			(SELECT SUM(amount)
+			 FROM bmp_cashflow
+			 WHERE "tenantId" = $1 AND "transactionType" = 'KELUAR'
+			   AND "transactionDate" >= $2 AND "transactionDate" < $3 AND "isDeleted" = FALSE
+			   AND "costType" = 'DIRECT_LABOR'), 0)
+	`, tenantId, startMs, endMs).Scan(&directLabor)
+	if err != nil { jsonErr(w, 500, err.Error()); return }
+
+	// 5. Query Factory Overhead (FOH)
+	var foh float64
+	err = db.QueryRow(`
+		SELECT COALESCE(
+			(SELECT SUM(amount)
+			 FROM bmp_cashflow
+			 WHERE "tenantId" = $1 AND "transactionType" = 'KELUAR'
+			   AND "transactionDate" >= $2 AND "transactionDate" < $3 AND "isDeleted" = FALSE
+			   AND "costType" = 'FACTORY_OVERHEAD'), 0)
+		+ COALESCE(
+			(SELECT SUM(bp.amount)
+			 FROM bmp_payrolls bp
+			 JOIN bmp_employees be ON bp."employeeId" = be.id AND bp."tenantId" = be."tenantId"
+			 WHERE bp."tenantId" = $1 AND bp."paymentDate" >= $2 AND bp."paymentDate" < $3
+			   AND be."employeeType" = 'INDIRECT_LABOR'), 0)
+	`, tenantId, startMs, endMs).Scan(&foh)
+	if err != nil { jsonErr(w, 500, err.Error()); return }
+
+	// 6. Query OPEX (Operating Expenses)
 	var opex float64
 	err = db.QueryRow(`
-		SELECT COALESCE(SUM("amount"), 0) 
-		FROM bmp_cashflow 
-		WHERE "tenantId"=$1 AND "transactionType"='KELUAR' 
-		  AND "transactionDate" >= $2 AND "transactionDate" < $3 AND "isDeleted"=FALSE
+		SELECT COALESCE(
+			(SELECT SUM(amount)
+			 FROM bmp_cashflow
+			 WHERE "tenantId" = $1 AND "transactionType" = 'KELUAR'
+			   AND "transactionDate" >= $2 AND "transactionDate" < $3 AND "isDeleted" = FALSE
+			   AND COALESCE("costType", 'OPERATING_EXPENSE') NOT IN ('FACTORY_OVERHEAD', 'DIRECT_LABOR')), 0)
+		+ COALESCE(
+			(SELECT SUM(bp.amount)
+			 FROM bmp_payrolls bp
+			 JOIN bmp_employees be ON bp."employeeId" = be.id AND bp."tenantId" = be."tenantId"
+			 WHERE bp."tenantId" = $1 AND bp."paymentDate" >= $2 AND bp."paymentDate" < $3
+			   AND COALESCE(be."employeeType", 'OPERATING_EXPENSE') NOT IN ('DIRECT_LABOR', 'INDIRECT_LABOR')), 0)
 	`, tenantId, startMs, endMs).Scan(&opex)
 	if err != nil { jsonErr(w, 500, err.Error()); return }
 
+	cogm := directMaterials + directLabor + foh
 	labaKotor := omzet - cogs
 	labaBersih := labaKotor - opex
 
-	// 4. Calculate BEP
+	// 7. Calculate BEP
 	var bep float64
 	if omzet > 0 && (omzet-cogs) > 0 {
 		marginRatio := (omzet - cogs) / omzet
@@ -1228,6 +1290,10 @@ func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
 		"cogsPercentage":   cogsPercentage,
 		"marginPercentage": marginPercentage,
 		"topProducts":      topProducts,
+		"directMaterials":  directMaterials,
+		"directLabor":      directLabor,
+		"foh":              foh,
+		"cogm":             cogm,
 	}
 
 	jsonOK(w, response)

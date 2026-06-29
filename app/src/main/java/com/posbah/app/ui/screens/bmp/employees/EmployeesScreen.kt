@@ -306,6 +306,7 @@ fun EmployeesScreen(
         var position by remember { mutableStateOf(editing.position.orEmpty()) }
         var pin by remember { mutableStateOf(editing.fingerprintPIN.orEmpty()) }
         var salary by remember { mutableStateOf(if (editing.salaryAmount == 0.0) "" else editing.salaryAmount.toLong().toString()) }
+        var selectedEmployeeType by remember { mutableStateOf(editing.employeeType) }
         var selectedOutletId by remember { mutableStateOf(editing.outletId) }
         var selectedOutletName by remember {
             mutableStateOf(outlets.firstOrNull { it.id == editing.outletId }?.name ?: "Seluruh Outlet")
@@ -347,6 +348,29 @@ fun EmployeesScreen(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth().testTag("emp-salary")
                     )
+                    Spacer(Modifier.size(8.dp))
+                    Text("Kategori Karyawan:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.padding(top = 4.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        listOf(
+                            "OPERATING_EXPENSE" to "Non-Produksi",
+                            "DIRECT_LABOR" to "Buruh Langsung",
+                            "INDIRECT_LABOR" to "Overhead"
+                        ).forEach { (valType, label) ->
+                            val selected = selectedEmployeeType == valType
+                            androidx.compose.material3.OutlinedButton(
+                                onClick = { selectedEmployeeType = valType },
+                                colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                                    containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else androidx.compose.ui.graphics.Color.Transparent,
+                                    contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                ),
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 2.dp)
+                            ) {
+                                Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                            }
+                        }
+                    }
                     Spacer(Modifier.size(8.dp))
                     Box(modifier = Modifier.fillMaxWidth()) {
                         OutlinedTextField(
@@ -466,6 +490,7 @@ fun EmployeesScreen(
                                     name = name,
                                     position = position.ifBlank { null },
                                     salaryAmount = salary.replace(",", "").toDoubleOrNull() ?: 0.0,
+                                    employeeType = selectedEmployeeType,
                                     fingerprintPIN = pin.ifBlank { null },
                                     outletId = selectedOutletId
                                 ),

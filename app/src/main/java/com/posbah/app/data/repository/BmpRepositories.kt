@@ -108,6 +108,7 @@ data class BmpCashflowData(
     val transactionType: String = "MASUK",
     val description: String = "",
     val amount: Double = 0.0,
+    val costType: String = "OPERATING_EXPENSE",
     val paymentRefId: Long? = null,
     val isDeleted: Boolean = false,
     val updatedAt: Long = 0
@@ -131,6 +132,7 @@ data class BmpEmployeeData(
     val name: String = "",
     val role: String = "KARYAWAN",
     val salary: Double = 0.0,
+    val employeeType: String = "OPERATING_EXPENSE",
     val phone: String? = null,
     val email: String? = null,
     val isActive: Boolean = true,
@@ -307,6 +309,7 @@ fun Map<String, Any?>.toBmpCashflowData() = BmpCashflowData(
     transactionType = getCaseInsensitive("transactionType") as? String ?: "MASUK",
     description = getCaseInsensitive("description") as? String ?: "",
     amount = (getCaseInsensitive("amount") as? Number)?.toDouble() ?: 0.0,
+    costType = getCaseInsensitive("costType") as? String ?: "OPERATING_EXPENSE",
     paymentRefId = (getCaseInsensitive("paymentRefId") as? Number)?.toLong(),
     isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false,
     updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0
@@ -1398,6 +1401,7 @@ class BmpCashFlowRepository @Inject constructor(
                 "transactionType" to entry.transactionType,
                 "description" to entry.description,
                 "amount" to entry.amount,
+                "costType" to entry.costType,
                 "paymentRefId" to entry.paymentRefId
             ))
             val newId = (resp.body()?.get("id") as? Number)?.toLong() ?: 0L
@@ -1422,7 +1426,8 @@ class BmpCashFlowRepository @Inject constructor(
                 "transactionDate" to entry.transactionDate,
                 "transactionType" to entry.transactionType,
                 "description" to entry.description,
-                "amount" to entry.amount
+                "amount" to entry.amount,
+                "costType" to entry.costType
             ))
             OnlineWriteResult.Success
         } catch (e: Exception) {
@@ -1457,6 +1462,7 @@ class BmpCashFlowRepository @Inject constructor(
                     transactionType = d.transactionType,
                     description = d.description,
                     amount = d.amount,
+                    costType = d.costType,
                     transactionDate = d.transactionDate,
                     paymentRefId = d.paymentRefId,
                     isSynced = true
@@ -1478,6 +1484,7 @@ class BmpCashFlowRepository @Inject constructor(
             transactionType = entity.transactionType,
             description = entity.description,
             amount = entity.amount,
+            costType = entity.costType,
             transactionDate = entity.transactionDate
         ))
     }
@@ -1494,7 +1501,6 @@ class BmpEmployeeRepository @Inject constructor(
 ) {
     private val _employees = MutableStateFlow<List<BmpEmployeeData>>(emptyList())
     val employees = _employees.asStateFlow()
-
     suspend fun refresh() {
         try {
             val resp = api.getBmpEmployees()
@@ -1506,6 +1512,7 @@ class BmpEmployeeRepository @Inject constructor(
                         name = it["name"] as? String ?: "",
                         role = it["role"] as? String ?: "KARYAWAN",
                         salary = (it["salary"] as? Number)?.toDouble() ?: 0.0,
+                        employeeType = it["employeeType"] as? String ?: "OPERATING_EXPENSE",
                         phone = it["phone"] as? String,
                         email = it["email"] as? String,
                         isActive = it["isActive"] as? Boolean ?: true,
@@ -1539,6 +1546,7 @@ class BmpEmployeeRepository @Inject constructor(
         return try {
             val body = mapOf<String, Any?>(
                 "name" to emp.name, "role" to emp.role, "salary" to emp.salary,
+                "employeeType" to emp.employeeType,
                 "phone" to emp.phone, "email" to emp.email, "isActive" to emp.isActive
             )
             if (emp.id == 0L) api.createBmpEmployee(body) else api.updateBmpEmployee(emp.id, body)
@@ -1571,6 +1579,7 @@ class BmpEmployeeRepository @Inject constructor(
                     name = it.name,
                     position = it.role,
                     salaryAmount = it.salary,
+                    employeeType = it.employeeType,
                     isActive = it.isActive,
                     fingerprintPIN = null,
                     employeeId = null,
@@ -1604,6 +1613,7 @@ class BmpEmployeeRepository @Inject constructor(
             name = e.name,
             role = e.position ?: "KARYAWAN",
             salary = e.salaryAmount,
+            employeeType = e.employeeType,
             phone = null,
             email = null,
             isActive = e.isActive,

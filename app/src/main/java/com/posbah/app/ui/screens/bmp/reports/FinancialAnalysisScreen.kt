@@ -63,6 +63,10 @@ data class FinancialReportUiState(
     val cogsPercentage: Double = 0.0,
     val marginPercentage: Double = 0.0,
     val topProducts: List<TopProductReport> = emptyList(),
+    val directMaterials: Double = 0.0,
+    val directLabor: Double = 0.0,
+    val foh: Double = 0.0,
+    val cogm: Double = 0.0,
     val isLoading: Boolean = false,
     val error: String? = null
 )
@@ -165,6 +169,10 @@ class FinancialAnalysisViewModel @Inject constructor(
                         cogsPercentage = (body["cogsPercentage"] as? Number)?.toDouble() ?: 0.0,
                         marginPercentage = (body["marginPercentage"] as? Number)?.toDouble() ?: 0.0,
                         topProducts = topProductsList,
+                        directMaterials = (body["directMaterials"] as? Number)?.toDouble() ?: 0.0,
+                        directLabor = (body["directLabor"] as? Number)?.toDouble() ?: 0.0,
+                        foh = (body["foh"] as? Number)?.toDouble() ?: 0.0,
+                        cogm = (body["cogm"] as? Number)?.toDouble() ?: 0.0,
                         isLoading = false
                     )
                 }
@@ -436,6 +444,35 @@ fun FinancialAnalysisScreen(
                                 value = Formatters.rupiah(state.labaBersih), 
                                 isHeader = true,
                                 valueColor = if (state.labaBersih >= 0) Color(0xFF10B981) else Color(0xFFEF4444)
+                            )
+                        }
+                    }
+                }
+
+                // Harga Pokok Produksi (COGM) card
+                item {
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "Harga Pokok Produksi (COGM)",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            
+                            ReportLine("Bahan Baku Langsung Terpakai", Formatters.rupiah(state.directMaterials))
+                            ReportLine("Tenaga Kerja Langsung", Formatters.rupiah(state.directLabor))
+                            ReportLine("Overhead Pabrik (FOH)", Formatters.rupiah(state.foh))
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                            ReportLine(
+                                label = "TOTAL HARGA POKOK PRODUKSI", 
+                                value = Formatters.rupiah(state.cogm), 
+                                isHeader = true,
+                                valueColor = MaterialTheme.colorScheme.primary
                             )
                         }
                     }

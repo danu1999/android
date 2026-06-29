@@ -145,7 +145,7 @@ class CashFlowViewModel @Inject constructor(
         }
     }
 
-    fun insert(type: String, desc: String, amount: Double) = viewModelScope.launch {
+    fun insert(type: String, desc: String, amount: Double, costType: String = "OPERATING_EXPENSE") = viewModelScope.launch {
         if (desc.isBlank() || amount <= 0) return@launch
         repo.insert(
             BmpCashFlowEntity(
@@ -153,7 +153,8 @@ class CashFlowViewModel @Inject constructor(
                 transactionDate = System.currentTimeMillis(),
                 transactionType = type,
                 description = desc,
-                amount = amount
+                amount = amount,
+                costType = if (type == "MASUK") "OPERATING_EXPENSE" else costType
             )
         )
     }
@@ -170,7 +171,8 @@ class CashFlowViewModel @Inject constructor(
                     transactionDate = System.currentTimeMillis(),
                     transactionType = "KELUAR",
                     description = "Gaji Karyawan Bulanan (Rutin)",
-                    amount = totalGaji
+                    amount = totalGaji,
+                    costType = "DIRECT_LABOR"
                 )
             )
         }
@@ -182,7 +184,8 @@ class CashFlowViewModel @Inject constructor(
                     transactionDate = System.currentTimeMillis(),
                     transactionType = "KELUAR",
                     description = "Listrik Bulanan (Rutin)",
-                    amount = s.listrikBulanan
+                    amount = s.listrikBulanan,
+                    costType = "FACTORY_OVERHEAD"
                 )
             )
         }
@@ -206,6 +209,7 @@ fun CashFlowScreen(
     var formType by remember { mutableStateOf("MASUK") }
     var formDesc by remember { mutableStateOf("") }
     var formAmt by remember { mutableStateOf("") }
+    var formCostType by remember { mutableStateOf("OPERATING_EXPENSE") }
     var dropdownExpanded by remember { mutableStateOf(false) }
     var showPostOverheadDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -225,7 +229,7 @@ fun CashFlowScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = {
-                    showForm = true; formType = "MASUK"; formDesc = ""; formAmt = ""
+                    showForm = true; formType = "MASUK"; formDesc = ""; formAmt = ""; formCostType = "OPERATING_EXPENSE"
                 },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -383,12 +387,37 @@ fun CashFlowScreen(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth().testTag("cf-amount")
                     )
+                    if (formType == "KELUAR") {
+                        Spacer(Modifier.padding(top = 10.dp))
+                        Text("Kategori Pengeluaran:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.padding(top = 4.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(
+                                "OPERATING_EXPENSE" to "OPEX",
+                                "FACTORY_OVERHEAD" to "Overhead",
+                                "DIRECT_LABOR" to "Tenaga Kerja"
+                            ).forEach { (valType, label) ->
+                                val selected = formCostType == valType
+                                OutlinedButton(
+                                    onClick = { formCostType = valType },
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                        contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                    ),
+                                    modifier = Modifier.weight(1f),
+                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                                ) {
+                                    Text(label, style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                    }
                 }
             },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.insert(formType, formDesc, formAmt.replace(",", ".").toDoubleOrNull() ?: 0.0)
+                        viewModel.insert(formType, formDesc, formAmt.replace(",", ".").toDoubleOrNull() ?: 0.0, formCostType)
                         showForm = false
                     },
                     modifier = Modifier.testTag("btn-save-cf")

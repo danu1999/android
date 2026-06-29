@@ -202,6 +202,8 @@ func initSchema() error {
 			"transactionDate" BIGINT NOT NULL,
 			"transactionType" VARCHAR(50) NOT NULL,
 			"description" TEXT NOT NULL,
+			"amount" DOUBLE PRECISION DEFAULT 0,
+			"costType" VARCHAR(50) DEFAULT 'OPERATING_EXPENSE',
 			"paymentRefId" INT,
 			"createdAt" BIGINT,
 			"isDeleted" BOOLEAN DEFAULT FALSE
@@ -899,10 +901,25 @@ func initSchema() error {
 	// Migration: tambah kolom rawMaterialId ke tabel bmp_production_logs
 	manufakturMigrations := []string{
 		`ALTER TABLE "bmp_production_logs" ADD COLUMN IF NOT EXISTS "rawMaterialId" INT DEFAULT 0;`,
+		`ALTER TABLE "bmp_cashflow" ADD COLUMN IF NOT EXISTS "amount" DOUBLE PRECISION DEFAULT 0;`,
+		`ALTER TABLE "bmp_cashflow" ADD COLUMN IF NOT EXISTS "costType" VARCHAR(50) DEFAULT 'OPERATING_EXPENSE';`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "employeeType" VARCHAR(50) DEFAULT 'OPERATING_EXPENSE';`,
+		`CREATE TABLE IF NOT EXISTS "bmp_raw_material_stocks" (
+			"id" SERIAL PRIMARY KEY,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"jenisBahan" VARCHAR(150) NOT NULL,
+			"stockInitial" DOUBLE PRECISION DEFAULT 0.0,
+			"stockEntered" DOUBLE PRECISION DEFAULT 0.0,
+			"stockConsumed" DOUBLE PRECISION DEFAULT 0.0,
+			"stockFinal" DOUBLE PRECISION DEFAULT 0.0,
+			"period" VARCHAR(50) NOT NULL,
+			"updatedAt" BIGINT,
+			CONSTRAINT "uniq_rm_stock_period" UNIQUE ("tenantId", "jenisBahan", "period")
+		);`,
 	}
 	for _, q := range manufakturMigrations {
 		if _, err := db.Exec(q); err != nil {
-			log.Printf("[migration] manufaktur rawMaterialId warning: %v", err)
+			log.Printf("[migration] manufaktur rawMaterialId/accounting warning: %v", err)
 		}
 	}
 
