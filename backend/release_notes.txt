@@ -1,8 +1,8 @@
-POSBah v2.18.7 - Pembersihan Dashboard & Fitur Pembayaran Global Bahan Baku (Tunai/Transfer)
+POSBah v2.18.8 - Desain Varian Baru & HPP per Varian POS FnB
 
-Halo Kak! POSBah v2.18.7 kini hadir dengan pembaruan fitur baru untuk mempermudah operasional Anda:
-1. Pembersihan Dashboard: Bagian Aksi Cepat yang redundan telah dihapus dari halaman utama untuk tampilan yang lebih bersih dan ringkas.
-2. Filter Invoice Jatuh Tempo Instan: Mengklik banner invoice jatuh tempo di halaman utama kini otomatis menyaring daftar untuk hanya menampilkan invoice jatuh tempo saja.
-3. Pembayaran Global Bahan Baku (TF/Cash): Sekarang Anda dapat mencatat pembayaran tunai atau transfer ke supplier bahan baku secara langsung tanpa perlu mencocokkan faktur/tagihan hutang tertentu. Sisa hutang supplier dan arus kas akan terpotong secara otomatis.
+Halo Kak! POSBah v2.18.8 kini hadir dengan pembaruan fitur baru untuk mempermudah operasional Anda:
+1. Redesign Varian Produk POS FnB: Sekarang Anda dapat menambahkan hingga maksimal 7 varian produk secara dinamis langsung dari dialog Tambah & Edit Produk.
+2. Input HPP Per Varian: Setiap varian kini memiliki input HPP (Harga Pokok Penjualan) tersendiri. Margin keuntungan dan laba kotor di laporan keuangan kini terhitung lebih akurat berdasarkan varian spesifik yang terjual.
+3. Pembersihan Form: Kolom harga jual & HPP utama akan otomatis disembunyikan jika varian aktif, membuat tampilan form lebih bersih dan fokus.
 
 Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!

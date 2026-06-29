@@ -44,6 +44,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.Close
 
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.LocalOffer
 import androidx.compose.material.icons.outlined.Notes
@@ -177,21 +178,60 @@ private fun deserializeHppComponents(json: String?): List<HppComponent> {
     return list
 }
 
-private fun convertVariantsStringToJsons(variantsStr: String): String? {
-    if (variantsStr.isBlank()) return null
-    val names = variantsStr.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-    if (names.isEmpty()) return null
-    val arr = org.json.JSONArray()
-    names.forEachIndexed { index, name ->
-        val obj = org.json.JSONObject()
-        obj.put("id", index + 1L)
-        obj.put("name", name)
-        obj.put("price", org.json.JSONObject.NULL)
-        obj.put("costPrice", org.json.JSONObject.NULL)
-        obj.put("stock", org.json.JSONObject.NULL)
-        arr.put(obj)
+data class EditableVariant(
+    val id: Long = 0,
+    val name: String = "",
+    val price: String = "",
+    val costPrice: String = ""
+)
+
+private fun deserializeVariantsToList(variantsJson: String?): List<EditableVariant> {
+    if (variantsJson.isNullOrBlank()) return emptyList()
+    try {
+        val arr = org.json.JSONArray(variantsJson)
+        val list = mutableListOf<EditableVariant>()
+        for (i in 0 until arr.length()) {
+            val obj = arr.getJSONObject(i)
+            val priceVal = if (obj.isNull("price")) "" else obj.get("price").toString()
+            val costVal = if (obj.isNull("costPrice")) "" else obj.get("costPrice").toString()
+            list.add(
+                EditableVariant(
+                    id = obj.optLong("id", i + 1L),
+                    name = obj.optString("name", ""),
+                    price = priceVal,
+                    costPrice = costVal
+                )
+            )
+        }
+        return list
+    } catch (e: Exception) {
+        return emptyList()
     }
-    return arr.toString()
+}
+
+private fun convertVariantsListToJsons(list: List<EditableVariant>): String? {
+    if (list.isEmpty()) return null
+    val arr = org.json.JSONArray()
+    list.forEachIndexed { index, v ->
+        if (v.name.isNotBlank()) {
+            val obj = org.json.JSONObject()
+            obj.put("id", index + 1L)
+            obj.put("name", v.name)
+            if (v.price.isBlank()) {
+                obj.put("price", org.json.JSONObject.NULL)
+            } else {
+                obj.put("price", v.price.toDoubleOrNull() ?: org.json.JSONObject.NULL)
+            }
+            if (v.costPrice.isBlank()) {
+                obj.put("costPrice", org.json.JSONObject.NULL)
+            } else {
+                obj.put("costPrice", v.costPrice.toDoubleOrNull() ?: org.json.JSONObject.NULL)
+            }
+            obj.put("stock", org.json.JSONObject.NULL)
+            arr.put(obj)
+        }
+    }
+    return if (arr.length() > 0) arr.toString() else null
 }
 
 private fun convertVariantsJsonsToString(variantsJson: String?): String {
@@ -242,7 +282,8 @@ fun PosScreen(
     var newProdWholesaleEnabled by remember { mutableStateOf(false) }
     var newProdWholesalePrice by remember { mutableStateOf("") }
     var newProdMinWholesaleQty by remember { mutableStateOf("") }
-    var newProdVariants by remember { mutableStateOf("") }
+    var newProdVariantsEnabled by remember { mutableStateOf(false) }
+    val newProdVariantsList = remember { mutableStateListOf<EditableVariant>() }
     val newProdHppComponents = remember { mutableStateListOf<HppComponent>() }
     var newHppNameInput by remember { mutableStateOf("") }
     var newHppCostInput by remember { mutableStateOf("") }
@@ -266,7 +307,8 @@ fun PosScreen(
     var editProdWholesaleEnabled by remember { mutableStateOf(false) }
     var editProdWholesalePrice by remember { mutableStateOf("") }
     var editProdMinWholesaleQty by remember { mutableStateOf("") }
-    var editProdVariants by remember { mutableStateOf("") }
+    var editProdVariantsEnabled by remember { mutableStateOf(false) }
+    val editProdVariantsList = remember { mutableStateListOf<EditableVariant>() }
     val editProdHppComponents = remember { mutableStateListOf<HppComponent>() }
     var editHppNameInput by remember { mutableStateOf("") }
     var editHppCostInput by remember { mutableStateOf("") }
@@ -489,7 +531,8 @@ fun PosScreen(
                                         newProdWholesaleEnabled = false
                                         newProdWholesalePrice = ""
                                         newProdMinWholesaleQty = ""
-                                        newProdVariants = ""
+                                        newProdVariantsEnabled = false
+                                        newProdVariantsList.clear()
                                         newProdHppComponents.clear()
                                         newHppNameInput = ""
                                         newHppCostInput = ""
@@ -695,7 +738,10 @@ fun PosScreen(
                                             editProdWholesaleEnabled = p.wholesaleEnabled
                                             editProdWholesalePrice = p.wholesalePrice.toString()
                                             editProdMinWholesaleQty = p.minWholesaleQty.toString()
-                                            editProdVariants = convertVariantsJsonsToString(p.variants)
+                                             val des = deserializeVariantsToList(p.variants)
+                                             editProdVariantsEnabled = des.isNotEmpty()
+                                             editProdVariantsList.clear()
+                                             editProdVariantsList.addAll(des)
                                             editProdHppComponents.clear()
                                             editProdHppComponents.addAll(deserializeHppComponents(p.costPriceBreakdown))
                                             editHppNameInput = ""
@@ -1134,34 +1180,36 @@ fun PosScreen(
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth().testTag("add-product-name")
                         )
-                        OutlinedTextField(
-                            value = newProdPrice,
-                            onValueChange = { priceVal -> newProdPrice = priceVal },
-                            label = { Text("Harga Jual (Rp)") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth().testTag("add-product-price")
-                        )
-                        OutlinedTextField(
-                            value = newProdCostPrice,
-                            onValueChange = { costVal -> newProdCostPrice = costVal },
-                            label = { Text("Harga Beli (Rp)") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        if (!newProdVariantsEnabled) {
+                            OutlinedTextField(
+                                value = newProdPrice,
+                                onValueChange = { priceVal -> newProdPrice = priceVal },
+                                label = { Text("Harga Jual (Rp)") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth().testTag("add-product-price")
+                            )
+                            OutlinedTextField(
+                                value = newProdCostPrice,
+                                onValueChange = { costVal -> newProdCostPrice = costVal },
+                                label = { Text("Harga Beli (Rp)") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
 
-                        // Real-time margin calculator
-                        val jual = newProdPrice.toDoubleOrNull() ?: 0.0
-                        val beli = newProdCostPrice.toDoubleOrNull() ?: 0.0
-                        val margin = if (jual > 0) ((jual - beli) / jual) * 100 else 0.0
-                        Text(
-                            text = "Margin Keuntungan: ${String.format("%.1f", margin)}%",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (margin >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(vertical = 2.dp)
-                        )
+                            // Real-time margin calculator
+                            val jual = newProdPrice.toDoubleOrNull() ?: 0.0
+                            val beli = newProdCostPrice.toDoubleOrNull() ?: 0.0
+                            val margin = if (jual > 0) ((jual - beli) / jual) * 100 else 0.0
+                            Text(
+                                text = "Margin Keuntungan: ${String.format("%.1f", margin)}%",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (margin >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(vertical = 2.dp)
+                            )
+                        }
 
                         OutlinedTextField(
                             value = newProdStock,
@@ -1203,14 +1251,79 @@ fun PosScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
 
-                        // Variants Input UI
-                        OutlinedTextField(
-                            value = newProdVariants,
-                            onValueChange = { newProdVariants = it },
-                            label = { Text("Varian (Pisahkan dengan koma, contoh: Pedas, Sedang)") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        // Variants Input UI Redesign
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        ) {
+                            androidx.compose.material3.Checkbox(
+                                checked = newProdVariantsEnabled,
+                                onCheckedChange = { enabled ->
+                                    newProdVariantsEnabled = enabled
+                                    if (enabled && newProdVariantsList.isEmpty()) {
+                                        newProdVariantsList.add(EditableVariant())
+                                    }
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Memiliki Varian Produk", fontWeight = FontWeight.SemiBold)
+                        }
+
+                        if (newProdVariantsEnabled) {
+                            Text("Varian Produk (Maksimal 7 Varian)", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                            newProdVariantsList.forEachIndexed { index, variant ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    OutlinedTextField(
+                                        value = variant.name,
+                                        onValueChange = { nameVal ->
+                                            newProdVariantsList[index] = variant.copy(name = nameVal)
+                                        },
+                                        label = { Text("Nama Varian") },
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1.5f)
+                                    )
+                                    OutlinedTextField(
+                                        value = variant.price,
+                                        onValueChange = { priceVal ->
+                                            newProdVariantsList[index] = variant.copy(price = priceVal)
+                                        },
+                                        label = { Text("Harga") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    OutlinedTextField(
+                                        value = variant.costPrice,
+                                        onValueChange = { costVal ->
+                                            newProdVariantsList[index] = variant.copy(costPrice = costVal)
+                                        },
+                                        label = { Text("HPP") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    IconButton(
+                                        onClick = { newProdVariantsList.removeAt(index) }
+                                    ) {
+                                        Icon(Icons.Outlined.Delete, contentDescription = "Hapus Varian", tint = MaterialTheme.colorScheme.error)
+                                    }
+                                }
+                            }
+                            if (newProdVariantsList.size < 7) {
+                                TextButton(
+                                    onClick = { newProdVariantsList.add(EditableVariant()) },
+                                    modifier = Modifier.align(Alignment.Start)
+                                ) {
+                                    Icon(Icons.Outlined.Add, contentDescription = "Tambah Varian")
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Tambah Varian (+)")
+                                }
+                            }
+                        }
 
                         // Wholesale Input UI
                         Row(
@@ -1399,8 +1512,16 @@ fun PosScreen(
                 confirmButton = {
                     Button(
                         onClick = {
-                            val price = newProdPrice.toDoubleOrNull() ?: 0.0
-                            val costPrice = newProdCostPrice.toDoubleOrNull() ?: 0.0
+                            val price = if (newProdVariantsEnabled) {
+                                newProdVariantsList.firstOrNull()?.price?.toDoubleOrNull() ?: 0.0
+                            } else {
+                                newProdPrice.toDoubleOrNull() ?: 0.0
+                            }
+                            val costPrice = if (newProdVariantsEnabled) {
+                                newProdVariantsList.firstOrNull()?.costPrice?.toDoubleOrNull() ?: 0.0
+                            } else {
+                                newProdCostPrice.toDoubleOrNull() ?: 0.0
+                            }
                             val stock = newProdStock.toIntOrNull() ?: 0
                             val minStock = newProdMinStockAlert.toIntOrNull() ?: 0
                             if (newProdName.isNotBlank() && price > 0) {
@@ -1416,7 +1537,7 @@ fun PosScreen(
                                     wholesaleEnabled = newProdWholesaleEnabled,
                                     wholesalePrice = newProdWholesalePrice.toDoubleOrNull() ?: 0.0,
                                     minWholesaleQty = newProdMinWholesaleQty.toIntOrNull() ?: 0,
-                                    variants = convertVariantsStringToJsons(newProdVariants),
+                                    variants = if (newProdVariantsEnabled) convertVariantsListToJsons(newProdVariantsList) else null,
                                     costPriceBreakdown = serializeHppComponents(newProdHppComponents),
                                     defaultDailyTarget = newProdDefaultDailyTarget.toIntOrNull() ?: 0
                                 ) {
@@ -1451,22 +1572,24 @@ fun PosScreen(
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
-                        OutlinedTextField(
-                            value = editProdPrice,
-                            onValueChange = { editProdPrice = it },
-                            label = { Text("Harga Jual (Rp)") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        OutlinedTextField(
-                            value = editProdCostPrice,
-                            onValueChange = { editProdCostPrice = it },
-                            label = { Text("Harga Beli (Rp)") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        if (!editProdVariantsEnabled) {
+                            OutlinedTextField(
+                                value = editProdPrice,
+                                onValueChange = { editProdPrice = it },
+                                label = { Text("Harga Jual (Rp)") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            OutlinedTextField(
+                                value = editProdCostPrice,
+                                onValueChange = { editProdCostPrice = it },
+                                label = { Text("Harga Beli (Rp)") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
 
                         // HPP Components Edit UI
                         Text("Komponen HPP (Harga Pokok Penjualan)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
@@ -1568,17 +1691,19 @@ fun PosScreen(
                             }
                         }
 
-                        // Real-time margin calculator
-                        val jual = editProdPrice.toDoubleOrNull() ?: 0.0
-                        val beli = editProdCostPrice.toDoubleOrNull() ?: 0.0
-                        val margin = if (jual > 0) ((jual - beli) / jual) * 100 else 0.0
-                        Text(
-                            text = "Margin Keuntungan: ${String.format("%.1f", margin)}%",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (margin >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                            modifier = Modifier.padding(vertical = 2.dp)
-                        )
+                        if (!editProdVariantsEnabled) {
+                            // Real-time margin calculator
+                            val jual = editProdPrice.toDoubleOrNull() ?: 0.0
+                            val beli = editProdCostPrice.toDoubleOrNull() ?: 0.0
+                            val margin = if (jual > 0) ((jual - beli) / jual) * 100 else 0.0
+                            Text(
+                                text = "Margin Keuntungan: ${String.format("%.1f", margin)}%",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (margin >= 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(vertical = 2.dp)
+                            )
+                        }
 
                         OutlinedTextField(
                             value = editProdStock,
@@ -1610,6 +1735,80 @@ fun PosScreen(
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
+
+                        // Variants Input UI Redesign (Edit Dialog)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        ) {
+                            androidx.compose.material3.Checkbox(
+                                checked = editProdVariantsEnabled,
+                                onCheckedChange = { enabled ->
+                                    editProdVariantsEnabled = enabled
+                                    if (enabled && editProdVariantsList.isEmpty()) {
+                                        editProdVariantsList.add(EditableVariant())
+                                    }
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Memiliki Varian Produk", fontWeight = FontWeight.SemiBold)
+                        }
+
+                        if (editProdVariantsEnabled) {
+                            Text("Varian Produk (Maksimal 7 Varian)", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                            editProdVariantsList.forEachIndexed { index, variant ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    OutlinedTextField(
+                                        value = variant.name,
+                                        onValueChange = { nameVal ->
+                                            editProdVariantsList[index] = variant.copy(name = nameVal)
+                                        },
+                                        label = { Text("Nama Varian") },
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1.5f)
+                                    )
+                                    OutlinedTextField(
+                                        value = variant.price,
+                                        onValueChange = { priceVal ->
+                                            editProdVariantsList[index] = variant.copy(price = priceVal)
+                                        },
+                                        label = { Text("Harga") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    OutlinedTextField(
+                                        value = variant.costPrice,
+                                        onValueChange = { costVal ->
+                                            editProdVariantsList[index] = variant.copy(costPrice = costVal)
+                                        },
+                                        label = { Text("HPP") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        singleLine = true,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    IconButton(
+                                        onClick = { editProdVariantsList.removeAt(index) }
+                                    ) {
+                                        Icon(Icons.Outlined.Delete, contentDescription = "Hapus Varian", tint = MaterialTheme.colorScheme.error)
+                                    }
+                                }
+                            }
+                            if (editProdVariantsList.size < 7) {
+                                TextButton(
+                                    onClick = { editProdVariantsList.add(EditableVariant()) },
+                                    modifier = Modifier.align(Alignment.Start)
+                                ) {
+                                    Icon(Icons.Outlined.Add, contentDescription = "Tambah Varian")
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Tambah Varian (+)")
+                                }
+                            }
+                        }
 
                         // Camera & Image Section
                         if (capturedPhotoFile != null) {
@@ -1710,8 +1909,16 @@ fun PosScreen(
                 confirmButton = {
                     Button(
                         onClick = {
-                            val price = editProdPrice.toDoubleOrNull() ?: 0.0
-                            val costPrice = editProdCostPrice.toDoubleOrNull() ?: 0.0
+                            val price = if (editProdVariantsEnabled) {
+                                editProdVariantsList.firstOrNull()?.price?.toDoubleOrNull() ?: 0.0
+                            } else {
+                                editProdPrice.toDoubleOrNull() ?: 0.0
+                            }
+                            val costPrice = if (editProdVariantsEnabled) {
+                                editProdVariantsList.firstOrNull()?.costPrice?.toDoubleOrNull() ?: 0.0
+                            } else {
+                                editProdCostPrice.toDoubleOrNull() ?: 0.0
+                            }
                             val stock = editProdStock.toIntOrNull() ?: 0
                             val minStock = editProdMinStockAlert.toIntOrNull() ?: 0
                             if (editProdName.isNotBlank() && price > 0) {
@@ -1730,7 +1937,7 @@ fun PosScreen(
                                     wholesaleEnabled = editProdWholesaleEnabled,
                                     wholesalePrice = editProdWholesalePrice.toDoubleOrNull() ?: 0.0,
                                     minWholesaleQty = editProdMinWholesaleQty.toIntOrNull() ?: 0,
-                                    variants = convertVariantsStringToJsons(editProdVariants),
+                                    variants = if (editProdVariantsEnabled) convertVariantsListToJsons(editProdVariantsList) else null,
                                     costPriceBreakdown = serializeHppComponents(editProdHppComponents),
                                     defaultDailyTarget = editProdDefaultDailyTarget.toIntOrNull() ?: 0
                                 ) {

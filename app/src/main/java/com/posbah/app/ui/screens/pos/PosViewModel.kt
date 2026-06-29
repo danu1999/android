@@ -47,6 +47,7 @@ data class CartItem(
     val variantId: Long? = null,
     val variantName: String? = null,
     val variantPrice: Double? = null,
+    val variantCostPrice: Double? = null,
     val quantity: Int = 1,
     val discount: Double = 0.0,
     val note: String? = null
@@ -335,6 +336,7 @@ class PosViewModel @Inject constructor(
                     variantId = variant?.id,
                     variantName = variant?.name,
                     variantPrice = variant?.price,
+                    variantCostPrice = variant?.costPrice,
                     quantity = 1
                 )
             )
@@ -477,7 +479,7 @@ class PosViewModel @Inject constructor(
                 variantName = it.variantName,
                 quantity = it.quantity,
                 price = getItemUnitPrice(it),
-                costPrice = it.product.costPrice,
+                costPrice = it.variantCostPrice ?: it.product.costPrice,
                 discount = it.discount,
                 note = it.note,
                 hppBreakdown = it.product.costPriceBreakdown
