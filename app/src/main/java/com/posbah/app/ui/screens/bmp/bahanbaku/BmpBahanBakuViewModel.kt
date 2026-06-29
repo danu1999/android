@@ -7,6 +7,8 @@ import com.posbah.app.data.local.entities.BmpBahanBakuEntity
 import com.posbah.app.data.local.entities.BmpBahanBakuItemEntity
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpBahanBakuRepository
+import com.posbah.app.data.repository.BmpCashFlowRepository
+import com.posbah.app.data.repository.BmpCashflowData
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,7 +26,8 @@ import kotlinx.coroutines.launch
 class BahanBakuListViewModel @Inject constructor(
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     private val repo: BmpBahanBakuRepository,
-    private val authRepo: AuthRepository
+    private val authRepo: AuthRepository,
+    private val cashFlowRepo: BmpCashFlowRepository
 ) : ViewModel() {
     private val tenantId = authRepo.activeTenantId().orEmpty()
 
@@ -148,6 +151,48 @@ class BahanBakuListViewModel @Inject constructor(
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+        }
+    }
+
+    fun recordAfvalRecycling(jenisBahan: String, beratKg: Double, biayaGiling: Double) = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        if (beratKg <= 0 || biayaGiling <= 0 || jenisBahan.isBlank()) return@launch
+        try {
+            val rate = biayaGiling / beratKg
+            
+            // 1. Catat kas keluar (FACTORY_OVERHEAD)
+            cashFlowRepo.createEntry(
+                BmpCashflowData(
+                    tenantId = tenantId,
+                    transactionDate = System.currentTimeMillis(),
+                    transactionType = "KELUAR",
+                    description = "Jasa Giling Afval ($jenisBahan gilingan, $beratKg Kg)",
+                    amount = biayaGiling,
+                    costType = "FACTORY_OVERHEAD"
+                )
+            )
+
+            // 2. Tambah stok bahan baku masuk
+            val bahanBaku = com.posbah.app.data.repository.BmpBahanBakuData(
+                id = 0,
+                tenantId = tenantId,
+                tanggal = System.currentTimeMillis(),
+                noTagihan = "AFVAL-GILING-${System.currentTimeMillis() / 1000}",
+                supplier = "Daur Ulang Internal (Afval)",
+                totalHarga = biayaGiling,
+                nominal = biayaGiling,
+                notes = "Hasil Daur Ulang Afval $jenisBahan"
+            )
+            val item = com.posbah.app.data.repository.BmpBahanBakuItemData(
+                id = 0,
+                bahanBakuId = 0,
+                jenisBahan = jenisBahan,
+                kuantitas = beratKg,
+                rate = rate
+            )
+            repo.create(bahanBaku, listOf(item))
+            repo.refresh()
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 }

@@ -1233,6 +1233,36 @@ func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
 	`, tenantId, startMs, endMs).Scan(&opex)
 	if err != nil { jsonErr(w, 500, err.Error()); return }
 
+	var depreciation float64
+	if periodType == "MONTHLY" {
+		_ = db.QueryRow(`
+			SELECT COALESCE(SUM(amount), 0.0) 
+			FROM bmp_monthly_depreciation 
+			WHERE "tenantId"=$1 AND period=$2
+		`, tenantId, dateStr).Scan(&depreciation)
+	} else if periodType == "QUARTERLY" {
+		parts := strings.Split(dateStr, "-Q")
+		year := parts[0]
+		quarter, _ := strconv.Atoi(parts[1])
+		var months []string
+		for m := (quarter-1)*3 + 1; m <= quarter*3; m++ {
+			months = append(months, fmt.Sprintf("'%s-%02d'", year, m))
+		}
+		qStr := fmt.Sprintf(`
+			SELECT COALESCE(SUM(amount), 0.0) 
+			FROM bmp_monthly_depreciation 
+			WHERE "tenantId"=$1 AND period IN (%s)
+		`, strings.Join(months, ","))
+		_ = db.QueryRow(qStr, tenantId).Scan(&depreciation)
+	} else { // ANNUALLY
+		_ = db.QueryRow(`
+			SELECT COALESCE(SUM(amount), 0.0) 
+			FROM bmp_monthly_depreciation 
+			WHERE "tenantId"=$1 AND period LIKE $2
+		`, tenantId, dateStr+"-%").Scan(&depreciation)
+	}
+
+	foh = foh + depreciation
 	cogm := directMaterials + directLabor + foh
 	labaKotor := omzet - cogs
 	labaBersih := labaKotor - opex
@@ -1294,6 +1324,7 @@ func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
 		"directLabor":      directLabor,
 		"foh":              foh,
 		"cogm":             cogm,
+		"depreciation":     depreciation,
 	}
 
 	jsonOK(w, response)
@@ -1486,4 +1517,57 @@ func handleRtBmpSuppliers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	jsonOK(w, list)
+}
+
+func handleRtBmpDepreciation(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+
+	if r.Method == http.MethodGet {
+		period := r.URL.Query().Get("period")
+		if period == "" {
+			jsonErr(w, 400, "period is required")
+			return
+		}
+		var amount float64
+		err := db.QueryRow(`
+			SELECT COALESCE(amount, 0.0) 
+			FROM bmp_monthly_depreciation 
+			WHERE "tenantId"=$1 AND period=$2
+		`, tenantId, period).Scan(&amount)
+		if err != nil {
+			jsonOK(w, map[string]interface{}{"amount": 0.0})
+			return
+		}
+		jsonOK(w, map[string]interface{}{"amount": amount})
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid body")
+			return
+		}
+		period, _ := body["period"].(string)
+		amountVal, _ := body["amount"].(float64)
+		if period == "" {
+			jsonErr(w, 400, "period is required")
+			return
+		}
+
+		_, err := db.Exec(`
+			INSERT INTO bmp_monthly_depreciation ("tenantId", "period", "amount", "updatedAt")
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT ("tenantId", "period") DO UPDATE SET "amount"=$3, "updatedAt"=$4
+		`, tenantId, period, amountVal, time.Now().UnixNano()/1e6)
+		if err != nil {
+			jsonErr(w, 500, err.Error())
+			return
+		}
+		jsonOK(w, map[string]interface{}{"success": true})
+		return
+	}
+
+	jsonErr(w, 405, "method not allowed")
 }

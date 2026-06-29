@@ -916,6 +916,14 @@ func initSchema() error {
 			"updatedAt" BIGINT,
 			CONSTRAINT "uniq_rm_stock_period" UNIQUE ("tenantId", "jenisBahan", "period")
 		);`,
+		`CREATE TABLE IF NOT EXISTS "bmp_monthly_depreciation" (
+			"id" SERIAL PRIMARY KEY,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"period" VARCHAR(50) NOT NULL,
+			"amount" DOUBLE PRECISION DEFAULT 0.0,
+			"updatedAt" BIGINT,
+			CONSTRAINT "uniq_depreciation_period" UNIQUE ("tenantId", "period")
+		);`,
 	}
 	for _, q := range manufakturMigrations {
 		if _, err := db.Exec(q); err != nil {

@@ -102,6 +102,11 @@ fun BahanBakuListScreen(
     var globalPaySupplier by remember { mutableStateOf("") }
     var globalPaySupplierDropdownExpanded by remember { mutableStateOf(false) }
 
+    var showAfvalDialog by remember { mutableStateOf(false) }
+    var afvalBahan by remember { mutableStateOf("") }
+    var afvalBerat by remember { mutableStateOf("") }
+    var afvalBiaya by remember { mutableStateOf("") }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -177,6 +182,24 @@ fun BahanBakuListScreen(
                     Icon(imageVector = Icons.Outlined.Payments, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
                     Text("Bayar Global (TF/Cash)", fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = {
+                        showAfvalDialog = true
+                        afvalBahan = ""
+                        afvalBerat = ""
+                        afvalBiaya = ""
+                    },
+                    modifier = Modifier.fillMaxWidth().testTag("btn-afval-bb"),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                ) {
+                    Icon(imageVector = Icons.Outlined.Science, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Catat Giling Afval (Daur Ulang)", fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -447,6 +470,63 @@ fun BahanBakuListScreen(
         BahanBakuCalendarDialog(
             viewModel = viewModel,
             onDismiss = { showCalendarDialog = false }
+        )
+    }
+
+    if (showAfvalDialog) {
+        AlertDialog(
+            onDismissRequest = { showAfvalDialog = false },
+            title = { Text("Catat Jasa Giling Afval") },
+            text = {
+                Column {
+                    Text("Catat masuk bahan baku hasil gilingan limbah produksi (afval) beserta biaya jasa gilingnya.", style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = afvalBahan,
+                        onValueChange = { afvalBahan = it },
+                        label = { Text("Jenis Bahan Baku (e.g. PP Giling)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("afval-bahan")
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = afvalBerat,
+                        onValueChange = { afvalBerat = it },
+                        label = { Text("Berat Bersih Giling (Kg)") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth().testTag("afval-berat")
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = afvalBiaya,
+                        onValueChange = { afvalBiaya = it },
+                        label = { Text("Biaya Jasa Giling (Total Rp)") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth().testTag("afval-biaya")
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val berat = afvalBerat.replace(",", ".").toDoubleOrNull() ?: 0.0
+                        val biaya = afvalBiaya.replace(",", ".").toDoubleOrNull() ?: 0.0
+                        if (afvalBahan.isNotBlank() && berat > 0 && biaya > 0) {
+                            viewModel.recordAfvalRecycling(afvalBahan, berat, biaya)
+                            showAfvalDialog = false
+                            android.widget.Toast.makeText(context, "Berhasil mencatat daur ulang afval!", android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            android.widget.Toast.makeText(context, "Mohon lengkapi semua kolom dengan benar!", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.testTag("btn-confirm-afval")
+                ) { Text("Simpan", fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAfvalDialog = false }) { Text("Batal") }
+            }
         )
     }
 }

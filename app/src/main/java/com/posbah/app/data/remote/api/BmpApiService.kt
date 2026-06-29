@@ -186,4 +186,14 @@ interface BmpApiService {
         @Query("periodType") periodType: String,
         @Query("date") date: String
     ): Response<okhttp3.ResponseBody>
+
+    @GET("api/rt/bmp/reports/depreciation")
+    suspend fun getDepreciation(
+        @Query("period") period: String
+    ): Response<Map<String, Any?>>
+
+    @POST("api/rt/bmp/reports/depreciation")
+    suspend fun saveDepreciation(
+        @Body body: Map<String, Any?>
+    ): Response<Map<String, Any?>>
 }

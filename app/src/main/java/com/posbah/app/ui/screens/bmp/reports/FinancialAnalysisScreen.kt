@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -67,6 +69,7 @@ data class FinancialReportUiState(
     val directLabor: Double = 0.0,
     val foh: Double = 0.0,
     val cogm: Double = 0.0,
+    val depreciation: Double = 0.0,
     val isLoading: Boolean = false,
     val error: String? = null
 )
@@ -173,6 +176,7 @@ class FinancialAnalysisViewModel @Inject constructor(
                         directLabor = (body["directLabor"] as? Number)?.toDouble() ?: 0.0,
                         foh = (body["foh"] as? Number)?.toDouble() ?: 0.0,
                         cogm = (body["cogm"] as? Number)?.toDouble() ?: 0.0,
+                        depreciation = (body["depreciation"] as? Number)?.toDouble() ?: 0.0,
                         isLoading = false
                     )
                 }
@@ -182,6 +186,18 @@ class FinancialAnalysisViewModel @Inject constructor(
         } catch (e: Exception) {
             e.printStackTrace()
             _uiState.update { it.copy(isLoading = false, error = e.localizedMessage ?: "Terjadi kesalahan jaringan.") }
+        }
+    }
+
+    fun saveDepreciation(amount: Double) = viewModelScope.launch {
+        try {
+            val period = _uiState.value.date
+            val resp = api.saveDepreciation(mapOf("period" to period, "amount" to amount))
+            if (resp.isSuccessful) {
+                fetchReport()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
@@ -231,6 +247,9 @@ fun FinancialAnalysisScreen(
     viewModel: FinancialAnalysisViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
+
+    var showDepreciationDialog by remember { mutableStateOf(false) }
+    var editDepreciationValue by remember { mutableStateOf("") }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -466,7 +485,45 @@ fun FinancialAnalysisScreen(
                             
                             ReportLine("Bahan Baku Langsung Terpakai", Formatters.rupiah(state.directMaterials))
                             ReportLine("Tenaga Kerja Langsung", Formatters.rupiah(state.directLabor))
-                            ReportLine("Overhead Pabrik (FOH)", Formatters.rupiah(state.foh))
+                            
+                            val overheadKas = state.foh - state.depreciation
+                            ReportLine("Overhead Kas (Listrik/Oli dll)", Formatters.rupiah(overheadKas))
+                            
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Penyusutan Mesin (Manual)",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = Formatters.rupiah(state.depreciation),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Normal,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        text = "Ubah",
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier
+                                            .clickable {
+                                                editDepreciationValue = if (state.depreciation <= 0.0) "" else state.depreciation.toLong().toString()
+                                                showDepreciationDialog = true
+                                            }
+                                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                            
                             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                             ReportLine(
                                 label = "TOTAL HARGA POKOK PRODUKSI", 
@@ -523,6 +580,40 @@ fun FinancialAnalysisScreen(
                 }
             }
         }
+    }
+
+    if (showDepreciationDialog) {
+        AlertDialog(
+            onDismissRequest = { showDepreciationDialog = false },
+            title = { Text("Ubah Penyusutan Mesin") },
+            text = {
+                Column {
+                    Text("Masukkan total nilai penyusutan mesin untuk periode ${state.periodLabel}.", style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = editDepreciationValue,
+                        onValueChange = { editDepreciationValue = it },
+                        label = { Text("Penyusutan (Rp)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("input-depreciation-amount")
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val value = editDepreciationValue.replace(",", ".").toDoubleOrNull() ?: 0.0
+                        viewModel.saveDepreciation(value)
+                        showDepreciationDialog = false
+                    },
+                    modifier = Modifier.testTag("btn-confirm-depreciation")
+                ) { Text("Simpan", fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDepreciationDialog = false }) { Text("Batal") }
+            }
+        )
     }
 }
 

@@ -1,3 +1,13 @@
+POSBah v2.19.0 - Penyusutan Mesin & Daur Ulang Afval
+
+Halo Kak! POSBah v2.19.0 kini hadir dengan penyempurnaan laporan keuangan manufaktur:
+1. Penyusutan Mesin (Depreciation): Input manual biaya penyusutan mesin langsung di halaman Analisis Keuangan untuk dialokasikan otomatis ke FOH dan Harga Pokok Produksi (COGM).
+2. Daur Ulang Afval (Jasa Giling): Catat masuk bahan baku sekunder dari daur ulang limbah produksi (afval) beserta biaya jasa gilingnya secara otomatis ke FOH.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.18.9 - Analisis Keuangan Standar Akuntansi Manufaktur & Arus Kas
 
 Halo Kak! POSBah v2.18.9 kini hadir dengan pembaruan fitur untuk mengelola laporan keuangan industri manufaktur:
@@ -6,12 +16,3 @@ Halo Kak! POSBah v2.18.9 kini hadir dengan pembaruan fitur untuk mengelola lapor
 3. Kategori Gaji Karyawan: Karyawan kini dapat dikategorikan menjadi Buruh Langsung, Buruh Overhead, atau Non-Produksi untuk perhitungan upah yang lebih akurat.
 
 Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
-
----
-
-POSBah v2.18.8 - Desain Varian Baru & HPP per Varian POS FnB
-
-Halo Kak! POSBah v2.18.8 kini hadir dengan pembaruan fitur baru untuk mempermudah operasional Anda:
-1. Redesign Varian Produk POS FnB: Sekarang Anda dapat menambahkan hingga maksimal 7 varian produk secara dinamis langsung dari dialog Tambah & Edit Produk.
-2. Input HPP Per Varian: Setiap varian kini memiliki input HPP (Harga Pokok Penjualan) tersendiri. Laporan keuangan dihitung lebih akurat berdasarkan varian spesifik.
-3. Pembersihan Form: Kolom harga jual & HPP utama disembunyikan jika varian aktif.
