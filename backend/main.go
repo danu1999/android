@@ -5360,7 +5360,14 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html")
-	w.Write([]byte(landingHtmlPage))
+	
+	version := "2.19.3" // default fallback
+	if db != nil {
+		_ = db.QueryRow(`SELECT "version" FROM "apk_config" WHERE "id" = 1`).Scan(&version)
+	}
+	
+	html := strings.ReplaceAll(landingHtmlPage, "v2.0.3", "v"+version)
+	w.Write([]byte(html))
 }
 
 const landingHtmlPage = `<!DOCTYPE html>
