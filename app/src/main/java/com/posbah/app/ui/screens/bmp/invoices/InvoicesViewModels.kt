@@ -247,8 +247,9 @@ class InvoiceDetailViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            val settings = settingsRepo.get(tenantId)
-            _ui.update { it.copy(settings = settings) }
+            settingsRepo.observe(tenantId).collect { settings ->
+                _ui.update { it.copy(settings = settings) }
+            }
         }
         viewModelScope.launch {
             printSettingsRepo.observe(tenantId, "BMP").collect { printSettings ->

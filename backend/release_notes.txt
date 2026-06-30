@@ -1,3 +1,13 @@
+POSBah v2.19.4 - Pembaruan Profil & Cetak Dinamis
+
+Halo Kak! POSBah v2.19.4 kini hadir dengan perbaikan sistem profil & sinkronisasi cetak:
+1. Perbaikan Simpan Profil: Pengaturan dan profil kini berhasil disimpan dengan sukses walaupun kolom NPWP dikosongkan.
+2. Kop Cetak Dinamis (Invoice, Surat Jalan & JPG): Nama, alamat, telepon, dan email pada kop dokumen cetak Invoice PDF, Surat Jalan PDF, dan Ekspor JPG kini sepenuhnya mengikuti data yang Anda simpan di Pengaturan Profil (baik di Web maupun di APK Android).
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.3 - Pembaruan Tampilan Kolom Cetak Invoice & JPG
 
 Halo Kak! POSBah v2.19.3 kini hadir dengan penyempurnaan format kolom pada Invoice:
@@ -7,6 +17,7 @@ Halo Kak! POSBah v2.19.3 kini hadir dengan penyempurnaan format kolom pada Invoi
 Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
 
 ---
+
 
 POSBah v2.19.2 - Pembaruan Ekspor & Cetak JPG Portrait
 

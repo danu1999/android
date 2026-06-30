@@ -995,12 +995,42 @@ func handleRtBmpSettings(w http.ResponseWriter, r *http.Request) {
 		rows, _ := db.Query(`SELECT * FROM bmp_settings WHERE "tenantId"=$1 LIMIT 1`, tenantId)
 		defer rows.Close()
 		result := rowsToJSON(rows)
-		if len(result) > 0 { jsonOK(w, result[0]) } else { jsonOK(w, nil) }
+		if len(result) > 0 {
+			res := result[0]
+			// Map DB keys to app keys
+			if val, ok := res["clientName"]; ok { res["companyName"] = val }
+			if val, ok := res["clientLogo"]; ok { res["logoUrl"] = val }
+			if val, ok := res["addressLine1"]; ok { res["address"] = val }
+			if val, ok := res["phoneNumber"]; ok { res["phone"] = val }
+			if val, ok := res["emailAddress"]; ok { res["email"] = val }
+			if val, ok := res["taxNumber"]; ok { res["npwp"] = val }
+			jsonOK(w, res)
+		} else {
+			jsonOK(w, nil)
+		}
 	case http.MethodPost:
 		var body map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&body); body["tenantId"] = tenantId; body["updatedAt"] = nowMillis()
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid JSON: " + err.Error())
+			return
+		}
+		body["tenantId"] = tenantId
+		body["updatedAt"] = nowMillis()
+
+		// Map app keys to DB keys
+		if val, ok := body["companyName"]; ok { body["clientName"] = val; delete(body, "companyName") }
+		if val, ok := body["logoUrl"]; ok { body["clientLogo"] = val; delete(body, "logoUrl") }
+		if val, ok := body["address"]; ok { body["addressLine1"] = val; delete(body, "address") }
+		if val, ok := body["phone"]; ok { body["phoneNumber"] = val; delete(body, "phone") }
+		if val, ok := body["email"]; ok { body["emailAddress"] = val; delete(body, "email") }
+		if val, ok := body["npwp"]; ok { body["taxNumber"] = val; delete(body, "npwp") }
+
 		db.Exec(`DELETE FROM bmp_settings WHERE "tenantId"=$1`, tenantId)
-		insertRow("bmp_settings", body)
+		_, err := insertRow("bmp_settings", body)
+		if err != nil {
+			jsonErr(w, 500, "failed to save settings: " + err.Error())
+			return
+		}
 		jsonOK(w, map[string]interface{}{"ok": true})
 	default:
 		jsonErr(w, 405, "method not allowed")

@@ -2622,9 +2622,31 @@ class BmpSettingsRepository @Inject constructor(
                 "biayaKarungPer1000" to settings.biayaKarungPer1000,
                 "hoursPerDay" to settings.hoursPerDay
             ))
+            
+            // Update the cached flow immediately on success
+            _settings.value = com.posbah.app.data.local.entities.BmpSettingsEntity(
+                id = settings.id,
+                tenantId = settings.tenantId,
+                clientName = settings.companyName,
+                clientLogo = settings.logoUrl,
+                addressLine1 = settings.address,
+                phoneNumber = settings.phone,
+                emailAddress = settings.email,
+                taxNumber = settings.npwp,
+                listrikBulanan = settings.listrikBulanan,
+                jumlahMesin = settings.jumlahMesin,
+                jumlahKaryawan = settings.jumlahKaryawan,
+                gajiHarian = settings.gajiHarian,
+                hariKerjaSebulan = settings.hariKerjaSebulan,
+                biayaKarungPer1000 = settings.biayaKarungPer1000,
+                hoursPerDay = settings.hoursPerDay,
+                updatedAt = settings.updatedAt
+            )
+            
             OnlineWriteResult.Success
         } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal simpan settings") }
     }
+
 
     fun observe(tenantId: String): Flow<com.posbah.app.data.local.entities.BmpSettingsEntity?> = settings
 

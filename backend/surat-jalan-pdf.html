@@ -82,11 +82,12 @@
         <tr>
             <td style="width: 60%; vertical-align: top; text-align: left; padding-left: 0;">
                 <h1 style="margin: 0; color: #000000; font-size: 14px; line-height: 1.1; font-weight: bold;">
-                    CV. Bahtera Mulya Plastik
+                    {{ if .Settings.ClientName }}{{ .Settings.ClientName }}{{ else }}CV. Bahtera Mulya Plastik{{ end }}
                 </h1>
                 <p style="margin: 3px 0 1px 0; font-size: 9px; color: #333333;">
-                    Jl. Arimbi, RT04 RW 01 Desa Ngrimbi
+                    {{ if .Settings.AddressLine1 }}{{ .Settings.AddressLine1 }}{{ else }}Jl. Arimbi, RT04 RW 01 Desa Ngrimbi{{ end }}
                 </p>
+
                 <p style="margin: 1px 0; font-size: 9px; color: #333333;">
                     Telp: {{ .Settings.PhoneNumber }} | Email: {{ .Settings.EmailAddress }}
                 </p>

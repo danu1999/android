@@ -15,6 +15,7 @@ let invoices = [];
 let clients = [];
 let bmpProducts = [];
 let printSettings = null;
+let bmpSettings = null;
 let currentInvoice = null;
 
 // Auth Check & Initialize
@@ -294,6 +295,16 @@ async function refreshData() {
 
                 const resBmpProducts = await fetch(`${BASE_URL}/api/sync/bmp_products?tenantId=eq.${tenantId}`, { headers });
                 bmpProducts = resBmpProducts.ok ? await resBmpProducts.json() : [];
+
+                // Fetch BMP Settings
+                try {
+                    const resBmpSettings = await fetch(`${BASE_URL}/api/rt/bmp/settings`, { headers });
+                    if (resBmpSettings.ok) {
+                        bmpSettings = await resBmpSettings.json();
+                    }
+                } catch (se) {
+                    console.error("Gagal menarik BMP settings:", se);
+                }
 
                 renderInvoicesList();
             } catch (be) {
@@ -1506,6 +1517,11 @@ function triggerInvoicePrint() {
         `;
     }
 
+    const compName = bmpSettings ? (bmpSettings.companyName || bmpSettings.clientName || "CV. Bahtera Mulya Plastik") : "CV. Bahtera Mulya Plastik";
+    const compAddress = bmpSettings ? (bmpSettings.address || bmpSettings.addressLine1 || "Jl. Arimbi, RT04 RW 01 Desa Ngrimbi") : "Jl. Arimbi, RT04 RW 01 Desa Ngrimbi";
+    const compPhone = bmpSettings ? (bmpSettings.phone || bmpSettings.phoneNumber || "082652626237") : "082652626237";
+    const compEmail = bmpSettings ? (bmpSettings.email || bmpSettings.emailAddress || "bahteramulyap@gmail.com") : "bahteramulyap@gmail.com";
+
     const printHtml = `
         <style>
             ${sizeStyle}
@@ -1571,9 +1587,9 @@ function triggerInvoicePrint() {
         <table class="header-table">
             <tr>
                 <td style="vertical-align: top; text-align: left;">
-                    <span class="company-name">CV. Bahtera Mulya Plastik</span><br>
-                    Sidoarjo, Jawa Timur<br>
-                    Telp: 082652626237 | Email: bahteramulyap@gmail.com
+                    <span class="company-name">${compName}</span><br>
+                    ${compAddress}<br>
+                    Telp: ${compPhone} | Email: ${compEmail}
                 </td>
                 <td style="text-align: right; vertical-align: top; line-height: 1.4; font-size: 13px; color: #000;">
                     <span class="doc-title">FAKTUR</span><br>
@@ -1796,6 +1812,10 @@ function triggerSjPrint() {
         `;
     }
 
+    const compName = bmpSettings ? (bmpSettings.companyName || bmpSettings.clientName || "CV. Bahtera Mulya Plastik") : "CV. Bahtera Mulya Plastik";
+    const compAddress = bmpSettings ? (bmpSettings.address || bmpSettings.addressLine1 || "Jl. Arimbi, RT04 RW 01 Desa Ngrimbi") : "Jl. Arimbi, RT04 RW 01 Desa Ngrimbi";
+    const compPhone = bmpSettings ? (bmpSettings.phone || bmpSettings.phoneNumber || "082652626237") : "082652626237";
+
     const printHtml = `
         <style>
             ${sizeStyle}
@@ -1852,9 +1872,9 @@ function triggerSjPrint() {
         <table class="header-table">
             <tr>
                 <td style="vertical-align: top; text-align: left;">
-                    <span class="company-name">CV. Bahtera Mulya Plastik</span><br>
-                    Sidoarjo, Jawa Timur<br>
-                    Telp: 082652626237
+                    <span class="company-name">${compName}</span><br>
+                    ${compAddress}<br>
+                    Telp: ${compPhone}
                 </td>
                 <td style="text-align: right; vertical-align: top;">
                     <span class="doc-title">Surat Jalan</span><br>
