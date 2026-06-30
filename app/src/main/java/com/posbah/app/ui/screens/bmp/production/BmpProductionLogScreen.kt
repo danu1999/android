@@ -76,10 +76,15 @@ class BmpProductionLogViewModel @Inject constructor(
     init {
         if (tenantId.isNotBlank()) {
             viewModelScope.launch {
-                logRepo.loadAll(tenantId)
-                try {
-                    bahanBakuRepo.refresh()
-                } catch (_: Exception) {}
+                while (true) {
+                    try {
+                        logRepo.loadAll(tenantId)
+                        bahanBakuRepo.refresh()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                    kotlinx.coroutines.delay(12_000)
+                }
             }
         }
     }

@@ -107,12 +107,17 @@ class MasterProductsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
-            repo.refresh()
-            try {
-                val ratesMap = bahanBakuRepo.getLatestMaterialRates(tenantId)
-                _distinctMaterials.value = ratesMap.keys.toList()
-                _latestRates.value = ratesMap
-            } catch (_: Exception) {}
+            while (true) {
+                try {
+                    repo.refresh()
+                    val ratesMap = bahanBakuRepo.getLatestMaterialRates(tenantId)
+                    _distinctMaterials.value = ratesMap.keys.toList()
+                    _latestRates.value = ratesMap
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                kotlinx.coroutines.delay(12_000)
+            }
         }
     }
 

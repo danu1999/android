@@ -74,8 +74,15 @@ class BmpStockViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            try { stockRepo.refresh() } catch (_: Exception) {}
-            try { masterProductRepo.refresh() } catch (_: Exception) {}
+            while (true) {
+                try {
+                    stockRepo.refresh()
+                    masterProductRepo.refresh()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                kotlinx.coroutines.delay(12_000)
+            }
         }
     }
 

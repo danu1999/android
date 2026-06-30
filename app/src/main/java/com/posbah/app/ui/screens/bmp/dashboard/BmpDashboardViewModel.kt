@@ -42,6 +42,7 @@ data class BmpDashboardUiState(
     val tenantId: String? = null,
     val tenantName: String? = null,
     val ownerEmail: String? = null,
+    val role: String = "KASIR",
     val clientCount: Int = 0,
     val invoiceCount: Int = 0,
     val totalAmount: Double = 0.0,
@@ -81,8 +82,9 @@ class BmpDashboardViewModel @Inject constructor(
     init {
         val tenantId = authRepository.activeTenantId()
         val userEmail = authRepository.activeUserEmail()
+        val userRole = authRepository.getActiveSession()?.role ?: "KASIR"
         if (tenantId != null) {
-            _ui.value = _ui.value.copy(tenantId = tenantId, ownerEmail = userEmail, isLoading = false)
+            _ui.value = _ui.value.copy(tenantId = tenantId, ownerEmail = userEmail, role = userRole, isLoading = false)
             
             viewModelScope.launch {
                 try {

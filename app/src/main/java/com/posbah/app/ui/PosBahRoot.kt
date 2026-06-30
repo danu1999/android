@@ -296,11 +296,27 @@ fun PosBahRoot(
         }
 
         composable(Screen.BmpEmployees.route) {
-            EmployeesScreen(onBack = { nav.popBackStack() })
+            if (!viewModel.isOwner()) {
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    nav.navigate(Screen.BmpDashboard.route) {
+                        popUpTo(Screen.BmpDashboard.route) { inclusive = true }
+                    }
+                }
+            } else {
+                EmployeesScreen(onBack = { nav.popBackStack() })
+            }
         }
 
         composable(Screen.BmpPayroll.route) {
-            PayrollScreen(onBack = { nav.popBackStack() })
+            if (!viewModel.isOwner()) {
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    nav.navigate(Screen.BmpDashboard.route) {
+                        popUpTo(Screen.BmpDashboard.route) { inclusive = true }
+                    }
+                }
+            } else {
+                PayrollScreen(onBack = { nav.popBackStack() })
+            }
         }
 
         composable(Screen.BmpSettings.route) {
@@ -346,7 +362,15 @@ fun PosBahRoot(
         }
 
         composable(Screen.BmpFinancialReport.route) {
-            FinancialAnalysisScreen(onBack = { nav.popBackStack() })
+            if (!viewModel.isOwner()) {
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    nav.navigate(Screen.BmpDashboard.route) {
+                        popUpTo(Screen.BmpDashboard.route) { inclusive = true }
+                    }
+                }
+            } else {
+                FinancialAnalysisScreen(onBack = { nav.popBackStack() })
+            }
         }
 
         composable(Screen.AdminPanel.route) {

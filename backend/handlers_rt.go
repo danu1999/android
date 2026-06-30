@@ -43,7 +43,11 @@ func extractTenantId(r *http.Request) (string, bool) {
 					empIdStr := strings.TrimPrefix(token, "emp:")
 					err4 := db.QueryRow(`SELECT "tenantId" FROM "employees" WHERE id = $1 AND "isActive" = TRUE LIMIT 1`, empIdStr).Scan(&tenantId)
 					if err4 != nil {
-						return "", false
+						// Fallback: check bmp_employees table for BMP employees/supervisors
+						err5 := db.QueryRow(`SELECT "tenantId" FROM "bmp_employees" WHERE id = $1 AND "isActive" = TRUE LIMIT 1`, empIdStr).Scan(&tenantId)
+						if err5 != nil {
+							return "", false
+						}
 					}
 				} else {
 					return "", false
@@ -52,6 +56,28 @@ func extractTenantId(r *http.Request) (string, bool) {
 		}
 	}
 	return tenantId, tenantId != ""
+}
+
+func isOwnerToken(token string) bool {
+	if strings.HasPrefix(token, "emp:") {
+		return false
+	}
+	var count int
+	_ = db.QueryRow(`
+		SELECT COUNT(1) FROM "local_users" 
+		WHERE ("sessionToken" = $1 OR "googleSub" = $1 OR "email" = $1) 
+		  AND "isActive" = TRUE`, token).Scan(&count)
+	return count > 0
+}
+
+func checkOwnerOnly(w http.ResponseWriter, r *http.Request) bool {
+	authHeader := r.Header.Get("Authorization")
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	if !isOwnerToken(token) {
+		jsonErr(w, 403, "forbidden: owner access only")
+		return false
+	}
+	return true
 }
 
 func jsonOK(w http.ResponseWriter, data interface{}) {
@@ -757,6 +783,7 @@ func handleRtBmpPaymentsById(w http.ResponseWriter, r *http.Request) {
 func handleRtBmpEmployees(w http.ResponseWriter, r *http.Request) {
 	tenantId, ok := extractTenantId(r)
 	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	if !checkOwnerOnly(w, r) { return }
 	switch r.Method {
 	case http.MethodGet:
 		rows, _ := db.Query(`SELECT * FROM bmp_employees WHERE "tenantId"=$1 AND "isActive"=TRUE ORDER BY name ASC`, tenantId)
@@ -775,6 +802,7 @@ func handleRtBmpEmployees(w http.ResponseWriter, r *http.Request) {
 func handleRtBmpEmployeesById(w http.ResponseWriter, r *http.Request) {
 	tenantId, ok := extractTenantId(r)
 	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	if !checkOwnerOnly(w, r) { return }
 	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/bmp/employees/")
 	id, _ := strconv.ParseInt(idStr, 10, 64)
 	switch r.Method {
@@ -793,6 +821,7 @@ func handleRtBmpEmployeesById(w http.ResponseWriter, r *http.Request) {
 func handleRtBmpPayrolls(w http.ResponseWriter, r *http.Request) {
 	tenantId, ok := extractTenantId(r)
 	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	if !checkOwnerOnly(w, r) { return }
 	switch r.Method {
 	case http.MethodGet:
 		rows, _ := db.Query(`SELECT * FROM bmp_payrolls WHERE "tenantId"=$1 ORDER BY "paymentDate" DESC`, tenantId)
@@ -838,6 +867,7 @@ func handleRtBmpPayrolls(w http.ResponseWriter, r *http.Request) {
 func handleRtBmpPayrollsById(w http.ResponseWriter, r *http.Request) {
 	tenantId, ok := extractTenantId(r)
 	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	if !checkOwnerOnly(w, r) { return }
 	
 	parts := strings.Split(r.URL.Path, "/")
 	if len(parts) < 6 {
@@ -1249,6 +1279,7 @@ func handleRtProductTargetsById(w http.ResponseWriter, r *http.Request) {
 func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
 	tenantId, ok := extractTenantId(r)
 	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	if !checkOwnerOnly(w, r) { return }
 	
 	if r.Method != http.MethodGet {
 		jsonErr(w, 405, "method not allowed")

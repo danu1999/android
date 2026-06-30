@@ -33,10 +33,13 @@ class BahanBakuListViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            try {
-                repo.refresh()
-            } catch (e: Exception) {
-                e.printStackTrace()
+            while (true) {
+                try {
+                    repo.refresh()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                kotlinx.coroutines.delay(12_000)
             }
         }
     }

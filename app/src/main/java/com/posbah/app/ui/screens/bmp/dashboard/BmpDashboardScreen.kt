@@ -110,7 +110,7 @@ fun BmpDashboardScreen(
     var upgradeBusinessName by remember { mutableStateOf("") }
     var isUpgrading by remember { mutableStateOf(false) }
 
-    val menuItems = remember {
+    val menuItems = remember(ui.role) {
         listOf(
             BmpMenuItem("Klien", "Daftar pelanggan & saldo", Icons.Outlined.Group, "bmp/clients", "menu-clients"),
             BmpMenuItem("Invoice", "Buat & kelola tagihan", Icons.Outlined.Description, "bmp/invoices", "menu-invoices"),
@@ -124,7 +124,15 @@ fun BmpDashboardScreen(
             BmpMenuItem("Karyawan", "Data & kontrol staf", Icons.Outlined.Badge, "bmp/employees", "menu-employees"),
             BmpMenuItem("Penggajian", "Payroll & rekap", Icons.Outlined.PriceChange, "bmp/payroll", "menu-payroll"),
             BmpMenuItem("Pengaturan", "Profil perusahaan & sistem", Icons.Outlined.Settings, "bmp/settings", "menu-settings"),
-        )
+        ).filter { item ->
+            if (ui.role != "OWNER") {
+                item.testTag != "menu-financial-report" &&
+                item.testTag != "menu-employees" &&
+                item.testTag != "menu-payroll"
+            } else {
+                true
+            }
+        }
     }
 
     var fabMenuExpanded by remember { mutableStateOf(false) }

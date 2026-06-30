@@ -1,3 +1,13 @@
+POSBah v2.19.9 - Sinkronisasi Real-time & Hak Akses Supervisor (BMP)
+
+Halo Kak! POSBah v2.19.9 kini hadir dengan peningkatan keamanan dan sinkronisasi realtime pada modul BMP:
+1. Sinkronisasi Real-time: Halaman master produk, stok gudang, log produksi harian, dan pembelian bahan baku kini melakukan sinkronisasi otomatis di latar belakang agar data Owner dan Supervisor ter-sync real-time secara instan.
+2. Hak Akses Supervisor: Supervisor (peran ADMIN) kini dikunci hak aksesnya di aplikasi Android dan VPS API server untuk menu keuangan laba-rugi, payroll gaji, dan manajemen staf karyawan.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.5 - Koreksi Gaji Karyawan & Sinkronisasi Arus Kas
 
 Halo Kak! POSBah v2.19.5 kini hadir dengan fitur pengelolaan gaji karyawan yang lebih fleksibel:

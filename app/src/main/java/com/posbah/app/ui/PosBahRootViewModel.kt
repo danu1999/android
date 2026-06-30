@@ -102,4 +102,6 @@ class PosBahRootViewModel @Inject constructor(
 
     /** Async wrapper — untuk backward compat dengan caller yang pakai suspend */
     suspend fun getDashboardRoute(): String = getDashboardRouteSync()
+
+    fun isOwner(): Boolean = securePrefs.currentRole == "OWNER"
 }
