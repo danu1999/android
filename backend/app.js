@@ -1898,9 +1898,6 @@ function triggerSjPrint() {
                 </td>
                 <td class="info-col" style="width: 50%;">
                     <div class="info-box-right">
-                        <strong>Keterangan:</strong><br>
-                        Dokumen ini adalah bukti penyerahan barang secara sah.<br>
-                        No. Faktur Rujukan: <strong>${currentInvoice.number}</strong>
                     </div>
                 </td>
             </tr>
