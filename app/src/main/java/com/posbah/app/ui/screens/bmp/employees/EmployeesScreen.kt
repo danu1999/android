@@ -41,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -154,7 +155,7 @@ class EmployeesViewModel @Inject constructor(
                 }
             } else {
                 if (posPin.isBlank()) {
-                    error.value = "Gagal: PIN POS wajib diisi untuk karyawan baru."
+                    error.value = "Gagal: Password POS wajib diisi untuk karyawan baru."
                     return@launch
                 }
                 val alreadyUsed = posEmployeeRepo.list().find { it.email?.lowercase()?.trim() == posEmail.lowercase().trim() }
@@ -445,9 +446,10 @@ fun EmployeesScreen(
                         Spacer(Modifier.size(8.dp))
                         OutlinedTextField(
                             value = posPin,
-                            onValueChange = { posPin = it.filter { c -> c.isDigit() } },
-                            label = { Text(if (editing.employeeId != null) "Ganti PIN POS (Numerik, Opsional)" else "PIN POS Baru (Numerik)") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            onValueChange = { posPin = it },
+                            label = { Text(if (editing.employeeId != null) "Ganti Password POS (Alphanumeric, Opsional)" else "Password POS Baru (Alphanumeric)") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            visualTransformation = PasswordVisualTransformation(),
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )

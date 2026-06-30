@@ -209,9 +209,12 @@ func main() {
 	http.HandleFunc("/api/rt/bmp/reports/financial", handleRtBmpFinancialReport)
 	http.HandleFunc("/api/rt/bmp/reports/export", handleRtBmpExportReport)
 	http.HandleFunc("/api/rt/bmp/reports/depreciation", handleRtBmpDepreciation)
+	http.HandleFunc("/api/rt/bmp/employees", handleRtBmpEmployees)
+	http.HandleFunc("/api/rt/bmp/employees/", handleRtBmpEmployeesById)
 
 	// PIN Login for kasir (full online)
 	http.HandleFunc("/api/auth/pin-login", handlePinLogin)
+	http.HandleFunc("/api/auth/bmp/pin-login", handleBmpPinLogin)
 
 	log.Printf("Server listening on port %s", port)
 	if err := http.ListenAndServe(":"+port, versionCheckMiddleware(http.DefaultServeMux)); err != nil {
@@ -3802,7 +3805,7 @@ func validateTenantAccess(r *http.Request) error {
 
 	// 1. Allow login/auth-related GET requests without headers IF they query by secure columns
 	if r.Method == http.MethodGet && (tenantID == "" || userEmail == "") {
-		if tableName == "local_users" || tableName == "employees" || tableName == "tenants" {
+		if tableName == "local_users" || tableName == "employees" || tableName == "bmp_employees" || tableName == "tenants" {
 			hasSecureFilter := false
 			for k, vList := range r.URL.Query() {
 				if len(vList) > 0 && strings.HasPrefix(vList[0], "eq.") {
@@ -8475,7 +8478,8 @@ func versionCheckMiddleware(next http.Handler) http.Handler {
 				strings.HasPrefix(path, "/api/store/") ||
 				strings.HasPrefix(path, "/api/sign/") ||
 				strings.HasPrefix(path, "/api/auth/qr-") ||
-				path == "/api/auth/pin-login"
+				path == "/api/auth/pin-login" ||
+				path == "/api/auth/bmp/pin-login"
 
 			if !isExempt {
 				clientVersion := strings.TrimSpace(r.Header.Get("x-client-version"))

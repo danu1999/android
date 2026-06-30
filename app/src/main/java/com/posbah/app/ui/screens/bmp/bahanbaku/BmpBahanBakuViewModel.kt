@@ -157,29 +157,19 @@ class BahanBakuListViewModel @Inject constructor(
     fun recordAfvalRecycling(jenisBahan: String, beratKg: Double, biayaGiling: Double) = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
         if (beratKg <= 0 || biayaGiling <= 0 || jenisBahan.isBlank()) return@launch
         try {
-            val rate = biayaGiling / beratKg
-            
-            // 1. Catat kas keluar (FACTORY_OVERHEAD)
-            cashFlowRepo.createEntry(
-                BmpCashflowData(
-                    tenantId = tenantId,
-                    transactionDate = System.currentTimeMillis(),
-                    transactionType = "KELUAR",
-                    description = "Jasa Giling Afval ($jenisBahan gilingan, $beratKg Kg)",
-                    amount = biayaGiling,
-                    costType = "FACTORY_OVERHEAD"
-                )
-            )
+            // biayaGiling = harga per Kg (rate), total nilai = beratKg * biayaGiling
+            val totalNilai = beratKg * biayaGiling
 
-            // 2. Tambah stok bahan baku masuk
+            // Tambah stok bahan baku masuk + cashflow otomatis via repo.create()
+            // (repo.create() sudah menangani pencatatan arus kas keluar dengan amount=totalNilai)
             val bahanBaku = com.posbah.app.data.repository.BmpBahanBakuData(
                 id = 0,
                 tenantId = tenantId,
                 tanggal = System.currentTimeMillis(),
                 noTagihan = "AFVAL-GILING-${System.currentTimeMillis() / 1000}",
                 supplier = "Daur Ulang Internal (Afval)",
-                totalHarga = biayaGiling,
-                nominal = biayaGiling,
+                totalHarga = totalNilai,
+                nominal = totalNilai, // Lunas: nilai aset = biaya giling yang langsung keluar
                 notes = "Hasil Daur Ulang Afval $jenisBahan"
             )
             val item = com.posbah.app.data.repository.BmpBahanBakuItemData(
@@ -187,7 +177,7 @@ class BahanBakuListViewModel @Inject constructor(
                 bahanBakuId = 0,
                 jenisBahan = jenisBahan,
                 kuantitas = beratKg,
-                rate = rate
+                rate = biayaGiling
             )
             repo.create(bahanBaku, listOf(item))
             repo.refresh()

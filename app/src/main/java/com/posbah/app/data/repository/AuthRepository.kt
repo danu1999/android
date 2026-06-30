@@ -167,10 +167,16 @@ class AuthRepository @Inject constructor(
 
     private fun fetchEmployeeFromVps(email: String): JSONObject? {
         val (code, body) = httpGet("$BASE_URL/api/sync/employees?email=eq.${URLEncoder.encode(email, "UTF-8")}")
-        if (code in 409..409) return null // conflict
-        if (code !in 200..299 || body.isNullOrBlank()) return null
-        val arr = JSONArray(body)
-        return if (arr.length() > 0) arr.getJSONObject(0) else null
+        if (code in 200..299 && !body.isNullOrBlank()) {
+            val arr = JSONArray(body)
+            if (arr.length() > 0) return arr.getJSONObject(0)
+        }
+        val (bmpCode, bmpBody) = httpGet("$BASE_URL/api/sync/bmp_employees?email=eq.${URLEncoder.encode(email, "UTF-8")}")
+        if (bmpCode in 200..299 && !bmpBody.isNullOrBlank()) {
+            val arr = JSONArray(bmpBody)
+            if (arr.length() > 0) return arr.getJSONObject(0)
+        }
+        return null
     }
 
     private fun fetchOutletsFromVps(tenantId: String): JSONArray {
@@ -671,11 +677,13 @@ class AuthRepository @Inject constructor(
         // Push new hash to VPS via employee endpoint if employee exists
         if (emp != null) {
             val empId = emp.optLong("id")
-            val tenantId = emp.optString("tenantId")
+            val tenantId = emp.optString("tenantId", "")
+            val isBmp = tenantId.lowercase().contains("bahteramulyap")
+            val endpoint = if (isBmp) "$BASE_URL/api/rt/bmp/employees/$empId" else "$BASE_URL/api/rt/employees/$empId"
             // POST to update employee hash on VPS
             var conn: HttpURLConnection? = null
             try {
-                conn = URL("$BASE_URL/api/rt/employees/$empId").openConnection() as HttpURLConnection
+                conn = URL(endpoint).openConnection() as HttpURLConnection
                 conn.requestMethod = "PUT"
                 conn.doOutput = true
                 conn.setRequestProperty("Content-Type", "application/json")

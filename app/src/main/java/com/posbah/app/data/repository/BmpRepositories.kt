@@ -1893,10 +1893,13 @@ class BmpBahanBakuRepository @Inject constructor(
               api.createBahanBakuItems(itemBodies)
 
               // ── Business logic: input bahan baku → potong cashflow ──────────
+              // Untuk bahan baku daur ulang/afval, nominal=0 (tidak ada hutang),
+              // sehingga cashflow menggunakan totalHarga (nilai riil aset yang masuk).
+              val cashflowAmount = if (bahanBaku.nominal > 0) bahanBaku.nominal else bahanBaku.totalHarga
               cashflowRepo.createEntry(BmpCashflowData(
                   transactionType = "KELUAR",
                   description = "Pembelian Bahan Baku: ${bahanBaku.noTagihan}",
-                  amount = bahanBaku.nominal,
+                  amount = cashflowAmount,
                   transactionDate = bahanBaku.tanggal
               ))
 

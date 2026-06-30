@@ -136,7 +136,7 @@ fun EmployeeManagementScreen(
                             emailInput = ""
                             phoneInput = ""
                             passwordInput = ""
-                            roleInput = "KASIR"
+                            roleInput = if (state.businessMode == "BMP") "ADMIN" else "KASIR"
                             salaryInput = ""
                             payPeriodInput = "MONTHLY"
                             selectedOutletId = null
@@ -389,32 +389,43 @@ fun EmployeeManagementScreen(
 
                     // Role Dropdown
                     Box(modifier = Modifier.fillMaxWidth()) {
-                        OutlinedTextField(
-                            value = if (roleInput == "ADMIN") "Administrator" else "Kasir",
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Role") },
-                            trailingIcon = { Text("▾", modifier = Modifier.clickable { roleDropdownExpanded = true }) },
-                            modifier = Modifier.fillMaxWidth().clickable { roleDropdownExpanded = true }
-                        )
-                        DropdownMenu(
-                            expanded = roleDropdownExpanded,
-                            onDismissRequest = { roleDropdownExpanded = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Kasir") },
-                                onClick = {
-                                    roleInput = "KASIR"
-                                    roleDropdownExpanded = false
-                                }
+                        if (state.businessMode == "BMP") {
+                            OutlinedTextField(
+                                value = "Supervisor / Admin",
+                                onValueChange = {},
+                                readOnly = true,
+                                enabled = false,
+                                label = { Text("Role") },
+                                modifier = Modifier.fillMaxWidth()
                             )
-                            DropdownMenuItem(
-                                text = { Text("Administrator") },
-                                onClick = {
-                                    roleInput = "ADMIN"
-                                    roleDropdownExpanded = false
-                                }
+                        } else {
+                            OutlinedTextField(
+                                value = if (roleInput == "ADMIN") "Administrator" else "Kasir",
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("Role") },
+                                trailingIcon = { Text("▾", modifier = Modifier.clickable { roleDropdownExpanded = true }) },
+                                modifier = Modifier.fillMaxWidth().clickable { roleDropdownExpanded = true }
                             )
+                            DropdownMenu(
+                                expanded = roleDropdownExpanded,
+                                onDismissRequest = { roleDropdownExpanded = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Kasir") },
+                                    onClick = {
+                                        roleInput = "KASIR"
+                                        roleDropdownExpanded = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Administrator") },
+                                    onClick = {
+                                        roleInput = "ADMIN"
+                                        roleDropdownExpanded = false
+                                    }
+                                )
+                            }
                         }
                     }
 

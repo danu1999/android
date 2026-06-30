@@ -321,6 +321,18 @@ fun BmpProductionLogScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            "Catatan: Menyimpan log produksi akan secara otomatis menambah stok barang jadi & memotong stok batch bahan baku yang dipilih.",
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
                     
                     // Product Selector Dropdown
                     Box(modifier = Modifier.fillMaxWidth()) {

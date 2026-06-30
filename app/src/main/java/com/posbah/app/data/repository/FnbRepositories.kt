@@ -1,6 +1,7 @@
 package com.posbah.app.data.repository
 
 import com.posbah.app.data.remote.api.PosApiService
+import com.posbah.app.data.remote.api.BmpApiService
 import com.posbah.app.security.SecurePreferences
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -1107,6 +1108,7 @@ fun Map<String, Any?>.toEmployeeData() = EmployeeData(
 @Singleton
 class EmployeeRepository @Inject constructor(
     private val api: PosApiService,
+    private val bmpApi: BmpApiService,
     private val securePrefs: SecurePreferences
 ) {
     private val tenantId get() = securePrefs.currentTenantId ?: ""
@@ -1116,7 +1118,8 @@ class EmployeeRepository @Inject constructor(
 
     suspend fun refresh() {
         try {
-            val resp = api.getEmployees()
+            val isBmp = securePrefs.currentBusinessMode == "BMP"
+            val resp = if (isBmp) bmpApi.getBmpEmployees() else api.getEmployees()
             if (resp.isSuccessful) {
                 _employees.value = resp.body()?.map { it.toEmployeeData() } ?: emptyList()
             }
@@ -1159,7 +1162,8 @@ class EmployeeRepository @Inject constructor(
                 "lastPaidAt" to emp.lastPaidAt,
                 "outletId" to emp.outletId
             )
-            val resp = api.createEmployee(body)
+            val isBmp = securePrefs.currentBusinessMode == "BMP"
+            val resp = if (isBmp) bmpApi.createBmpEmployee(body) else api.createEmployee(body)
             if (resp.isSuccessful) {
                 val newId = (resp.body()?.get("id") as? Number)?.toLong() ?: 0L
                 val savedEmp = tempEmp.copy(id = newId)
@@ -1191,7 +1195,12 @@ class EmployeeRepository @Inject constructor(
                 "lastPaidAt" to emp.lastPaidAt,
                 "outletId" to emp.outletId
             )
-            api.updateEmployee(emp.id, body)
+            val isBmp = securePrefs.currentBusinessMode == "BMP"
+            if (isBmp) {
+                bmpApi.updateBmpEmployee(emp.id, body)
+            } else {
+                api.updateEmployee(emp.id, body)
+            }
         } catch (e: Exception) {
             _employees.value = snapshot
         }
@@ -1201,7 +1210,12 @@ class EmployeeRepository @Inject constructor(
         val snapshot = _employees.value
         _employees.value = snapshot.filter { it.id != id }
         try {
-            api.deleteEmployee(id)
+            val isBmp = securePrefs.currentBusinessMode == "BMP"
+            if (isBmp) {
+                bmpApi.deleteBmpEmployee(id)
+            } else {
+                api.deleteEmployee(id)
+            }
         } catch (e: Exception) {
             _employees.value = snapshot
         }

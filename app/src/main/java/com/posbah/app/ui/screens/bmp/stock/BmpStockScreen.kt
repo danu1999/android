@@ -392,6 +392,19 @@ fun BmpStockScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Spacer(Modifier.height(8.dp))
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            "Catatan: Gunakan menu ini hanya untuk Stock Opname atau koreksi selisih gudang. Hasil produksi harian otomatis menambah stok saat dicatat di menu Log Produksi.",
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
                     Spacer(Modifier.height(12.dp))
                     OutlinedTextField(
                         value = adjustChangeInput,

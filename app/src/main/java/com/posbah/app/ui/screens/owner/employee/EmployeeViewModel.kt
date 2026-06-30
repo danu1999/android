@@ -34,6 +34,7 @@ data class EmployeeManagementUiState(
     val error: String? = null,
     val emailVerificationOtp: String? = null,
     val pendingEmployee: Employee? = null,
+    val businessMode: String = "FNB",
     // ── Ganti Gaji ──────────────────────────────────────────────────────────
     val showSalaryChangeDialog: Boolean = false,
     val activeEmployeeForSalaryChange: Employee? = null,
@@ -137,6 +138,7 @@ class EmployeeViewModel @Inject constructor(
                     activityLogs = emptyList(), // Activity logs loaded from API if needed
                     isOwner = true,
                     isLoading = false,
+                    businessMode = authRepository.activeBusinessMode() ?: "FNB",
                     error = null
                 )
             }

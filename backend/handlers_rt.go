@@ -461,6 +461,25 @@ func handleRtEmployeesById(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func handleBmpPinLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		jsonErr(w, 405, "POST required"); return
+	}
+	var req struct {
+		TenantId string `json:"tenantId"`
+		Email    string `json:"email"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+	var pinHash, name, role string
+	var id int64
+	err := db.QueryRow(`SELECT id, "pinHash", name, role FROM bmp_employees WHERE "tenantId"=$1 AND email=$2 AND "isActive"=TRUE LIMIT 1`,
+		req.TenantId, req.Email).Scan(&id, &pinHash, &name, &role)
+	if err != nil {
+		jsonErr(w, 401, "employee not found"); return
+	}
+	jsonOK(w, map[string]interface{}{"id": id, "name": name, "role": role, "pinHash": pinHash})
+}
+
 func handleRtOutlets(w http.ResponseWriter, r *http.Request) {
 	tenantId, ok := extractTenantId(r)
 	if !ok { jsonErr(w, 401, "unauthorized"); return }

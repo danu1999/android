@@ -501,7 +501,7 @@ fun BahanBakuListScreen(
                     OutlinedTextField(
                         value = afvalBiaya,
                         onValueChange = { afvalBiaya = it },
-                        label = { Text("Biaya Jasa Giling (Total Rp)") },
+                        label = { Text("Harga per Kg (Rp/Kg)") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth().testTag("afval-biaya")

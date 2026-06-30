@@ -102,6 +102,25 @@ func initSchema() error {
 			"createdAt" BIGINT,
 			"updatedAt" BIGINT
 		);`,
+		`CREATE TABLE IF NOT EXISTS "bmp_employees" (
+			"id" INT PRIMARY KEY,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"outletId" INT,
+			"name" VARCHAR(255) NOT NULL,
+			"email" VARCHAR(255),
+			"role" VARCHAR(50) DEFAULT 'SUPERVISOR',
+			"pinHash" VARCHAR(255) NOT NULL,
+			"phone" VARCHAR(50),
+			"salary" DOUBLE PRECISION DEFAULT 0,
+			"isActive" BOOLEAN DEFAULT TRUE,
+			"payPeriod" VARCHAR(50) DEFAULT 'MONTHLY',
+			"lastPaidAt" BIGINT,
+			"emailVerified" BOOLEAN DEFAULT FALSE,
+			"passwordChangeCount" INT DEFAULT 0,
+			"lastPasswordChangeDate" BIGINT DEFAULT 0,
+			"createdAt" BIGINT,
+			"updatedAt" BIGINT
+		);`,
 		`CREATE TABLE IF NOT EXISTS "bmp_clients" (
 			"id" INT PRIMARY KEY,
 			"tenantId" VARCHAR(100) NOT NULL,
