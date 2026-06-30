@@ -1024,6 +1024,9 @@ func handleRtBmpSettings(w http.ResponseWriter, r *http.Request) {
 		if val, ok := body["phone"]; ok { body["phoneNumber"] = val; delete(body, "phone") }
 		if val, ok := body["email"]; ok { body["emailAddress"] = val; delete(body, "email") }
 		if val, ok := body["npwp"]; ok { body["taxNumber"] = val; delete(body, "npwp") }
+		delete(body, "bankInfo")
+		delete(body, "invoicePrefix")
+
 
 		db.Exec(`DELETE FROM bmp_settings WHERE "tenantId"=$1`, tenantId)
 		_, err := insertRow("bmp_settings", body)
