@@ -148,6 +148,32 @@ fun LoginScreen(
                                 color = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.testTag("login-error-msg")
                             )
+                            if (err.contains("No credentials", ignoreCase = true)) {
+                                Spacer(Modifier.height(10.dp))
+                                Surface(
+                                    color = MaterialTheme.colorScheme.errorContainer,
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Text(
+                                            "Petunjuk Solusi:",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            color = MaterialTheme.colorScheme.onErrorContainer,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Spacer(Modifier.height(6.dp))
+                                        Text(
+                                            "1. SHA-1 rilis APK belum didaftarkan di Google Cloud Console untuk Web Client ID ini.\n" +
+                                            "2. Pastikan akun Google terhubung di perangkat Anda.\n" +
+                                            "3. Sebagai alternatif, Anda dapat masuk menggunakan metode 'Email & Password' (pilih tab 'Sandi' di atas) menggunakan kredensial pemilik.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onErrorContainer,
+                                            lineHeight = 16.sp
+                                        )
+                                    }
+                                }
+                            }
                             if (err == "Gagal login karena database tidak ada. Silakan hubungi admin.") {
                                 Spacer(Modifier.height(8.dp))
                                 PrimaryButton(
