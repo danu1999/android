@@ -1,3 +1,13 @@
+POSBah v2.19.2 - Pembaruan Ekspor & Cetak JPG Portrait
+
+Halo Kak! POSBah v2.19.2 kini hadir dengan perbaikan tampilan cetak dokumen:
+1. Mode Portrait untuk Ekspor JPG: Layout hasil ekspor gambar/cetak JPG invoice kini otomatis menggunakan mode Portrait (tegak) yang setara ukuran A4 standar, sehingga lebih mudah dibaca dan dibagikan via WhatsApp.
+2. Konsistensi Data & Keamanan: Penyelarasan format relasi dan payload server untuk memastikan transaksi Anda tersimpan dengan aman tanpa kendala.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.1 - Bug Fix: Laporan Keuangan & Akurasi Data
 
 Halo Kak! POSBah v2.19.1 adalah rilis perbaikan bug penting:

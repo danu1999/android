@@ -1474,7 +1474,7 @@ private fun printColoredJpg(context: Context, html: String, fileName: String) {
     WebView.enableSlowWholeDocumentDraw()
 
     val density = context.resources.displayMetrics.density
-    val renderWidthPx = (1024 * density).toInt()
+    val renderWidthPx = (794 * density).toInt() // v2.19.2: Mengubah lebar render JPG ke mode Portrait (794dp setara lebar A4 standar)
 
     val webView = WebView(context)
     // ✅ KUNCI: matikan hardware acceleration agar Canvas.draw() bisa capture bitmap
