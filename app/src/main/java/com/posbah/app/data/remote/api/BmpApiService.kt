@@ -116,6 +116,12 @@ interface BmpApiService {
     @POST("api/rt/bmp/payrolls")
     suspend fun createPayroll(@Body body: Map<String, Any?>): Response<Map<String, Any?>>
 
+    @PUT("api/rt/bmp/payrolls/{id}")
+    suspend fun updatePayroll(@Path("id") id: String, @Body body: Map<String, Any?>): Response<Map<String, Any?>>
+
+    @DELETE("api/rt/bmp/payrolls/{id}")
+    suspend fun deletePayroll(@Path("id") id: String): Response<Map<String, Any?>>
+
     // ── Bahan Baku (Raw Materials) ────────────────────────────────────────────
     @GET("api/rt/bmp/bahan-baku")
     suspend fun getBahanBaku(): Response<List<Map<String, Any?>>>

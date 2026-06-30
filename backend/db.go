@@ -925,6 +925,9 @@ func initSchema() error {
 		// Android mengirim "role" (DIRECT_LABOR, INDIRECT_LABOR, OPERATING_EXPENSE) tapi
 		// skema lama hanya punya "position". Kolom "role" ditambahkan agar data tersimpan benar.
 		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "role" VARCHAR(50) DEFAULT 'KARYAWAN';`,
+
+		// v2.19.4: Sinkronisasi Arus Kas & Payroll — tambah payrollRefId di bmp_cashflow
+		`ALTER TABLE "bmp_cashflow" ADD COLUMN IF NOT EXISTS "payrollRefId" VARCHAR(100);`,
 	}
 	for _, q := range manufakturMigrations {
 		if _, err := db.Exec(q); err != nil {

@@ -1,3 +1,13 @@
+POSBah v2.19.5 - Koreksi Gaji Karyawan & Sinkronisasi Arus Kas
+
+Halo Kak! POSBah v2.19.5 kini hadir dengan fitur pengelolaan gaji karyawan yang lebih fleksibel:
+1. Koreksi Gaji (Edit/Hapus): Anda sekarang dapat mengedit atau menghapus riwayat gaji karyawan langsung dari aplikasi jika terjadi kesalahan pencatatan atau ketidaksesuaian absensi pada mesin fingerprint.
+2. Otomatisasi & Konsistensi Arus Kas: Pengeditan atau penghapusan data gaji karyawan akan secara otomatis menyinkronkan pengeluaran kas yang terkait pada halaman Arus Kas secara real-time.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.4 - Pembaruan Profil & Cetak Dinamis
 
 Halo Kak! POSBah v2.19.4 kini hadir dengan perbaikan sistem profil & sinkronisasi cetak:
@@ -7,6 +17,7 @@ Halo Kak! POSBah v2.19.4 kini hadir dengan perbaikan sistem profil & sinkronisas
 Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
 
 ---
+
 
 POSBah v2.19.3 - Pembaruan Tampilan Kolom Cetak Invoice & JPG
 

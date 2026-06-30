@@ -193,6 +193,7 @@ func main() {
 	http.HandleFunc("/api/rt/bmp/employees", handleRtBmpEmployees)
 	http.HandleFunc("/api/rt/bmp/employees/", handleRtBmpEmployeesById)
 	http.HandleFunc("/api/rt/bmp/payrolls", handleRtBmpPayrolls)
+	http.HandleFunc("/api/rt/bmp/payrolls/", handleRtBmpPayrollsById)
 	http.HandleFunc("/api/rt/bmp/bahan-baku", handleRtBmpBahanBaku)
 	http.HandleFunc("/api/rt/bmp/bahan-baku/", handleRtBmpBahanBakuById)
 	http.HandleFunc("/api/rt/bmp/bahan-baku-items", handleRtBmpBahanBakuItems)

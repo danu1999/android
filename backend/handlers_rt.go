@@ -10,6 +10,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -779,14 +780,122 @@ func handleRtBmpPayrolls(w http.ResponseWriter, r *http.Request) {
 		defer rows.Close(); jsonOK(w, rowsToJSON(rows))
 	case http.MethodPost:
 		var body map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&body); body["tenantId"] = tenantId
-		id, err := insertRow("bmp_payrolls", body)
-		if err != nil { jsonErr(w, 500, err.Error()); return }
-		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid JSON")
+			return
+		}
+		
+		pid, _ := body["id"].(string)
+		if pid == "" {
+			pid = generateUUID()
+		}
+		employeeId, _ := body["employeeId"].(float64)
+		paymentDate, _ := body["paymentDate"].(float64)
+		amount, _ := body["amount"].(float64)
+		attendanceCount, _ := body["attendanceCount"].(float64)
+		dailyRate, _ := body["dailyRate"].(float64)
+		desc, _ := body["notes"].(string)
+		if desc == "" {
+			desc, _ = body["description"].(string)
+		}
+		
+		_, err := db.Exec(`
+			INSERT INTO "bmp_payrolls" (
+				"id", "tenantId", "employeeId", "paymentDate", "amount", 
+				"attendanceCount", "dailyRate", "description", "createdAt"
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		`, pid, tenantId, int(employeeId), int64(paymentDate), amount, int(attendanceCount), dailyRate, desc, nowMillis())
+		
+		if err != nil {
+			jsonErr(w, 500, "failed to insert payroll: " + err.Error())
+			return
+		}
+		jsonOK(w, map[string]interface{}{"id": pid, "ok": true})
 	default:
 		jsonErr(w, 405, "method not allowed")
 	}
 }
+
+func handleRtBmpPayrollsById(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 6 {
+		jsonErr(w, 400, "invalid id path")
+		return
+	}
+	payrollId := parts[5]
+	if payrollId == "" {
+		jsonErr(w, 400, "missing payroll id")
+		return
+	}
+
+	switch r.Method {
+	case http.MethodPut:
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid JSON")
+			return
+		}
+		
+		amount, _ := body["amount"].(float64)
+		attendanceCount, _ := body["attendanceCount"].(float64)
+		dailyRate, _ := body["dailyRate"].(float64)
+		desc, _ := body["notes"].(string)
+		if desc == "" {
+			desc, _ = body["description"].(string)
+		}
+		
+		_, err := db.Exec(`
+			UPDATE "bmp_payrolls"
+			SET "amount"=$1, "attendanceCount"=$2, "dailyRate"=$3, "description"=$4
+			WHERE "id"=$5 AND "tenantId"=$6
+		`, amount, int(attendanceCount), dailyRate, desc, payrollId, tenantId)
+		
+		if err != nil {
+			jsonErr(w, 500, "failed to update payroll: " + err.Error())
+			return
+		}
+		
+		employeeName, _ := body["employeeName"].(string)
+		cfDesc := "Gaji Karyawan"
+		if employeeName != "" {
+			cfDesc = "Gaji Karyawan: " + employeeName
+		}
+		
+		_, err = db.Exec(`
+			UPDATE "bmp_cashflow"
+			SET "amount"=$1, "description"=$2
+			WHERE "payrollRefId"=$3 AND "tenantId"=$4
+		`, amount, cfDesc, payrollId, tenantId)
+		if err != nil {
+			log.Printf("[Warning] Failed to update linked cashflow for payroll %s: %v", payrollId, err)
+		}
+		
+		jsonOK(w, map[string]interface{}{"ok": true})
+
+	case http.MethodDelete:
+		_, err := db.Exec(`DELETE FROM "bmp_payrolls" WHERE "id"=$1 AND "tenantId"=$2`, payrollId, tenantId)
+		if err != nil {
+			jsonErr(w, 500, "failed to delete payroll: " + err.Error())
+			return
+		}
+		
+		_, err = db.Exec(`UPDATE "bmp_cashflow" SET "isDeleted"=TRUE WHERE "payrollRefId"=$1 AND "tenantId"=$2`, payrollId, tenantId)
+		if err != nil {
+			log.Printf("[Warning] Failed to delete linked cashflow for payroll %s: %v", payrollId, err)
+		}
+		
+		jsonOK(w, map[string]interface{}{"ok": true})
+		
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+
+
 
 // ── BMP — bahan baku & items ──────────────────────────────────────────────────
 

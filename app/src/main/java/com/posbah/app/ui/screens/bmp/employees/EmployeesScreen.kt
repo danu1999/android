@@ -30,6 +30,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -210,6 +211,14 @@ class EmployeesViewModel @Inject constructor(
                 dailyRate = if (attendance > 0) amount / attendance else 0.0
             )
         )
+    }
+
+    fun editPayroll(payroll: BmpPayrollEntity) = viewModelScope.launch(Dispatchers.IO) {
+        repo.updatePayroll(payroll)
+    }
+
+    fun deletePayroll(id: String) = viewModelScope.launch(Dispatchers.IO) {
+        repo.deletePayroll(id)
     }
 }
 
@@ -559,6 +568,7 @@ fun PayrollScreen(
 ) {
     val payrolls by viewModel.payrolls.collectAsState()
     val emps by viewModel.employees.collectAsState()
+    var editTarget by remember { mutableStateOf<BmpPayrollEntity?>(null) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -579,7 +589,10 @@ fun PayrollScreen(
                     Surface(
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surface,
-                        modifier = Modifier.fillMaxWidth().testTag("payroll-${p.id}")
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("payroll-${p.id}")
+                            .clickable { editTarget = p }
                     ) {
                         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
@@ -600,5 +613,67 @@ fun PayrollScreen(
                 }
             }
         }
+    }
+
+    if (editTarget != null) {
+        val p = editTarget!!
+        val empName = emps.find { it.id == p.employeeId }?.name ?: "Karyawan"
+        var daysText by remember { mutableStateOf(p.attendanceCount.toString()) }
+        var amountText by remember { mutableStateOf(p.amount.toInt().toString()) }
+
+        AlertDialog(
+            onDismissRequest = { editTarget = null },
+            title = { Text("Koreksi Gaji: $empName") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = daysText,
+                        onValueChange = { daysText = it },
+                        label = { Text("Hari Kerja (Absensi)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = amountText,
+                        onValueChange = { amountText = it },
+                        label = { Text("Total Nominal Gaji (Rp)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val days = daysText.toIntOrNull() ?: 0
+                        val amt = amountText.toDoubleOrNull() ?: 0.0
+                        if (amt > 0) {
+                            val rate = if (days > 0) amt / days else 0.0
+                            viewModel.editPayroll(
+                                p.copy(
+                                    attendanceCount = days,
+                                    amount = amt,
+                                    dailyRate = rate
+                                )
+                            )
+                        }
+                        editTarget = null
+                    }
+                ) { Text("Simpan") }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                        onClick = {
+                            viewModel.deletePayroll(p.id)
+                            editTarget = null
+                        }
+                    ) { Text("Hapus") }
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(onClick = { editTarget = null }) { Text("Batal") }
+                }
+            }
+        )
     }
 }

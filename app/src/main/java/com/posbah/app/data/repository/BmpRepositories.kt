@@ -113,6 +113,7 @@ data class BmpCashflowData(
     val amount: Double = 0.0,
     val costType: String = "OPERATING_EXPENSE",
     val paymentRefId: Long? = null,
+    val payrollRefId: String? = null,
     val isDeleted: Boolean = false,
     val updatedAt: Long = 0
 )
@@ -143,7 +144,7 @@ data class BmpEmployeeData(
 )
 
 data class BmpPayrollData(
-    val id: Long = 0,
+    val id: String = "",
     val tenantId: String = "",
     val employeeId: Long = 0,
     val employeeName: String = "",
@@ -316,6 +317,7 @@ fun Map<String, Any?>.toBmpCashflowData() = BmpCashflowData(
     amount = (getCaseInsensitive("amount") as? Number)?.toDouble() ?: 0.0,
     costType = getCaseInsensitive("costType") as? String ?: "OPERATING_EXPENSE",
     paymentRefId = (getCaseInsensitive("paymentRefId") as? Number)?.toLong(),
+    payrollRefId = getCaseInsensitive("payrollRefId") as? String,
     isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false,
     updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0
 )
@@ -1410,7 +1412,8 @@ class BmpCashFlowRepository @Inject constructor(
                 "description" to entry.description,
                 "amount" to entry.amount,
                 "costType" to entry.costType,
-                "paymentRefId" to entry.paymentRefId
+                "paymentRefId" to entry.paymentRefId,
+                "payrollRefId" to entry.payrollRefId
             ))
             val newId = (resp.body()?.get("id") as? Number)?.toLong() ?: 0L
             if (newId > 0) {
@@ -1602,7 +1605,7 @@ class BmpEmployeeRepository @Inject constructor(
         payrollRepo.payrolls.map { list ->
             list.map {
                 com.posbah.app.data.local.entities.BmpPayrollEntity(
-                    id = it.id.toString(),
+                    id = it.id,
                     tenantId = it.tenantId,
                     employeeId = it.employeeId,
                     paymentDate = it.paymentDate,
@@ -1638,7 +1641,7 @@ class BmpEmployeeRepository @Inject constructor(
     suspend fun insertPayroll(payroll: com.posbah.app.data.local.entities.BmpPayrollEntity): Long {
         val empName = _employees.value.find { it.id == payroll.employeeId }?.name.orEmpty()
         val data = BmpPayrollData(
-            id = 0,
+            id = payroll.id,
             tenantId = payroll.tenantId,
             employeeId = payroll.employeeId,
             employeeName = empName,
@@ -1653,6 +1656,25 @@ class BmpEmployeeRepository @Inject constructor(
 
     suspend fun refreshPayrolls() {
         payrollRepo.refresh()
+    }
+
+    suspend fun updatePayroll(payroll: com.posbah.app.data.local.entities.BmpPayrollEntity): OnlineWriteResult {
+        val empName = _employees.value.find { it.id == payroll.employeeId }?.name.orEmpty()
+        val data = BmpPayrollData(
+            id = payroll.id,
+            tenantId = payroll.tenantId,
+            employeeId = payroll.employeeId,
+            employeeName = empName,
+            paymentDate = payroll.paymentDate,
+            amount = payroll.amount,
+            notes = payroll.description,
+            updatedAt = System.currentTimeMillis()
+        )
+        return payrollRepo.updatePayroll(data)
+    }
+
+    suspend fun deletePayroll(id: String): OnlineWriteResult {
+        return payrollRepo.deletePayroll(id)
     }
 }
 
@@ -1673,7 +1695,7 @@ class BmpPayrollRepository @Inject constructor(
             if (resp.isSuccessful) {
                 _payrolls.value = resp.body()?.map {
                     BmpPayrollData(
-                        id = (it["id"] as? Number)?.toLong() ?: 0,
+                        id = it["id"] as? String ?: "",
                         tenantId = it["tenantId"] as? String ?: "",
                         employeeId = (it["employeeId"] as? Number)?.toLong() ?: 0,
                         employeeName = it["employeeName"] as? String ?: "",
@@ -1691,7 +1713,7 @@ class BmpPayrollRepository @Inject constructor(
         try {
             api.getPayrolls().body()?.map {
                 BmpPayrollData(
-                    id = (it["id"] as? Number)?.toLong() ?: 0,
+                    id = it["id"] as? String ?: "",
                     tenantId = it["tenantId"] as? String ?: "",
                     employeeId = (it["employeeId"] as? Number)?.toLong() ?: 0,
                     employeeName = it["employeeName"] as? String ?: "",
@@ -1709,9 +1731,10 @@ class BmpPayrollRepository @Inject constructor(
      */
     suspend fun createPayroll(payroll: BmpPayrollData): OnlineWriteResult {
         val snapshot = _payrolls.value
-        _payrolls.value = snapshot + payroll.copy(id = -System.currentTimeMillis()) // optimistic
+        _payrolls.value = snapshot + payroll.copy(id = "temp-${System.currentTimeMillis()}") // optimistic
         return try {
             api.createPayroll(mapOf(
+                "id" to payroll.id,
                 "employeeId" to payroll.employeeId,
                 "employeeName" to payroll.employeeName,
                 "paymentDate" to payroll.paymentDate,
@@ -1723,13 +1746,49 @@ class BmpPayrollRepository @Inject constructor(
                 transactionType = "KELUAR",
                 description = "Gaji Karyawan: ${payroll.employeeName}",
                 amount = payroll.amount,
-                transactionDate = payroll.paymentDate
+                transactionDate = payroll.paymentDate,
+                payrollRefId = payroll.id, // Link to the payroll record UUID string
+                costType = "DIRECT_LABOR"  // Set cost type to DIRECT_LABOR
             ))
             refresh()
             OnlineWriteResult.Success
         } catch (e: Exception) {
             _payrolls.value = snapshot // rollback
             OnlineWriteResult.Error(e.message ?: "Gagal bayar gaji")
+        }
+    }
+
+    suspend fun updatePayroll(payroll: BmpPayrollData): OnlineWriteResult {
+        val snapshot = _payrolls.value
+        _payrolls.value = snapshot.map { if (it.id == payroll.id) payroll else it }
+        return try {
+            api.updatePayroll(payroll.id, mapOf(
+                "employeeId" to payroll.employeeId,
+                "employeeName" to payroll.employeeName,
+                "paymentDate" to payroll.paymentDate,
+                "amount" to payroll.amount,
+                "notes" to payroll.notes
+            ))
+            refresh()
+            cashflowRepo.refresh()
+            OnlineWriteResult.Success
+        } catch (e: Exception) {
+            _payrolls.value = snapshot // rollback
+            OnlineWriteResult.Error(e.message ?: "Gagal ubah gaji")
+        }
+    }
+
+    suspend fun deletePayroll(id: String): OnlineWriteResult {
+        val snapshot = _payrolls.value
+        _payrolls.value = snapshot.filter { it.id != id }
+        return try {
+            api.deletePayroll(id)
+            refresh()
+            cashflowRepo.refresh()
+            OnlineWriteResult.Success
+        } catch (e: Exception) {
+            _payrolls.value = snapshot // rollback
+            OnlineWriteResult.Error(e.message ?: "Gagal hapus gaji")
         }
     }
 }
