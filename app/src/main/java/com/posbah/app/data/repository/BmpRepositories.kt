@@ -98,7 +98,10 @@ data class BmpMasterProductData(
     val jenisBahanBaku: String = "",
     val image: String? = null,
     val isDeleted: Boolean = false,
-    val updatedAt: Long = 0
+    val updatedAt: Long = 0,
+    // v2.19.1: HPP fields untuk kalkulasi COGS di laporan keuangan
+    val hppTotalPcs: Double = 0.0,
+    val hppLusin: Double = 0.0
 )
 
 data class BmpCashflowData(
@@ -299,7 +302,9 @@ fun Map<String, Any?>.toBmpMasterProductData() = BmpMasterProductData(
     jenisBahanBaku = getCaseInsensitive("jenisBahanBaku") as? String ?: "",
     image = getCaseInsensitive("image") as? String,
     isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false,
-    updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0
+    updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0,
+    hppTotalPcs = (getCaseInsensitive("hppTotalPcs") as? Number)?.toDouble() ?: 0.0,
+    hppLusin = (getCaseInsensitive("hppLusin") as? Number)?.toDouble() ?: 0.0
 )
 
 fun Map<String, Any?>.toBmpCashflowData() = BmpCashflowData(
@@ -1359,8 +1364,8 @@ class BmpMasterProductRepository @Inject constructor(
                     createdAt = System.currentTimeMillis(),
                     updatedAt = it.updatedAt,
                     isSynced = true,
-                    hppTotalPcs = 0.0,
-                    hppLusin = 0.0
+                    hppTotalPcs = it.hppTotalPcs,
+                    hppLusin = it.hppLusin
                 )
             }
         }
