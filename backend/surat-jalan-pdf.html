@@ -130,7 +130,7 @@
             <tr>
                 <th style="width: 5%;">#</th>
                 <th style="width: 55%;">ITEM</th>
-                <th style="width: 20%;">SATUAN</th>
+                <th style="width: 20%;">LUSIN</th>
                 <th style="width: 20%;">QTY</th>
             </tr>
         </thead>
@@ -140,7 +140,7 @@
             <tr>
                 <td>{{ add $index 1 }}</td>
                 <td><strong>{{ $product.Title }}</strong></td>
-                <td>{{ if and $product.Unit (ne $product.Unit "-") }}{{ $product.Unit }}{{ else }}Lusin{{ end }}</td>
+                <td>{{ printf "%.0f" $product.JumlahLusin }}</td>
                 <td>{{ intcomma $product.Quantity }}</td>
             </tr>
             {{ end }}
