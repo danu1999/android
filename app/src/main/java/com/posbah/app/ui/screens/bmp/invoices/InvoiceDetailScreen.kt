@@ -692,16 +692,14 @@ private fun generateInvoiceHtml(
     val itemsHtml = StringBuilder()
     products.forEachIndexed { index, p ->
         val subtotal = p.price * p.quantity * p.jumlahLusin
-        val satuanVal = "${Formatters.number(p.jumlahLusin)} ${if (p.unit.lowercase() == "lusin" || p.unit == "-") "Lusin" else p.unit}"
+        val unitVal = if (p.unit.lowercase() == "lusin" || p.unit == "-") "Lusin" else p.unit
         val descHtml = if (!p.description.isNullOrBlank()) "<br/><span style=\"font-size: 8px; color: #555; font-weight: normal;\">${p.description}</span>" else ""
         itemsHtml.append("""
             <tr class="item-row">
                 <td style="text-align: center;">${index + 1}</td>
                 <td><strong>${p.title}</strong>$descHtml</td>
-                <td style="text-align: center;">
-                    <strong>${Formatters.number(p.quantity)}</strong>
-                    <br/><span style="font-size: 8px; color: #555;">$satuanVal</span>
-                </td>
+                <td style="text-align: center;"><strong>$unitVal</strong></td>
+                <td style="text-align: center;"><strong>${Formatters.number(p.quantity)}</strong></td>
                 <td style="text-align: right;"><strong>${Formatters.rupiah(p.price)}</strong></td>
                 <td style="text-align: right;"><strong>${Formatters.rupiah(subtotal)}</strong></td>
             </tr>
@@ -960,10 +958,11 @@ private fun generateInvoiceHtml(
                 <thead>
                     <tr>
                         <th style="width: 5%; text-align: center;">No</th>
-                        <th style="width: 50%;">Deskripsi Barang</th>
-                        <th style="width: 15%; text-align: center;">Qty</th>
-                        <th style="width: 15%; text-align: right;">Harga</th>
-                        <th style="width: 15%; text-align: right;">Total</th>
+                        <th style="width: 45%;">Deskripsi Barang</th>
+                        <th style="width: 15%; text-align: center;">Satuan</th>
+                        <th style="width: 10%; text-align: center;">Qty</th>
+                        <th style="width: 12%; text-align: right;">Harga</th>
+                        <th style="width: 13%; text-align: right;">Total</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1162,13 +1161,13 @@ private fun generateSuratJalanHtml(
 
     val itemsHtml = StringBuilder()
     products.forEachIndexed { index, p ->
-        val satuanVal = "${Formatters.number(p.jumlahLusin)} ${if (p.unit.lowercase() == "lusin" || p.unit == "-") "Lusin" else p.unit}"
+        val unitVal = if (p.unit.lowercase() == "lusin" || p.unit == "-") "Lusin" else p.unit
         val descHtml = if (!p.description.isNullOrBlank()) "<br/><span style=\"font-size: 9px; color: #555; font-weight: normal;\">${p.description}</span>" else ""
         itemsHtml.append("""
             <tr>
                 <td style="text-align: center;">${index + 1}</td>
                 <td><strong>${p.title}</strong>$descHtml</td>
-                <td style="text-align: center;">$satuanVal</td>
+                <td style="text-align: center;">$unitVal</td>
                 <td style="text-align: center;">${Formatters.number(p.quantity)}</td>
             </tr>
         """.trimIndent())
@@ -1403,7 +1402,7 @@ private fun generateSuratJalanHtml(
                     <tr>
                         <th style="width: 5%; text-align: center;">#</th>
                         <th style="width: 55%;">ITEM</th>
-                        <th style="width: 20%; text-align: center;">LUSIN</th>
+                        <th style="width: 20%; text-align: center;">SATUAN</th>
                         <th style="width: 20%; text-align: center;">QTY</th>
                     </tr>
                 </thead>

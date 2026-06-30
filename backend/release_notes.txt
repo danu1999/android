@@ -1,3 +1,13 @@
+POSBah v2.19.3 - Pembaruan Desain Cetak Invoice & Surat Jalan
+
+Halo Kak! POSBah v2.19.3 kini hadir dengan pembaruan layout cetak:
+1. Kolom "SATUAN" pada Invoice & JPG: Menambahkan kolom "SATUAN" di sebelah kiri QTY yang berisi "Lusin" (atau unit lainnya). Angka satuan di kolom QTY juga disederhanakan hanya berupa angka utama saja untuk tampilan bersih.
+2. Kolom "SATUAN" pada Surat Jalan: Mengubah header judul "LUSIN" menjadi "SATUAN" dan menampilkan nama unit (contoh: "Lusin") di bawahnya demi konsistensi data cetak.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.2 - Pembaruan Ekspor & Cetak JPG Portrait
 
 Halo Kak! POSBah v2.19.2 kini hadir dengan perbaikan tampilan cetak dokumen:

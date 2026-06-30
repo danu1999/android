@@ -144,10 +144,11 @@
         <thead>
             <tr>
                 <th style="width: 5%;">#</th>
-                <th style="width: 50%;">Deskripsi Barang</th>
-                <th style="width: 15%;">Qty</th>
-                <th style="width: 15%;">Harga</th>
-                <th style="width: 15%;">Total</th>
+                <th style="width: 45%;">Deskripsi Barang</th>
+                <th style="width: 15%; text-align: center;">Satuan</th>
+                <th style="width: 10%; text-align: center;">Qty</th>
+                <th style="width: 12%; text-align: right;">Harga</th>
+                <th style="width: 13%; text-align: right;">Total</th>
             </tr>
         </thead>
         <tbody>
@@ -156,9 +157,10 @@
             <tr class="item-row">
                 <td>{{ add $index 1 }}</td>
                 <td><strong>{{ $product.Title }}</strong></td>
-                <td><strong>{{ intcomma $product.Quantity }}</strong></td>
-                <td><strong>Rp{{ intcomma $product.Price }}</strong></td>
-                <td><strong>Rp{{ intcomma (mul3 $product.Quantity $product.JumlahLusin $product.Price) }}</strong></td>
+                <td style="text-align: center;"><strong>{{ if and $product.Unit (ne $product.Unit "-") }}{{ $product.Unit }}{{ else }}Lusin{{ end }}</strong></td>
+                <td style="text-align: center;"><strong>{{ intcomma $product.Quantity }}</strong></td>
+                <td style="text-align: right;"><strong>Rp{{ intcomma $product.Price }}</strong></td>
+                <td style="text-align: right;"><strong>Rp{{ intcomma (mul3 $product.Quantity $product.JumlahLusin $product.Price) }}</strong></td>
             </tr>
             {{ end }}
             {{ end }}
