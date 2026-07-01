@@ -155,9 +155,10 @@ class InvoicesListViewModel @Inject constructor(
     fun clearDeleteError() { _deleteError.value = null }
 
     fun delete(id: Long) = viewModelScope.launch {
-        android.widget.Toast.makeText(context, "Invoice berhasil dihapus!", android.widget.Toast.LENGTH_SHORT).show()
         val result = invoiceRepo.deleteInvoice(context, tenantId, id)
-        if (result is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+        if (result is com.posbah.app.data.repository.OnlineWriteResult.Success) {
+            android.widget.Toast.makeText(context, "Invoice berhasil dihapus!", android.widget.Toast.LENGTH_SHORT).show()
+        } else if (result is com.posbah.app.data.repository.OnlineWriteResult.Error) {
             _deleteError.value = result.message
             android.widget.Toast.makeText(context, "Gagal hapus invoice: ${result.message}", android.widget.Toast.LENGTH_LONG).show()
         } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
@@ -459,11 +460,12 @@ class InvoiceDetailViewModel @Inject constructor(
     }
 
     fun deleteInvoice(onDone: () -> Unit) {
-        onDone()
-        android.widget.Toast.makeText(context, "Invoice berhasil dihapus!", android.widget.Toast.LENGTH_SHORT).show()
         viewModelScope.launch {
             val result = invoiceRepo.deleteInvoice(context, tenantId, invoiceId)
-            if (result is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+            if (result is com.posbah.app.data.repository.OnlineWriteResult.Success) {
+                android.widget.Toast.makeText(context, "Invoice berhasil dihapus!", android.widget.Toast.LENGTH_SHORT).show()
+                onDone()
+            } else if (result is com.posbah.app.data.repository.OnlineWriteResult.Error) {
                 android.widget.Toast.makeText(context, "Gagal hapus invoice: ${result.message}", android.widget.Toast.LENGTH_LONG).show()
             } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
                 android.widget.Toast.makeText(context, "Gagal hapus invoice: Tidak ada internet", android.widget.Toast.LENGTH_LONG).show()
