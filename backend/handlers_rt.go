@@ -1493,31 +1493,23 @@ func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
 	if err != nil { jsonErr(w, 500, err.Error()); return }
 
 	// 2. Query COGS (HPP Terjual)
-	var cogs float64
-	err = db.QueryRow(`
-		SELECT COALESCE(SUM(bp.quantity * COALESCE(mp."hppTotalPcs", 0)), 0)
-		FROM bmp_products bp
-		JOIN bmp_invoices bi ON bp."invoiceId" = bi.id
-		LEFT JOIN bmp_master_products mp ON bp."masterItemID" = mp.id
-		WHERE bi."tenantId"=$1 AND bi."createdAt" >= $2 AND bi."createdAt" < $3 
-		  AND bi."isDeleted"=FALSE AND bp."isDeleted"=FALSE
-	`, tenantId, startMs, endMs).Scan(&cogs)
+	cogs, err := updateAndCalculateCOGS(tenantId, startMs, endMs, dateStr, periodType)
 	if err != nil { jsonErr(w, 500, err.Error()); return }
 
-	// 3. Query Direct Materials Cost (Actual Consumption)
+	// 3. Query Direct Materials Cost (Actual Consumption from detail table)
 	var directMaterials float64
 	err = db.QueryRow(`
-		SELECT COALESCE(SUM(pl."rawMaterialUsedKg" * COALESCE(rates.avg_rate, mp.price)), 0)
-		FROM bmp_production_logs pl
-		JOIN bmp_master_products mp ON pl."masterProductId" = mp.id AND pl."tenantId" = mp."tenantId"
+		SELECT COALESCE(SUM(pm."quantityUsed" * COALESCE(rates.avg_rate, 0.0)), 0.0)
+		FROM bmp_production_materials pm
+		JOIN bmp_production_logs pl ON pm."productionLogId" = pl.id AND pm."tenantId" = pl."tenantId"
 		LEFT JOIN (
 			SELECT bbi."jenisBahan", AVG(bbi.rate) as avg_rate
 			FROM bmp_bahan_baku_item bbi
 			JOIN bmp_bahan_baku bb ON bbi."bahanBakuId" = bb.id AND bbi."tenantId" = bb."tenantId"
 			WHERE bb."tenantId" = $1 AND bb."isDeleted" = FALSE AND bbi."isDeleted" = FALSE
 			GROUP BY bbi."jenisBahan"
-		) rates ON mp."jenisBahanBaku" = rates."jenisBahan"
-		WHERE pl."tenantId" = $1 AND pl."productionDate" >= $2 AND pl."productionDate" < $3 AND pl."isDeleted" = FALSE
+		) rates ON pm."jenisBahan" = rates."jenisBahan"
+		WHERE pl."tenantId" = $1 AND pl."productionDate" >= $2 AND pl."productionDate" < $3 AND pl."isDeleted" = FALSE AND pm."isDeleted" = FALSE
 	`, tenantId, startMs, endMs).Scan(&directMaterials)
 	if err != nil { jsonErr(w, 500, err.Error()); return }
 
@@ -1716,14 +1708,7 @@ func handleRtBmpExportReport(w http.ResponseWriter, r *http.Request) {
 		WHERE "tenantId"=$1 AND "createdAt" >= $2 AND "createdAt" < $3 AND "isDeleted"=FALSE
 	`, tenantId, startMs, endMs).Scan(&omzet)
 
-	_ = db.QueryRow(`
-		SELECT COALESCE(SUM(bp.quantity * COALESCE(mp."hppTotalPcs", 0)), 0)
-		FROM bmp_products bp
-		JOIN bmp_invoices bi ON bp."invoiceId" = bi.id
-		LEFT JOIN bmp_master_products mp ON bp."masterItemID" = mp.id
-		WHERE bi."tenantId"=$1 AND bi."createdAt" >= $2 AND bi."createdAt" < $3 
-		  AND bi."isDeleted"=FALSE AND bp."isDeleted"=FALSE
-	`, tenantId, startMs, endMs).Scan(&cogs)
+	cogs, _ = updateAndCalculateCOGS(tenantId, startMs, endMs, dateStr, periodType)
 
 	_ = db.QueryRow(`
 		SELECT COALESCE(SUM("amount"), 0) FROM bmp_cashflow 
@@ -2138,4 +2123,170 @@ func handleRtBmpProductionMaterialsById(w http.ResponseWriter, r *http.Request) 
 	default:
 		jsonErr(w, 405, "method not allowed")
 	}
+}
+
+func updateAndCalculateCOGS(tenantId string, startMs int64, endMs int64, dateStr string, periodType string) (float64, error) {
+	// 1. Get total produced in the period
+	var totalProduced float64
+	err := db.QueryRow(`
+		SELECT COALESCE(SUM("quantityProduced"), 0.0)
+		FROM bmp_production_logs
+		WHERE "tenantId"=$1 AND "productionDate" >= $2 AND "productionDate" < $3 AND "isDeleted"=FALSE
+	`, tenantId, startMs, endMs).Scan(&totalProduced)
+	if err != nil {
+		return 0, err
+	}
+
+	// 2. Get total direct labor in the period
+	var directLabor float64
+	err = db.QueryRow(`
+		SELECT COALESCE(
+			(SELECT SUM(bp.amount)
+			 FROM bmp_payrolls bp
+			 JOIN bmp_employees be ON bp."employeeId" = be.id AND bp."tenantId" = be."tenantId"
+			 WHERE bp."tenantId" = $1 AND bp."paymentDate" >= $2 AND bp."paymentDate" < $3
+			   AND be."employeeType" = 'DIRECT_LABOR'), 0)
+		+ COALESCE(
+			(SELECT SUM(amount)
+			 FROM bmp_cashflow
+			 WHERE "tenantId" = $1 AND "transactionType" = 'KELUAR'
+			   AND "transactionDate" >= $2 AND "transactionDate" < $3 AND "isDeleted" = FALSE
+			   AND "costType" = 'DIRECT_LABOR'), 0)
+	`, tenantId, startMs, endMs).Scan(&directLabor)
+	if err != nil {
+		return 0, err
+	}
+
+	// 3. Get total overhead in the period (FOH cashflow + indirect labor + depreciation)
+	var foh float64
+	err = db.QueryRow(`
+		SELECT COALESCE(
+			(SELECT SUM(amount)
+			 FROM bmp_cashflow
+			 WHERE "tenantId" = $1 AND "transactionType" = 'KELUAR'
+			   AND "transactionDate" >= $2 AND "transactionDate" < $3 AND "isDeleted" = FALSE
+			   AND "costType" = 'FACTORY_OVERHEAD'), 0)
+		+ COALESCE(
+			(SELECT SUM(bp.amount)
+			 FROM bmp_payrolls bp
+			 JOIN bmp_employees be ON bp."employeeId" = be.id AND bp."tenantId" = be."tenantId"
+			 WHERE bp."tenantId" = $1 AND bp."paymentDate" >= $2 AND bp."paymentDate" < $3
+			   AND be."employeeType" = 'INDIRECT_LABOR'), 0)
+	`, tenantId, startMs, endMs).Scan(&foh)
+	if err != nil {
+		return 0, err
+	}
+
+	// Add depreciation to overhead
+	var depreciation float64
+	if periodType == "MONTHLY" {
+		_ = db.QueryRow(`
+			SELECT COALESCE(SUM(amount), 0.0) 
+			FROM bmp_monthly_depreciation 
+			WHERE "tenantId"=$1 AND period=$2
+		`, tenantId, dateStr).Scan(&depreciation)
+	} else if periodType == "QUARTERLY" {
+		parts := strings.Split(dateStr, "-Q")
+		year := parts[0]
+		quarter, _ := strconv.Atoi(parts[1])
+		var months []string
+		for m := (quarter-1)*3 + 1; m <= quarter*3; m++ {
+			months = append(months, fmt.Sprintf("'%s-%02d'", year, m))
+		}
+		qStr := fmt.Sprintf(`
+			SELECT COALESCE(SUM(amount), 0.0) 
+			FROM bmp_monthly_depreciation 
+			WHERE "tenantId"=$1 AND period IN (%s)
+		`, strings.Join(months, ","))
+		_ = db.QueryRow(qStr, tenantId).Scan(&depreciation)
+	} else { // ANNUALLY
+		_ = db.QueryRow(`
+			SELECT COALESCE(SUM(amount), 0.0) 
+			FROM bmp_monthly_depreciation 
+			WHERE "tenantId"=$1 AND period LIKE $2
+		`, tenantId, dateStr+"-%").Scan(&depreciation)
+	}
+	foh = foh + depreciation
+
+	var laborAllocationPerUnit float64 = 0.0
+	var overheadAllocationPerUnit float64 = 0.0
+	if totalProduced > 0 {
+		laborAllocationPerUnit = directLabor / totalProduced
+		overheadAllocationPerUnit = foh / totalProduced
+	}
+
+	// 4. Query all sold products in the period
+	rows, err := db.Query(`
+		SELECT bp."masterItemID", SUM(bp.quantity), COALESCE(MAX(mp."hppTotalPcs"), 0.0)
+		FROM bmp_products bp
+		JOIN bmp_invoices bi ON bp."invoiceId" = bi.id
+		LEFT JOIN bmp_master_products mp ON bp."masterItemID" = mp.id
+		WHERE bi."tenantId"=$1 AND bi."createdAt" >= $2 AND bi."createdAt" < $3 
+		  AND bi."isDeleted"=FALSE AND bp."isDeleted"=FALSE
+		GROUP BY bp."masterItemID"
+	`, tenantId, startMs, endMs)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+
+	type SoldItem struct {
+		MasterItemID int64
+		Qty          float64
+		HppOld       float64
+	}
+	var soldItems []SoldItem
+	for rows.Next() {
+		var item SoldItem
+		if errS := rows.Scan(&item.MasterItemID, &item.Qty, &item.HppOld); errS == nil {
+			soldItems = append(soldItems, item)
+		}
+	}
+
+	var totalCogs float64 = 0.0
+	for _, item := range soldItems {
+		// Calculate Material cost from BOM
+		var materialCost float64
+		errM := db.QueryRow(`
+			SELECT COALESCE(SUM(pin.quantity * COALESCE(rates.avg_rate, 0.0)), 0.0)
+			FROM bmp_product_ingredients pin
+			LEFT JOIN (
+				SELECT bbi."jenisBahan", AVG(bbi.rate) as avg_rate
+				FROM bmp_bahan_baku_item bbi
+				JOIN bmp_bahan_baku bb ON bbi."bahanBakuId" = bb.id AND bbi."tenantId" = bb."tenantId"
+				WHERE bb."tenantId" = $1 AND bb."isDeleted" = FALSE AND bbi."isDeleted" = FALSE
+				GROUP BY bbi."jenisBahan"
+			) rates ON pin."jenisBahan" = rates."jenisBahan"
+			WHERE pin."productId" = $2 AND pin."tenantId" = $1
+		`, tenantId, item.MasterItemID).Scan(&materialCost)
+
+		// HPP = Material + Labor + Overhead
+		var computedHpp float64
+		if errM == nil && materialCost > 0 {
+			computedHpp = materialCost + laborAllocationPerUnit + overheadAllocationPerUnit
+		} else {
+			// Fallback to manual if no ingredients or error
+			computedHpp = item.HppOld
+			// If old HPP is also 0, try labor + overhead allocation
+			if computedHpp == 0 {
+				computedHpp = laborAllocationPerUnit + overheadAllocationPerUnit
+			}
+		}
+
+		// Round to 2 decimal places
+		computedHpp = math.Round(computedHpp*100) / 100
+
+		// Update hppTotalPcs in bmp_master_products
+		if computedHpp > 0 {
+			_, _ = db.Exec(`
+				UPDATE bmp_master_products 
+				SET "hppTotalPcs" = $1 
+				WHERE id = $2 AND "tenantId" = $3
+			`, computedHpp, item.MasterItemID, tenantId)
+		}
+
+		totalCogs += computedHpp * item.Qty
+	}
+
+	return totalCogs, nil
 }
