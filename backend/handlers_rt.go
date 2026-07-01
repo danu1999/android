@@ -1643,6 +1643,27 @@ func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	warnings := []string{}
+	if directLabor == 0 {
+		warnings = append(warnings, "Gaji karyawan (direct labor) belum dilengkapi untuk periode ini.")
+	}
+	if depreciation == 0 {
+		warnings = append(warnings, "Biaya penyusutan aset belum dilengkapi untuk periode ini.")
+	}
+
+	var missingBomCount int
+	_ = db.QueryRow(`
+		SELECT COUNT(DISTINCT bp."masterItemID")
+		FROM bmp_products bp
+		JOIN bmp_invoices bi ON bp."invoiceId" = bi.id
+		LEFT JOIN bmp_product_ingredients pin ON bp."masterItemID" = pin."productId" AND bp."tenantId" = pin."tenantId"
+		WHERE bi."tenantId"=$1 AND bi."createdAt" >= $2 AND bi."createdAt" < $3 
+		  AND bi."isDeleted"=FALSE AND bp."isDeleted"=FALSE AND pin.id IS NULL
+	`, tenantId, startMs, endMs).Scan(&missingBomCount)
+	if missingBomCount > 0 {
+		warnings = append(warnings, "Resep / BOM belum dilengkapi untuk sebagian produk yang terjual.")
+	}
+
 	response := map[string]interface{}{
 		"period":           dateStr,
 		"omzet":            omzet,
@@ -1659,6 +1680,7 @@ func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
 		"foh":              foh,
 		"cogm":             cogm,
 		"depreciation":     depreciation,
+		"warnings":         warnings,
 	}
 
 	jsonOK(w, response)

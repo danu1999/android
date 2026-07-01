@@ -71,7 +71,8 @@ data class FinancialReportUiState(
     val cogm: Double = 0.0,
     val depreciation: Double = 0.0,
     val isLoading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val warnings: List<String> = emptyList()
 )
 
 @HiltViewModel
@@ -160,6 +161,8 @@ class FinancialAnalysisViewModel @Inject constructor(
                     )
                 } ?: emptyList()
 
+                val warningsList = (body["warnings"] as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+
                 _uiState.update {
                     it.copy(
                         periodLabel = body["period"] as? String ?: state.date,
@@ -177,7 +180,8 @@ class FinancialAnalysisViewModel @Inject constructor(
                         foh = (body["foh"] as? Number)?.toDouble() ?: 0.0,
                         cogm = (body["cogm"] as? Number)?.toDouble() ?: 0.0,
                         depreciation = (body["depreciation"] as? Number)?.toDouble() ?: 0.0,
-                        isLoading = false
+                        isLoading = false,
+                        warnings = warningsList
                     )
                 }
             } else {
@@ -335,6 +339,47 @@ fun FinancialAnalysisScreen(
                     }
                 }
             } else {
+                if (state.warnings.isNotEmpty()) {
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                                .background(
+                                    color = Color(0xFFFEF3C7),
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                .border(
+                                    width = 0.5.dp,
+                                    color = Color(0xFFF59E0B),
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            state.warnings.forEach { warningText ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Warning,
+                                        contentDescription = "Peringatan",
+                                        tint = Color(0xFFD97706),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = warningText,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Color(0xFF92400E)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Summary Metric Cards
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
