@@ -1173,6 +1173,9 @@ func initSchema() error {
 		`ALTER TABLE "bmp_master_products" ADD COLUMN IF NOT EXISTS "machine_id" INT;`,
 		`ALTER TABLE "bmp_master_products" ADD COLUMN IF NOT EXISTS "mold_id" INT;`,
 		`ALTER TABLE "bmp_master_products" ADD COLUMN IF NOT EXISTS "colorant_ratio" DOUBLE PRECISION DEFAULT 0.0;`,
+		`ALTER TABLE "bmp_machines" ADD COLUMN IF NOT EXISTS "electricity_cost_daily" DOUBLE PRECISION DEFAULT 0.0;`,
+		`ALTER TABLE "bmp_master_products" ADD COLUMN IF NOT EXISTS "colorant_material" VARCHAR(150);`,
+		`ALTER TABLE "bmp_master_products" ADD COLUMN IF NOT EXISTS "colorant_type" VARCHAR(50) DEFAULT 'RATIO';`,
 	}
 	for _, q := range machineAndMoldMigrations {
 		if _, err := db.Exec(q); err != nil {

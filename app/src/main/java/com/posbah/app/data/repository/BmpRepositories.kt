@@ -104,7 +104,9 @@ data class BmpMasterProductData(
     val hppLusin: Double = 0.0,
     val machineId: Int? = null,
     val moldId: Int? = null,
-    val colorantRatio: Double = 0.0
+    val colorantRatio: Double = 0.0,
+    val colorantMaterial: String? = null,
+    val colorantType: String = "RATIO"
 )
 
 data class BmpMachineData(
@@ -113,6 +115,7 @@ data class BmpMachineData(
     val name: String = "",
     val depreciationMonthly: Double = 0.0,
     val powerConsumptionKw: Double = 0.0,
+    val electricityCostDaily: Double = 0.0,
     val operatorSalaryMonthly: Double = 0.0,
     val overheadAllocatedMonthly: Double = 0.0,
     val hoursCapacityMonthly: Double = 624.0,
@@ -335,7 +338,9 @@ fun Map<String, Any?>.toBmpMasterProductData() = BmpMasterProductData(
     hppLusin = (getCaseInsensitive("hppLusin") as? Number)?.toDouble() ?: 0.0,
     machineId = (getCaseInsensitive("machine_id") as? Number)?.toInt(),
     moldId = (getCaseInsensitive("mold_id") as? Number)?.toInt(),
-    colorantRatio = (getCaseInsensitive("colorant_ratio") as? Number)?.toDouble() ?: 0.0
+    colorantRatio = (getCaseInsensitive("colorant_ratio") as? Number)?.toDouble() ?: 0.0,
+    colorantMaterial = getCaseInsensitive("colorant_material") as? String,
+    colorantType = getCaseInsensitive("colorant_type") as? String ?: "RATIO"
 )
 
 fun Map<String, Any?>.toBmpMachineData() = BmpMachineData(
@@ -344,6 +349,7 @@ fun Map<String, Any?>.toBmpMachineData() = BmpMachineData(
     name = getCaseInsensitive("name") as? String ?: "",
     depreciationMonthly = (getCaseInsensitive("depreciation_monthly") as? Number)?.toDouble() ?: 0.0,
     powerConsumptionKw = (getCaseInsensitive("power_consumption_kw") as? Number)?.toDouble() ?: 0.0,
+    electricityCostDaily = (getCaseInsensitive("electricity_cost_daily") as? Number)?.toDouble() ?: 0.0,
     operatorSalaryMonthly = (getCaseInsensitive("operator_salary_monthly") as? Number)?.toDouble() ?: 0.0,
     overheadAllocatedMonthly = (getCaseInsensitive("overhead_allocated_monthly") as? Number)?.toDouble() ?: 0.0,
     hoursCapacityMonthly = (getCaseInsensitive("hours_capacity_monthly") as? Number)?.toDouble() ?: 624.0,
@@ -1373,6 +1379,8 @@ class BmpMasterProductRepository @Inject constructor(
                 if (item.machineId != null) put("machine_id", item.machineId)
                 if (item.moldId != null) put("mold_id", item.moldId)
                 put("colorant_ratio", item.colorantRatio)
+                if (item.colorantMaterial != null) put("colorant_material", item.colorantMaterial)
+                put("colorant_type", item.colorantType)
                 if (item.description != null) put("description", item.description)
                 if (item.uniqueID != null) put("uniqueID", item.uniqueID)
                 if (item.slug != null) put("slug", item.slug)
@@ -1427,7 +1435,9 @@ class BmpMasterProductRepository @Inject constructor(
                     hppLusin = it.hppLusin,
                     machineId = it.machineId,
                     moldId = it.moldId,
-                    colorantRatio = it.colorantRatio
+                    colorantRatio = it.colorantRatio,
+                    colorantMaterial = it.colorantMaterial,
+                    colorantType = it.colorantType
                 )
             }
         }
@@ -3036,6 +3046,7 @@ class BmpMachineRepository @Inject constructor(
                 put("name", item.name)
                 put("depreciation_monthly", item.depreciationMonthly)
                 put("power_consumption_kw", item.powerConsumptionKw)
+                put("electricity_cost_daily", item.electricityCostDaily)
                 put("operator_salary_monthly", item.operatorSalaryMonthly)
                 put("overhead_allocated_monthly", item.overheadAllocatedMonthly)
                 put("hours_capacity_monthly", item.hoursCapacityMonthly)
@@ -3071,6 +3082,7 @@ class BmpMachineRepository @Inject constructor(
                     name = it.name,
                     depreciationMonthly = it.depreciationMonthly,
                     powerConsumptionKw = it.powerConsumptionKw,
+                    electricityCostDaily = it.electricityCostDaily,
                     operatorSalaryMonthly = it.operatorSalaryMonthly,
                     overheadAllocatedMonthly = it.overheadAllocatedMonthly,
                     hoursCapacityMonthly = it.hoursCapacityMonthly,

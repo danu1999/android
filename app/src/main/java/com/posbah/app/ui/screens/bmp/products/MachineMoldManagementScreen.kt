@@ -108,6 +108,7 @@ class MachineMoldViewModel @Inject constructor(
             name = e.name,
             depreciationMonthly = e.depreciationMonthly,
             powerConsumptionKw = e.powerConsumptionKw,
+            electricityCostDaily = e.electricityCostDaily,
             operatorSalaryMonthly = e.operatorSalaryMonthly,
             overheadAllocatedMonthly = e.overheadAllocatedMonthly,
             hoursCapacityMonthly = e.hoursCapacityMonthly
@@ -331,13 +332,13 @@ fun MachineMoldManagementScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
-                        value = if (edit.powerConsumptionKw == 0.0) "" else edit.powerConsumptionKw.toString(),
+                        value = if (edit.electricityCostDaily == 0.0) "" else edit.electricityCostDaily.toLong().toString(),
                         onValueChange = { v ->
-                            val n = v.replace(",", ".").toDoubleOrNull() ?: 0.0
-                            viewModel.updateMachineField { it.copy(powerConsumptionKw = n) }
+                            val n = v.replace(",", "").replace(".", "").toDoubleOrNull() ?: 0.0
+                            viewModel.updateMachineField { it.copy(electricityCostDaily = n) }
                         },
-                        label = { Text("Konsumsi Daya Mesin (kW)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        label = { Text("Biaya Listrik Nominal Harian (Rp/Hari)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -558,8 +559,8 @@ fun MachineCard(
                 Text(Formatters.rupiah(machine.depreciationMonthly), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
             }
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                Text("Daya Mesin (kW):", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                Text("${Formatters.number(machine.powerConsumptionKw)} kW", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                Text("Listrik Nominal Harian:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                Text(Formatters.rupiah(machine.electricityCostDaily), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
             }
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 Text("Gaji Operator / Bulan:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)

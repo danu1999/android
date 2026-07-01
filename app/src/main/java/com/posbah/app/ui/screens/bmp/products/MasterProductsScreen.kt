@@ -24,6 +24,8 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -166,15 +168,24 @@ class MasterProductsViewModel @Inject constructor(
         val s = settings.value
         val rates = latestRates.value
         val computed = if (s != null) {
-            val colorantRate = rates.filter { it.key.contains("pewarna", ignoreCase = true) }
-                .values.average().takeIf { !it.isNaN() } ?: 60000.0
+            val colorantMaterialRaw = e.colorantMaterial ?: ""
+            val colorantName = colorantMaterialRaw.substringBefore(":")
+            val colorantRate = colorantMaterialRaw.substringAfter(":", "").toDoubleOrNull()
+                ?: rates.filter { it.key.contains("pewarna", ignoreCase = true) }
+                    .values.average().takeIf { !it.isNaN() } ?: 60000.0
             val resinRate = if (e.jenisBahanBaku.isNotEmpty()) {
                 rates[e.jenisBahanBaku] ?: e.price
             } else {
                 e.price
             }
             val mixedRate = if (e.colorantRatio > 0.0) {
-                (e.colorantRatio * resinRate + colorantRate) / (e.colorantRatio + 1.0)
+                if (e.colorantType == "PERCENTAGE") {
+                    val p = e.colorantRatio.coerceIn(0.0, 100.0)
+                    ((100.0 - p) * resinRate + p * colorantRate) / 100.0
+                } else {
+                    val r = e.colorantRatio
+                    (r * resinRate + colorantRate) / (r + 1.0)
+                }
             } else {
                 resinRate
             }
@@ -182,7 +193,7 @@ class MasterProductsViewModel @Inject constructor(
             val selectedMachine = machines.value.find { it.id == e.machineId?.toLong() }
             val biayaMesin = if (selectedMachine != null) {
                 val totalGajiMesin = selectedMachine.operatorSalaryMonthly
-                val listrikMesin = selectedMachine.powerConsumptionKw * selectedMachine.hoursCapacityMonthly * 1500.0
+                val listrikMesin = selectedMachine.electricityCostDaily * s.hariKerjaSebulan
                 val overheadMesin = selectedMachine.depreciationMonthly + selectedMachine.overheadAllocatedMonthly + totalGajiMesin + listrikMesin
                 val totalDetikMesin = selectedMachine.hoursCapacityMonthly * 3600.0
                 val biayaPerDetik = if (totalDetikMesin > 0) overheadMesin / totalDetikMesin else 0.0
@@ -236,7 +247,9 @@ class MasterProductsViewModel @Inject constructor(
             hppLusin = finalProduct.hppLusin,
             machineId = finalProduct.machineId,
             moldId = finalProduct.moldId,
-            colorantRatio = finalProduct.colorantRatio
+            colorantRatio = finalProduct.colorantRatio,
+            colorantMaterial = finalProduct.colorantMaterial,
+            colorantType = finalProduct.colorantType
         )
         // Optimistic: tutup form langsung sebelum menunggu network
         _form.update { FormState() }
@@ -461,15 +474,26 @@ fun MasterProductsScreen(
 
         val hppRes = remember(e, settings, latestRates, machinesState, moldsState) {
             settings?.let { s ->
-                val colorantRate = latestRates.filter { it.key.contains("pewarna", ignoreCase = true) }
-                    .values.average().takeIf { !it.isNaN() } ?: 60000.0
+                val colorantMaterialRaw = e.colorantMaterial ?: ""
+                val colorantName = colorantMaterialRaw.substringBefore(":")
+                val colorantRate = colorantMaterialRaw.substringAfter(":", "").toDoubleOrNull()
+                    ?: latestRates.filter { it.key.contains("pewarna", ignoreCase = true) }
+                        .values.average().takeIf { !it.isNaN() } ?: 60000.0
+                
                 val resinRate = if (e.jenisBahanBaku.isNotEmpty()) {
                     latestRates[e.jenisBahanBaku] ?: e.price
                 } else {
                     e.price
                 }
+                
                 val mixedRate = if (e.colorantRatio > 0.0) {
-                    (e.colorantRatio * resinRate + colorantRate) / (e.colorantRatio + 1.0)
+                    if (e.colorantType == "PERCENTAGE") {
+                        val p = e.colorantRatio.coerceIn(0.0, 100.0)
+                        ((100.0 - p) * resinRate + p * colorantRate) / 100.0
+                    } else {
+                        val r = e.colorantRatio
+                        (r * resinRate + colorantRate) / (r + 1.0)
+                    }
                 } else {
                     resinRate
                 }
@@ -477,7 +501,7 @@ fun MasterProductsScreen(
                 val selectedMachine = machinesState.find { it.id == e.machineId?.toLong() }
                 val biayaMesin = if (selectedMachine != null) {
                     val totalGajiMesin = selectedMachine.operatorSalaryMonthly
-                    val listrikMesin = selectedMachine.powerConsumptionKw * selectedMachine.hoursCapacityMonthly * 1500.0
+                    val listrikMesin = selectedMachine.electricityCostDaily * s.hariKerjaSebulan
                     val overheadMesin = selectedMachine.depreciationMonthly + selectedMachine.overheadAllocatedMonthly + totalGajiMesin + listrikMesin
                     val totalDetikMesin = selectedMachine.hoursCapacityMonthly * 3600.0
                     val biayaPerDetik = if (totalDetikMesin > 0) overheadMesin / totalDetikMesin else 0.0
@@ -507,7 +531,7 @@ fun MasterProductsScreen(
                 HppResult(
                     overheadBulanan = if (selectedMachine != null) {
                         val totalGajiMesin = selectedMachine.operatorSalaryMonthly
-                        val listrikMesin = selectedMachine.powerConsumptionKw * selectedMachine.hoursCapacityMonthly * 1500.0
+                        val listrikMesin = selectedMachine.electricityCostDaily * s.hariKerjaSebulan
                         selectedMachine.depreciationMonthly + selectedMachine.overheadAllocatedMonthly + totalGajiMesin + listrikMesin
                     } else {
                         s.listrikBulanan + s.jumlahKaryawan * s.gajiHarian * s.hariKerjaSebulan
@@ -617,18 +641,152 @@ fun MasterProductsScreen(
                         )
                     }
 
+                    val colorantMaterialRaw = e.colorantMaterial ?: ""
+                    val colorantName = colorantMaterialRaw.substringBefore(":")
+                    val colorantRateVal = colorantMaterialRaw.substringAfter(":", "").toDoubleOrNull()
+                    val displayColorantText = if (colorantName.isNotEmpty()) {
+                        "$colorantName (${Formatters.rupiah(colorantRateVal ?: 0.0)}/Kg)"
+                    } else {
+                        "Polos (Tanpa Pewarna)"
+                    }
+
                     Spacer(Modifier.size(8.dp))
+                    var showColorantSelector by remember { mutableStateOf(false) }
+
+                    OutlinedTextField(
+                        value = displayColorantText,
+                        onValueChange = {},
+                        label = { Text("Bahan Pewarna / Campuran") },
+                        readOnly = true,
+                        enabled = false,
+                        modifier = Modifier.fillMaxWidth().clickable { showColorantSelector = true }
+                    )
+
+                    Spacer(Modifier.size(8.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Mode Pewarna:", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                        Button(
+                            onClick = { viewModel.updateField { it.copy(colorantType = "RATIO") } },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (e.colorantType == "RATIO") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (e.colorantType == "RATIO") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Rasio (1:R)") }
+                        Button(
+                            onClick = { viewModel.updateField { it.copy(colorantType = "PERCENTAGE") } },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (e.colorantType == "PERCENTAGE") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (e.colorantType == "PERCENTAGE") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Persen (%)") }
+                    }
+
+                    Spacer(Modifier.size(8.dp))
+                    val labelText = if (e.colorantType == "PERCENTAGE") {
+                        "Persentase Pewarna (Contoh: 2 untuk 2%)"
+                    } else {
+                        "Rasio Resin ke Pewarna (Contoh: 50 untuk 1:50)"
+                    }
                     OutlinedTextField(
                         value = if (e.colorantRatio == 0.0) "" else e.colorantRatio.toString(),
                         onValueChange = { v ->
                             val n = v.replace(",", ".").toDoubleOrNull() ?: 0.0
                             viewModel.updateField { it.copy(colorantRatio = n) }
                         },
-                        label = { Text("Rasio Pewarna (Contoh: 50 untuk 1:50, 0 jika polos)") },
+                        label = { Text(labelText) },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    // Colorant Selector Dialog
+                    if (showColorantSelector) {
+                        var customName by remember { mutableStateOf("") }
+                        var customRate by remember { mutableStateOf("") }
+
+                        AlertDialog(
+                            onDismissRequest = { showColorantSelector = false },
+                            title = { Text("Pilih Pewarna") },
+                            text = {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text("Tulis Pewarna Kustom Baru:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                    OutlinedTextField(
+                                        value = customName,
+                                        onValueChange = { customName = it },
+                                        label = { Text("Nama Pewarna Kustom") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    OutlinedTextField(
+                                        value = customRate,
+                                        onValueChange = { customRate = it },
+                                        label = { Text("Harga / Kg (Rp)") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    Button(
+                                        onClick = {
+                                            if (customName.isNotEmpty()) {
+                                                val rate = customRate.replace(",", "").toDoubleOrNull() ?: 60000.0
+                                                viewModel.updateField { it.copy(colorantMaterial = "$customName:$rate") }
+                                                showColorantSelector = false
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("+ Gunakan Pewarna Kustom Ini")
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Divider(color = MaterialTheme.colorScheme.outlineVariant)
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    Text("Pilih dari Bahan Pewarna Terdaftar:", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                                    
+                                    Surface(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                viewModel.updateField { it.copy(colorantMaterial = null, colorantRatio = 0.0) }
+                                                showColorantSelector = false
+                                            }
+                                            .padding(vertical = 8.dp)
+                                    ) {
+                                        Text("(Tanpa Pewarna / Polos)", color = Color.Gray)
+                                    }
+
+                                    val dbPewarnas = latestRates.keys.filter { it.contains("pewarna", ignoreCase = true) }
+                                    dbPewarnas.forEach { name ->
+                                        val rate = latestRates[name] ?: 0.0
+                                        Surface(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    viewModel.updateField { it.copy(colorantMaterial = "$name:$rate") }
+                                                    showColorantSelector = false
+                                                }
+                                                .padding(vertical = 8.dp)
+                                        ) {
+                                            Text("$name (${Formatters.rupiah(rate)}/Kg)", fontWeight = FontWeight.Medium)
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {},
+                            dismissButton = {
+                                TextButton(onClick = { showColorantSelector = false }) { Text("Batal") }
+                            }
+                        )
+                    }
 
                     // Machine Selector Dialog
                     if (showMachineSelector) {

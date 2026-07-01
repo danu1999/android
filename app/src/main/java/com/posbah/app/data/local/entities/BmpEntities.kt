@@ -77,7 +77,9 @@ data class BmpMasterProductEntity(
     val hppLusin: Double = 0.0,
     val machineId: Int? = null,
     val moldId: Int? = null,
-    val colorantRatio: Double = 0.0
+    val colorantRatio: Double = 0.0,
+    val colorantMaterial: String? = null,
+    val colorantType: String = "RATIO"
 )
 
 data class BmpProductEntity(
@@ -308,6 +310,7 @@ data class BmpMachineEntity(
     val name: String,
     val depreciationMonthly: Double = 0.0,
     val powerConsumptionKw: Double = 0.0,
+    val electricityCostDaily: Double = 0.0,
     val operatorSalaryMonthly: Double = 0.0,
     val overheadAllocatedMonthly: Double = 0.0,
     val hoursCapacityMonthly: Double = 624.0,
