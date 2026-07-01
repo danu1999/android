@@ -1001,6 +1001,18 @@ func initSchema() error {
 			CONSTRAINT "uniq_production_material" UNIQUE ("tenantId", "productionLogId", "rawMaterialId")
 		);`,
 		`CREATE INDEX IF NOT EXISTS "idx_prod_materials_log" ON "bmp_production_materials" ("tenantId", "productionLogId");`,
+
+		// v2.19.16: Tambah kolom invoice_payment_id, bahan_baku_id, dan cost_center di bmp_cashflow
+		`ALTER TABLE "bmp_cashflow" ADD COLUMN IF NOT EXISTS "invoice_payment_id" INT;`,
+		`ALTER TABLE "bmp_cashflow" ADD COLUMN IF NOT EXISTS "bahan_baku_id" INT;`,
+		`ALTER TABLE "bmp_cashflow" ADD COLUMN IF NOT EXISTS "cost_center" VARCHAR(50) DEFAULT 'OPERATIONAL_OPEX';`,
+		`ALTER TABLE "bmp_cashflow" DROP CONSTRAINT IF EXISTS "fk_cashflow_invoice_payment";`,
+		`ALTER TABLE "bmp_cashflow" ADD CONSTRAINT "fk_cashflow_invoice_payment" FOREIGN KEY ("invoice_payment_id", "tenantId") REFERENCES "bmp_invoice_payments" ("id", "tenantId") ON DELETE CASCADE;`,
+		`ALTER TABLE "bmp_cashflow" DROP CONSTRAINT IF EXISTS "fk_cashflow_bahan_baku";`,
+		`ALTER TABLE "bmp_cashflow" ADD CONSTRAINT "fk_cashflow_bahan_baku" FOREIGN KEY ("bahan_baku_id", "tenantId") REFERENCES "bmp_bahan_baku" ("id", "tenantId") ON DELETE CASCADE;`,
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_cashflow_invoice_payment_id" ON "bmp_cashflow" ("invoice_payment_id", "tenantId") WHERE "invoice_payment_id" IS NOT NULL;`,
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_cashflow_bahan_baku_id" ON "bmp_cashflow" ("bahan_baku_id", "tenantId") WHERE "bahan_baku_id" IS NOT NULL;`,
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_cashflow_cost_center" ON "bmp_cashflow" ("cost_center");`,
 	}
 	for _, q := range manufakturMigrations {
 		if _, err := db.Exec(q); err != nil {

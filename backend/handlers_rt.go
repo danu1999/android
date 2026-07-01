@@ -777,15 +777,17 @@ func handleRtBmpPayments(w http.ResponseWriter, r *http.Request) {
 		}
 
 		cfBody := map[string]interface{}{
-			"tenantId":        tenantId,
-			"transactionDate": txDate,
-			"transactionType": "MASUK",
-			"description":     desc,
-			"amount":          amountVal,
-			"costType":        "OPERATING_EXPENSE",
-			"paymentRefId":    id,
-			"createdAt":       nowMillis(),
-			"isDeleted":       false,
+			"tenantId":           tenantId,
+			"transactionDate":    txDate,
+			"transactionType":    "MASUK",
+			"description":        desc,
+			"amount":             amountVal,
+			"costType":           "OPERATING_EXPENSE",
+			"paymentRefId":       id,
+			"invoice_payment_id": id,
+			"cost_center":        "OPERATIONAL_OPEX",
+			"createdAt":          nowMillis(),
+			"isDeleted":          false,
 		}
 		_, errCf := insertRow("bmp_cashflow", cfBody)
 		if errCf != nil {
@@ -809,7 +811,7 @@ func handleRtBmpPaymentsById(w http.ResponseWriter, r *http.Request) {
 		if err != nil { jsonErr(w, 500, err.Error()); return }
 
 		// Otomatis hapus arus kas terkait
-		_, errCf := db.Exec(`UPDATE bmp_cashflow SET "isDeleted"=TRUE WHERE "paymentRefId"=$1 AND "tenantId"=$2`, id, tenantId)
+		_, errCf := db.Exec(`UPDATE bmp_cashflow SET "isDeleted"=TRUE WHERE ("paymentRefId"=$1 OR "invoice_payment_id"=$1) AND "tenantId"=$2`, id, tenantId)
 		if errCf != nil {
 			log.Printf("[Warning] Gagal menghapus arus kas otomatis: %v", errCf)
 		}
@@ -1028,6 +1030,8 @@ func handleRtBmpBahanBaku(w http.ResponseWriter, r *http.Request) {
 				"amount":          nominalVal,
 				"costType":        "FACTORY_OVERHEAD",
 				"bahanBakuRefId":  id,
+				"bahan_baku_id":   id,
+				"cost_center":     "PRODUCTION_BOP",
 				"createdAt":       nowMillis(),
 				"isDeleted":       false,
 			}
@@ -1057,7 +1061,7 @@ func handleRtBmpBahanBakuById(w http.ResponseWriter, r *http.Request) {
 
 		// Sync ke cashflow: cek apakah record cashflow untuk bahanBakuRefId ini sudah ada
 		var exists bool
-		_ = db.QueryRow(`SELECT EXISTS(SELECT 1 FROM bmp_cashflow WHERE "bahanBakuRefId"=$1 AND "tenantId"=$2)`, id, tenantId).Scan(&exists)
+		_ = db.QueryRow(`SELECT EXISTS(SELECT 1 FROM bmp_cashflow WHERE ("bahanBakuRefId"=$1 OR "bahan_baku_id"=$1) AND "tenantId"=$2)`, id, tenantId).Scan(&exists)
 
 		nominalVal := 0.0
 		if nom, ok := body["nominal"].(float64); ok {
@@ -1067,7 +1071,7 @@ func handleRtBmpBahanBakuById(w http.ResponseWriter, r *http.Request) {
 		if exists {
 			if nominalVal <= 0 {
 				// Nominal diubah menjadi <= 0, hapus record cashflow
-				_, _ = db.Exec(`UPDATE bmp_cashflow SET "isDeleted"=TRUE WHERE "bahanBakuRefId"=$1 AND "tenantId"=$2`, id, tenantId)
+				_, _ = db.Exec(`UPDATE bmp_cashflow SET "isDeleted"=TRUE WHERE ("bahanBakuRefId"=$1 OR "bahan_baku_id"=$1) AND "tenantId"=$2`, id, tenantId)
 			} else {
 				// Update record cashflow yang ada
 				noTagihan, _ := body["noTagihan"].(string)
@@ -1079,7 +1083,7 @@ func handleRtBmpBahanBakuById(w http.ResponseWriter, r *http.Request) {
 				if tgl, ok := body["tanggal"].(float64); ok {
 					txDate = int64(tgl)
 				}
-				_, errCf := db.Exec(`UPDATE bmp_cashflow SET "transactionDate"=$1, "amount"=$2, "description"=$3, "isDeleted"=FALSE WHERE "bahanBakuRefId"=$4 AND "tenantId"=$5`,
+				_, errCf := db.Exec(`UPDATE bmp_cashflow SET "transactionDate"=$1, "amount"=$2, "description"=$3, "isDeleted"=FALSE WHERE ("bahanBakuRefId"=$4 OR "bahan_baku_id"=$4) AND "tenantId"=$5`,
 					txDate, nominalVal, desc, id, tenantId)
 				if errCf != nil {
 					log.Printf("[Warning] Gagal memperbarui arus kas otomatis: %v", errCf)
@@ -1104,6 +1108,8 @@ func handleRtBmpBahanBakuById(w http.ResponseWriter, r *http.Request) {
 				"amount":          nominalVal,
 				"costType":        "FACTORY_OVERHEAD",
 				"bahanBakuRefId":  id,
+				"bahan_baku_id":   id,
+				"cost_center":     "PRODUCTION_BOP",
 				"createdAt":       nowMillis(),
 				"isDeleted":       false,
 			}
@@ -1119,7 +1125,7 @@ func handleRtBmpBahanBakuById(w http.ResponseWriter, r *http.Request) {
 		if err != nil { jsonErr(w, 500, err.Error()); return }
 
 		// Otomatis hapus arus kas terkait
-		_, errCf := db.Exec(`UPDATE bmp_cashflow SET "isDeleted"=TRUE WHERE "bahanBakuRefId"=$1 AND "tenantId"=$2`, id, tenantId)
+		_, errCf := db.Exec(`UPDATE bmp_cashflow SET "isDeleted"=TRUE WHERE ("bahanBakuRefId"=$1 OR "bahan_baku_id"=$1) AND "tenantId"=$2`, id, tenantId)
 		if errCf != nil {
 			log.Printf("[Warning] Gagal menghapus arus kas otomatis: %v", errCf)
 		}
