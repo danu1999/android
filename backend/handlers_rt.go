@@ -1039,6 +1039,9 @@ func handleRtBmpBahanBaku(w http.ResponseWriter, r *http.Request) {
 			if errCf != nil {
 				log.Printf("[Warning] Gagal mencatat arus kas keluar otomatis: %v", errCf)
 			}
+			// Trigger HPP recalculation for the period
+			startMs, endMs, dateStr := getPeriodRangeFromMs(txDate)
+			_, _ = updateAndCalculateCOGS(tenantId, startMs, endMs, dateStr, "MONTHLY")
 		}
 
 		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
@@ -1119,6 +1122,14 @@ func handleRtBmpBahanBakuById(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		// Trigger HPP recalculation for the period
+		txDate := nowMillis()
+		if tgl, ok := body["tanggal"].(float64); ok {
+			txDate = int64(tgl)
+		}
+		startMs, endMs, dateStr := getPeriodRangeFromMs(txDate)
+		_, _ = updateAndCalculateCOGS(tenantId, startMs, endMs, dateStr, "MONTHLY")
+
 		jsonOK(w, map[string]interface{}{"ok": true})
 	case http.MethodDelete:
 		_, err := db.Exec(`UPDATE bmp_bahan_baku SET "isDeleted"=TRUE,"updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, nowMillis(), id, tenantId)
@@ -1177,9 +1188,27 @@ func handleRtBmpProductionLogs(w http.ResponseWriter, r *http.Request) {
 		defer rows.Close(); jsonOK(w, rowsToJSON(rows))
 	case http.MethodPost:
 		var body map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&body); body["tenantId"] = tenantId
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid body")
+			return
+		}
+		body["tenantId"] = tenantId
+		
+		statusVal, ok := body["status"].(string)
+		if !ok || statusVal == "" {
+			body["status"] = "COMPLETED" // Default
+			statusVal = "COMPLETED"
+		}
+		
 		id, err := insertRow("bmp_production_logs", body)
 		if err != nil { jsonErr(w, 500, err.Error()); return }
+		
+		if statusVal == "COMPLETED" {
+			errTrigger := triggerProductionLogCompletion(tenantId, id)
+			if errTrigger != nil {
+				log.Printf("[Warning] Gagal memicu penyelesaian log produksi: %v", errTrigger)
+			}
+		}
 		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
 	default:
 		jsonErr(w, 405, "method not allowed")
@@ -1192,6 +1221,23 @@ func handleRtBmpProductionLogsById(w http.ResponseWriter, r *http.Request) {
 	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/bmp/production-logs/")
 	id, _ := strconv.ParseInt(idStr, 10, 64)
 	switch r.Method {
+	case http.MethodPut:
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid body")
+			return
+		}
+		err := updateRow("bmp_production_logs", id, tenantId, body)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+
+		statusVal, _ := body["status"].(string)
+		if statusVal == "COMPLETED" {
+			errTrigger := triggerProductionLogCompletion(tenantId, id)
+			if errTrigger != nil {
+				log.Printf("[Warning] Gagal memicu penyelesaian log produksi: %v", errTrigger)
+			}
+		}
+		jsonOK(w, map[string]interface{}{"ok": true})
 	case http.MethodDelete:
 		_, err := db.Exec(`UPDATE bmp_production_logs SET "isDeleted"=TRUE WHERE id=$1 AND "tenantId"=$2`, id, tenantId)
 		if err != nil { jsonErr(w, 500, err.Error()); return }
@@ -2151,6 +2197,91 @@ func handleRtBmpProductionMaterialsById(w http.ResponseWriter, r *http.Request) 
 	default:
 		jsonErr(w, 405, "method not allowed")
 	}
+}
+
+func getPeriodRangeFromMs(ms int64) (int64, int64, string) {
+	loc, _ := time.LoadLocation("Asia/Jakarta")
+	t := time.Unix(ms/1000, (ms%1000)*1e6).In(loc)
+	dateStr := t.Format("2006-01")
+	startT := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, loc)
+	endT := startT.AddDate(0, 1, 0)
+	return startT.UnixNano() / 1e6, endT.UnixNano() / 1e6, dateStr
+}
+
+func triggerProductionLogCompletion(tenantId string, logId int64) error {
+	var masterProductId int64
+	var quantityProduced float64
+	var productionDate int64
+	err := db.QueryRow(`
+		SELECT "masterProductId", "quantityProduced", "productionDate" 
+		FROM bmp_production_logs 
+		WHERE id=$1 AND "tenantId"=$2 AND "isDeleted"=FALSE
+	`, logId, tenantId).Scan(&masterProductId, &quantityProduced, &productionDate)
+	if err != nil {
+		return err
+	}
+
+	// 1. Clear any existing materials for this log
+	_, _ = db.Exec(`UPDATE bmp_production_materials SET "isDeleted"=TRUE WHERE "productionLogId"=$1 AND "tenantId"=$2`, logId, tenantId)
+
+	// 2. Query ingredients (BOM)
+	rows, err := db.Query(`
+		SELECT "jenisBahan", quantity 
+		FROM bmp_product_ingredients 
+		WHERE "productId"=$1 AND "tenantId"=$2
+	`, masterProductId, tenantId)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var jenisBahan string
+		var bomQty float64
+		if errS := rows.Scan(&jenisBahan, &bomQty); errS == nil {
+			qtyUsed := bomQty * quantityProduced
+			
+			// Find rawMaterialId (latest active purchase of this material)
+			var rawMaterialId int64 = 0
+			_ = db.QueryRow(`
+				SELECT bbi.id 
+				FROM bmp_bahan_baku_item bbi 
+				JOIN bmp_bahan_baku bb ON bbi."bahanBakuId" = bb.id AND bbi."tenantId" = bb."tenantId" 
+				WHERE bb."tenantId"=$1 AND bbi."jenisBahan"=$2 AND bb."isDeleted"=FALSE AND bbi."isDeleted"=FALSE 
+				ORDER BY bb.tanggal DESC, bbi.id DESC 
+				LIMIT 1
+			`, tenantId, jenisBahan).Scan(&rawMaterialId)
+
+			// Insert detail pemakaian
+			_, _ = db.Exec(`
+				INSERT INTO bmp_production_materials ("tenantId", "productionLogId", "rawMaterialId", "jenisBahan", "quantityUsed", "createdAt", "updatedAt")
+				VALUES ($1, $2, $3, $4, $5, $6, $6)
+				ON CONFLICT ("tenantId", "productionLogId", "rawMaterialId") 
+				DO UPDATE SET "quantityUsed"=$5, "isDeleted"=FALSE, "updatedAt"=$6
+			`, tenantId, logId, rawMaterialId, jenisBahan, qtyUsed, nowMillis())
+		}
+	}
+
+	// 3. Recalculate HPP for the period
+	startMs, endMs, dateStr := getPeriodRangeFromMs(productionDate)
+	_, _ = updateAndCalculateCOGS(tenantId, startMs, endMs, dateStr, "MONTHLY")
+
+	// 4. Fetch the computed HPP
+	var hppTotal float64
+	errHpp := db.QueryRow(`SELECT "hppTotalPcs" FROM bmp_master_products WHERE id=$1 AND "tenantId"=$2`, masterProductId, tenantId).Scan(&hppTotal)
+	if errHpp == nil && hppTotal > 0 {
+		// Snapshot HPP to invoice products
+		_, _ = db.Exec(`
+			UPDATE bmp_products bp 
+			SET "hargaBeli" = $1 
+			FROM bmp_invoices bi 
+			WHERE bp."invoiceId" = bi.id AND bp."masterItemID" = $2 AND bp."tenantId" = $3 
+			  AND bi."createdAt" >= $4 AND bi."createdAt" < $5 
+			  AND bi."isDeleted" = FALSE AND bp."isDeleted" = FALSE
+		`, hppTotal, masterProductId, tenantId, startMs, endMs)
+	}
+
+	return nil
 }
 
 func updateAndCalculateCOGS(tenantId string, startMs int64, endMs int64, dateStr string, periodType string) (float64, error) {

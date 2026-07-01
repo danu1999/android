@@ -1013,6 +1013,10 @@ func initSchema() error {
 		`CREATE INDEX IF NOT EXISTS "idx_bmp_cashflow_invoice_payment_id" ON "bmp_cashflow" ("invoice_payment_id", "tenantId") WHERE "invoice_payment_id" IS NOT NULL;`,
 		`CREATE INDEX IF NOT EXISTS "idx_bmp_cashflow_bahan_baku_id" ON "bmp_cashflow" ("bahan_baku_id", "tenantId") WHERE "bahan_baku_id" IS NOT NULL;`,
 		`CREATE INDEX IF NOT EXISTS "idx_bmp_cashflow_cost_center" ON "bmp_cashflow" ("cost_center");`,
+
+		// v2.19.17: Tambah kolom status di bmp_production_logs untuk WIP
+		`ALTER TABLE "bmp_production_logs" ADD COLUMN IF NOT EXISTS "status" VARCHAR(50) DEFAULT 'COMPLETED';`,
+		`CREATE INDEX IF NOT EXISTS "idx_production_logs_status" ON "bmp_production_logs" ("tenantId", "status");`,
 	}
 	for _, q := range manufakturMigrations {
 		if _, err := db.Exec(q); err != nil {
