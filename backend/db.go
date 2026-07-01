@@ -1184,6 +1184,11 @@ func initSchema() error {
 		`ALTER TABLE "bmp_production_logs" ADD COLUMN IF NOT EXISTS "color_mixture" TEXT DEFAULT NULL;`,
 		// v2.19.18: Tambah color_mixture ke bahan baku item (campuran warna per batch)
 		`ALTER TABLE "bmp_bahan_baku_item" ADD COLUMN IF NOT EXISTS "color_mixture" TEXT DEFAULT NULL;`,
+		// v2.19.21: Absensi Harian Mesin (3 Shift), Pelacakan Matras
+		`ALTER TABLE "bmp_machines" ADD COLUMN IF NOT EXISTS "mold_id" INT DEFAULT NULL;`,
+		`ALTER TABLE "bmp_molds" ADD COLUMN IF NOT EXISTS "usage_count" INT DEFAULT 0;`,
+		`ALTER TABLE "bmp_production_logs" ADD COLUMN IF NOT EXISTS "workers_attendance" TEXT DEFAULT NULL;`,
+		`ALTER TABLE "bmp_production_logs" ADD COLUMN IF NOT EXISTS "shift_name" VARCHAR(50) DEFAULT 'PAGI';`,
 	}
 	for _, q := range machineAndMoldMigrations {
 		if _, err := db.Exec(q); err != nil {

@@ -3056,7 +3056,7 @@ class BmpMachineRepository @Inject constructor(
             _items.value = snapshot.map { if (it.id == item.id) item else it }
         }
         return try {
-            val body = mutableMapOf<String, Any>().apply {
+            val body = mutableMapOf<String, Any?>().apply {
                 put("name", item.name)
                 put("depreciation_monthly", item.depreciationMonthly)
                 put("power_consumption_kw", item.powerConsumptionKw)
@@ -3065,7 +3065,7 @@ class BmpMachineRepository @Inject constructor(
                 put("overhead_allocated_monthly", item.overheadAllocatedMonthly)
                 put("hours_capacity_monthly", item.hoursCapacityMonthly)
                 put("is_active", item.isActive)
-                if (item.moldId != null) put("mold_id", item.moldId)
+                put("mold_id", item.moldId)
             }
             if (item.id == 0L) api.createMachine(body)
             else api.updateMachine(item.id, body)
