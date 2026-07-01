@@ -952,6 +952,27 @@ func initSchema() error {
 		`ALTER TABLE "bmp_cashflow" ADD COLUMN IF NOT EXISTS "bahanBakuRefId" INT;`,
 		`CREATE INDEX IF NOT EXISTS "idx_bmp_cashflow_paymentRefId" ON "bmp_cashflow" ("paymentRefId") WHERE "paymentRefId" IS NOT NULL;`,
 		`CREATE INDEX IF NOT EXISTS "idx_bmp_cashflow_bahanBakuRefId" ON "bmp_cashflow" ("bahanBakuRefId") WHERE "bahanBakuRefId" IS NOT NULL;`,
+
+		// v2.19.13: Tambah tabel bmp_assets dan modifikasi tabel bmp_monthly_depreciation
+		`CREATE TABLE IF NOT EXISTS "bmp_assets" (
+			"id" SERIAL PRIMARY KEY,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"assetName" VARCHAR(255) NOT NULL,
+			"purchaseDate" BIGINT NOT NULL,
+			"purchasePrice" DOUBLE PRECISION NOT NULL,
+			"usefulLifeMonths" INT NOT NULL,
+			"residualValue" DOUBLE PRECISION DEFAULT 0.0,
+			"depreciationMethod" VARCHAR(50) DEFAULT 'STRAIGHT_LINE',
+			"isDeleted" BOOLEAN DEFAULT FALSE,
+			"createdAt" BIGINT,
+			"updatedAt" BIGINT
+		);`,
+		`ALTER TABLE "bmp_monthly_depreciation" ADD COLUMN IF NOT EXISTS "assetId" INT DEFAULT 0;`,
+		`ALTER TABLE "bmp_monthly_depreciation" DROP CONSTRAINT IF EXISTS "uniq_depreciation_period";`,
+		`ALTER TABLE "bmp_monthly_depreciation" DROP CONSTRAINT IF EXISTS "uniq_depreciation_asset_period";`,
+		`ALTER TABLE "bmp_monthly_depreciation" ADD CONSTRAINT "uniq_depreciation_asset_period" UNIQUE ("tenantId", "assetId", "period");`,
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_assets_tenant_deleted" ON "bmp_assets" ("tenantId", "isDeleted");`,
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_depreciation_asset_period" ON "bmp_monthly_depreciation" ("tenantId", "assetId", "period");`,
 	}
 	for _, q := range manufakturMigrations {
 		if _, err := db.Exec(q); err != nil {

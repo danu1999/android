@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -1856,6 +1857,58 @@ func handleRtBmpSuppliers(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, list)
 }
 
+func isPeriodWithinAssetLife(purchaseDateMs int64, usefulLifeMonths int, targetPeriod string) bool {
+	t, err := time.Parse("2006-01", targetPeriod)
+	if err != nil {
+		return false
+	}
+	targetYear, targetMonth, _ := t.Date()
+
+	pTime := time.Unix(purchaseDateMs/1000, 0).UTC()
+	pYear, pMonth, _ := pTime.Date()
+
+	diffMonths := (targetYear-pYear)*12 + int(targetMonth-pMonth)
+	return diffMonths >= 0 && diffMonths < usefulLifeMonths
+}
+
+func autoCalculateDepreciation(tenantId string, targetPeriod string) error {
+	rows, err := db.Query(`SELECT id, "purchaseDate", "purchasePrice", "usefulLifeMonths", "residualValue" FROM bmp_assets WHERE "tenantId"=$1 AND "isDeleted"=FALSE`, tenantId)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int64
+		var purchaseDate int64
+		var purchasePrice float64
+		var usefulLifeMonths int
+		var residualValue float64
+		if errS := rows.Scan(&id, &purchaseDate, &purchasePrice, &usefulLifeMonths, &residualValue); errS == nil {
+			if isPeriodWithinAssetLife(purchaseDate, usefulLifeMonths, targetPeriod) {
+				monthlyAmt := (purchasePrice - residualValue) / float64(usefulLifeMonths)
+				monthlyAmt = math.Round(monthlyAmt*100) / 100
+				
+				_, _ = db.Exec(`
+					INSERT INTO bmp_monthly_depreciation ("tenantId", "assetId", "period", "amount", "updatedAt")
+					VALUES ($1, $2, $3, $4, $5)
+					ON CONFLICT ("tenantId", "assetId", "period") 
+					DO UPDATE SET "amount"=$4, "updatedAt"=$5
+				`, tenantId, id, targetPeriod, monthlyAmt, nowMillis())
+			} else {
+				// Nilai penyusutan adalah 0 jika di luar masa manfaat
+				_, _ = db.Exec(`
+					INSERT INTO bmp_monthly_depreciation ("tenantId", "assetId", "period", "amount", "updatedAt")
+					VALUES ($1, $2, $3, 0.0, $4)
+					ON CONFLICT ("tenantId", "assetId", "period") 
+					DO UPDATE SET "amount"=0.0, "updatedAt"=$4
+				`, tenantId, id, targetPeriod, nowMillis())
+			}
+		}
+	}
+	return nil
+}
+
 func handleRtBmpDepreciation(w http.ResponseWriter, r *http.Request) {
 	tenantId, ok := extractTenantId(r)
 	if !ok { jsonErr(w, 401, "unauthorized"); return }
@@ -1866,9 +1919,14 @@ func handleRtBmpDepreciation(w http.ResponseWriter, r *http.Request) {
 			jsonErr(w, 400, "period is required")
 			return
 		}
+
+		// Jalankan perhitungan penyusutan otomatis terlebih dahulu
+		_ = autoCalculateDepreciation(tenantId, period)
+
+		// Jumlahkan seluruh entri penyusutan (aset + penyesuaian manual)
 		var amount float64
 		err := db.QueryRow(`
-			SELECT COALESCE(amount, 0.0) 
+			SELECT COALESCE(SUM(amount), 0.0) 
 			FROM bmp_monthly_depreciation 
 			WHERE "tenantId"=$1 AND period=$2
 		`, tenantId, period).Scan(&amount)
@@ -1893,11 +1951,13 @@ func handleRtBmpDepreciation(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// Simpan penyesuaian manual menggunakan assetId = 0
 		_, err := db.Exec(`
-			INSERT INTO bmp_monthly_depreciation ("tenantId", "period", "amount", "updatedAt")
-			VALUES ($1, $2, $3, $4)
-			ON CONFLICT ("tenantId", "period") DO UPDATE SET "amount"=$3, "updatedAt"=$4
-		`, tenantId, period, amountVal, time.Now().UnixNano()/1e6)
+			INSERT INTO bmp_monthly_depreciation ("tenantId", "assetId", "period", "amount", "updatedAt")
+			VALUES ($1, 0, $2, $3, $4)
+			ON CONFLICT ("tenantId", "assetId", "period") 
+			DO UPDATE SET "amount"=$3, "updatedAt"=$4
+		`, tenantId, period, amountVal, nowMillis())
 		if err != nil {
 			jsonErr(w, 500, err.Error())
 			return
@@ -1907,4 +1967,58 @@ func handleRtBmpDepreciation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonErr(w, 405, "method not allowed")
+}
+
+func handleRtBmpAssets(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	switch r.Method {
+	case http.MethodGet:
+		rows, err := db.Query(`SELECT * FROM bmp_assets WHERE "tenantId"=$1 AND "isDeleted"=FALSE ORDER BY "purchaseDate" DESC`, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		defer rows.Close(); jsonOK(w, rowsToJSON(rows))
+	case http.MethodPost:
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid body")
+			return
+		}
+		body["tenantId"] = tenantId
+		body["createdAt"] = nowMillis()
+		body["updatedAt"] = nowMillis()
+		body["isDeleted"] = false
+		id, err := insertRow("bmp_assets", body)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+func handleRtBmpAssetsById(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/bmp/assets/")
+	id, _ := strconv.ParseInt(idStr, 10, 64)
+	switch r.Method {
+	case http.MethodPut:
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid body")
+			return
+		}
+		body["updatedAt"] = nowMillis()
+		err := updateRow("bmp_assets", id, tenantId, body)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"ok": true})
+	case http.MethodDelete:
+		_, err := db.Exec(`UPDATE bmp_assets SET "isDeleted"=TRUE, "updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, nowMillis(), id, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		
+		// Hapus juga record penyusutan bulanan terkait
+		_, _ = db.Exec(`DELETE FROM bmp_monthly_depreciation WHERE "assetId"=$1 AND "tenantId"=$2`, id, tenantId)
+		jsonOK(w, map[string]interface{}{"ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
 }
