@@ -101,6 +101,10 @@ class BmpProductionLogRepository @Inject constructor(
                         quantityRejected = (m["quantityRejected"] as? Number)?.toDouble() ?: 0.0,
                         rawMaterialUsedKg = (m["rawMaterialUsedKg"] as? Number)?.toDouble() ?: 0.0,
                         rawMaterialId = (m["rawMaterialId"] as? Number)?.toLong() ?: 0L,
+                        machineId = (m["machine_id"] as? Number)?.toLong(),
+                        isMachineActive = m["is_machine_active"] as? Boolean ?: true,
+                        cycleTimeActual = (m["cycle_time_actual"] as? Number)?.toDouble() ?: 0.0,
+                        electricityCostActual = (m["electricity_cost_actual"] as? Number)?.toDouble() ?: 0.0,
                         operatorName = m["operatorName"] as? String,
                         productionDate = (m["productionDate"] as? Number)?.toLong() ?: System.currentTimeMillis(),
                         isDeleted = m["isDeleted"] as? Boolean ?: false,
@@ -123,7 +127,7 @@ class BmpProductionLogRepository @Inject constructor(
         val tempLog = log.copy(id = tempId)
         _logs.value = snapshot + tempLog
         return try {
-            val resp = api.createProductionLog(mapOf(
+            val body = mutableMapOf<String, Any?>(
                 "masterProductId" to log.masterProductId,
                 "quantityProduced" to log.quantityProduced,
                 "quantityRejected" to log.quantityRejected,
@@ -131,7 +135,11 @@ class BmpProductionLogRepository @Inject constructor(
                 "rawMaterialId" to log.rawMaterialId,
                 "operatorName" to log.operatorName,
                 "productionDate" to log.productionDate
-            ))
+            )
+            if (log.machineId != null) body["machine_id"] = log.machineId
+            if (log.cycleTimeActual > 0) body["cycle_time_actual"] = log.cycleTimeActual
+            if (log.electricityCostActual > 0) body["electricity_cost_actual"] = log.electricityCostActual
+            val resp = api.createProductionLog(body)
             if (resp.isSuccessful) {
                 // Extract the real server-assigned ID and replace the temp entry
                 val newId = (resp.body()?.get("id") as? Number)?.toLong() ?: 0L

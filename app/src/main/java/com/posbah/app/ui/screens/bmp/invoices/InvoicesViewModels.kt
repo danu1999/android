@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.posbah.app.data.local.entities.BmpClientEntity
 import com.posbah.app.data.local.entities.BmpInvoiceEntity
 import com.posbah.app.data.local.entities.BmpInvoicePaymentEntity
+import com.posbah.app.data.local.entities.BmpMachineEntity
 import com.posbah.app.data.local.entities.BmpProductEntity
 import com.posbah.app.data.local.entities.BmpMasterProductEntity
 import com.posbah.app.data.local.entities.BmpSettingsEntity
@@ -14,6 +15,7 @@ import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpClientRepository
 import com.posbah.app.data.repository.BmpInvoiceRepository
 import com.posbah.app.data.repository.BmpCashFlowRepository
+import com.posbah.app.data.repository.BmpMachineRepository
 import com.posbah.app.data.repository.BmpMasterProductRepository
 import com.posbah.app.data.repository.BmpSettingsRepository
 import com.posbah.app.data.repository.PrintSettingsRepository
@@ -484,6 +486,7 @@ data class InvoiceFormUi(
     val productLines: List<BmpProductEntity> = emptyList(),
     val clients: List<BmpClientEntity> = emptyList(),
     val masterProducts: List<BmpMasterProductEntity> = emptyList(),
+    val machines: List<BmpMachineEntity> = emptyList(),
     val showClientSheet: Boolean = false,
     val showProductSheet: Boolean = false,
     val isLoading: Boolean = false,
@@ -497,6 +500,7 @@ class InvoiceFormViewModel @Inject constructor(
     private val invoiceRepo: BmpInvoiceRepository,
     private val clientRepo: BmpClientRepository,
     private val masterRepo: BmpMasterProductRepository,
+    private val machineRepo: BmpMachineRepository,
     private val authRepository: AuthRepository,
     savedState: SavedStateHandle
 ) : ViewModel() {
@@ -528,6 +532,11 @@ class InvoiceFormViewModel @Inject constructor(
                 _ui.update { it.copy(masterProducts = list) }
             }
         }
+        viewModelScope.launch {
+            machineRepo.observe(tenantId).collect { list ->
+                _ui.update { it.copy(machines = list) }
+            }
+        }
         if (editingId > 0) viewModelScope.launch {
             val inv = invoiceRepo.getById(editingId) ?: return@launch
             _ui.update { it.copy(invoice = inv) }
@@ -547,6 +556,14 @@ class InvoiceFormViewModel @Inject constructor(
     }
 
     fun addProductLine(masterProduct: BmpMasterProductEntity) {
+        // v2.19.17: snapshot HPP dengan mempertimbangkan status mesin
+        val machine = _ui.value.machines.find { it.id == masterProduct.machineId }
+        val hppSnapshot = if (machine != null && !machine.isActive) {
+            // Mesin mati: hargaBeli = 0 (no machine overhead included)
+            0.0
+        } else {
+            masterProduct.hppTotalPcs
+        }
         _ui.update {
             it.copy(productLines = it.productLines + BmpProductEntity(
                 tenantId = tenantId,
@@ -556,7 +573,8 @@ class InvoiceFormViewModel @Inject constructor(
                 quantity = 1.0,
                 jumlahLusin = 1.0,
                 unit = masterProduct.unit,
-                price = masterProduct.price
+                price = masterProduct.price,
+                hargaBeli = hppSnapshot
             ))
         }
     }

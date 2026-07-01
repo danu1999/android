@@ -1200,6 +1200,16 @@ func handleRtBmpProductionLogs(w http.ResponseWriter, r *http.Request) {
 			statusVal = "COMPLETED"
 		}
 		
+		// v2.19.17: resolve is_machine_active from the referenced machine
+		// (pre-populate before insert so insertRow picks it up)
+		if machineIdRaw, ok2 := body["machine_id"]; ok2 && machineIdRaw != nil {
+			var machineActive bool
+			errM := db.QueryRow(`SELECT COALESCE("is_active", TRUE) FROM bmp_machines WHERE id=$1 AND "tenantId"=$2`, machineIdRaw, tenantId).Scan(&machineActive)
+			if errM == nil {
+				body["is_machine_active"] = machineActive
+			}
+		}
+
 		id, err := insertRow("bmp_production_logs", body)
 		if err != nil { jsonErr(w, 500, err.Error()); return }
 		
@@ -2212,13 +2222,24 @@ func triggerProductionLogCompletion(tenantId string, logId int64) error {
 	var masterProductId int64
 	var quantityProduced float64
 	var productionDate int64
+	var cycleTimeActual float64
+	var electricityCostActual float64
 	err := db.QueryRow(`
-		SELECT "masterProductId", "quantityProduced", "productionDate" 
+		SELECT "masterProductId", "quantityProduced", "productionDate",
+		       COALESCE(cycle_time_actual, 0), COALESCE(electricity_cost_actual, 0)
 		FROM bmp_production_logs 
 		WHERE id=$1 AND "tenantId"=$2 AND "isDeleted"=FALSE
-	`, logId, tenantId).Scan(&masterProductId, &quantityProduced, &productionDate)
+	`, logId, tenantId).Scan(&masterProductId, &quantityProduced, &productionDate, &cycleTimeActual, &electricityCostActual)
 	if err != nil {
 		return err
+	}
+
+	// v2.19.17: Jika cycle_time_actual di-isi user, snapshot ke master product
+	// agar COGS recalc menggunakan nilai aktual dari shift ini
+	if cycleTimeActual > 0 {
+		_, _ = db.Exec(`UPDATE bmp_master_products SET "cycleTime"=$1 WHERE id=$2 AND "tenantId"=$3`,
+			cycleTimeActual, masterProductId, tenantId)
+		log.Printf("[HPP] Cycle time updated for masterProduct %d: %.2fs (from log %d)", masterProductId, cycleTimeActual, logId)
 	}
 
 	// 1. Clear any existing materials for this log
@@ -2281,8 +2302,10 @@ func triggerProductionLogCompletion(tenantId string, logId int64) error {
 		`, hppTotal, masterProductId, tenantId, startMs, endMs)
 	}
 
+	log.Printf("[HPP] Completed for masterProduct %d: hppTotalPcs=%.2f cycleTime=%.2fs elec=%.0f", masterProductId, hppTotal, cycleTimeActual, electricityCostActual)
 	return nil
 }
+
 
 func updateAndCalculateCOGS(tenantId string, startMs int64, endMs int64, dateStr string, periodType string) (float64, error) {
 	// 1. Get total produced in the period
@@ -2374,12 +2397,25 @@ func updateAndCalculateCOGS(tenantId string, startMs int64, endMs int64, dateStr
 		overheadAllocationPerUnit = foh / totalProduced
 	}
 
-	// 4. Query all sold products in the period
+	// 4. Query all sold products in the period (v2.19.17: include machine info)
+	workDaysInPeriod := float64(endMs-startMs) / float64(24*3600*1000)
 	rows, err := db.Query(`
-		SELECT bp."masterItemID", SUM(bp.quantity), COALESCE(MAX(mp."hppTotalPcs"), 0.0)
+		SELECT 
+			bp."masterItemID", 
+			SUM(bp.quantity), 
+			COALESCE(MAX(mp."hppTotalPcs"), 0.0),
+			COALESCE(bool_and(COALESCE(m."is_active", TRUE)), TRUE),
+			COALESCE(MAX(mp."cycleTime"), 0.0),
+			COALESCE(MAX(m."hours_capacity_monthly"), 624.0),
+			COALESCE(MAX(m."depreciation_monthly"), 0.0),
+			COALESCE(MAX(m."electricity_cost_daily"), 0.0),
+			COALESCE(MAX(m."operator_salary_monthly"), 0.0),
+			COALESCE(MAX(m."overhead_allocated_monthly"), 0.0),
+			CASE WHEN MAX(mp."machine_id") IS NOT NULL THEN TRUE ELSE FALSE END
 		FROM bmp_products bp
 		JOIN bmp_invoices bi ON bp."invoiceId" = bi.id
 		LEFT JOIN bmp_master_products mp ON bp."masterItemID" = mp.id
+		LEFT JOIN bmp_machines m ON mp."machine_id" = m.id AND m."tenantId" = $1
 		WHERE bi."tenantId"=$1 AND bi."createdAt" >= $2 AND bi."createdAt" < $3 
 		  AND bi."isDeleted"=FALSE AND bp."isDeleted"=FALSE
 		GROUP BY bp."masterItemID"
@@ -2390,20 +2426,44 @@ func updateAndCalculateCOGS(tenantId string, startMs int64, endMs int64, dateStr
 	defer rows.Close()
 
 	type SoldItem struct {
-		MasterItemID int64
-		Qty          float64
-		HppOld       float64
+		MasterItemID     int64
+		Qty              float64
+		HppOld           float64
+		MachineIsActive  bool
+		CycleTime        float64
+		HoursCapacity    float64
+		DeprecMonthly    float64
+		ElecCostDaily    float64
+		OpSalaryMonthly  float64
+		OvhdAllocMonthly float64
+		HasMachine       bool
 	}
 	var soldItems []SoldItem
 	for rows.Next() {
 		var item SoldItem
-		if errS := rows.Scan(&item.MasterItemID, &item.Qty, &item.HppOld); errS == nil {
+		if errS := rows.Scan(
+			&item.MasterItemID, &item.Qty, &item.HppOld,
+			&item.MachineIsActive, &item.CycleTime, &item.HoursCapacity,
+			&item.DeprecMonthly, &item.ElecCostDaily, &item.OpSalaryMonthly,
+			&item.OvhdAllocMonthly, &item.HasMachine,
+		); errS == nil {
 			soldItems = append(soldItems, item)
 		}
 	}
 
 	var totalCogs float64 = 0.0
 	for _, item := range soldItems {
+		// v2.19.17: Machine overhead per unit — 0 jika mesin mati atau produk tanpa mesin spesifik
+		var machineOverheadPerUnit float64 = 0.0
+		if item.HasMachine && item.MachineIsActive && item.CycleTime > 0 {
+			machineMonthlyOverhead := item.DeprecMonthly + item.OvhdAllocMonthly +
+				item.ElecCostDaily*workDaysInPeriod + item.OpSalaryMonthly
+			machineSecsCap := item.HoursCapacity * 3600.0
+			if machineSecsCap > 0 {
+				machineOverheadPerUnit = (item.CycleTime / machineSecsCap) * machineMonthlyOverhead
+			}
+		}
+
 		// Calculate Material cost from BOM
 		var materialCost float64
 		errM := db.QueryRow(`
@@ -2419,16 +2479,24 @@ func updateAndCalculateCOGS(tenantId string, startMs int64, endMs int64, dateStr
 			WHERE pin."productId" = $2 AND pin."tenantId" = $1
 		`, tenantId, item.MasterItemID).Scan(&materialCost)
 
-		// HPP = Material + Labor + Overhead
+		// HPP = Material + Labor + Overhead (machine-specific jika ada mesin)
 		var computedHpp float64
 		if errM == nil && materialCost > 0 {
-			computedHpp = materialCost + laborAllocationPerUnit + overheadAllocationPerUnit
+			if item.HasMachine {
+				// Gunakan machine overhead (0 jika mesin mati)
+				computedHpp = materialCost + laborAllocationPerUnit + machineOverheadPerUnit
+			} else {
+				// Fallback ke alokasi FOH global jika produk tidak punya mesin spesifik
+				computedHpp = materialCost + laborAllocationPerUnit + overheadAllocationPerUnit
+			}
 		} else {
-			// Fallback to manual if no ingredients or error
 			computedHpp = item.HppOld
-			// If old HPP is also 0, try labor + overhead allocation
 			if computedHpp == 0 {
-				computedHpp = laborAllocationPerUnit + overheadAllocationPerUnit
+				if item.HasMachine {
+					computedHpp = laborAllocationPerUnit + machineOverheadPerUnit
+				} else {
+					computedHpp = laborAllocationPerUnit + overheadAllocationPerUnit
+				}
 			}
 		}
 
