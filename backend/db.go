@@ -947,6 +947,11 @@ func initSchema() error {
 
 		// v2.19.4: Sinkronisasi Arus Kas & Payroll — tambah payrollRefId di bmp_cashflow
 		`ALTER TABLE "bmp_cashflow" ADD COLUMN IF NOT EXISTS "payrollRefId" VARCHAR(100);`,
+
+		// v2.19.12: Tambah kolom bahanBakuRefId di bmp_cashflow dan buat indeks untuk JOIN
+		`ALTER TABLE "bmp_cashflow" ADD COLUMN IF NOT EXISTS "bahanBakuRefId" INT;`,
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_cashflow_paymentRefId" ON "bmp_cashflow" ("paymentRefId") WHERE "paymentRefId" IS NOT NULL;`,
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_cashflow_bahanBakuRefId" ON "bmp_cashflow" ("bahanBakuRefId") WHERE "bahanBakuRefId" IS NOT NULL;`,
 	}
 	for _, q := range manufakturMigrations {
 		if _, err := db.Exec(q); err != nil {

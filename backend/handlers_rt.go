@@ -754,6 +754,43 @@ func handleRtBmpPayments(w http.ResponseWriter, r *http.Request) {
 		json.NewDecoder(r.Body).Decode(&body); body["tenantId"] = tenantId
 		id, err := insertRow("bmp_invoice_payments", body)
 		if err != nil { jsonErr(w, 500, err.Error()); return }
+
+		// Otomatis catat kas masuk ke bmp_cashflow
+		invoiceIdVal := body["invoiceId"]
+		var invoiceNum string
+		if invoiceIdVal != nil {
+			_ = db.QueryRow(`SELECT "number" FROM bmp_invoices WHERE id=$1 AND "tenantId"=$2`, invoiceIdVal, tenantId).Scan(&invoiceNum)
+		}
+		desc := "Penerimaan Pembayaran Invoice"
+		if invoiceNum != "" {
+			desc = "Penerimaan Pembayaran Invoice #" + invoiceNum
+		}
+
+		txDate := nowMillis()
+		if pDate, ok := body["paymentDate"].(float64); ok {
+			txDate = int64(pDate)
+		}
+		amountVal := 0.0
+		if pAmount, ok := body["paymentAmount"].(float64); ok {
+			amountVal = pAmount
+		}
+
+		cfBody := map[string]interface{}{
+			"tenantId":        tenantId,
+			"transactionDate": txDate,
+			"transactionType": "MASUK",
+			"description":     desc,
+			"amount":          amountVal,
+			"costType":        "OPERATING_EXPENSE",
+			"paymentRefId":    id,
+			"createdAt":       nowMillis(),
+			"isDeleted":       false,
+		}
+		_, errCf := insertRow("bmp_cashflow", cfBody)
+		if errCf != nil {
+			log.Printf("[Warning] Gagal mencatat arus kas otomatis: %v", errCf)
+		}
+
 		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
 	default:
 		jsonErr(w, 405, "method not allowed")
@@ -767,7 +804,15 @@ func handleRtBmpPaymentsById(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(idStr, 10, 64)
 	switch r.Method {
 	case http.MethodDelete:
-		db.Exec(`UPDATE bmp_invoice_payments SET "isDeleted"=TRUE WHERE id=$1 AND "tenantId"=$2`, id, tenantId)
+		_, err := db.Exec(`UPDATE bmp_invoice_payments SET "isDeleted"=TRUE WHERE id=$1 AND "tenantId"=$2`, id, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+
+		// Otomatis hapus arus kas terkait
+		_, errCf := db.Exec(`UPDATE bmp_cashflow SET "isDeleted"=TRUE WHERE "paymentRefId"=$1 AND "tenantId"=$2`, id, tenantId)
+		if errCf != nil {
+			log.Printf("[Warning] Gagal menghapus arus kas otomatis: %v", errCf)
+		}
+
 		jsonOK(w, map[string]interface{}{"ok": true})
 	default:
 		jsonErr(w, 405, "method not allowed")
@@ -956,6 +1001,41 @@ func handleRtBmpBahanBaku(w http.ResponseWriter, r *http.Request) {
 		json.NewDecoder(r.Body).Decode(&body); body["tenantId"] = tenantId; body["updatedAt"] = nowMillis()
 		id, err := insertRow("bmp_bahan_baku", body)
 		if err != nil { jsonErr(w, 500, err.Error()); return }
+
+		// Otomatis catat kas keluar ke bmp_cashflow jika ada nominal yang dibayarkan
+		nominalVal := 0.0
+		if nom, ok := body["nominal"].(float64); ok {
+			nominalVal = nom
+		}
+		if nominalVal > 0 {
+			noTagihan, _ := body["noTagihan"].(string)
+			desc := "Pembelian Bahan Baku"
+			if noTagihan != "" {
+				desc = "Pembelian Bahan Baku No. Faktur " + noTagihan
+			}
+
+			txDate := nowMillis()
+			if tgl, ok := body["tanggal"].(float64); ok {
+				txDate = int64(tgl)
+			}
+
+			cfBody := map[string]interface{}{
+				"tenantId":        tenantId,
+				"transactionDate": txDate,
+				"transactionType": "KELUAR",
+				"description":     desc,
+				"amount":          nominalVal,
+				"costType":        "FACTORY_OVERHEAD",
+				"bahanBakuRefId":  id,
+				"createdAt":       nowMillis(),
+				"isDeleted":       false,
+			}
+			_, errCf := insertRow("bmp_cashflow", cfBody)
+			if errCf != nil {
+				log.Printf("[Warning] Gagal mencatat arus kas keluar otomatis: %v", errCf)
+			}
+		}
+
 		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
 	default:
 		jsonErr(w, 405, "method not allowed")
@@ -971,9 +1051,78 @@ func handleRtBmpBahanBakuById(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		var body map[string]interface{}
 		json.NewDecoder(r.Body).Decode(&body); body["updatedAt"] = nowMillis()
-		updateRow("bmp_bahan_baku", id, tenantId, body); jsonOK(w, map[string]interface{}{"ok": true})
+		err := updateRow("bmp_bahan_baku", id, tenantId, body)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+
+		// Sync ke cashflow: cek apakah record cashflow untuk bahanBakuRefId ini sudah ada
+		var exists bool
+		_ = db.QueryRow(`SELECT EXISTS(SELECT 1 FROM bmp_cashflow WHERE "bahanBakuRefId"=$1 AND "tenantId"=$2)`, id, tenantId).Scan(&exists)
+
+		nominalVal := 0.0
+		if nom, ok := body["nominal"].(float64); ok {
+			nominalVal = nom
+		}
+
+		if exists {
+			if nominalVal <= 0 {
+				// Nominal diubah menjadi <= 0, hapus record cashflow
+				_, _ = db.Exec(`UPDATE bmp_cashflow SET "isDeleted"=TRUE WHERE "bahanBakuRefId"=$1 AND "tenantId"=$2`, id, tenantId)
+			} else {
+				// Update record cashflow yang ada
+				noTagihan, _ := body["noTagihan"].(string)
+				desc := "Pembelian Bahan Baku"
+				if noTagihan != "" {
+					desc = "Pembelian Bahan Baku No. Faktur " + noTagihan
+				}
+				txDate := nowMillis()
+				if tgl, ok := body["tanggal"].(float64); ok {
+					txDate = int64(tgl)
+				}
+				_, errCf := db.Exec(`UPDATE bmp_cashflow SET "transactionDate"=$1, "amount"=$2, "description"=$3, "isDeleted"=FALSE WHERE "bahanBakuRefId"=$4 AND "tenantId"=$5`,
+					txDate, nominalVal, desc, id, tenantId)
+				if errCf != nil {
+					log.Printf("[Warning] Gagal memperbarui arus kas otomatis: %v", errCf)
+				}
+			}
+		} else if nominalVal > 0 {
+			// Belum ada record kas sebelumnya, buat baru
+			noTagihan, _ := body["noTagihan"].(string)
+			desc := "Pembelian Bahan Baku"
+			if noTagihan != "" {
+				desc = "Pembelian Bahan Baku No. Faktur " + noTagihan
+			}
+			txDate := nowMillis()
+			if tgl, ok := body["tanggal"].(float64); ok {
+				txDate = int64(tgl)
+			}
+			cfBody := map[string]interface{}{
+				"tenantId":        tenantId,
+				"transactionDate": txDate,
+				"transactionType": "KELUAR",
+				"description":     desc,
+				"amount":          nominalVal,
+				"costType":        "FACTORY_OVERHEAD",
+				"bahanBakuRefId":  id,
+				"createdAt":       nowMillis(),
+				"isDeleted":       false,
+			}
+			_, errCf := insertRow("bmp_cashflow", cfBody)
+			if errCf != nil {
+				log.Printf("[Warning] Gagal mencatat arus kas otomatis pasca-update: %v", errCf)
+			}
+		}
+
+		jsonOK(w, map[string]interface{}{"ok": true})
 	case http.MethodDelete:
-		db.Exec(`UPDATE bmp_bahan_baku SET "isDeleted"=TRUE,"updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, nowMillis(), id, tenantId)
+		_, err := db.Exec(`UPDATE bmp_bahan_baku SET "isDeleted"=TRUE,"updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, nowMillis(), id, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+
+		// Otomatis hapus arus kas terkait
+		_, errCf := db.Exec(`UPDATE bmp_cashflow SET "isDeleted"=TRUE WHERE "bahanBakuRefId"=$1 AND "tenantId"=$2`, id, tenantId)
+		if errCf != nil {
+			log.Printf("[Warning] Gagal menghapus arus kas otomatis: %v", errCf)
+		}
+
 		jsonOK(w, map[string]interface{}{"ok": true})
 	default:
 		jsonErr(w, 405, "method not allowed")
