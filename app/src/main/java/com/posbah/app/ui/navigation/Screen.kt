@@ -30,6 +30,7 @@ sealed class Screen(val route: String) {
         fun build(id: Long? = null) = "bmp/invoices/create?id=${id ?: -1}"
     }
     object BmpProducts : Screen("bmp/products")
+    object BmpMachineMold : Screen("bmp/machines")
     object BmpProductEdit : Screen("bmp/products/edit?id={id}") {
         fun build(id: Long? = null) = "bmp/products/edit?id=${id ?: -1}"
     }

@@ -213,6 +213,10 @@ func main() {
 	http.HandleFunc("/api/rt/bmp/assets/", handleRtBmpAssetsById)
 	http.HandleFunc("/api/rt/bmp/ingredients", handleRtBmpIngredients)
 	http.HandleFunc("/api/rt/bmp/ingredients/", handleRtBmpIngredientsById)
+	http.HandleFunc("/api/rt/bmp/machines", handleRtBmpMachines)
+	http.HandleFunc("/api/rt/bmp/machines/", handleRtBmpMachinesById)
+	http.HandleFunc("/api/rt/bmp/molds", handleRtBmpMolds)
+	http.HandleFunc("/api/rt/bmp/molds/", handleRtBmpMoldsById)
 	http.HandleFunc("/api/rt/bmp/production-materials", handleRtBmpProductionMaterials)
 	http.HandleFunc("/api/rt/bmp/production-materials/", handleRtBmpProductionMaterialsById)
 
@@ -395,6 +399,8 @@ func purgeTenantData(tenantID string) {
 		"employees",
 		"outlets",
 		"bmp_device_tenants",
+		"bmp_machines",
+		"bmp_molds",
 	}
 
 	for _, table := range tables {
@@ -1134,6 +1140,8 @@ func handleInspectTenant(w http.ResponseWriter, r *http.Request) {
 		"activity_logs",
 		"employees",
 		"outlets",
+		"bmp_machines",
+		"bmp_molds",
 		"bmp_device_tenants",
 	}
 
@@ -3773,6 +3781,8 @@ var allowedSyncTables = map[string]bool{
 	"product_daily_targets": true,
 	"bmp_attendance_logs":  true,
 	"bmp_device_tenants":   true,
+	"bmp_machines":         true,
+	"bmp_molds":            true,
 }
 
 var columnNameRegex = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
@@ -7357,7 +7367,7 @@ func handleAdminDiagnose(w http.ResponseWriter, r *http.Request) {
 			"outlets", "employees", "products", "customers", "transactions", 
 			"bmp_invoices", "bmp_products", "bmp_master_products", "bmp_clients", 
 			"bmp_cashflow", "bmp_payrolls", "bmp_bahan_baku", "print_settings", 
-			"activity_logs",
+			"activity_logs", "bmp_machines", "bmp_molds",
 		}
 		for _, tbl := range tenantTables {
 			var count int
@@ -8246,6 +8256,8 @@ func handleSyncSummary(w http.ResponseWriter, r *http.Request) {
 		"customers",
 		"transactions",
 		"outlets",
+		"bmp_machines",
+		"bmp_molds",
 	}
 
 	for _, table := range tables {

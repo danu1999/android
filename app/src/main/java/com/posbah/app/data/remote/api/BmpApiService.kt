@@ -64,6 +64,32 @@ interface BmpApiService {
     @DELETE("api/rt/bmp/master-products/{id}")
     suspend fun deleteMasterProduct(@Path("id") id: Long): Response<Map<String, Any?>>
 
+    // ── Machines ──────────────────────────────────────────────────────────────
+    @GET("api/rt/bmp/machines")
+    suspend fun getMachines(): Response<List<Map<String, Any?>>>
+
+    @POST("api/rt/bmp/machines")
+    suspend fun createMachine(@Body body: Map<String, Any?>): Response<Map<String, Any?>>
+
+    @PUT("api/rt/bmp/machines/{id}")
+    suspend fun updateMachine(@Path("id") id: Long, @Body body: Map<String, Any?>): Response<Map<String, Any?>>
+
+    @DELETE("api/rt/bmp/machines/{id}")
+    suspend fun deleteMachine(@Path("id") id: Long): Response<Map<String, Any?>>
+
+    // ── Molds ─────────────────────────────────────────────────────────────────
+    @GET("api/rt/bmp/molds")
+    suspend fun getMolds(): Response<List<Map<String, Any?>>>
+
+    @POST("api/rt/bmp/molds")
+    suspend fun createMold(@Body body: Map<String, Any?>): Response<Map<String, Any?>>
+
+    @PUT("api/rt/bmp/molds/{id}")
+    suspend fun updateMold(@Path("id") id: Long, @Body body: Map<String, Any?>): Response<Map<String, Any?>>
+
+    @DELETE("api/rt/bmp/molds/{id}")
+    suspend fun deleteMold(@Path("id") id: Long): Response<Map<String, Any?>>
+
     // ── Cashflow ──────────────────────────────────────────────────────────────
     @GET("api/rt/bmp/cashflow")
     suspend fun getCashflow(): Response<List<Map<String, Any?>>>

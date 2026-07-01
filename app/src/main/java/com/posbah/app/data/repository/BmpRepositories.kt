@@ -101,7 +101,34 @@ data class BmpMasterProductData(
     val updatedAt: Long = 0,
     // v2.19.1: HPP fields untuk kalkulasi COGS di laporan keuangan
     val hppTotalPcs: Double = 0.0,
-    val hppLusin: Double = 0.0
+    val hppLusin: Double = 0.0,
+    val machineId: Int? = null,
+    val moldId: Int? = null,
+    val colorantRatio: Double = 0.0
+)
+
+data class BmpMachineData(
+    val id: Long = 0,
+    val tenantId: String = "",
+    val name: String = "",
+    val depreciationMonthly: Double = 0.0,
+    val powerConsumptionKw: Double = 0.0,
+    val operatorSalaryMonthly: Double = 0.0,
+    val overheadAllocatedMonthly: Double = 0.0,
+    val hoursCapacityMonthly: Double = 624.0,
+    val isDeleted: Boolean = false,
+    val updatedAt: Long = 0
+)
+
+data class BmpMoldData(
+    val id: Long = 0,
+    val tenantId: String = "",
+    val name: String = "",
+    val purchasePrice: Double = 0.0,
+    val expectedShotsLifetime: Int = 100000,
+    val masterProductId: Long? = null,
+    val isDeleted: Boolean = false,
+    val updatedAt: Long = 0
 )
 
 data class BmpCashflowData(
@@ -305,7 +332,34 @@ fun Map<String, Any?>.toBmpMasterProductData() = BmpMasterProductData(
     isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false,
     updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0,
     hppTotalPcs = (getCaseInsensitive("hppTotalPcs") as? Number)?.toDouble() ?: 0.0,
-    hppLusin = (getCaseInsensitive("hppLusin") as? Number)?.toDouble() ?: 0.0
+    hppLusin = (getCaseInsensitive("hppLusin") as? Number)?.toDouble() ?: 0.0,
+    machineId = (getCaseInsensitive("machine_id") as? Number)?.toInt(),
+    moldId = (getCaseInsensitive("mold_id") as? Number)?.toInt(),
+    colorantRatio = (getCaseInsensitive("colorant_ratio") as? Number)?.toDouble() ?: 0.0
+)
+
+fun Map<String, Any?>.toBmpMachineData() = BmpMachineData(
+    id = (getCaseInsensitive("id") as? Number)?.toLong() ?: 0,
+    tenantId = getCaseInsensitive("tenantId") as? String ?: "",
+    name = getCaseInsensitive("name") as? String ?: "",
+    depreciationMonthly = (getCaseInsensitive("depreciation_monthly") as? Number)?.toDouble() ?: 0.0,
+    powerConsumptionKw = (getCaseInsensitive("power_consumption_kw") as? Number)?.toDouble() ?: 0.0,
+    operatorSalaryMonthly = (getCaseInsensitive("operator_salary_monthly") as? Number)?.toDouble() ?: 0.0,
+    overheadAllocatedMonthly = (getCaseInsensitive("overhead_allocated_monthly") as? Number)?.toDouble() ?: 0.0,
+    hoursCapacityMonthly = (getCaseInsensitive("hours_capacity_monthly") as? Number)?.toDouble() ?: 624.0,
+    isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false,
+    updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0
+)
+
+fun Map<String, Any?>.toBmpMoldData() = BmpMoldData(
+    id = (getCaseInsensitive("id") as? Number)?.toLong() ?: 0,
+    tenantId = getCaseInsensitive("tenantId") as? String ?: "",
+    name = getCaseInsensitive("name") as? String ?: "",
+    purchasePrice = (getCaseInsensitive("purchase_price") as? Number)?.toDouble() ?: 0.0,
+    expectedShotsLifetime = (getCaseInsensitive("expected_shots_lifetime") as? Number)?.toInt() ?: 100000,
+    masterProductId = (getCaseInsensitive("master_product_id") as? Number)?.toLong(),
+    isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false,
+    updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0
 )
 
 fun Map<String, Any?>.toBmpCashflowData() = BmpCashflowData(
@@ -1316,6 +1370,9 @@ class BmpMasterProductRepository @Inject constructor(
                 // Tanpa ini, kolom DB tetap 0.0 meski sudah ada migrasi.
                 put("hppTotalPcs", item.hppTotalPcs)
                 put("hppLusin", item.hppLusin)
+                if (item.machineId != null) put("machine_id", item.machineId)
+                if (item.moldId != null) put("mold_id", item.moldId)
+                put("colorant_ratio", item.colorantRatio)
                 if (item.description != null) put("description", item.description)
                 if (item.uniqueID != null) put("uniqueID", item.uniqueID)
                 if (item.slug != null) put("slug", item.slug)
@@ -1367,7 +1424,10 @@ class BmpMasterProductRepository @Inject constructor(
                     updatedAt = it.updatedAt,
                     isSynced = true,
                     hppTotalPcs = it.hppTotalPcs,
-                    hppLusin = it.hppLusin
+                    hppLusin = it.hppLusin,
+                    machineId = it.machineId,
+                    moldId = it.moldId,
+                    colorantRatio = it.colorantRatio
                 )
             }
         }
@@ -2930,4 +2990,180 @@ class PrintSettingsRepository @Inject constructor(
      */
     fun observe(tenantId: String, moduleKey: String): kotlinx.coroutines.flow.Flow<PrintSettingsData?> =
         _settingsList.map { list -> list.find { it.moduleKey == moduleKey } }
+}
+
+// ── BmpMachineRepository ──────────────────────────────────────────────────────
+
+@Singleton
+class BmpMachineRepository @Inject constructor(
+    private val api: BmpApiService
+) {
+    private val _items = MutableStateFlow<List<BmpMachineData>>(emptyList())
+    val items = _items.asStateFlow()
+
+    suspend fun refresh() {
+        try {
+            val resp = api.getMachines()
+            if (resp.isSuccessful) {
+                _items.value = resp.body()?.map { it.toBmpMachineData() } ?: emptyList()
+            }
+        } catch (_: Exception) {}
+    }
+
+    suspend fun list(): List<BmpMachineData> {
+        val cached = _items.value
+        if (cached.isNotEmpty()) {
+            CoroutineScope(Dispatchers.IO).launch {
+                try { refresh() } catch (_: Exception) {}
+            }
+            return cached
+        }
+        refresh()
+        return _items.value
+    }
+
+    suspend fun getById(id: Long): BmpMachineData? = list().find { it.id == id }
+
+    suspend fun upsert(item: BmpMachineData): OnlineWriteResult {
+        val snapshot = _items.value
+        if (item.id == 0L) {
+            _items.value = snapshot + item.copy(id = -System.currentTimeMillis())
+        } else {
+            _items.value = snapshot.map { if (it.id == item.id) item else it }
+        }
+        return try {
+            val body = mutableMapOf<String, Any>().apply {
+                put("name", item.name)
+                put("depreciation_monthly", item.depreciationMonthly)
+                put("power_consumption_kw", item.powerConsumptionKw)
+                put("operator_salary_monthly", item.operatorSalaryMonthly)
+                put("overhead_allocated_monthly", item.overheadAllocatedMonthly)
+                put("hours_capacity_monthly", item.hoursCapacityMonthly)
+            }
+            if (item.id == 0L) api.createMachine(body)
+            else api.updateMachine(item.id, body)
+            refresh()
+            OnlineWriteResult.Success
+        } catch (e: Exception) {
+            _items.value = snapshot
+            OnlineWriteResult.Error(e.message ?: "Gagal simpan mesin")
+        }
+    }
+
+    suspend fun delete(id: Long): OnlineWriteResult {
+        val snapshot = _items.value
+        _items.value = snapshot.filter { it.id != id }
+        return try {
+            api.deleteMachine(id)
+            OnlineWriteResult.Success
+        } catch (e: Exception) {
+            _items.value = snapshot
+            OnlineWriteResult.Error(e.message ?: "Gagal hapus mesin")
+        }
+    }
+
+    fun observe(tenantId: String): Flow<List<com.posbah.app.data.local.entities.BmpMachineEntity>> =
+        _items.map { list ->
+            list.map {
+                com.posbah.app.data.local.entities.BmpMachineEntity(
+                    id = it.id,
+                    tenantId = it.tenantId,
+                    name = it.name,
+                    depreciationMonthly = it.depreciationMonthly,
+                    powerConsumptionKw = it.powerConsumptionKw,
+                    operatorSalaryMonthly = it.operatorSalaryMonthly,
+                    overheadAllocatedMonthly = it.overheadAllocatedMonthly,
+                    hoursCapacityMonthly = it.hoursCapacityMonthly,
+                    isDeleted = it.isDeleted,
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = it.updatedAt
+                )
+            }
+        }
+}
+
+// ── BmpMoldRepository ─────────────────────────────────────────────────────────
+
+@Singleton
+class BmpMoldRepository @Inject constructor(
+    private val api: BmpApiService
+) {
+    private val _items = MutableStateFlow<List<BmpMoldData>>(emptyList())
+    val items = _items.asStateFlow()
+
+    suspend fun refresh() {
+        try {
+            val resp = api.getMolds()
+            if (resp.isSuccessful) {
+                _items.value = resp.body()?.map { it.toBmpMoldData() } ?: emptyList()
+            }
+        } catch (_: Exception) {}
+    }
+
+    suspend fun list(): List<BmpMoldData> {
+        val cached = _items.value
+        if (cached.isNotEmpty()) {
+            CoroutineScope(Dispatchers.IO).launch {
+                try { refresh() } catch (_: Exception) {}
+            }
+            return cached
+        }
+        refresh()
+        return _items.value
+    }
+
+    suspend fun getById(id: Long): BmpMoldData? = list().find { it.id == id }
+
+    suspend fun upsert(item: BmpMoldData): OnlineWriteResult {
+        val snapshot = _items.value
+        if (item.id == 0L) {
+            _items.value = snapshot + item.copy(id = -System.currentTimeMillis())
+        } else {
+            _items.value = snapshot.map { if (it.id == item.id) item else it }
+        }
+        return try {
+            val body = mutableMapOf<String, Any>().apply {
+                put("name", item.name)
+                put("purchase_price", item.purchasePrice)
+                put("expected_shots_lifetime", item.expectedShotsLifetime)
+                if (item.masterProductId != null) put("master_product_id", item.masterProductId)
+            }
+            if (item.id == 0L) api.createMold(body)
+            else api.updateMold(item.id, body)
+            refresh()
+            OnlineWriteResult.Success
+        } catch (e: Exception) {
+            _items.value = snapshot
+            OnlineWriteResult.Error(e.message ?: "Gagal simpan cetakan")
+        }
+    }
+
+    suspend fun delete(id: Long): OnlineWriteResult {
+        val snapshot = _items.value
+        _items.value = snapshot.filter { it.id != id }
+        return try {
+            api.deleteMold(id)
+            OnlineWriteResult.Success
+        } catch (e: Exception) {
+            _items.value = snapshot
+            OnlineWriteResult.Error(e.message ?: "Gagal hapus cetakan")
+        }
+    }
+
+    fun observe(tenantId: String): Flow<List<com.posbah.app.data.local.entities.BmpMoldEntity>> =
+        _items.map { list ->
+            list.map {
+                com.posbah.app.data.local.entities.BmpMoldEntity(
+                    id = it.id,
+                    tenantId = it.tenantId,
+                    name = it.name,
+                    purchasePrice = it.purchasePrice,
+                    expectedShotsLifetime = it.expectedShotsLifetime,
+                    masterProductId = it.masterProductId,
+                    isDeleted = it.isDeleted,
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = it.updatedAt
+                )
+            }
+        }
 }

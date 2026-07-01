@@ -2449,3 +2449,83 @@ func updateAndCalculateCOGS(tenantId string, startMs int64, endMs int64, dateStr
 
 	return totalCogs, nil
 }
+
+// ── BMP — machines ─────────────────────────────────────────────────────────────
+
+func handleRtBmpMachines(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	switch r.Method {
+	case http.MethodGet:
+		rows, _ := db.Query(`SELECT * FROM bmp_machines WHERE "tenantId"=$1 AND "isDeleted"=FALSE ORDER BY id ASC`, tenantId)
+		defer rows.Close(); jsonOK(w, rowsToJSON(rows))
+	case http.MethodPost:
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body)
+		body["tenantId"] = tenantId; body["updatedAt"] = nowMillis()
+		if _, ok := body["createdAt"]; !ok { body["createdAt"] = nowMillis() }
+		id, err := insertRow("bmp_machines", body)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+func handleRtBmpMachinesById(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/bmp/machines/")
+	id, _ := strconv.ParseInt(idStr, 10, 64)
+	switch r.Method {
+	case http.MethodPut:
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body); body["updatedAt"] = nowMillis()
+		updateRow("bmp_machines", id, tenantId, body); jsonOK(w, map[string]interface{}{"ok": true})
+	case http.MethodDelete:
+		db.Exec(`UPDATE bmp_machines SET "isDeleted"=TRUE,"updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, nowMillis(), id, tenantId)
+		jsonOK(w, map[string]interface{}{"ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+// ── BMP — molds ────────────────────────────────────────────────────────────────
+
+func handleRtBmpMolds(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	switch r.Method {
+	case http.MethodGet:
+		rows, _ := db.Query(`SELECT * FROM bmp_molds WHERE "tenantId"=$1 AND "isDeleted"=FALSE ORDER BY id ASC`, tenantId)
+		defer rows.Close(); jsonOK(w, rowsToJSON(rows))
+	case http.MethodPost:
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body)
+		body["tenantId"] = tenantId; body["updatedAt"] = nowMillis()
+		if _, ok := body["createdAt"]; !ok { body["createdAt"] = nowMillis() }
+		id, err := insertRow("bmp_molds", body)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+func handleRtBmpMoldsById(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/bmp/molds/")
+	id, _ := strconv.ParseInt(idStr, 10, 64)
+	switch r.Method {
+	case http.MethodPut:
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body); body["updatedAt"] = nowMillis()
+		updateRow("bmp_molds", id, tenantId, body); jsonOK(w, map[string]interface{}{"ok": true})
+	case http.MethodDelete:
+		db.Exec(`UPDATE bmp_molds SET "isDeleted"=TRUE,"updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, nowMillis(), id, tenantId)
+		jsonOK(w, map[string]interface{}{"ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}

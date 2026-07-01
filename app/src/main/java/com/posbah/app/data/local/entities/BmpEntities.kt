@@ -74,7 +74,10 @@ data class BmpMasterProductEntity(
     val updatedAt: Long = System.currentTimeMillis(),
     val isSynced: Boolean = false,
     val hppTotalPcs: Double = 0.0,
-    val hppLusin: Double = 0.0
+    val hppLusin: Double = 0.0,
+    val machineId: Int? = null,
+    val moldId: Int? = null,
+    val colorantRatio: Double = 0.0
 )
 
 data class BmpProductEntity(
@@ -298,4 +301,30 @@ data class BmpProductionLogEntity(
 ) {
     val productId: Long get() = masterProductId
 }
+
+data class BmpMachineEntity(
+    val id: Long = 0,
+    val tenantId: String,
+    val name: String,
+    val depreciationMonthly: Double = 0.0,
+    val powerConsumptionKw: Double = 0.0,
+    val operatorSalaryMonthly: Double = 0.0,
+    val overheadAllocatedMonthly: Double = 0.0,
+    val hoursCapacityMonthly: Double = 624.0,
+    val isDeleted: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+data class BmpMoldEntity(
+    val id: Long = 0,
+    val tenantId: String,
+    val name: String,
+    val purchasePrice: Double = 0.0,
+    val expectedShotsLifetime: Int = 100000,
+    val masterProductId: Long? = null,
+    val isDeleted: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
 

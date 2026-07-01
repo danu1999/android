@@ -1142,6 +1142,44 @@ func initSchema() error {
 		}
 	}
 
+	// v2.19.18: Tambah tabel bmp_machines dan bmp_molds untuk HPP dinamis
+	machineAndMoldMigrations := []string{
+		`CREATE TABLE IF NOT EXISTS "bmp_machines" (
+			"id" INT,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"name" VARCHAR(255) NOT NULL,
+			"depreciation_monthly" DOUBLE PRECISION DEFAULT 0.0,
+			"power_consumption_kw" DOUBLE PRECISION DEFAULT 0.0,
+			"operator_salary_monthly" DOUBLE PRECISION DEFAULT 0.0,
+			"overhead_allocated_monthly" DOUBLE PRECISION DEFAULT 0.0,
+			"hours_capacity_monthly" DOUBLE PRECISION DEFAULT 624.0,
+			"isDeleted" BOOLEAN DEFAULT FALSE,
+			"createdAt" BIGINT,
+			"updatedAt" BIGINT,
+			PRIMARY KEY ("id", "tenantId")
+		);`,
+		`CREATE TABLE IF NOT EXISTS "bmp_molds" (
+			"id" INT,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"name" VARCHAR(255) NOT NULL,
+			"purchase_price" DOUBLE PRECISION DEFAULT 0.0,
+			"expected_shots_lifetime" INT DEFAULT 100000,
+			"master_product_id" INT,
+			"isDeleted" BOOLEAN DEFAULT FALSE,
+			"createdAt" BIGINT,
+			"updatedAt" BIGINT,
+			PRIMARY KEY ("id", "tenantId")
+		);`,
+		`ALTER TABLE "bmp_master_products" ADD COLUMN IF NOT EXISTS "machine_id" INT;`,
+		`ALTER TABLE "bmp_master_products" ADD COLUMN IF NOT EXISTS "mold_id" INT;`,
+		`ALTER TABLE "bmp_master_products" ADD COLUMN IF NOT EXISTS "colorant_ratio" DOUBLE PRECISION DEFAULT 0.0;`,
+	}
+	for _, q := range machineAndMoldMigrations {
+		if _, err := db.Exec(q); err != nil {
+			log.Printf("[migration] machine/mold warning: %v", err)
+		}
+	}
+
 	log.Println("Database schemas verified / migrated successfully.")
 	return nil
 }
@@ -1152,7 +1190,7 @@ func hasTenantIdColumn(tableName string) bool {
 		"bmp_master_products", "bmp_invoice_payments", "bmp_cashflow", "bmp_settings",
 		"bmp_employees", "bmp_payrolls", "bmp_bahan_baku", "bmp_bahan_baku_item",
 		"products", "customers", "transactions", "bmp_product_stocks", "bmp_stock_ledger",
-		"bmp_production_logs":
+		"bmp_production_logs", "bmp_machines", "bmp_molds":
 		return true
 	}
 	return false

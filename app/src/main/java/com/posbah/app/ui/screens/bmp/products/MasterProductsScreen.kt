@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -21,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Inventory2
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -89,11 +91,15 @@ class MasterProductsViewModel @Inject constructor(
     private val settingsRepo: com.posbah.app.data.repository.BmpSettingsRepository,
     private val authRepository: AuthRepository,
     private val bahanBakuRepo: com.posbah.app.data.repository.BmpBahanBakuRepository,
+    private val machineRepo: com.posbah.app.data.repository.BmpMachineRepository,
+    private val moldRepo: com.posbah.app.data.repository.BmpMoldRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
     val products = repo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val settings = settingsRepo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val machines = machineRepo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val molds = moldRepo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _latestRates = MutableStateFlow<Map<String, Double>>(emptyMap())
     val latestRates = _latestRates.asStateFlow()
@@ -110,6 +116,8 @@ class MasterProductsViewModel @Inject constructor(
             while (true) {
                 try {
                     repo.refresh()
+                    machineRepo.refresh()
+                    moldRepo.refresh()
                     val ratesMap = bahanBakuRepo.getLatestMaterialRates(tenantId)
                     _distinctMaterials.value = ratesMap.keys.toList()
                     _latestRates.value = ratesMap
@@ -158,19 +166,43 @@ class MasterProductsViewModel @Inject constructor(
         val s = settings.value
         val rates = latestRates.value
         val computed = if (s != null) {
-            val totalGaji = s.jumlahKaryawan * s.gajiHarian * s.hariKerjaSebulan
-            val overheadBulanan = s.listrikBulanan + totalGaji
-            val totalDetikSebulan = s.jumlahMesin * s.hariKerjaSebulan * s.hoursPerDay * 3600.0
-            val biayaPerDetik = if (totalDetikSebulan > 0) overheadBulanan / totalDetikSebulan else 0.0
-            val biayaMesin = e.cycleTime * biayaPerDetik
-            
-            val bahanRate = if (e.jenisBahanBaku.isNotEmpty()) {
+            val colorantRate = rates.filter { it.key.contains("pewarna", ignoreCase = true) }
+                .values.average().takeIf { !it.isNaN() } ?: 60000.0
+            val resinRate = if (e.jenisBahanBaku.isNotEmpty()) {
                 rates[e.jenisBahanBaku] ?: e.price
             } else {
                 e.price
             }
+            val mixedRate = if (e.colorantRatio > 0.0) {
+                (e.colorantRatio * resinRate + colorantRate) / (e.colorantRatio + 1.0)
+            } else {
+                resinRate
+            }
 
-            val hppSatuan = (e.beratGram * (bahanRate / 1000.0) + biayaMesin) * (1.0 + (e.rejectRate / 100.0))
+            val selectedMachine = machines.value.find { it.id == e.machineId?.toLong() }
+            val biayaMesin = if (selectedMachine != null) {
+                val totalGajiMesin = selectedMachine.operatorSalaryMonthly
+                val listrikMesin = selectedMachine.powerConsumptionKw * selectedMachine.hoursCapacityMonthly * 1500.0
+                val overheadMesin = selectedMachine.depreciationMonthly + selectedMachine.overheadAllocatedMonthly + totalGajiMesin + listrikMesin
+                val totalDetikMesin = selectedMachine.hoursCapacityMonthly * 3600.0
+                val biayaPerDetik = if (totalDetikMesin > 0) overheadMesin / totalDetikMesin else 0.0
+                e.cycleTime * biayaPerDetik
+            } else {
+                val totalGaji = s.jumlahKaryawan * s.gajiHarian * s.hariKerjaSebulan
+                val overheadBulanan = s.listrikBulanan + totalGaji
+                val totalDetikSebulan = s.jumlahMesin * s.hariKerjaSebulan * s.hoursPerDay * 3600.0
+                val biayaPerDetik = if (totalDetikSebulan > 0) overheadBulanan / totalDetikSebulan else 0.0
+                e.cycleTime * biayaPerDetik
+            }
+
+            val selectedMold = molds.value.find { it.id == e.moldId?.toLong() }
+            val biayaMoldPcs = if (selectedMold != null && selectedMold.expectedShotsLifetime > 0 && e.cavity > 0) {
+                (selectedMold.purchasePrice / selectedMold.expectedShotsLifetime) / e.cavity
+            } else {
+                0.0
+            }
+
+            val hppSatuan = (e.beratGram * (mixedRate / 1000.0) + biayaMesin + biayaMoldPcs) * (1.0 + (e.rejectRate / 100.0))
             val biayaKemasanPcs = s.biayaKarungPer1000 / 1000.0
             val hppTotalPcs = hppSatuan + biayaKemasanPcs
             val hppLusin = hppTotalPcs * 12.0
@@ -199,7 +231,12 @@ class MasterProductsViewModel @Inject constructor(
             jenisBahanBaku = finalProduct.jenisBahanBaku,
             image = finalProduct.image,
             isDeleted = finalProduct.isDeleted,
-            updatedAt = System.currentTimeMillis()
+            updatedAt = System.currentTimeMillis(),
+            hppTotalPcs = finalProduct.hppTotalPcs,
+            hppLusin = finalProduct.hppLusin,
+            machineId = finalProduct.machineId,
+            moldId = finalProduct.moldId,
+            colorantRatio = finalProduct.colorantRatio
         )
         // Optimistic: tutup form langsung sebelum menunggu network
         _form.update { FormState() }
@@ -265,6 +302,7 @@ data class HppResult(
 @Composable
 fun MasterProductsScreen(
     onBack: () -> Unit,
+    onNavigateToMachines: () -> Unit,
     viewModel: MasterProductsViewModel = hiltViewModel()
 ) {
     val list by viewModel.products.collectAsState()
@@ -327,7 +365,21 @@ fun MasterProductsScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { PosBahTopBar(title = "Master Produk", subtitle = "${list.size} item", onBack = onBack) },
+        topBar = {
+            PosBahTopBar(
+                title = "Master Produk",
+                subtitle = "${list.size} item",
+                onBack = onBack,
+                actions = {
+                    IconButton(onClick = onNavigateToMachines) {
+                        Icon(
+                            imageVector = Icons.Outlined.Settings,
+                            contentDescription = "Mesin & Matras"
+                        )
+                    }
+                }
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = viewModel::openCreate,
@@ -404,21 +456,48 @@ fun MasterProductsScreen(
         var simHargaJualLusin by remember { mutableStateOf("") }
 
         val latestRates by viewModel.latestRates.collectAsState()
-        val hppRes = remember(e, settings, latestRates) {
+        val machinesState by viewModel.machines.collectAsState()
+        val moldsState by viewModel.molds.collectAsState()
+
+        val hppRes = remember(e, settings, latestRates, machinesState, moldsState) {
             settings?.let { s ->
-                val totalGaji = s.jumlahKaryawan * s.gajiHarian * s.hariKerjaSebulan
-                val overheadBulanan = s.listrikBulanan + totalGaji
-                val totalDetikSebulan = s.jumlahMesin * s.hariKerjaSebulan * s.hoursPerDay * 3600.0
-                val biayaPerDetik = if (totalDetikSebulan > 0) overheadBulanan / totalDetikSebulan else 0.0
-                val biayaMesin = e.cycleTime * biayaPerDetik
-                
-                val bahanRate = if (e.jenisBahanBaku.isNotEmpty()) {
+                val colorantRate = latestRates.filter { it.key.contains("pewarna", ignoreCase = true) }
+                    .values.average().takeIf { !it.isNaN() } ?: 60000.0
+                val resinRate = if (e.jenisBahanBaku.isNotEmpty()) {
                     latestRates[e.jenisBahanBaku] ?: e.price
                 } else {
                     e.price
                 }
+                val mixedRate = if (e.colorantRatio > 0.0) {
+                    (e.colorantRatio * resinRate + colorantRate) / (e.colorantRatio + 1.0)
+                } else {
+                    resinRate
+                }
 
-                val hppSatuan = (e.beratGram * (bahanRate / 1000.0) + biayaMesin) * (1.0 + (e.rejectRate / 100.0))
+                val selectedMachine = machinesState.find { it.id == e.machineId?.toLong() }
+                val biayaMesin = if (selectedMachine != null) {
+                    val totalGajiMesin = selectedMachine.operatorSalaryMonthly
+                    val listrikMesin = selectedMachine.powerConsumptionKw * selectedMachine.hoursCapacityMonthly * 1500.0
+                    val overheadMesin = selectedMachine.depreciationMonthly + selectedMachine.overheadAllocatedMonthly + totalGajiMesin + listrikMesin
+                    val totalDetikMesin = selectedMachine.hoursCapacityMonthly * 3600.0
+                    val biayaPerDetik = if (totalDetikMesin > 0) overheadMesin / totalDetikMesin else 0.0
+                    e.cycleTime * biayaPerDetik
+                } else {
+                    val totalGaji = s.jumlahKaryawan * s.gajiHarian * s.hariKerjaSebulan
+                    val overheadBulanan = s.listrikBulanan + totalGaji
+                    val totalDetikSebulan = s.jumlahMesin * s.hariKerjaSebulan * s.hoursPerDay * 3600.0
+                    val biayaPerDetik = if (totalDetikSebulan > 0) overheadBulanan / totalDetikSebulan else 0.0
+                    e.cycleTime * biayaPerDetik
+                }
+
+                val selectedMold = moldsState.find { it.id == e.moldId?.toLong() }
+                val biayaMoldPcs = if (selectedMold != null && selectedMold.expectedShotsLifetime > 0 && e.cavity > 0) {
+                    (selectedMold.purchasePrice / selectedMold.expectedShotsLifetime) / e.cavity
+                } else {
+                    0.0
+                }
+
+                val hppSatuan = (e.beratGram * (mixedRate / 1000.0) + biayaMesin + biayaMoldPcs) * (1.0 + (e.rejectRate / 100.0))
                 val biayaKemasanPcs = s.biayaKarungPer1000 / 1000.0
                 val hppTotalPcs = hppSatuan + biayaKemasanPcs
                 val hppLusin = hppTotalPcs * 12.0
@@ -426,7 +505,13 @@ fun MasterProductsScreen(
                 val outputJamLusin = outputJamPcs / 12.0
 
                 HppResult(
-                    overheadBulanan = overheadBulanan,
+                    overheadBulanan = if (selectedMachine != null) {
+                        val totalGajiMesin = selectedMachine.operatorSalaryMonthly
+                        val listrikMesin = selectedMachine.powerConsumptionKw * selectedMachine.hoursCapacityMonthly * 1500.0
+                        selectedMachine.depreciationMonthly + selectedMachine.overheadAllocatedMonthly + totalGajiMesin + listrikMesin
+                    } else {
+                        s.listrikBulanan + s.jumlahKaryawan * s.gajiHarian * s.hariKerjaSebulan
+                    },
                     outputJamPcs = outputJamPcs,
                     outputJamLusin = outputJamLusin,
                     hppTotalPcs = hppTotalPcs,
@@ -504,6 +589,122 @@ fun MasterProductsScreen(
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.weight(1.4f)
+                        )
+                    }
+
+                    Spacer(Modifier.size(8.dp))
+                    var showMachineSelector by remember { mutableStateOf(false) }
+                    var showMoldSelector by remember { mutableStateOf(false) }
+                    val selectedMachine = machinesState.find { it.id == e.machineId?.toLong() }
+                    val selectedMold = moldsState.find { it.id == e.moldId?.toLong() }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = selectedMachine?.name ?: "Pilih Mesin...",
+                            onValueChange = {},
+                            label = { Text("Mesin Cetak") },
+                            readOnly = true,
+                            enabled = false,
+                            modifier = Modifier.weight(1f).clickable { showMachineSelector = true }
+                        )
+                        OutlinedTextField(
+                            value = selectedMold?.name ?: "Pilih Matras...",
+                            onValueChange = {},
+                            label = { Text("Matras Cetak") },
+                            readOnly = true,
+                            enabled = false,
+                            modifier = Modifier.weight(1f).clickable { showMoldSelector = true }
+                        )
+                    }
+
+                    Spacer(Modifier.size(8.dp))
+                    OutlinedTextField(
+                        value = if (e.colorantRatio == 0.0) "" else e.colorantRatio.toString(),
+                        onValueChange = { v ->
+                            val n = v.replace(",", ".").toDoubleOrNull() ?: 0.0
+                            viewModel.updateField { it.copy(colorantRatio = n) }
+                        },
+                        label = { Text("Rasio Pewarna (Contoh: 50 untuk 1:50, 0 jika polos)") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    // Machine Selector Dialog
+                    if (showMachineSelector) {
+                        AlertDialog(
+                            onDismissRequest = { showMachineSelector = false },
+                            title = { Text("Pilih Mesin") },
+                            text = {
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    item {
+                                        Surface(
+                                            modifier = Modifier.fillMaxWidth().clickable {
+                                                viewModel.updateField { it.copy(machineId = null) }
+                                                showMachineSelector = false
+                                            }.padding(vertical = 8.dp)
+                                        ) {
+                                            Text("(Tidak menggunakan mesin khusus / global)", color = Color.Gray)
+                                        }
+                                    }
+                                    items(machinesState) { m ->
+                                        Surface(
+                                            modifier = Modifier.fillMaxWidth().clickable {
+                                                viewModel.updateField { it.copy(machineId = m.id.toInt()) }
+                                                showMachineSelector = false
+                                            }.padding(vertical = 8.dp)
+                                        ) {
+                                            Text(m.name, fontWeight = FontWeight.Medium)
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {},
+                            dismissButton = {
+                                TextButton(onClick = { showMachineSelector = false }) { Text("Tutup") }
+                            }
+                        )
+                    }
+
+                    // Mold Selector Dialog
+                    if (showMoldSelector) {
+                        AlertDialog(
+                            onDismissRequest = { showMoldSelector = false },
+                            title = { Text("Pilih Matras") },
+                            text = {
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    item {
+                                        Surface(
+                                            modifier = Modifier.fillMaxWidth().clickable {
+                                                viewModel.updateField { it.copy(moldId = null) }
+                                                showMoldSelector = false
+                                            }.padding(vertical = 8.dp)
+                                        ) {
+                                            Text("(Tidak menggunakan matras khusus / global)", color = Color.Gray)
+                                        }
+                                    }
+                                    items(moldsState) { m ->
+                                        Surface(
+                                            modifier = Modifier.fillMaxWidth().clickable {
+                                                viewModel.updateField { it.copy(moldId = m.id.toInt()) }
+                                                showMoldSelector = false
+                                            }.padding(vertical = 8.dp)
+                                        ) {
+                                            Text(m.name, fontWeight = FontWeight.Medium)
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {},
+                            dismissButton = {
+                                TextButton(onClick = { showMoldSelector = false }) { Text("Tutup") }
+                            }
                         )
                     }
                     val bahanRate = if (e.jenisBahanBaku.isNotEmpty()) {

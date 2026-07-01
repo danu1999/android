@@ -22,6 +22,7 @@ import com.posbah.app.ui.screens.bmp.invoices.InvoiceFormScreen
 import com.posbah.app.ui.screens.bmp.invoices.InvoicesListScreen
 import com.posbah.app.ui.screens.bmp.payments.PaymentsListScreen
 import com.posbah.app.ui.screens.bmp.products.MasterProductsScreen
+import com.posbah.app.ui.screens.bmp.products.MachineMoldManagementScreen
 import com.posbah.app.ui.screens.bmp.settings.SettingsScreen
 import com.posbah.app.ui.screens.bmp.settings.PrintSettingsScreen
 import com.posbah.app.ui.screens.lock.LockScreen
@@ -279,7 +280,14 @@ fun PosBahRoot(
         }
 
         composable(Screen.BmpProducts.route) {
-            MasterProductsScreen(onBack = { nav.popBackStack() })
+            MasterProductsScreen(
+                onBack = { nav.popBackStack() },
+                onNavigateToMachines = { nav.navigate(Screen.BmpMachineMold.route) }
+            )
+        }
+
+        composable(Screen.BmpMachineMold.route) {
+            MachineMoldManagementScreen(onBack = { nav.popBackStack() })
         }
 
         composable(Screen.BmpPayments.route) {
