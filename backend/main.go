@@ -2141,6 +2141,9 @@ func handleApkVersion(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	if version == "2.19.12" {
+		version = "2.19.11"
+	}
 	json.NewEncoder(w).Encode(map[string]string{
 		"version":     version,
 		"description": description,
