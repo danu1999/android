@@ -29,29 +29,25 @@ func extractTenantId(r *http.Request) (string, bool) {
 		return "", false
 	}
 	var tenantId string
-	// Try 1: sessionToken (for future JWT support)
-	err := db.QueryRow(`SELECT "tenantId" FROM "local_users" WHERE "sessionToken" = $1 AND "isActive" = TRUE LIMIT 1`, token).Scan(&tenantId)
+	// Try 1: googleSub (numeric sub ID from Google SSO atau email token sesi lokal)
+	err := db.QueryRow(`SELECT "tenantId" FROM "local_users" WHERE "googleSub" = $1 AND "isActive" = TRUE LIMIT 1`, token).Scan(&tenantId)
 	if err != nil {
-		// Try 2: googleSub (numeric sub ID from Google SSO)
-		err2 := db.QueryRow(`SELECT "tenantId" FROM "local_users" WHERE "googleSub" = $1 AND "isActive" = TRUE LIMIT 1`, token).Scan(&tenantId)
+		// Try 2: email — untuk user premium statis (login email+password)
+		err2 := db.QueryRow(`SELECT "tenantId" FROM "local_users" WHERE "email" = $1 AND "isActive" = TRUE LIMIT 1`, token).Scan(&tenantId)
 		if err2 != nil {
-			// Try 3: email — for premium static users (email+password login) whose token = email
-			err3 := db.QueryRow(`SELECT "tenantId" FROM "local_users" WHERE "email" = $1 AND "isActive" = TRUE LIMIT 1`, token).Scan(&tenantId)
-			if err3 != nil {
-				// Try 4: check employees table — for kasir/admin login where token = "emp:<id>"
-				if strings.HasPrefix(token, "emp:") {
-					empIdStr := strings.TrimPrefix(token, "emp:")
-					err4 := db.QueryRow(`SELECT "tenantId" FROM "employees" WHERE id = $1 AND "isActive" = TRUE LIMIT 1`, empIdStr).Scan(&tenantId)
+			// Try 3: check employees / bmp_employees table — untuk admin/supervisor login (token = "emp:<id>")
+			if strings.HasPrefix(token, "emp:") {
+				empIdStr := strings.TrimPrefix(token, "emp:")
+				err3 := db.QueryRow(`SELECT "tenantId" FROM "employees" WHERE id = $1 AND "isActive" = TRUE LIMIT 1`, empIdStr).Scan(&tenantId)
+				if err3 != nil {
+					// Fallback: check bmp_employees table
+					err4 := db.QueryRow(`SELECT "tenantId" FROM "bmp_employees" WHERE id = $1 AND "isActive" = TRUE LIMIT 1`, empIdStr).Scan(&tenantId)
 					if err4 != nil {
-						// Fallback: check bmp_employees table for BMP employees/supervisors
-						err5 := db.QueryRow(`SELECT "tenantId" FROM "bmp_employees" WHERE id = $1 AND "isActive" = TRUE LIMIT 1`, empIdStr).Scan(&tenantId)
-						if err5 != nil {
-							return "", false
-						}
+						return "", false
 					}
-				} else {
-					return "", false
 				}
+			} else {
+				return "", false
 			}
 		}
 	}
@@ -65,7 +61,7 @@ func isOwnerToken(token string) bool {
 	var count int
 	_ = db.QueryRow(`
 		SELECT COUNT(1) FROM "local_users" 
-		WHERE ("sessionToken" = $1 OR "googleSub" = $1 OR "email" = $1) 
+		WHERE ("googleSub" = $1 OR "email" = $1) 
 		  AND "isActive" = TRUE`, token).Scan(&count)
 	return count > 0
 }
