@@ -301,6 +301,8 @@ data class BmpProductionLogEntity(
     val isMachineActive: Boolean = true,
     val cycleTimeActual: Double = 0.0,
     val electricityCostActual: Double = 0.0,
+    /** JSON campuran warna per shift: [{\"color\":\"Merah\",\"rasio\":\"1\"},{\"color\":\"Natural\",\"rasio\":\"9\"}] */
+    val colorMixture: String? = null,
     val operatorName: String? = null,
     val productionDate: Long = System.currentTimeMillis(),
     val isSynced: Boolean = false,

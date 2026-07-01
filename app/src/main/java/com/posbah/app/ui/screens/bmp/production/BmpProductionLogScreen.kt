@@ -233,6 +233,16 @@ class BmpProductionLogViewModel @Inject constructor(
             val electricityCost = entry.electricityInput.toDoubleOrNull()
                 ?: entry.machine.electricityCostDaily
 
+            // Serialize campuran warna ke JSON (jika ada)
+            val colorMixtureJson = if (entry.isCampuranBahan &&
+                entry.campuranBahan.any { it.warna.isNotBlank() }) {
+                entry.campuranBahan
+                    .filter { it.warna.isNotBlank() }
+                    .joinToString(",", "[", "]") { ce ->
+                        "{\"color\":\"${ce.warna}\",\"rasio\":\"${ce.rasio.ifBlank { "1" }}\"}"
+                    }
+            } else null
+
             val log = BmpProductionLogEntity(
                 tenantId = tenantId,
                 masterProductId = product.id,
@@ -243,6 +253,7 @@ class BmpProductionLogViewModel @Inject constructor(
                 rawMaterialId = entry.selectedRawMaterial?.id ?: 0L,
                 cycleTimeActual = cycleTime,
                 electricityCostActual = electricityCost,
+                colorMixture = colorMixtureJson,
                 operatorName = null,
                 productionDate = System.currentTimeMillis()
             )
@@ -967,6 +978,22 @@ private fun HistoryTab(
                                 SuggestionChip(onClick = {}, label = { Text("Reject: ${Formatters.number(log.quantityRejected)}") })
                                 SuggestionChip(onClick = {}, label = { Text("BB: ${Formatters.number(log.rawMaterialUsedKg)} Kg") })
                             }
+                            // Tampilkan campuran warna jika ada
+                            val mixSummary = parseColorMixtureSummary(log.colorMixture)
+                            if (mixSummary.isNotBlank()) {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                                    modifier = Modifier.padding(top = 4.dp)
+                                ) {
+                                    Text(
+                                        "🎨 $mixSummary",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
                         }
                         Column(horizontalAlignment = Alignment.End) {
                             Text(
@@ -990,4 +1017,37 @@ private fun HistoryTab(
             }
         }
     }
+}
+
+/**
+ * Parse JSON color_mixture string menjadi human-readable summary persentase.
+ * Input:  [{"color":"Natural","rasio":"9"},{"color":"Merah","rasio":"1"}]
+ * Output: "Natural 90% + Merah 10%"
+ */
+fun parseColorMixtureSummary(colorMixture: String?): String {
+    if (colorMixture.isNullOrBlank()) return ""
+    return try {
+        val entries = colorMixture
+            .trimStart('[').trimEnd(']')
+            .split("},")
+            .filter { it.isNotBlank() }
+            .map { chunk ->
+                val clean = chunk.replace("{", "").replace("}", "").replace("\"", "")
+                val map = clean.split(",").associate {
+                    val kv = it.split(":")
+                    kv.getOrElse(0) { "" }.trim() to kv.getOrElse(1) { "" }.trim()
+                }
+                val color = map["color"] ?: ""
+                val rasio = map["rasio"]?.toDoubleOrNull() ?: 1.0
+                color to rasio
+            }.filter { it.first.isNotBlank() }
+
+        if (entries.isEmpty()) return ""
+        val total = entries.sumOf { it.second }
+        if (total <= 0) return ""
+        entries.joinToString(" + ") { (color, rasio) ->
+            val pct = (rasio / total * 100).toInt()
+            "$color $pct%"
+        }
+    } catch (_: Exception) { "" }
 }

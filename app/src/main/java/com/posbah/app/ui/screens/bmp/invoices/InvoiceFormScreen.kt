@@ -221,6 +221,7 @@ fun InvoiceFormScreen(
                 ProductLineEditor(
                     line = line,
                     masterProducts = ui.masterProducts,
+                    machines = ui.machines,
                     onChange = { trans -> viewModel.updateProductLine(idx) { trans(it) } },
                     onRemove = { viewModel.removeProductLine(idx) },
                     testTagPrefix = "line-$idx"
@@ -496,12 +497,15 @@ private fun ClientPickerRow(c: BmpClientEntity, onClick: () -> Unit) {
 private fun ProductLineEditor(
     line: BmpProductEntity,
     masterProducts: List<com.posbah.app.data.local.entities.BmpMasterProductEntity>,
+    machines: List<com.posbah.app.data.local.entities.BmpMachineEntity> = emptyList(),
     onChange: ((BmpProductEntity) -> BmpProductEntity) -> Unit,
     onRemove: () -> Unit,
     testTagPrefix: String
 ) {
     var showProductPicker by remember { mutableStateOf(false) }
     val matchedMaster = masterProducts.find { it.id == line.masterItemID }
+    val matchedMachine = if (matchedMaster?.machineId != null)
+        machines.find { it.id == matchedMaster.machineId.toLong() } else null
     val saranModal = if (matchedMaster != null) {
         matchedMaster.hppTotalPcs * line.quantity * line.jumlahLusin
     } else 0.0
@@ -541,6 +545,36 @@ private fun ProductLineEditor(
                             if (matchedMaster != null) "Ganti Master: ${matchedMaster.title}" else "Pilih dari Master Produk",
                             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
                         )
+                    }
+                    // Info chip: bahan baku + status mesin
+                    if (matchedMaster != null) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            if (matchedMaster.jenisBahanBaku.isNotBlank()) {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                                ) {
+                                    Text(
+                                        "📦 ${matchedMaster.jenisBahanBaku}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                            if (matchedMachine != null && !matchedMachine.isActive) {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = MaterialTheme.colorScheme.errorContainer
+                                ) {
+                                    Text(
+                                        "⚠️ Mesin Mati",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
                 IconButton(onClick = onRemove, modifier = Modifier.testTag("$testTagPrefix-remove")) {

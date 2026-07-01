@@ -105,6 +105,7 @@ class BmpProductionLogRepository @Inject constructor(
                         isMachineActive = m["is_machine_active"] as? Boolean ?: true,
                         cycleTimeActual = (m["cycle_time_actual"] as? Number)?.toDouble() ?: 0.0,
                         electricityCostActual = (m["electricity_cost_actual"] as? Number)?.toDouble() ?: 0.0,
+                        colorMixture = m["color_mixture"] as? String,
                         operatorName = m["operatorName"] as? String,
                         productionDate = (m["productionDate"] as? Number)?.toLong() ?: System.currentTimeMillis(),
                         isDeleted = m["isDeleted"] as? Boolean ?: false,
@@ -139,6 +140,7 @@ class BmpProductionLogRepository @Inject constructor(
             if (log.machineId != null) body["machine_id"] = log.machineId
             if (log.cycleTimeActual > 0) body["cycle_time_actual"] = log.cycleTimeActual
             if (log.electricityCostActual > 0) body["electricity_cost_actual"] = log.electricityCostActual
+            if (!log.colorMixture.isNullOrBlank()) body["color_mixture"] = log.colorMixture
             val resp = api.createProductionLog(body)
             if (resp.isSuccessful) {
                 // Extract the real server-assigned ID and replace the temp entry
