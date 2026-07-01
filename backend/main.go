@@ -211,6 +211,8 @@ func main() {
 	http.HandleFunc("/api/rt/bmp/reports/depreciation", handleRtBmpDepreciation)
 	http.HandleFunc("/api/rt/bmp/assets", handleRtBmpAssets)
 	http.HandleFunc("/api/rt/bmp/assets/", handleRtBmpAssetsById)
+	http.HandleFunc("/api/rt/bmp/ingredients", handleRtBmpIngredients)
+	http.HandleFunc("/api/rt/bmp/ingredients/", handleRtBmpIngredientsById)
 
 	// PIN Login for kasir (full online)
 	http.HandleFunc("/api/auth/pin-login", handlePinLogin)

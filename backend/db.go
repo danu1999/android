@@ -973,6 +973,19 @@ func initSchema() error {
 		`ALTER TABLE "bmp_monthly_depreciation" ADD CONSTRAINT "uniq_depreciation_asset_period" UNIQUE ("tenantId", "assetId", "period");`,
 		`CREATE INDEX IF NOT EXISTS "idx_bmp_assets_tenant_deleted" ON "bmp_assets" ("tenantId", "isDeleted");`,
 		`CREATE INDEX IF NOT EXISTS "idx_bmp_depreciation_asset_period" ON "bmp_monthly_depreciation" ("tenantId", "assetId", "period");`,
+
+		// v2.19.14: Tambah tabel bmp_product_ingredients (BOM/Resep)
+		`CREATE TABLE IF NOT EXISTS "bmp_product_ingredients" (
+			"id" SERIAL PRIMARY KEY,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"productId" INT NOT NULL,
+			"jenisBahan" VARCHAR(150) NOT NULL,
+			"quantity" DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+			"createdAt" BIGINT,
+			"updatedAt" BIGINT,
+			CONSTRAINT "uniq_product_ingredient" UNIQUE ("tenantId", "productId", "jenisBahan")
+		);`,
+		`CREATE INDEX IF NOT EXISTS "idx_ingredients_product" ON "bmp_product_ingredients" ("tenantId", "productId");`,
 	}
 	for _, q := range manufakturMigrations {
 		if _, err := db.Exec(q); err != nil {
@@ -980,6 +993,15 @@ func initSchema() error {
 		}
 	}
 
+	// Backfill: migrasikan data resep/BOM dari kolom jenisBahanBaku di bmp_master_products
+	// ke tabel bmp_product_ingredients secara otomatis.
+	_, _ = db.Exec(`
+		INSERT INTO bmp_product_ingredients ("tenantId", "productId", "jenisBahan", "quantity", "createdAt", "updatedAt")
+		SELECT "tenantId", id, "jenisBahanBaku", 1.0, EXTRACT(EPOCH FROM NOW())::BIGINT * 1000, EXTRACT(EPOCH FROM NOW())::BIGINT * 1000
+		FROM bmp_master_products
+		WHERE "jenisBahanBaku" IS NOT NULL AND TRIM("jenisBahanBaku") != '' AND "isDeleted" = FALSE
+		ON CONFLICT ("tenantId", "productId", "jenisBahan") DO NOTHING;
+	`)
 
 	// Backfill: isi kolom description pada bmp_products lama yang NULL
 	// dengan description dari bmp_master_products berdasarkan masterItemID.

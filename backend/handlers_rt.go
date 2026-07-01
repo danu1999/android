@@ -2022,3 +2022,59 @@ func handleRtBmpAssetsById(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 405, "method not allowed")
 	}
 }
+
+func handleRtBmpIngredients(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	switch r.Method {
+	case http.MethodGet:
+		productIdStr := r.URL.Query().Get("productId")
+		if productIdStr == "" {
+			jsonErr(w, 400, "productId is required")
+			return
+		}
+		productId, _ := strconv.ParseInt(productIdStr, 10, 64)
+		rows, err := db.Query(`SELECT * FROM bmp_product_ingredients WHERE "tenantId"=$1 AND "productId"=$2 ORDER BY "jenisBahan" ASC`, tenantId, productId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		defer rows.Close(); jsonOK(w, rowsToJSON(rows))
+	case http.MethodPost:
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid body")
+			return
+		}
+		body["tenantId"] = tenantId
+		body["createdAt"] = nowMillis()
+		body["updatedAt"] = nowMillis()
+		id, err := insertRow("bmp_product_ingredients", body)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+func handleRtBmpIngredientsById(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/bmp/ingredients/")
+	id, _ := strconv.ParseInt(idStr, 10, 64)
+	switch r.Method {
+	case http.MethodPut:
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid body")
+			return
+		}
+		body["updatedAt"] = nowMillis()
+		err := updateRow("bmp_product_ingredients", id, tenantId, body)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"ok": true})
+	case http.MethodDelete:
+		_, err := db.Exec(`DELETE FROM bmp_product_ingredients WHERE id=$1 AND "tenantId"=$2`, id, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
