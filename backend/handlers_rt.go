@@ -1189,6 +1189,10 @@ func handleRtBmpProductionLogsById(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		_, err := db.Exec(`UPDATE bmp_production_logs SET "isDeleted"=TRUE WHERE id=$1 AND "tenantId"=$2`, id, tenantId)
 		if err != nil { jsonErr(w, 500, err.Error()); return }
+
+		// Cascade soft-delete ke bmp_production_materials
+		_, _ = db.Exec(`UPDATE bmp_production_materials SET "isDeleted"=TRUE WHERE "productionLogId"=$1 AND "tenantId"=$2`, id, tenantId)
+
 		jsonOK(w, map[string]interface{}{"ok": true})
 	default:
 		jsonErr(w, 405, "method not allowed")
@@ -2072,6 +2076,63 @@ func handleRtBmpIngredientsById(w http.ResponseWriter, r *http.Request) {
 		jsonOK(w, map[string]interface{}{"ok": true})
 	case http.MethodDelete:
 		_, err := db.Exec(`DELETE FROM bmp_product_ingredients WHERE id=$1 AND "tenantId"=$2`, id, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+func handleRtBmpProductionMaterials(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	switch r.Method {
+	case http.MethodGet:
+		productionLogIdStr := r.URL.Query().Get("productionLogId")
+		if productionLogIdStr == "" {
+			jsonErr(w, 400, "productionLogId is required")
+			return
+		}
+		productionLogId, _ := strconv.ParseInt(productionLogIdStr, 10, 64)
+		rows, err := db.Query(`SELECT * FROM bmp_production_materials WHERE "tenantId"=$1 AND "productionLogId"=$2 AND "isDeleted"=FALSE ORDER BY "id" ASC`, tenantId, productionLogId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		defer rows.Close(); jsonOK(w, rowsToJSON(rows))
+	case http.MethodPost:
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid body")
+			return
+		}
+		body["tenantId"] = tenantId
+		body["createdAt"] = nowMillis()
+		body["updatedAt"] = nowMillis()
+		body["isDeleted"] = false
+		id, err := insertRow("bmp_production_materials", body)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+func handleRtBmpProductionMaterialsById(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/bmp/production-materials/")
+	id, _ := strconv.ParseInt(idStr, 10, 64)
+	switch r.Method {
+	case http.MethodPut:
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid body")
+			return
+		}
+		body["updatedAt"] = nowMillis()
+		err := updateRow("bmp_production_materials", id, tenantId, body)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"ok": true})
+	case http.MethodDelete:
+		_, err := db.Exec(`UPDATE bmp_production_materials SET "isDeleted"=TRUE, "updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, nowMillis(), id, tenantId)
 		if err != nil { jsonErr(w, 500, err.Error()); return }
 		jsonOK(w, map[string]interface{}{"ok": true})
 	default:

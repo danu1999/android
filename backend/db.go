@@ -986,6 +986,21 @@ func initSchema() error {
 			CONSTRAINT "uniq_product_ingredient" UNIQUE ("tenantId", "productId", "jenisBahan")
 		);`,
 		`CREATE INDEX IF NOT EXISTS "idx_ingredients_product" ON "bmp_product_ingredients" ("tenantId", "productId");`,
+
+		// v2.19.15: Tambah tabel bmp_production_materials (detail log bahan baku produksi)
+		`CREATE TABLE IF NOT EXISTS "bmp_production_materials" (
+			"id" SERIAL PRIMARY KEY,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"productionLogId" INT NOT NULL,
+			"rawMaterialId" INT NOT NULL DEFAULT 0,
+			"jenisBahan" VARCHAR(150) NOT NULL,
+			"quantityUsed" DOUBLE PRECISION NOT NULL,
+			"isDeleted" BOOLEAN DEFAULT FALSE,
+			"createdAt" BIGINT,
+			"updatedAt" BIGINT,
+			CONSTRAINT "uniq_production_material" UNIQUE ("tenantId", "productionLogId", "rawMaterialId")
+		);`,
+		`CREATE INDEX IF NOT EXISTS "idx_prod_materials_log" ON "bmp_production_materials" ("tenantId", "productionLogId");`,
 	}
 	for _, q := range manufakturMigrations {
 		if _, err := db.Exec(q); err != nil {
@@ -1001,6 +1016,24 @@ func initSchema() error {
 		FROM bmp_master_products
 		WHERE "jenisBahanBaku" IS NOT NULL AND TRIM("jenisBahanBaku") != '' AND "isDeleted" = FALSE
 		ON CONFLICT ("tenantId", "productId", "jenisBahan") DO NOTHING;
+	`)
+
+	// Backfill: migrasikan data pemakaian bahan baku dari tabel bmp_production_logs
+	// ke tabel detail baru bmp_production_materials.
+	_, _ = db.Exec(`
+		INSERT INTO bmp_production_materials ("tenantId", "productionLogId", "rawMaterialId", "jenisBahan", "quantityUsed", "createdAt", "updatedAt")
+		SELECT 
+			pl."tenantId", 
+			pl.id, 
+			pl."rawMaterialId", 
+			COALESCE(mp."jenisBahanBaku", 'Bahan Baku'),
+			pl."rawMaterialUsedKg", 
+			pl."createdAt", 
+			pl."createdAt"
+		FROM bmp_production_logs pl
+		LEFT JOIN bmp_master_products mp ON pl."masterProductId" = mp.id AND pl."tenantId" = mp."tenantId"
+		WHERE pl."rawMaterialUsedKg" > 0 AND pl."rawMaterialId" > 0 AND pl."isDeleted" = FALSE
+		ON CONFLICT ("tenantId", "productionLogId", "rawMaterialId") DO NOTHING;
 	`)
 
 	// Backfill: isi kolom description pada bmp_products lama yang NULL
