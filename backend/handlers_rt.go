@@ -2397,7 +2397,100 @@ func updateAndCalculateCOGS(tenantId string, startMs int64, endMs int64, dateStr
 		overheadAllocationPerUnit = foh / totalProduced
 	}
 
-	// 4. Query all sold products in the period (v2.19.17: include machine info)
+	// === v2.19.21: Pre-compute actual operator labor cost per machine from attendance ===
+	type MachineActualLabor struct {
+		TotalLaborCost  float64 // total salary of operators allocated to this machine
+		TotalSecsWorked float64 // total seconds of actual attendance at this machine
+	}
+	machineActualLabor := make(map[int64]MachineActualLabor)
+
+	// 1. Read production logs with workers_attendance in period
+	type logAttEntry struct {
+		MachineId  int64
+		EmployeeId int64
+		Hours      float64
+	}
+	var allLogAtts []logAttEntry
+	laRows, errLA := db.Query(`
+		SELECT COALESCE(machine_id, 0), COALESCE(workers_attendance, '')
+		FROM bmp_production_logs
+		WHERE "tenantId"=$1 AND "productionDate">=$2 AND "productionDate"<$3
+		  AND "isDeleted"=FALSE AND machine_id IS NOT NULL AND workers_attendance IS NOT NULL
+	`, tenantId, startMs, endMs)
+	if errLA == nil {
+		defer laRows.Close()
+		for laRows.Next() {
+			var machineId int64
+			var attJSON string
+			laRows.Scan(&machineId, &attJSON)
+			if machineId == 0 || attJSON == "" {
+				continue
+			}
+			var attendees []struct {
+				EmployeeId int64  `json:"employeeId"`
+				CheckIn    string `json:"checkIn"`
+				CheckOut   string `json:"checkOut"`
+			}
+			if json.Unmarshal([]byte(attJSON), &attendees) != nil {
+				continue
+			}
+			for _, a := range attendees {
+				hours := calcHoursWorked(a.CheckIn, a.CheckOut)
+				if hours > 0 {
+					allLogAtts = append(allLogAtts, logAttEntry{MachineId: machineId, EmployeeId: a.EmployeeId, Hours: hours})
+				}
+			}
+		}
+	}
+
+	// 2. Group by (machine, employee) to sum hours
+	type empMachineKey struct{ Machine, Emp int64 }
+	empMachineHoursMap := make(map[empMachineKey]float64)
+	machineEmpSet := make(map[int64]map[int64]bool)
+	for _, la := range allLogAtts {
+		k := empMachineKey{la.MachineId, la.EmployeeId}
+		empMachineHoursMap[k] += la.Hours
+		if machineEmpSet[la.MachineId] == nil {
+			machineEmpSet[la.MachineId] = make(map[int64]bool)
+		}
+		machineEmpSet[la.MachineId][la.EmployeeId] = true
+	}
+
+	// 3. Total hours per employee across all machines (for proportional allocation)
+	empTotalHoursMap := make(map[int64]float64)
+	for k, h := range empMachineHoursMap {
+		empTotalHoursMap[k.Emp] += h
+	}
+
+	// 4. For each machine, compute total labor cost allocated
+	for machineId, empSet := range machineEmpSet {
+		var machineTotalLaborCost float64
+		var machineTotalSecsWorked float64
+		for empId := range empSet {
+			k := empMachineKey{machineId, empId}
+			hoursAtMachine := empMachineHoursMap[k]
+			totalEmpHours := empTotalHoursMap[empId]
+			if totalEmpHours <= 0 {
+				continue
+			}
+			var empPayroll float64
+			db.QueryRow(`
+				SELECT COALESCE(SUM(amount), 0)
+				FROM bmp_payrolls
+				WHERE "tenantId"=$1 AND "employeeId"=$2
+				  AND "paymentDate">=$3 AND "paymentDate"<$4
+			`, tenantId, empId, startMs, endMs).Scan(&empPayroll)
+			machineTotalLaborCost += empPayroll * (hoursAtMachine / totalEmpHours)
+			machineTotalSecsWorked += hoursAtMachine * 3600
+		}
+		machineActualLabor[machineId] = MachineActualLabor{
+			TotalLaborCost:  machineTotalLaborCost,
+			TotalSecsWorked: machineTotalSecsWorked,
+		}
+	}
+	// === END v2.19.21 pre-compute ===
+
+	// 4. Query all sold products in the period (v2.19.21: include machine_id + mold data)
 	workDaysInPeriod := float64(endMs-startMs) / float64(24*3600*1000)
 	rows, err := db.Query(`
 		SELECT 
@@ -2411,11 +2504,15 @@ func updateAndCalculateCOGS(tenantId string, startMs int64, endMs int64, dateStr
 			COALESCE(MAX(m."electricity_cost_daily"), 0.0),
 			COALESCE(MAX(m."operator_salary_monthly"), 0.0),
 			COALESCE(MAX(m."overhead_allocated_monthly"), 0.0),
-			CASE WHEN MAX(mp."machine_id") IS NOT NULL THEN TRUE ELSE FALSE END
+			CASE WHEN MAX(mp."machine_id") IS NOT NULL THEN TRUE ELSE FALSE END,
+			COALESCE(MAX(m.id), 0),
+			COALESCE(MAX(mo.purchase_price), 0.0),
+			COALESCE(MAX(mo.expected_shots_lifetime), 0)
 		FROM bmp_products bp
 		JOIN bmp_invoices bi ON bp."invoiceId" = bi.id
 		LEFT JOIN bmp_master_products mp ON bp."masterItemID" = mp.id
 		LEFT JOIN bmp_machines m ON mp."machine_id" = m.id AND m."tenantId" = $1
+		LEFT JOIN bmp_molds mo ON m.mold_id = mo.id AND mo."isDeleted" = FALSE
 		WHERE bi."tenantId"=$1 AND bi."createdAt" >= $2 AND bi."createdAt" < $3 
 		  AND bi."isDeleted"=FALSE AND bp."isDeleted"=FALSE
 		GROUP BY bp."masterItemID"
@@ -2426,17 +2523,20 @@ func updateAndCalculateCOGS(tenantId string, startMs int64, endMs int64, dateStr
 	defer rows.Close()
 
 	type SoldItem struct {
-		MasterItemID     int64
-		Qty              float64
-		HppOld           float64
-		MachineIsActive  bool
-		CycleTime        float64
-		HoursCapacity    float64
-		DeprecMonthly    float64
-		ElecCostDaily    float64
-		OpSalaryMonthly  float64
-		OvhdAllocMonthly float64
-		HasMachine       bool
+		MasterItemID         int64
+		Qty                  float64
+		HppOld               float64
+		MachineIsActive      bool
+		CycleTime            float64
+		HoursCapacity        float64
+		DeprecMonthly        float64
+		ElecCostDaily        float64
+		OpSalaryMonthly      float64 // deprecated — fallback only if no attendance data
+		OvhdAllocMonthly     float64
+		HasMachine           bool
+		MachineId            int64   // v2.19.21
+		MoldPurchasePrice    float64 // v2.19.21
+		MoldExpectedLifetime int64   // v2.19.21
 	}
 	var soldItems []SoldItem
 	for rows.Next() {
@@ -2446,6 +2546,7 @@ func updateAndCalculateCOGS(tenantId string, startMs int64, endMs int64, dateStr
 			&item.MachineIsActive, &item.CycleTime, &item.HoursCapacity,
 			&item.DeprecMonthly, &item.ElecCostDaily, &item.OpSalaryMonthly,
 			&item.OvhdAllocMonthly, &item.HasMachine,
+			&item.MachineId, &item.MoldPurchasePrice, &item.MoldExpectedLifetime,
 		); errS == nil {
 			soldItems = append(soldItems, item)
 		}
@@ -2453,14 +2554,33 @@ func updateAndCalculateCOGS(tenantId string, startMs int64, endMs int64, dateStr
 
 	var totalCogs float64 = 0.0
 	for _, item := range soldItems {
-		// v2.19.17: Machine overhead per unit — 0 jika mesin mati atau produk tanpa mesin spesifik
+		// v2.19.21: Use actual operator labor from attendance, fall back to deprecated OpSalaryMonthly
 		var machineOverheadPerUnit float64 = 0.0
+		var machineLaborPerUnit float64 = 0.0
+		var moldDepreciationPerUnit float64 = 0.0
+
 		if item.HasMachine && item.MachineIsActive && item.CycleTime > 0 {
-			machineMonthlyOverhead := item.DeprecMonthly + item.OvhdAllocMonthly +
-				item.ElecCostDaily*workDaysInPeriod + item.OpSalaryMonthly
-			machineSecsCap := item.HoursCapacity * 3600.0
-			if machineSecsCap > 0 {
-				machineOverheadPerUnit = (item.CycleTime / machineSecsCap) * machineMonthlyOverhead
+			// --- Machine overhead (electricity + machine depreciation + fixed overhead) ---
+			machineFixedOverhead := item.DeprecMonthly + item.OvhdAllocMonthly +
+				item.ElecCostDaily*workDaysInPeriod
+
+			// --- Actual operator labor from attendance ---
+			if actualLabor, ok := machineActualLabor[item.MachineId]; ok && actualLabor.TotalSecsWorked > 0 {
+				// Actual: allocate based on real cycle time vs real seconds worked
+				machineLaborPerUnit = (item.CycleTime / actualLabor.TotalSecsWorked) * actualLabor.TotalLaborCost
+				machineOverheadPerUnit = (item.CycleTime / actualLabor.TotalSecsWorked) * machineFixedOverhead
+			} else {
+				// Fallback: use theoretical capacity (deprecated OpSalaryMonthly)
+				machineSecsCap := item.HoursCapacity * 3600.0
+				if machineSecsCap > 0 {
+					machineLaborPerUnit = (item.CycleTime / machineSecsCap) * item.OpSalaryMonthly
+					machineOverheadPerUnit = (item.CycleTime / machineSecsCap) * machineFixedOverhead
+				}
+			}
+
+			// --- v2.19.21: Mold depreciation per pcs ---
+			if item.MoldPurchasePrice > 0 && item.MoldExpectedLifetime > 0 {
+				moldDepreciationPerUnit = item.MoldPurchasePrice / float64(item.MoldExpectedLifetime)
 			}
 		}
 
@@ -2479,21 +2599,21 @@ func updateAndCalculateCOGS(tenantId string, startMs int64, endMs int64, dateStr
 			WHERE pin."productId" = $2 AND pin."tenantId" = $1
 		`, tenantId, item.MasterItemID).Scan(&materialCost)
 
-		// HPP = Material + Labor + Overhead (machine-specific jika ada mesin)
+		// v2.19.21 HPP = Material + GlobalNonDirectLabor + MachineOverhead + ActualMachineLaborCost + MoldDepreciation
 		var computedHpp float64
 		if errM == nil && materialCost > 0 {
 			if item.HasMachine {
-				// Gunakan machine overhead (0 jika mesin mati)
-				computedHpp = materialCost + laborAllocationPerUnit + machineOverheadPerUnit
+				computedHpp = materialCost + laborAllocationPerUnit + machineOverheadPerUnit +
+					machineLaborPerUnit + moldDepreciationPerUnit
 			} else {
-				// Fallback ke alokasi FOH global jika produk tidak punya mesin spesifik
 				computedHpp = materialCost + laborAllocationPerUnit + overheadAllocationPerUnit
 			}
 		} else {
 			computedHpp = item.HppOld
 			if computedHpp == 0 {
 				if item.HasMachine {
-					computedHpp = laborAllocationPerUnit + machineOverheadPerUnit
+					computedHpp = laborAllocationPerUnit + machineOverheadPerUnit +
+						machineLaborPerUnit + moldDepreciationPerUnit
 				} else {
 					computedHpp = laborAllocationPerUnit + overheadAllocationPerUnit
 				}
@@ -2516,6 +2636,25 @@ func updateAndCalculateCOGS(tenantId string, startMs int64, endMs int64, dateStr
 	}
 
 	return totalCogs, nil
+}
+
+// calcHoursWorked menghitung selisih jam kerja dari string "HH:mm".
+// Mendukung shift malam (checkOut < checkIn = tambah 24 jam).
+func calcHoursWorked(checkIn, checkOut string) float64 {
+	parseMinutes := func(s string) int {
+		parts := strings.Split(s, ":")
+		if len(parts) != 2 { return 0 }
+		h, err1 := strconv.Atoi(parts[0])
+		m, err2 := strconv.Atoi(parts[1])
+		if err1 != nil || err2 != nil { return 0 }
+		return h*60 + m
+	}
+	inMin := parseMinutes(checkIn)
+	outMin := parseMinutes(checkOut)
+	if outMin <= inMin {
+		outMin += 24 * 60 // overnight shift
+	}
+	return float64(outMin-inMin) / 60.0
 }
 
 // ── BMP — machines ─────────────────────────────────────────────────────────────
