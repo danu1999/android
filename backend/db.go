@@ -1145,7 +1145,7 @@ func initSchema() error {
 	// v2.19.18: Tambah tabel bmp_machines dan bmp_molds untuk HPP dinamis
 	machineAndMoldMigrations := []string{
 		`CREATE TABLE IF NOT EXISTS "bmp_machines" (
-			"id" INT,
+			"id" SERIAL,
 			"tenantId" VARCHAR(100) NOT NULL,
 			"name" VARCHAR(255) NOT NULL,
 			"depreciation_monthly" DOUBLE PRECISION DEFAULT 0.0,
@@ -1159,7 +1159,7 @@ func initSchema() error {
 			PRIMARY KEY ("id", "tenantId")
 		);`,
 		`CREATE TABLE IF NOT EXISTS "bmp_molds" (
-			"id" INT,
+			"id" SERIAL,
 			"tenantId" VARCHAR(100) NOT NULL,
 			"name" VARCHAR(255) NOT NULL,
 			"purchase_price" DOUBLE PRECISION DEFAULT 0.0,
