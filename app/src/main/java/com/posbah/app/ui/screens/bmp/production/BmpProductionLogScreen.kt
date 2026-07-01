@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.posbah.app.ui.screens.bmp.production
 
 import android.content.Context

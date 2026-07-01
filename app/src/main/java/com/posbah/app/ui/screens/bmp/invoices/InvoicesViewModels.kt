@@ -557,7 +557,7 @@ class InvoiceFormViewModel @Inject constructor(
 
     fun addProductLine(masterProduct: BmpMasterProductEntity) {
         // v2.19.17: snapshot HPP dengan mempertimbangkan status mesin
-        val machine = _ui.value.machines.find { it.id == masterProduct.machineId }
+        val machine = _ui.value.machines.find { it.id == (masterProduct.machineId?.toLong() ?: -1L) }
         val hppSnapshot = if (machine != null && !machine.isActive) {
             // Mesin mati: hargaBeli = 0 (no machine overhead included)
             0.0
