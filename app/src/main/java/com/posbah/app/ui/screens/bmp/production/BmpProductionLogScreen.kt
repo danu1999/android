@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.posbah.app.ui.screens.bmp.bahanbaku.ColorMixEntry
+import com.posbah.app.ui.screens.bmp.bahanbaku.WARNA_OPTIONS
 import com.posbah.app.data.local.entities.BmpMachineEntity
 import com.posbah.app.data.local.entities.BmpMasterProductEntity
 import com.posbah.app.data.local.entities.BmpProductionLogEntity
@@ -64,7 +66,11 @@ data class MachineShiftEntry(
     val cycleTimeInput: String = "",
     /** Biaya listrik harian (Rp) — pre-fill dari mesin, bisa di-override */
     val electricityInput: String = "",
-    val selectedRawMaterial: BmpBahanBakuData? = null
+    val selectedRawMaterial: BmpBahanBakuData? = null,
+    /** v2.19.18: Apakah mesin ini menggunakan campuran warna pada shift ini */
+    val isCampuranBahan: Boolean = false,
+    /** Campuran warna: [{warna:"Merah",rasio:"1"},{warna:"Natural",rasio:"9"}] */
+    val campuranBahan: List<ColorMixEntry> = listOf(ColorMixEntry())
 ) {
     val missingFields: List<String>
         get() = if (!isRunningToday) emptyList() else buildList {
@@ -717,7 +723,138 @@ private fun MachineShiftCard(
                         }
                     }
 
-                    // 5. Estimasi Summary Card
+                    // 5. Campuran Warna (opsional)
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable {
+                            onUpdate { it.copy(isCampuranBahan = !it.isCampuranBahan) }
+                        },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = entry.isCampuranBahan,
+                            onCheckedChange = { onUpdate { e -> e.copy(isCampuranBahan = it) } }
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "Campuran Warna",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                            )
+                            Text(
+                                if (entry.isCampuranBahan) "Isi warna & rasio campuran"
+                                else "Mesin ini menggunakan campuran pewarna?",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    AnimatedVisibility(visible = entry.isCampuranBahan) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            // Summary chip
+                            val totalRasio = entry.campuranBahan.sumOf { it.rasio.toDoubleOrNull() ?: 0.0 }
+                            if (totalRasio > 0) {
+                                val summary = entry.campuranBahan.filter { it.warna.isNotBlank() }.joinToString(" + ") { ce ->
+                                    val pct = if (totalRasio > 0) ((ce.rasio.toDoubleOrNull() ?: 0.0) / totalRasio * 100).toInt() else 0
+                                    "${ce.warna} ${pct}%"
+                                }
+                                if (summary.isNotBlank()) {
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            "Campuran: $summary",
+                                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                                            modifier = Modifier.padding(8.dp),
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            }
+                            // Color rows
+                            entry.campuranBahan.forEachIndexed { ci, colorEntry ->
+                                var warnaDropOpen by remember { mutableStateOf(false) }
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(modifier = Modifier.weight(1.8f)) {
+                                        ExposedDropdownMenuBox(expanded = warnaDropOpen, onExpandedChange = { warnaDropOpen = !warnaDropOpen }) {
+                                            OutlinedTextField(
+                                                value = colorEntry.warna,
+                                                onValueChange = { v ->
+                                                    onUpdate { d ->
+                                                        val nl = d.campuranBahan.toMutableList()
+                                                        if (ci in nl.indices) nl[ci] = nl[ci].copy(warna = v)
+                                                        d.copy(campuranBahan = nl)
+                                                    }
+                                                },
+                                                label = { Text("Warna ${ci + 1}") },
+                                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = warnaDropOpen) },
+                                                singleLine = true,
+                                                modifier = Modifier.fillMaxWidth().menuAnchor()
+                                            )
+                                            ExposedDropdownMenu(expanded = warnaDropOpen, onDismissRequest = { warnaDropOpen = false }) {
+                                                WARNA_OPTIONS.forEach { wOpt ->
+                                                    DropdownMenuItem(
+                                                        text = { Text(wOpt) },
+                                                        onClick = {
+                                                            onUpdate { d ->
+                                                                val nl = d.campuranBahan.toMutableList()
+                                                                if (ci in nl.indices) nl[ci] = nl[ci].copy(warna = wOpt)
+                                                                d.copy(campuranBahan = nl)
+                                                            }
+                                                            warnaDropOpen = false
+                                                        }
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    OutlinedTextField(
+                                        value = colorEntry.rasio,
+                                        onValueChange = { v ->
+                                            onUpdate { d ->
+                                                val nl = d.campuranBahan.toMutableList()
+                                                if (ci in nl.indices) nl[ci] = nl[ci].copy(rasio = v)
+                                                d.copy(campuranBahan = nl)
+                                            }
+                                        },
+                                        label = { Text("Bagian") },
+                                        singleLine = true,
+                                        suffix = { Text("×") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                        modifier = Modifier.weight(0.9f)
+                                    )
+                                    if (entry.campuranBahan.size > 1) {
+                                        IconButton(
+                                            onClick = {
+                                                onUpdate { d ->
+                                                    val nl = d.campuranBahan.toMutableList().also { it.removeAt(ci) }
+                                                    d.copy(campuranBahan = nl)
+                                                }
+                                            },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(Icons.Outlined.Close, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                                        }
+                                    }
+                                }
+                            }
+                            TextButton(
+                                onClick = { onUpdate { d -> d.copy(campuranBahan = d.campuranBahan + ColorMixEntry()) } },
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                            ) {
+                                Icon(Icons.Outlined.Add, null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Tambah Warna Lain", style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+
+                    // 6. Estimasi Summary Card
                     if (entry.estimatedMaterial > 0 || entry.selectedProduct != null) {
                         Surface(
                             shape = RoundedCornerShape(10.dp),

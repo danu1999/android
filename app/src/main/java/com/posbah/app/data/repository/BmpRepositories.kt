@@ -208,6 +208,8 @@ data class BmpBahanBakuItemData(
     val unit: String = "kg",
     val rate: Double = 0.0,
     val subtotal: Double = 0.0,
+    /** JSON string: [{\"color\":\"Merah\",\"rasio\":\"1\"},{\"color\":\"PP Natural\",\"rasio\":\"9\"}] */
+    val colorMixture: String? = null,
     val isDeleted: Boolean = false
 )
 
@@ -1959,7 +1961,8 @@ class BmpBahanBakuRepository @Inject constructor(
                       "jenisBahan" to it.jenisBahan,
                       "kuantitas" to it.kuantitas,
                       "unit" to it.unit,
-                      "rate" to it.rate
+                      "rate" to it.rate,
+                      "color_mixture" to it.colorMixture
                   )
               }
               api.createBahanBakuItems(itemBodies)
@@ -2219,7 +2222,8 @@ class BmpBahanBakuRepository @Inject constructor(
             emit(items.map { d ->
                 com.posbah.app.data.local.entities.BmpBahanBakuItemEntity(
                     id = d.id, tenantId = "", bahanBakuId = d.bahanBakuId,
-                    jenisBahan = d.jenisBahan, kuantitas = d.kuantitas, unit = d.unit, rate = d.rate
+                    jenisBahan = d.jenisBahan, kuantitas = d.kuantitas, unit = d.unit,
+                    rate = d.rate, colorMixture = d.colorMixture
                 )
             })
         }
@@ -2250,7 +2254,8 @@ class BmpBahanBakuRepository @Inject constructor(
             BmpBahanBakuItemData(
                 id = it.id, bahanBakuId = it.bahanBakuId, jenisBahan = it.jenisBahan,
                 kuantitas = it.kuantitas, unit = it.unit, rate = it.rate,
-                subtotal = it.kuantitas * it.rate
+                subtotal = it.kuantitas * it.rate,
+                colorMixture = it.colorMixture
             )
         }
         return if (entity.id == 0L) create(data, itemData) else update(data, itemData)
@@ -2292,7 +2297,8 @@ class BmpBahanBakuRepository @Inject constructor(
                 kuantitas = it.kuantitas,
                 unit = it.unit,
                 rate = it.rate,
-                subtotal = it.kuantitas * it.rate
+                subtotal = it.kuantitas * it.rate,
+                colorMixture = it.colorMixture
             )
         }
 
@@ -2325,7 +2331,8 @@ class BmpBahanBakuRepository @Inject constructor(
                         "jenisBahan" to it.jenisBahan,
                         "kuantitas" to it.kuantitas,
                         "unit" to it.unit,
-                        "rate" to it.rate
+                        "rate" to it.rate,
+                        "color_mixture" to it.colorMixture
                     )
                 }
                 api.createBahanBakuItems(itemBodies)
@@ -2387,7 +2394,8 @@ class BmpBahanBakuRepository @Inject constructor(
                 kuantitas = q,
                 unit = it["unit"] as? String ?: "kg",
                 rate = r,
-                subtotal = (it["subtotal"] as? Number)?.toDouble() ?: (q * r)
+                subtotal = (it["subtotal"] as? Number)?.toDouble() ?: (q * r),
+                colorMixture = it["color_mixture"] as? String
             )
         } ?: emptyList()
     } catch (_: Exception) { emptyList() }

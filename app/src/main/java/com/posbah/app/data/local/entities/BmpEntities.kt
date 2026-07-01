@@ -210,6 +210,8 @@ data class BmpBahanBakuItemEntity(
     val kuantitas: Double = 0.0,
     val unit: String = "Kg",
     val rate: Double = 0.0,
+    /** JSON string: [{"color":"Merah","rasio":"1"},{"color":"PP Natural","rasio":"9"}] */
+    val colorMixture: String? = null,
     val isSynced: Boolean = false,
     val isDeleted: Boolean = false,
     val createdAt: Long = System.currentTimeMillis()

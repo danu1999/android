@@ -1181,6 +1181,9 @@ func initSchema() error {
 		`ALTER TABLE "bmp_production_logs" ADD COLUMN IF NOT EXISTS "is_machine_active" BOOLEAN DEFAULT TRUE;`,
 		`ALTER TABLE "bmp_production_logs" ADD COLUMN IF NOT EXISTS "cycle_time_actual" DOUBLE PRECISION DEFAULT 0.0;`,
 		`ALTER TABLE "bmp_production_logs" ADD COLUMN IF NOT EXISTS "electricity_cost_actual" DOUBLE PRECISION DEFAULT 0.0;`,
+		`ALTER TABLE "bmp_production_logs" ADD COLUMN IF NOT EXISTS "color_mixture" TEXT DEFAULT NULL;`,
+		// v2.19.18: Tambah color_mixture ke bahan baku item (campuran warna per batch)
+		`ALTER TABLE "bmp_bahan_baku_item" ADD COLUMN IF NOT EXISTS "color_mixture" TEXT DEFAULT NULL;`,
 	}
 	for _, q := range machineAndMoldMigrations {
 		if _, err := db.Exec(q); err != nil {

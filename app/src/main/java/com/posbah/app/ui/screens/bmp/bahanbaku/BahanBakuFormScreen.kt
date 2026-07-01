@@ -34,6 +34,8 @@ import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Image
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -78,7 +80,19 @@ import com.posbah.app.util.CameraUtils
 import com.posbah.app.util.Formatters
 import java.io.File
 
-private val JENIS_BAHAN_OPTIONS = listOf("PP Original", "PP Peletan", "PP Gilingan", "PE", "HDPE", "LDPE", "PVC", "ABS", "PS", "Pewarna Merah", "Pewarna Biru", "Pewarna Hijau", "Lainnya")
+private val JENIS_BAHAN_OPTIONS = listOf(
+    "PP Original", "PP Peletan", "PP Gilingan", "PE", "HDPE", "LDPE", "PVC", "ABS", "PS", "Lainnya"
+)
+
+internal val WARNA_OPTIONS = listOf(
+    "Natural/Bening", "Putih", "Hitam",
+    "Merah", "Merah Marun", "Merah Muda (Pink)",
+    "Kuning", "Kuning Gading", "Oranye",
+    "Hijau", "Hijau Tua", "Tosca",
+    "Biru", "Biru Tua", "Biru Muda",
+    "Ungu", "Coklat", "Abu-abu",
+    "Kustom"
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -564,16 +578,19 @@ private fun BahanBakuItemRow(
     onUpdate: ((BahanBakuItemDraft) -> BahanBakuItemDraft) -> Unit,
     onRemove: () -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var jenisExpanded by remember { mutableStateOf(false) }
+    var warnaExpanded by remember { mutableStateOf<Int?>(null) } // index of open warna dropdown
 
     Card(
-        shape = RoundedCornerShape(16.dp),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
         ),
         modifier = Modifier.fillMaxWidth().testTag("bb-item-row-$index")
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
+
+            // ── Header row: Item N + subtotal + delete ────────────────────────
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "Item ${index + 1}",
@@ -604,26 +621,26 @@ private fun BahanBakuItemRow(
             }
             Spacer(Modifier.height(8.dp))
 
-            // Jenis Bahan dropdown
+            // ── Jenis Bahan dropdown ──────────────────────────────────────────
             ExposedDropdownMenuBox(
-                expanded = expanded,
-                onExpandedChange = { expanded = !expanded }
+                expanded = jenisExpanded,
+                onExpandedChange = { jenisExpanded = !jenisExpanded }
             ) {
                 OutlinedTextField(
                     value = item.jenisBahan,
                     onValueChange = { onUpdate { d -> d.copy(jenisBahan = it) } },
                     label = { Text("Jenis Bahan") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = jenisExpanded) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().menuAnchor().testTag("bb-jenis-$index")
                 )
-                ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                ExposedDropdownMenu(expanded = jenisExpanded, onDismissRequest = { jenisExpanded = false }) {
                     JENIS_BAHAN_OPTIONS.forEach { opt ->
                         DropdownMenuItem(
                             text = { Text(opt) },
                             onClick = {
                                 onUpdate { d -> d.copy(jenisBahan = opt) }
-                                expanded = false
+                                jenisExpanded = false
                             }
                         )
                     }
@@ -631,6 +648,7 @@ private fun BahanBakuItemRow(
             }
             Spacer(Modifier.height(8.dp))
 
+            // ── Qty, Unit, Rate ───────────────────────────────────────────────
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = item.kuantitas,
@@ -661,6 +679,161 @@ private fun BahanBakuItemRow(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier.fillMaxWidth().testTag("bb-rate-$index")
             )
+
+            // ── Warna / Campuran Section ──────────────────────────────────────
+            Spacer(Modifier.height(12.dp))
+            androidx.compose.material3.HorizontalDivider()
+            Spacer(Modifier.height(8.dp))
+
+            // Toggle campuran
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable { onUpdate { d -> d.copy(isCampuran = !d.isCampuran) } },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                androidx.compose.material3.Checkbox(
+                    checked = item.isCampuran,
+                    onCheckedChange = { onUpdate { d -> d.copy(isCampuran = it) } }
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Campuran Warna", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
+                    Text(
+                        if (item.isCampuran) "Isi warna & rasio campuran (misal: Natural 9 bagian + Merah 1 bagian)"
+                        else "Centang jika bahan ini menggunakan campuran warna",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // Color entries (shown when isCampuran OR for single color)
+            if (item.isCampuran) {
+                Spacer(Modifier.height(8.dp))
+
+                // Summary chip if colors filled
+                val totalRasio = item.campuranColors.sumOf { it.rasio.toDoubleOrNull() ?: 0.0 }
+                if (totalRasio > 0) {
+                    val summary = item.campuranColors
+                        .filter { it.warna.isNotBlank() }
+                        .joinToString(" + ") { entry ->
+                            val pct = if (totalRasio > 0) ((entry.rasio.toDoubleOrNull() ?: 0.0) / totalRasio * 100).toInt() else 0
+                            "${entry.warna} ${pct}%"
+                        }
+                    if (summary.isNotBlank()) {
+                        Surface(
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                "Campuran: $summary",
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                    }
+                }
+
+                // Color mix rows
+                item.campuranColors.forEachIndexed { ci, colorEntry ->
+                    var warnaDropOpen by remember { mutableStateOf(false) }
+                    var warnaCustom by remember { mutableStateOf(colorEntry.warna) }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        // Warna selector
+                        Box(modifier = Modifier.weight(1.8f)) {
+                            ExposedDropdownMenuBox(
+                                expanded = warnaDropOpen,
+                                onExpandedChange = { warnaDropOpen = !warnaDropOpen }
+                            ) {
+                                OutlinedTextField(
+                                    value = colorEntry.warna,
+                                    onValueChange = { v ->
+                                        warnaCustom = v
+                                        onUpdate { d ->
+                                            val newList = d.campuranColors.toMutableList()
+                                            if (ci in newList.indices) newList[ci] = newList[ci].copy(warna = v)
+                                            d.copy(campuranColors = newList)
+                                        }
+                                    },
+                                    label = { Text("Warna ${ci + 1}") },
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = warnaDropOpen) },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth().menuAnchor()
+                                )
+                                ExposedDropdownMenu(
+                                    expanded = warnaDropOpen,
+                                    onDismissRequest = { warnaDropOpen = false }
+                                ) {
+                                    WARNA_OPTIONS.forEach { wOpt ->
+                                        DropdownMenuItem(
+                                            text = { Text(wOpt) },
+                                            onClick = {
+                                                onUpdate { d ->
+                                                    val newList = d.campuranColors.toMutableList()
+                                                    if (ci in newList.indices) newList[ci] = newList[ci].copy(warna = wOpt)
+                                                    d.copy(campuranColors = newList)
+                                                }
+                                                warnaDropOpen = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        // Rasio (bagian)
+                        OutlinedTextField(
+                            value = colorEntry.rasio,
+                            onValueChange = { v ->
+                                onUpdate { d ->
+                                    val newList = d.campuranColors.toMutableList()
+                                    if (ci in newList.indices) newList[ci] = newList[ci].copy(rasio = v)
+                                    d.copy(campuranColors = newList)
+                                }
+                            },
+                            label = { Text("Bagian") },
+                            singleLine = true,
+                            suffix = { Text("×") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.weight(0.9f)
+                        )
+                        // Remove color row
+                        if (item.campuranColors.size > 1) {
+                            IconButton(
+                                onClick = {
+                                    onUpdate { d ->
+                                        val newList = d.campuranColors.toMutableList().also { it.removeAt(ci) }
+                                        d.copy(campuranColors = newList)
+                                    }
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(Icons.Outlined.Close, null,
+                                    tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                }
+
+                // Add color button
+                TextButton(
+                    onClick = {
+                        onUpdate { d ->
+                            d.copy(campuranColors = d.campuranColors + ColorMixEntry())
+                        }
+                    },
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                ) {
+                    Icon(Icons.Outlined.Add, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Tambah Warna Lain", style = MaterialTheme.typography.bodySmall)
+                }
+            }
         }
     }
 }

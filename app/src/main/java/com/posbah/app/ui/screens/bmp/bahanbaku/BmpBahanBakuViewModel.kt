@@ -194,17 +194,35 @@ class BahanBakuListViewModel @Inject constructor(
 // Form ViewModel
 // ─────────────────────────────────────────────
 
+/** Entri satu warna dalam campuran bahan baku (misal: Merah 1 bagian, PP Natural 9 bagian) */
+data class ColorMixEntry(
+    val warna: String = "",
+    val rasio: String = "1"
+)
+
 data class BahanBakuItemDraft(
     val id: Long = 0,
     val jenisBahan: String = "",
     val kuantitas: String = "",
     val unit: String = "Kg",
-    val rate: String = ""
+    val rate: String = "",
+    val isCampuran: Boolean = false,
+    /** Warna tunggal atau campuran; rasio relatif (misal [Merah:1, Natural:9] berarti 10% Merah + 90% Natural) */
+    val campuranColors: List<ColorMixEntry> = listOf(ColorMixEntry())
 ) {
     val subtotal: Double get() {
         val q = kuantitas.replace(",", ".").toDoubleOrNull() ?: 0.0
         val r = rate.replace(",", ".").toDoubleOrNull() ?: 0.0
         return q * r
+    }
+    /** Serialize campuran ke JSON string untuk disimpan ke DB */
+    fun serializeColorMixture(): String? {
+        if (!isCampuran) return null
+        val valid = campuranColors.filter { it.warna.isNotBlank() }
+        if (valid.isEmpty()) return null
+        return valid.joinToString(",", prefix = "[", postfix = "]") {
+            "{\"color\":\"${it.warna}\",\"rasio\":\"${it.rasio.ifBlank { "1" }}\"}"
+        }
     }
 }
 
@@ -280,7 +298,22 @@ class BahanBakuFormViewModel @Inject constructor(
                     jenisBahan = e.jenisBahan,
                     kuantitas = e.kuantitas.toBigDecimal().stripTrailingZeros().toPlainString(),
                     unit = e.unit,
-                    rate = e.rate.toBigDecimal().stripTrailingZeros().toPlainString()
+                    rate = e.rate.toBigDecimal().stripTrailingZeros().toPlainString(),
+                    isCampuran = !e.colorMixture.isNullOrBlank(),
+                    campuranColors = if (!e.colorMixture.isNullOrBlank()) {
+                        // Simple JSON parse: extract color and rasio pairs
+                        try {
+                            val json = e.colorMixture.trim().trimStart('[').trimEnd(']')
+                            json.split("},{")
+                                .map { it.replace("{", "").replace("}", "") }
+                                .mapNotNull { entry ->
+                                    val parts = entry.split(",")
+                                    val color = parts.find { it.contains("color") }?.substringAfter(":")?.trim('"') ?: return@mapNotNull null
+                                    val rasio = parts.find { it.contains("rasio") }?.substringAfter(":")?.trim('"') ?: "1"
+                                    ColorMixEntry(color, rasio)
+                                }
+                        } catch (e2: Exception) { listOf(ColorMixEntry()) }
+                    } else listOf(ColorMixEntry())
                 )
             }
             _ui.update {
@@ -475,7 +508,8 @@ class BahanBakuFormViewModel @Inject constructor(
                     jenisBahan = d.jenisBahan,
                     kuantitas = d.kuantitas.replace(",", ".").toDoubleOrNull() ?: 0.0,
                     unit = d.unit,
-                    rate = d.rate.replace(",", ".").toDoubleOrNull() ?: 0.0
+                    rate = d.rate.replace(",", ".").toDoubleOrNull() ?: 0.0,
+                    colorMixture = d.serializeColorMixture()
                 )
             }
 
