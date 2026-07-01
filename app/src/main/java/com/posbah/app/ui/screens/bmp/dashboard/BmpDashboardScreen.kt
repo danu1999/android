@@ -118,6 +118,7 @@ fun BmpDashboardScreen(
             BmpMenuItem("Produk", "Master produk & harga", Icons.Outlined.Inventory2, "bmp/products", "menu-products"),
             BmpMenuItem("Stok", "Stok gudang & ledger", Icons.Outlined.Inventory, "bmp/stock", "menu-stock"),
             BmpMenuItem("Produksi", "Catatan produksi harian", Icons.Outlined.PrecisionManufacturing, "bmp/production", "menu-production"),
+            BmpMenuItem("Mesin & Matras", "Kelola mesin & cetakan", Icons.Outlined.Settings, "bmp/machines", "menu-machines"),
             BmpMenuItem("Pembayaran", "Catat & lihat penerimaan", Icons.Outlined.Payments, "bmp/payments", "menu-payments"),
             BmpMenuItem("Arus Kas", "Cashflow masuk/keluar", Icons.Outlined.AccountBalance, "bmp/cashflow", "menu-cashflow"),
             BmpMenuItem("Analisis Keuangan", "Laba rugi & ekspor Excel", Icons.Outlined.Analytics, "bmp/reports/financial", "menu-financial-report"),

@@ -1,3 +1,15 @@
+POSBah v2.19.19 - Campuran Warna Produksi & Interkoneksi Data Lengkap
+
+Halo Kak! POSBah v2.19.19 hadir dengan pelacakan campuran warna produksi yang terintegrasi penuh:
+1. Campuran Warna Tersimpan: Campuran warna (misal: Natural 90% + Merah 10%) yang dipilih saat produksi kini benar-benar tersimpan ke database dan terbaca kembali secara akurat.
+2. Riwayat Produksi: Kartu riwayat shift kini menampilkan chip 🎨 dengan ringkasan persentase campuran warna yang digunakan setiap mesin.
+3. Form Invoice: Setiap baris produk di invoice kini menampilkan informasi bahan baku 📦 dan peringatan ⚠️ Mesin Mati jika mesin terkait sedang tidak aktif.
+4. Interkoneksi Penuh: Alur data campuran warna kini terhubung sempurna: Bahan Baku → Produksi → History → Invoice → Laporan Keuangan.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.9 - Sinkronisasi Real-time & Hak Akses Supervisor (BMP)
 
 Halo Kak! POSBah v2.19.9 kini hadir dengan peningkatan keamanan dan sinkronisasi realtime pada modul BMP:
