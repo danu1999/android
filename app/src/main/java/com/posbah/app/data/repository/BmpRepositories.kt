@@ -119,6 +119,7 @@ data class BmpMachineData(
     val operatorSalaryMonthly: Double = 0.0,
     val overheadAllocatedMonthly: Double = 0.0,
     val hoursCapacityMonthly: Double = 624.0,
+    val isActive: Boolean = true,
     val isDeleted: Boolean = false,
     val updatedAt: Long = 0
 )
@@ -353,6 +354,7 @@ fun Map<String, Any?>.toBmpMachineData() = BmpMachineData(
     operatorSalaryMonthly = (getCaseInsensitive("operator_salary_monthly") as? Number)?.toDouble() ?: 0.0,
     overheadAllocatedMonthly = (getCaseInsensitive("overhead_allocated_monthly") as? Number)?.toDouble() ?: 0.0,
     hoursCapacityMonthly = (getCaseInsensitive("hours_capacity_monthly") as? Number)?.toDouble() ?: 624.0,
+    isActive = getCaseInsensitive("is_active") as? Boolean ?: true,
     isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false,
     updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0
 )
@@ -3050,6 +3052,7 @@ class BmpMachineRepository @Inject constructor(
                 put("operator_salary_monthly", item.operatorSalaryMonthly)
                 put("overhead_allocated_monthly", item.overheadAllocatedMonthly)
                 put("hours_capacity_monthly", item.hoursCapacityMonthly)
+                put("is_active", item.isActive)
             }
             if (item.id == 0L) api.createMachine(body)
             else api.updateMachine(item.id, body)
@@ -3086,6 +3089,7 @@ class BmpMachineRepository @Inject constructor(
                     operatorSalaryMonthly = it.operatorSalaryMonthly,
                     overheadAllocatedMonthly = it.overheadAllocatedMonthly,
                     hoursCapacityMonthly = it.hoursCapacityMonthly,
+                    isActive = it.isActive,
                     isDeleted = it.isDeleted,
                     createdAt = System.currentTimeMillis(),
                     updatedAt = it.updatedAt

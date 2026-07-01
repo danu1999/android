@@ -280,14 +280,30 @@ fun PosBahRoot(
         }
 
         composable(Screen.BmpProducts.route) {
-            MasterProductsScreen(
-                onBack = { nav.popBackStack() },
-                onNavigateToMachines = { nav.navigate(Screen.BmpMachineMold.route) }
-            )
+            if (!viewModel.isBmpManager()) {
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    nav.navigate(Screen.BmpDashboard.route) {
+                        popUpTo(Screen.BmpDashboard.route) { inclusive = true }
+                    }
+                }
+            } else {
+                MasterProductsScreen(
+                    onBack = { nav.popBackStack() },
+                    onNavigateToMachines = { nav.navigate(Screen.BmpMachineMold.route) }
+                )
+            }
         }
 
         composable(Screen.BmpMachineMold.route) {
-            MachineMoldManagementScreen(onBack = { nav.popBackStack() })
+            if (!viewModel.isBmpManager()) {
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    nav.navigate(Screen.BmpDashboard.route) {
+                        popUpTo(Screen.BmpDashboard.route) { inclusive = true }
+                    }
+                }
+            } else {
+                MachineMoldManagementScreen(onBack = { nav.popBackStack() })
+            }
         }
 
         composable(Screen.BmpPayments.route) {

@@ -125,7 +125,13 @@ fun BmpDashboardScreen(
             BmpMenuItem("Penggajian", "Payroll & rekap", Icons.Outlined.PriceChange, "bmp/payroll", "menu-payroll"),
             BmpMenuItem("Pengaturan", "Profil perusahaan & sistem", Icons.Outlined.Settings, "bmp/settings", "menu-settings"),
         ).filter { item ->
-            if (ui.role != "OWNER") {
+            val isManager = ui.role == "OWNER" || ui.role == "ADMIN" || ui.role == "SUPERVISOR"
+            if (!isManager) {
+                item.testTag != "menu-products" &&
+                item.testTag != "menu-financial-report" &&
+                item.testTag != "menu-employees" &&
+                item.testTag != "menu-payroll"
+            } else if (ui.role != "OWNER") {
                 item.testTag != "menu-financial-report" &&
                 item.testTag != "menu-employees" &&
                 item.testTag != "menu-payroll"

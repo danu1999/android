@@ -122,6 +122,27 @@ class MachineMoldViewModel @Inject constructor(
         }
     }
 
+    fun toggleMachineActive(m: BmpMachineEntity) = viewModelScope.launch {
+        val data = BmpMachineData(
+            id = m.id,
+            tenantId = m.tenantId,
+            name = m.name,
+            depreciationMonthly = m.depreciationMonthly,
+            powerConsumptionKw = m.powerConsumptionKw,
+            electricityCostDaily = m.electricityCostDaily,
+            operatorSalaryMonthly = m.operatorSalaryMonthly,
+            overheadAllocatedMonthly = m.overheadAllocatedMonthly,
+            hoursCapacityMonthly = m.hoursCapacityMonthly,
+            isActive = !m.isActive
+        )
+        val res = machineRepo.upsert(data)
+        if (res is OnlineWriteResult.Error) {
+            _error.value = res.message
+        } else {
+            Toast.makeText(context, "Status mesin ${m.name} diubah menjadi ${if (!m.isActive) "Aktif" else "Mati"}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     fun deleteMachine(id: Long) = viewModelScope.launch {
         val res = machineRepo.delete(id)
         if (res is OnlineWriteResult.Error) {
@@ -266,7 +287,8 @@ fun MachineMoldManagementScreen(
                             MachineCard(
                                 machine = machine,
                                 onEdit = { viewModel.openMachineEdit(machine) },
-                                onDelete = { viewModel.deleteMachine(machine.id) }
+                                onDelete = { viewModel.deleteMachine(machine.id) },
+                                onToggleActive = { viewModel.toggleMachineActive(machine) }
                             )
                         }
                     }
@@ -375,6 +397,20 @@ fun MachineMoldManagementScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Status Mesin Aktif (Hidup)", fontWeight = FontWeight.Bold)
+                        Switch(
+                            checked = edit.isActive,
+                            onCheckedChange = { checked ->
+                                viewModel.updateMachineField { it.copy(isActive = checked) }
+                            }
+                        )
+                    }
                 }
             },
             confirmButton = {
@@ -510,7 +546,8 @@ fun MachineMoldManagementScreen(
 fun MachineCard(
     machine: BmpMachineEntity,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onToggleActive: () -> Unit
 ) {
     Surface(
         shape = RoundedCornerShape(12.dp),
@@ -530,7 +567,12 @@ fun MachineCard(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                Row {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Switch(
+                        checked = machine.isActive,
+                        onCheckedChange = { onToggleActive() },
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
                     IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
                         Icon(
                             Icons.Outlined.Edit,
@@ -573,6 +615,15 @@ fun MachineCard(
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 Text("Jam Kerja Normal:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 Text("${machine.hoursCapacityMonthly.toInt()} Jam/Bulan", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+            }
+            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                Text("Status Mesin:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                Text(
+                    text = if (machine.isActive) "AKTIF / HIDUP" else "MATI / OFF",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (machine.isActive) Color(0xFF4CAF50) else Color(0xFFF44336)
+                )
             }
         }
     }

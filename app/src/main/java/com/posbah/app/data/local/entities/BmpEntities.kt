@@ -314,6 +314,7 @@ data class BmpMachineEntity(
     val operatorSalaryMonthly: Double = 0.0,
     val overheadAllocatedMonthly: Double = 0.0,
     val hoursCapacityMonthly: Double = 624.0,
+    val isActive: Boolean = true,
     val isDeleted: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()

@@ -192,12 +192,16 @@ class MasterProductsViewModel @Inject constructor(
 
             val selectedMachine = machines.value.find { it.id == e.machineId?.toLong() }
             val biayaMesin = if (selectedMachine != null) {
-                val totalGajiMesin = selectedMachine.operatorSalaryMonthly
-                val listrikMesin = selectedMachine.electricityCostDaily * s.hariKerjaSebulan
-                val overheadMesin = selectedMachine.depreciationMonthly + selectedMachine.overheadAllocatedMonthly + totalGajiMesin + listrikMesin
-                val totalDetikMesin = selectedMachine.hoursCapacityMonthly * 3600.0
-                val biayaPerDetik = if (totalDetikMesin > 0) overheadMesin / totalDetikMesin else 0.0
-                e.cycleTime * biayaPerDetik
+                if (!selectedMachine.isActive) {
+                    0.0
+                } else {
+                    val totalGajiMesin = selectedMachine.operatorSalaryMonthly
+                    val listrikMesin = selectedMachine.electricityCostDaily * s.hariKerjaSebulan
+                    val overheadMesin = selectedMachine.depreciationMonthly + selectedMachine.overheadAllocatedMonthly + totalGajiMesin + listrikMesin
+                    val totalDetikMesin = selectedMachine.hoursCapacityMonthly * 3600.0
+                    val biayaPerDetik = if (totalDetikMesin > 0) overheadMesin / totalDetikMesin else 0.0
+                    e.cycleTime * biayaPerDetik
+                }
             } else {
                 val totalGaji = s.jumlahKaryawan * s.gajiHarian * s.hariKerjaSebulan
                 val overheadBulanan = s.listrikBulanan + totalGaji
@@ -500,12 +504,16 @@ fun MasterProductsScreen(
 
                 val selectedMachine = machinesState.find { it.id == e.machineId?.toLong() }
                 val biayaMesin = if (selectedMachine != null) {
-                    val totalGajiMesin = selectedMachine.operatorSalaryMonthly
-                    val listrikMesin = selectedMachine.electricityCostDaily * s.hariKerjaSebulan
-                    val overheadMesin = selectedMachine.depreciationMonthly + selectedMachine.overheadAllocatedMonthly + totalGajiMesin + listrikMesin
-                    val totalDetikMesin = selectedMachine.hoursCapacityMonthly * 3600.0
-                    val biayaPerDetik = if (totalDetikMesin > 0) overheadMesin / totalDetikMesin else 0.0
-                    e.cycleTime * biayaPerDetik
+                    if (!selectedMachine.isActive) {
+                        0.0
+                    } else {
+                        val totalGajiMesin = selectedMachine.operatorSalaryMonthly
+                        val listrikMesin = selectedMachine.electricityCostDaily * s.hariKerjaSebulan
+                        val overheadMesin = selectedMachine.depreciationMonthly + selectedMachine.overheadAllocatedMonthly + totalGajiMesin + listrikMesin
+                        val totalDetikMesin = selectedMachine.hoursCapacityMonthly * 3600.0
+                        val biayaPerDetik = if (totalDetikMesin > 0) overheadMesin / totalDetikMesin else 0.0
+                        e.cycleTime * biayaPerDetik
+                    }
                 } else {
                     val totalGaji = s.jumlahKaryawan * s.gajiHarian * s.hariKerjaSebulan
                     val overheadBulanan = s.listrikBulanan + totalGaji
@@ -530,9 +538,13 @@ fun MasterProductsScreen(
 
                 HppResult(
                     overheadBulanan = if (selectedMachine != null) {
-                        val totalGajiMesin = selectedMachine.operatorSalaryMonthly
-                        val listrikMesin = selectedMachine.electricityCostDaily * s.hariKerjaSebulan
-                        selectedMachine.depreciationMonthly + selectedMachine.overheadAllocatedMonthly + totalGajiMesin + listrikMesin
+                        if (!selectedMachine.isActive) {
+                            0.0
+                        } else {
+                            val totalGajiMesin = selectedMachine.operatorSalaryMonthly
+                            val listrikMesin = selectedMachine.electricityCostDaily * s.hariKerjaSebulan
+                            selectedMachine.depreciationMonthly + selectedMachine.overheadAllocatedMonthly + totalGajiMesin + listrikMesin
+                        }
                     } else {
                         s.listrikBulanan + s.jumlahKaryawan * s.gajiHarian * s.hariKerjaSebulan
                     },

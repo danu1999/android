@@ -104,4 +104,9 @@ class PosBahRootViewModel @Inject constructor(
     suspend fun getDashboardRoute(): String = getDashboardRouteSync()
 
     fun isOwner(): Boolean = securePrefs.currentRole == "OWNER"
+
+    fun isBmpManager(): Boolean {
+        val role = securePrefs.currentRole ?: "KASIR"
+        return role == "OWNER" || role == "ADMIN" || role == "SUPERVISOR"
+    }
 }
