@@ -120,6 +120,7 @@ data class BmpMachineData(
     val overheadAllocatedMonthly: Double = 0.0,
     val hoursCapacityMonthly: Double = 624.0,
     val isActive: Boolean = true,
+    val moldId: Long? = null,
     val isDeleted: Boolean = false,
     val updatedAt: Long = 0
 )
@@ -131,6 +132,7 @@ data class BmpMoldData(
     val purchasePrice: Double = 0.0,
     val expectedShotsLifetime: Int = 100000,
     val masterProductId: Long? = null,
+    val usageCount: Int = 0,
     val isDeleted: Boolean = false,
     val updatedAt: Long = 0
 )
@@ -357,6 +359,7 @@ fun Map<String, Any?>.toBmpMachineData() = BmpMachineData(
     overheadAllocatedMonthly = (getCaseInsensitive("overhead_allocated_monthly") as? Number)?.toDouble() ?: 0.0,
     hoursCapacityMonthly = (getCaseInsensitive("hours_capacity_monthly") as? Number)?.toDouble() ?: 624.0,
     isActive = getCaseInsensitive("is_active") as? Boolean ?: true,
+    moldId = (getCaseInsensitive("mold_id") as? Number)?.toLong(),
     isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false,
     updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0
 )
@@ -368,6 +371,7 @@ fun Map<String, Any?>.toBmpMoldData() = BmpMoldData(
     purchasePrice = (getCaseInsensitive("purchase_price") as? Number)?.toDouble() ?: 0.0,
     expectedShotsLifetime = (getCaseInsensitive("expected_shots_lifetime") as? Number)?.toInt() ?: 100000,
     masterProductId = (getCaseInsensitive("master_product_id") as? Number)?.toLong(),
+    usageCount = (getCaseInsensitive("usage_count") as? Number)?.toInt() ?: 0,
     isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false,
     updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0
 )
@@ -3061,6 +3065,7 @@ class BmpMachineRepository @Inject constructor(
                 put("overhead_allocated_monthly", item.overheadAllocatedMonthly)
                 put("hours_capacity_monthly", item.hoursCapacityMonthly)
                 put("is_active", item.isActive)
+                if (item.moldId != null) put("mold_id", item.moldId)
             }
             if (item.id == 0L) api.createMachine(body)
             else api.updateMachine(item.id, body)
@@ -3098,6 +3103,7 @@ class BmpMachineRepository @Inject constructor(
                     overheadAllocatedMonthly = it.overheadAllocatedMonthly,
                     hoursCapacityMonthly = it.hoursCapacityMonthly,
                     isActive = it.isActive,
+                    moldId = it.moldId,
                     isDeleted = it.isDeleted,
                     createdAt = System.currentTimeMillis(),
                     updatedAt = it.updatedAt
@@ -3184,6 +3190,7 @@ class BmpMoldRepository @Inject constructor(
                     purchasePrice = it.purchasePrice,
                     expectedShotsLifetime = it.expectedShotsLifetime,
                     masterProductId = it.masterProductId,
+                    usageCount = it.usageCount,
                     isDeleted = it.isDeleted,
                     createdAt = System.currentTimeMillis(),
                     updatedAt = it.updatedAt

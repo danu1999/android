@@ -305,6 +305,10 @@ data class BmpProductionLogEntity(
     val colorMixture: String? = null,
     val operatorName: String? = null,
     val productionDate: Long = System.currentTimeMillis(),
+    /** JSON absensi operator per shift: [{\"employeeId\":1,\"checkIn\":\"07:00\",\"checkOut\":\"15:00\"}] */
+    val workersAttendance: String? = null,
+    /** Nama shift: PAGI | SORE | MALAM */
+    val shiftName: String = "PAGI",
     val isSynced: Boolean = false,
     val isDeleted: Boolean = false,
     val createdAt: Long = System.currentTimeMillis()
@@ -319,10 +323,12 @@ data class BmpMachineEntity(
     val depreciationMonthly: Double = 0.0,
     val powerConsumptionKw: Double = 0.0,
     val electricityCostDaily: Double = 0.0,
-    val operatorSalaryMonthly: Double = 0.0,
+    val operatorSalaryMonthly: Double = 0.0,   // deprecated: disembunyikan dari UI v2.19.21+
     val overheadAllocatedMonthly: Double = 0.0,
-    val hoursCapacityMonthly: Double = 624.0,
+    val hoursCapacityMonthly: Double = 624.0,  // deprecated: disembunyikan dari UI v2.19.21+
     val isActive: Boolean = true,
+    /** ID matras/cetakan yang terpasang pada mesin ini */
+    val moldId: Long? = null,
     val isDeleted: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
@@ -335,8 +341,39 @@ data class BmpMoldEntity(
     val purchasePrice: Double = 0.0,
     val expectedShotsLifetime: Int = 100000,
     val masterProductId: Long? = null,
+    /** Akumulasi jumlah pemakaian cetakan berdasarkan total shots log produksi */
+    val usageCount: Int = 0,
     val isDeleted: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
 
+// ─── Absensi Karyawan per Mesin per Shift ───────────────────────────────────
+
+/**
+ * Representasi 1 entri absensi karyawan di mesin, disimpan sebagai item dalam JSON array
+ * di kolom workers_attendance pada bmp_production_logs.
+ */
+data class BmpMachineWorkerAttendance(
+    val employeeId: Long,
+    val employeeName: String = "",
+    val checkIn: String = "07:00",   // format "HH:mm"
+    val checkOut: String = "15:00"   // format "HH:mm"
+)
+
+/** Serialisasi list absensi ke JSON string untuk disimpan ke DB */
+fun serializeWorkersAttendance(list: List<BmpMachineWorkerAttendance>): String? {
+    if (list.isEmpty()) return null
+    return try {
+        com.google.gson.Gson().toJson(list)
+    } catch (_: Exception) { null }
+}
+
+/** Deserialisasi JSON string dari DB ke list absensi */
+fun parseWorkersAttendance(json: String?): List<BmpMachineWorkerAttendance> {
+    if (json.isNullOrBlank()) return emptyList()
+    return try {
+        val type = object : com.google.gson.reflect.TypeToken<List<BmpMachineWorkerAttendance>>() {}.type
+        com.google.gson.Gson().fromJson(json, type) ?: emptyList()
+    } catch (_: Exception) { emptyList() }
+}

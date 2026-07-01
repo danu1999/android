@@ -33,9 +33,13 @@ import com.posbah.app.data.local.entities.BmpMachineEntity
 import com.posbah.app.data.local.entities.BmpMasterProductEntity
 import com.posbah.app.data.local.entities.BmpProductionLogEntity
 import com.posbah.app.data.local.entities.BmpProductStockEntity
+import com.posbah.app.data.local.entities.serializeWorkersAttendance
+import com.posbah.app.data.local.entities.BmpMachineWorkerAttendance
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpBahanBakuData
 import com.posbah.app.data.repository.BmpBahanBakuRepository
+import com.posbah.app.data.repository.BmpEmployeeData
+import com.posbah.app.data.repository.BmpEmployeeRepository
 import com.posbah.app.data.repository.BmpMachineRepository
 import com.posbah.app.data.repository.BmpMasterProductRepository
 import com.posbah.app.data.repository.BmpProductionLogRepository
@@ -48,13 +52,31 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.util.Calendar
 import javax.inject.Inject
 
 // ── Data Models ───────────────────────────────────────────────────────────────
 
+/** Tiga shift produksi harian */
+enum class ShiftType(val label: String, val startHour: Int, val defaultCheckIn: String, val defaultCheckOut: String) {
+    PAGI("Shift Pagi (07.00)", 7, "07:00", "15:00"),
+    SORE("Shift Sore (15.00)", 15, "15:00", "23:00"),
+    MALAM("Shift Malam (23.00)", 23, "23:00", "07:00")
+}
+
+/** Deteksi shift aktif berdasarkan jam lokal */
+fun detectCurrentShift(): ShiftType {
+    val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+    return when {
+        hour in 7..14  -> ShiftType.PAGI
+        hour in 15..22 -> ShiftType.SORE
+        else           -> ShiftType.MALAM
+    }
+}
+
 /**
  * State per mesin untuk satu sesi shift produksi.
- * v2.19.17: setiap mesin punya form sendiri; cycle time & biaya listrik bisa di-override.
+ * v2.19.21: tambah shiftName, operatorEmployeeId, checkIn/Out per mesin.
  */
 data class MachineShiftEntry(
     val machine: BmpMachineEntity,
@@ -71,7 +93,13 @@ data class MachineShiftEntry(
     /** v2.19.18: Apakah mesin ini menggunakan campuran warna pada shift ini */
     val isCampuranBahan: Boolean = false,
     /** Campuran warna: [{warna:"Merah",rasio:"1"},{warna:"Natural",rasio:"9"}] */
-    val campuranBahan: List<ColorMixEntry> = listOf(ColorMixEntry())
+    val campuranBahan: List<ColorMixEntry> = listOf(ColorMixEntry()),
+    /** v2.19.21: ID operator yang bertugas di mesin ini pada shift ini */
+    val operatorEmployeeId: Long? = null,
+    /** v2.19.21: Jam masuk operator format HH:mm */
+    val operatorCheckIn: String = "07:00",
+    /** v2.19.21: Jam keluar operator format HH:mm */
+    val operatorCheckOut: String = "15:00"
 ) {
     val missingFields: List<String>
         get() = if (!isRunningToday) emptyList() else buildList {
@@ -102,6 +130,7 @@ class BmpProductionLogViewModel @Inject constructor(
     private val stockRepo: BmpStockRepository,
     private val bahanBakuRepo: BmpBahanBakuRepository,
     private val machineRepo: BmpMachineRepository,
+    private val employeeRepo: BmpEmployeeRepository,
     private val authRepository: AuthRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
@@ -116,6 +145,21 @@ class BmpProductionLogViewModel @Inject constructor(
 
     val rawMaterials = bahanBakuRepo.bahanBaku
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val employees = employeeRepo.employees
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Shift aktif saat ini — user dapat mengubahnya */
+    private val _activeShift = MutableStateFlow(detectCurrentShift())
+    val activeShift = _activeShift.asStateFlow()
+
+    fun setShift(shift: ShiftType) {
+        _activeShift.value = shift
+        // Update default check-in/out di semua entri
+        _shiftEntries.update { list ->
+            list.map { it.copy(operatorCheckIn = shift.defaultCheckIn, operatorCheckOut = shift.defaultCheckOut) }
+        }
+    }
 
     /** Entri shift per mesin — semua mesin (aktif & mati ditampilkan, default sesuai isActive) */
     private val _shiftEntries = MutableStateFlow<List<MachineShiftEntry>>(emptyList())
@@ -152,6 +196,7 @@ class BmpProductionLogViewModel @Inject constructor(
                     try {
                         logRepo.loadAll(tenantId)
                         bahanBakuRepo.refresh()
+                        employeeRepo.refresh()
                     } catch (e: Exception) { e.printStackTrace() }
                     kotlinx.coroutines.delay(12_000)
                 }
@@ -233,7 +278,6 @@ class BmpProductionLogViewModel @Inject constructor(
             val electricityCost = entry.electricityInput.toDoubleOrNull()
                 ?: entry.machine.electricityCostDaily
 
-            // Serialize campuran warna ke JSON (jika ada)
             val colorMixtureJson = if (entry.isCampuranBahan &&
                 entry.campuranBahan.any { it.warna.isNotBlank() }) {
                 entry.campuranBahan
@@ -241,6 +285,19 @@ class BmpProductionLogViewModel @Inject constructor(
                     .joinToString(",", "[", "]") { ce ->
                         "{\"color\":\"${ce.warna}\",\"rasio\":\"${ce.rasio.ifBlank { "1" }}\"}"
                     }
+            } else null
+
+            // Serialize workers attendance (1 operator per mesin)
+            val attendanceJson = if (entry.operatorEmployeeId != null) {
+                val empName = employees.value.find { it.id == entry.operatorEmployeeId }?.name ?: ""
+                serializeWorkersAttendance(listOf(
+                    BmpMachineWorkerAttendance(
+                        employeeId = entry.operatorEmployeeId,
+                        employeeName = empName,
+                        checkIn = entry.operatorCheckIn,
+                        checkOut = entry.operatorCheckOut
+                    )
+                ))
             } else null
 
             val log = BmpProductionLogEntity(
@@ -254,7 +311,9 @@ class BmpProductionLogViewModel @Inject constructor(
                 cycleTimeActual = cycleTime,
                 electricityCostActual = electricityCost,
                 colorMixture = colorMixtureJson,
-                operatorName = null,
+                operatorName = employees.value.find { it.id == entry.operatorEmployeeId }?.name,
+                workersAttendance = attendanceJson,
+                shiftName = _activeShift.value.name,
                 productionDate = System.currentTimeMillis()
             )
 
@@ -279,7 +338,8 @@ class BmpProductionLogViewModel @Inject constructor(
                         qtyProduced = "",
                         qtyRejected = "0",
                         cycleTimeInput = "",
-                        selectedRawMaterial = null
+                        selectedRawMaterial = null,
+                        operatorEmployeeId = null
                     ) else entry
                 }
             }
@@ -312,6 +372,8 @@ fun BmpProductionLogScreen(
     val products by viewModel.products.collectAsState()
     val productStocks by viewModel.productStocks.collectAsState()
     val rawMaterials by viewModel.rawMaterials.collectAsState()
+    val employees by viewModel.employees.collectAsState()
+    val activeShift by viewModel.activeShift.collectAsState()
     val error by viewModel.error.collectAsState()
     val saveSuccess by viewModel.saveSuccess.collectAsState()
     val context = LocalContext.current
@@ -337,7 +399,7 @@ fun BmpProductionLogScreen(
         topBar = {
             PosBahTopBar(
                 title = "Log Produksi Harian",
-                subtitle = "Manufaktur — v2.19.17",
+                subtitle = "Manufaktur — v2.19.21",
                 onBack = onBack
             )
         }
@@ -364,9 +426,12 @@ fun BmpProductionLogScreen(
             when (selectedTab) {
                 0 -> ShiftTab(
                     shiftEntries = shiftEntries,
+                    activeShift = activeShift,
+                    employees = employees,
                     products = products,
                     productStocks = productStocks,
                     rawMaterials = rawMaterials,
+                    onShiftChange = { viewModel.setShift(it) },
                     onToggleMachine = { viewModel.toggleMachineRunning(it) },
                     onToggleExpand = { viewModel.toggleExpand(it) },
                     onSelectProduct = { machineId, product -> viewModel.selectProductForMachine(machineId, product) },
@@ -406,9 +471,12 @@ fun BmpProductionLogScreen(
 @Composable
 private fun ShiftTab(
     shiftEntries: List<MachineShiftEntry>,
+    activeShift: ShiftType,
+    employees: List<BmpEmployeeData>,
     products: List<BmpMasterProductEntity>,
     productStocks: List<BmpProductStockEntity>,
     rawMaterials: List<BmpBahanBakuData>,
+    onShiftChange: (ShiftType) -> Unit,
     onToggleMachine: (Long) -> Unit,
     onToggleExpand: (Long) -> Unit,
     onSelectProduct: (Long, BmpMasterProductEntity) -> Unit,
@@ -419,6 +487,30 @@ private fun ShiftTab(
     val errorCount = shiftEntries.count { it.hasErrors }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        // ── Shift Selector ────────────────────────────────────────────────
+        Surface(
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text("🕔 Shift:", fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodyMedium)
+                ShiftType.values().forEach { shift ->
+                    val isSelected = shift == activeShift
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { onShiftChange(shift) },
+                        label = { Text(shift.label, style = MaterialTheme.typography.labelSmall) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+
         // Global validation banner
         AnimatedVisibility(visible = errorCount > 0) {
             Surface(
@@ -458,6 +550,7 @@ private fun ShiftTab(
                 items(shiftEntries, key = { it.machine.id }) { entry ->
                     MachineShiftCard(
                         entry = entry,
+                        employees = employees,
                         products = products,
                         productStocks = productStocks,
                         rawMaterials = rawMaterials,
@@ -497,6 +590,7 @@ private fun ShiftTab(
 @Composable
 private fun MachineShiftCard(
     entry: MachineShiftEntry,
+    employees: List<BmpEmployeeData>,
     products: List<BmpMasterProductEntity>,
     productStocks: List<BmpProductStockEntity>,
     rawMaterials: List<BmpBahanBakuData>,
@@ -735,7 +829,72 @@ private fun MachineShiftCard(
                         }
                     }
 
-                    // 5. Campuran Warna (opsional)
+                    // 5a. Absensi Operator (1 orang per mesin)
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    Text(
+                        "👷 Operator Shift Ini",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    var operatorDropdown by remember { mutableStateOf(false) }
+                    val selectedEmpName = employees.find { it.id == entry.operatorEmployeeId }?.name
+                    ExposedDropdownMenuBox(
+                        expanded = operatorDropdown,
+                        onExpandedChange = { operatorDropdown = it }
+                    ) {
+                        OutlinedTextField(
+                            value = selectedEmpName ?: "— Pilih Operator (Opsional) —",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Operator Mesin") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = operatorDropdown) },
+                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = operatorDropdown,
+                            onDismissRequest = { operatorDropdown = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("— Tanpa operator —", color = Color.Gray) },
+                                onClick = { onUpdate { it.copy(operatorEmployeeId = null) }; operatorDropdown = false }
+                            )
+                            employees.filter { it.isActive }.forEach { emp ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(emp.name, fontWeight = FontWeight.Medium)
+                                            Text(emp.role, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                        }
+                                    },
+                                    onClick = { onUpdate { it.copy(operatorEmployeeId = emp.id) }; operatorDropdown = false }
+                                )
+                            }
+                        }
+                    }
+                    if (entry.operatorEmployeeId != null) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = entry.operatorCheckIn,
+                                onValueChange = { v -> onUpdate { it.copy(operatorCheckIn = v) } },
+                                label = { Text("Jam Masuk") },
+                                singleLine = true,
+                                placeholder = { Text("07:00") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = entry.operatorCheckOut,
+                                onValueChange = { v -> onUpdate { it.copy(operatorCheckOut = v) } },
+                                label = { Text("Jam Keluar") },
+                                singleLine = true,
+                                placeholder = { Text("15:00") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+
+                    // 5b. Campuran Warna (opsional)
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth().clickable {
@@ -959,11 +1118,29 @@ private fun HistoryTab(
                                 item.product?.title ?: "Produk #${log.masterProductId}",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                             )
-                            Text(
-                                "${Formatters.dateLong(log.productionDate)} • ${item.machineName ?: "Tanpa Mesin"}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(
+                                    "${Formatters.dateLong(log.productionDate)} • ${item.machineName ?: "Tanpa Mesin"}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                // Badge shift
+                                if (!log.shiftName.isNullOrBlank() && log.shiftName != "PAGI" || log.shiftName == "PAGI") {
+                                    val shiftColor = when(log.shiftName) {
+                                        "SORE" -> Color(0xFFFF6F00)
+                                        "MALAM" -> Color(0xFF303F9F)
+                                        else -> Color(0xFF388E3C)
+                                    }
+                                    Surface(shape = RoundedCornerShape(4.dp), color = shiftColor.copy(alpha = 0.15f)) {
+                                        Text(
+                                            log.shiftName ?: "PAGI",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                            color = shiftColor,
+                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
+                            }
                             if (log.cycleTimeActual > 0 || log.electricityCostActual > 0) {
                                 Text(
                                     buildString {

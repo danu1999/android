@@ -1,3 +1,16 @@
+POSBah v2.19.21 - Shift Produksi 3 Waktu, Absensi Operator & Notifikasi Matras
+
+Halo Kak! POSBah v2.19.21 hadir dengan peningkatan besar pada sistem produksi manufaktur:
+1. Selector Shift 3 Waktu: Halaman Log Produksi kini punya selector shift otomatis (Pagi 07.00 / Sore 15.00 / Malam 23.00). Sistem mendeteksi shift aktif berdasarkan jam, namun bisa diubah manual.
+2. Absensi Operator per Mesin: Setiap mesin kini bisa diisi 1 operator khusus beserta jam masuk dan jam keluar per shift, sesuai aturan "1 mesin 1 orang".
+3. Dropdown Pilih Matras: Form edit mesin kini dilengkapi dropdown untuk menghubungkan mesin ke cetakan/matras yang terpasang.
+4. Notifikasi Umur Matras: Kartu matras menampilkan progress bar pemakaian. Jika sudah ≥90% dari expected shots lifetime, muncul badge ⚠️ "Perlu Servis" berwarna oranye.
+5. Riwayat Produksi dengan Label Shift: Setiap entri di riwayat log produksi menampilkan badge shift (PAGI/SORE/MALAM) berwarna berbeda untuk kemudahan identifikasi.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.20 - Menu Mesin & Matras Langsung dari Dashboard
 
 Halo Kak! POSBah v2.19.20 memperbaiki akses halaman Mesin & Matras:

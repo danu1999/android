@@ -141,6 +141,8 @@ class BmpProductionLogRepository @Inject constructor(
             if (log.cycleTimeActual > 0) body["cycle_time_actual"] = log.cycleTimeActual
             if (log.electricityCostActual > 0) body["electricity_cost_actual"] = log.electricityCostActual
             if (!log.colorMixture.isNullOrBlank()) body["color_mixture"] = log.colorMixture
+            if (!log.workersAttendance.isNullOrBlank()) body["workers_attendance"] = log.workersAttendance
+            body["shift_name"] = log.shiftName
             val resp = api.createProductionLog(body)
             if (resp.isSuccessful) {
                 // Extract the real server-assigned ID and replace the temp entry

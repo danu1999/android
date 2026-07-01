@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.posbah.app.ui.screens.bmp.products
 
 import android.content.Context
@@ -23,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -111,7 +113,8 @@ class MachineMoldViewModel @Inject constructor(
             electricityCostDaily = e.electricityCostDaily,
             operatorSalaryMonthly = e.operatorSalaryMonthly,
             overheadAllocatedMonthly = e.overheadAllocatedMonthly,
-            hoursCapacityMonthly = e.hoursCapacityMonthly
+            hoursCapacityMonthly = e.hoursCapacityMonthly,
+            moldId = e.moldId
         )
         val res = machineRepo.upsert(data)
         if (res is OnlineWriteResult.Error) {
@@ -133,7 +136,8 @@ class MachineMoldViewModel @Inject constructor(
             operatorSalaryMonthly = m.operatorSalaryMonthly,
             overheadAllocatedMonthly = m.overheadAllocatedMonthly,
             hoursCapacityMonthly = m.hoursCapacityMonthly,
-            isActive = !m.isActive
+            isActive = !m.isActive,
+            moldId = m.moldId
         )
         val res = machineRepo.upsert(data)
         if (res is OnlineWriteResult.Error) {
@@ -286,6 +290,7 @@ fun MachineMoldManagementScreen(
                         items(machines, key = { it.id }) { machine ->
                             MachineCard(
                                 machine = machine,
+                                moldName = molds.find { it.id == machine.moldId }?.name,
                                 onEdit = { viewModel.openMachineEdit(machine) },
                                 onDelete = { viewModel.deleteMachine(machine.id) },
                                 onToggleActive = { viewModel.toggleMachineActive(machine) }
@@ -376,7 +381,7 @@ fun MachineMoldManagementScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
-                        value = if (edit.overheadAllocatedMonthly == 0.0) "" else edit.overheadAllocatedMonthly.toLong().toString(),
+                        value = edit.overheadAllocatedMonthly.let { if (it == 0.0) "" else it.toLong().toString() },
                         onValueChange = { v ->
                             val n = v.replace(",", "").replace(".", "").toDoubleOrNull() ?: 0.0
                             viewModel.updateMachineField { it.copy(overheadAllocatedMonthly = n) }
@@ -386,17 +391,44 @@ fun MachineMoldManagementScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    OutlinedTextField(
-                        value = edit.hoursCapacityMonthly.toInt().toString(),
-                        onValueChange = { v ->
-                            val n = v.toDoubleOrNull() ?: 624.0
-                            viewModel.updateMachineField { it.copy(hoursCapacityMonthly = n) }
-                        },
-                        label = { Text("Jam Kerja Normal Sebulan (Jam)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    Spacer(Modifier.height(4.dp))
+                    // Dropdown Pilih Matras
+                    var expandMoldDropdown by remember { mutableStateOf(false) }
+                    val selectedMoldName = molds.find { it.id == edit.moldId }?.name
+                    ExposedDropdownMenuBox(
+                        expanded = expandMoldDropdown,
+                        onExpandedChange = { expandMoldDropdown = it }
+                    ) {
+                        OutlinedTextField(
+                            value = selectedMoldName ?: "— Tidak ada matras —",
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Matras/Cetakan Terpasang") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandMoldDropdown) },
+                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                        )
+                        ExposedDropdownMenu(
+                            expanded = expandMoldDropdown,
+                            onDismissRequest = { expandMoldDropdown = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("— Tidak ada matras —", color = Color.Gray) },
+                                onClick = {
+                                    viewModel.updateMachineField { it.copy(moldId = null) }
+                                    expandMoldDropdown = false
+                                }
+                            )
+                            molds.forEach { m ->
+                                DropdownMenuItem(
+                                    text = { Text(m.name) },
+                                    onClick = {
+                                        viewModel.updateMachineField { it.copy(moldId = m.id) }
+                                        expandMoldDropdown = false
+                                    }
+                                )
+                            }
+                        }
+                    }
                     Spacer(Modifier.height(8.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -545,6 +577,7 @@ fun MachineMoldManagementScreen(
 @Composable
 fun MachineCard(
     machine: BmpMachineEntity,
+    moldName: String?,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onToggleActive: () -> Unit
@@ -595,7 +628,6 @@ fun MachineCard(
             Divider(color = MaterialTheme.colorScheme.outlineVariant)
             Spacer(Modifier.height(8.dp))
             
-            // Machine properties
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 Text("Penyusutan Bulanan:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 Text(Formatters.rupiah(machine.depreciationMonthly), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
@@ -605,16 +637,8 @@ fun MachineCard(
                 Text(Formatters.rupiah(machine.electricityCostDaily), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
             }
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                Text("Gaji Operator / Bulan:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                Text(Formatters.rupiah(machine.operatorSalaryMonthly), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-            }
-            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 Text("BOP Bulanan Alokasi:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 Text(Formatters.rupiah(machine.overheadAllocatedMonthly), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-            }
-            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                Text("Jam Kerja Normal:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                Text("${machine.hoursCapacityMonthly.toInt()} Jam/Bulan", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
             }
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 Text("Status Mesin:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
@@ -624,6 +648,37 @@ fun MachineCard(
                     fontWeight = FontWeight.Bold,
                     color = if (machine.isActive) Color(0xFF4CAF50) else Color(0xFFF44336)
                 )
+            }
+            // Matras terpasang
+            Spacer(Modifier.height(6.dp))
+            if (moldName != null) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "🎯 Matras: $moldName",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            } else {
+                Surface(
+                    color = Color(0xFFFFF8E1),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "⚠️ Belum ada matras terpasang — edit mesin untuk memilih matras",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        color = Color(0xFF8D6E00),
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
         }
     }
@@ -636,9 +691,14 @@ fun MoldCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val usagePct = if (mold.expectedShotsLifetime > 0)
+        (mold.usageCount.toFloat() / mold.expectedShotsLifetime.toFloat()).coerceIn(0f, 1f)
+    else 0f
+    val needsService = usagePct >= 0.9f
+
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface,
+        color = if (needsService) Color(0xFFFFF8E1) else MaterialTheme.colorScheme.surface,
         tonalElevation = 2.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -648,12 +708,28 @@ fun MoldCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = mold.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = mold.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (needsService) Color(0xFF8D6E00) else MaterialTheme.colorScheme.onSurface
+                    )
+                    if (needsService) {
+                        Spacer(Modifier.width(6.dp))
+                        Surface(
+                            color = Color(0xFFFF8F00),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                "⚠️ Perlu Servis",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
                 Row {
                     IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
                         Icon(
@@ -685,6 +761,22 @@ fun MoldCard(
                 Text("Expected Shots Lifetime:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 Text("${Formatters.number(mold.expectedShotsLifetime.toDouble())} kali", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
             }
+            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                Text("Pemakaian Aktual:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                Text("${Formatters.number(mold.usageCount.toDouble())} kali (${(usagePct * 100).toInt()}%)",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (needsService) Color(0xFFE65100) else MaterialTheme.colorScheme.onSurface)
+            }
+            Spacer(Modifier.height(6.dp))
+            // Usage progress bar
+            LinearProgressIndicator(
+                progress = usagePct,
+                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                color = if (needsService) Color(0xFFFF8F00) else MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.outlineVariant
+            )
+            Spacer(Modifier.height(6.dp))
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 Text("Amortisasi Per Shot:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 val amortPerShot = if (mold.expectedShotsLifetime > 0) mold.purchasePrice / mold.expectedShotsLifetime else 0.0
