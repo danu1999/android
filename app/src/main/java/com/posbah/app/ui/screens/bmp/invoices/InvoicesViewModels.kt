@@ -593,16 +593,16 @@ class InvoiceFormViewModel @Inject constructor(
     fun save() {
         val inv = _ui.value.invoice ?: return
         viewModelScope.launch {
-            // Optimistic: navigate back immediately
-            _ui.update { it.copy(saved = true) }
-            
             val result = if (inv.id == 0L) {
                 val (_, r) = invoiceRepo.createInvoice(context, inv, _ui.value.productLines)
                 r
             } else {
                 invoiceRepo.updateInvoice(context, inv, _ui.value.productLines)
             }
-            if (result is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+            if (result is com.posbah.app.data.repository.OnlineWriteResult.Success) {
+                android.widget.Toast.makeText(context, "Invoice berhasil disimpan!", android.widget.Toast.LENGTH_SHORT).show()
+                _ui.update { it.copy(saved = true) }
+            } else if (result is com.posbah.app.data.repository.OnlineWriteResult.Error) {
                 android.widget.Toast.makeText(context, "Gagal simpan invoice: ${result.message}", android.widget.Toast.LENGTH_LONG).show()
             } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
                 android.widget.Toast.makeText(context, "Gagal simpan invoice: Tidak ada internet", android.widget.Toast.LENGTH_LONG).show()
