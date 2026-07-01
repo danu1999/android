@@ -88,6 +88,9 @@ class BmpProductionLogRepository @Inject constructor(
 
     fun observeAll(tenantId: String): Flow<List<BmpProductionLogEntity>> = _logs.asStateFlow()
 
+    /** Kembalikan snapshot log dari cache in-memory (untuk keperluan absensi/statistik) */
+    fun getCachedLogs(tenantId: String): List<BmpProductionLogEntity> = _logs.value
+
     suspend fun loadAll(tenantId: String) {
         try {
             val resp = api.getProductionLogs()
@@ -107,6 +110,8 @@ class BmpProductionLogRepository @Inject constructor(
                         electricityCostActual = (m["electricity_cost_actual"] as? Number)?.toDouble() ?: 0.0,
                         colorMixture = m["color_mixture"] as? String,
                         operatorName = m["operatorName"] as? String,
+                        workersAttendance = m["workers_attendance"] as? String,
+                        shiftName = m["shift_name"] as? String ?: "PAGI",
                         productionDate = (m["productionDate"] as? Number)?.toLong() ?: System.currentTimeMillis(),
                         isDeleted = m["isDeleted"] as? Boolean ?: false,
                         createdAt = (m["createdAt"] as? Number)?.toLong() ?: System.currentTimeMillis()

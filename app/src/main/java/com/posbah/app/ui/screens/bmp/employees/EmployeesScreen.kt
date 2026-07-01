@@ -59,9 +59,16 @@ import com.posbah.app.ui.components.PosBahTopBar
 import com.posbah.app.util.Formatters
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import com.posbah.app.data.local.entities.parseWorkersAttendance
+import com.posbah.app.data.repository.BmpProductionLogRepository
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.util.Calendar
 
 import android.content.Context
 import androidx.compose.material3.DropdownMenu
@@ -71,9 +78,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.LaunchedEffect
-import com.posbah.app.data.local.PosBahDatabase
-import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.Dispatchers
 
 @HiltViewModel
 class EmployeesViewModel @Inject constructor(
@@ -81,6 +85,7 @@ class EmployeesViewModel @Inject constructor(
     private val posEmployeeRepo: EmployeeRepository,
     private val outletRepo: OutletRepository,
     private val authRepository: AuthRepository,
+    private val productionLogRepo: BmpProductionLogRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     val tenantId = authRepository.activeTenantId().orEmpty()
@@ -220,6 +225,60 @@ class EmployeesViewModel @Inject constructor(
 
     fun deletePayroll(id: String) = viewModelScope.launch(Dispatchers.IO) {
         repo.deletePayroll(id)
+    }
+
+    /**
+     * Hitung kehadiran operator dari log produksi bulan ini.
+     * Membaca field workers_attendance di bmp_production_logs dan menghitung
+     * berapa banyak shift/hari karyawan ini tercatat hadir.
+     * Satu hari bisa ada beberapa shift — dihitung per entry log produksi.
+     */
+    fun countAttendanceFromProduction(bmpEmployeeId: Long): Int {
+        // Ambil semua log bulan ini dari flow yang sudah di-cache
+        val cal = Calendar.getInstance()
+        val startOfMonth = cal.apply {
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
+        var count = 0
+        viewModelScope.launch(Dispatchers.IO) {
+            val logs = productionLogRepo.getCachedLogs(tenantId)
+            logs.filter { it.productionDate >= startOfMonth }.forEach { log ->
+                val attendees = parseWorkersAttendance(log.workersAttendance)
+                if (attendees.any { it.employeeId == bmpEmployeeId }) count++
+            }
+        }
+        return count
+    }
+
+    private val _autoAttendance = MutableStateFlow<Int?>(null)
+    val autoAttendance = _autoAttendance.asStateFlow()
+    fun clearAutoAttendance() { _autoAttendance.value = null }
+
+    fun fetchAttendanceFromProduction(bmpEmployeeId: Long) = viewModelScope.launch(Dispatchers.IO) {
+        val cal = Calendar.getInstance()
+        val startOfMonth = Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+
+        try {
+            val logs = productionLogRepo.getCachedLogs(tenantId)
+            val count = logs.filter { it.productionDate >= startOfMonth }.count { log ->
+                val attendees = parseWorkersAttendance(log.workersAttendance)
+                attendees.any { it.employeeId == bmpEmployeeId }
+            }
+            _autoAttendance.value = count
+        } catch (_: Exception) {
+            _autoAttendance.value = 0
+        }
     }
 }
 
@@ -532,6 +591,16 @@ fun EmployeesScreen(
     payTarget?.let { target ->
         var amt by remember { mutableStateOf(target.salaryAmount.toLong().toString()) }
         var att by remember { mutableStateOf("26") }
+        val autoAttendance by viewModel.autoAttendance.collectAsState()
+
+        // Auto-fill attendance when value comes in
+        LaunchedEffect(autoAttendance) {
+            autoAttendance?.let {
+                att = it.toString()
+                viewModel.clearAutoAttendance()
+            }
+        }
+
         AlertDialog(
             onDismissRequest = { payTarget = null },
             title = { Text("Bayar Gaji: ${target.name}") },
@@ -550,6 +619,33 @@ fun EmployeesScreen(
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth().testTag("pay-att")
                     )
+                    Spacer(Modifier.size(6.dp))
+                    // Tombol Isi Otomatis dari Absensi Produksi
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = { viewModel.fetchAttendanceFromProduction(target.id) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        androidx.compose.material.icons.Icons.Outlined.let {}
+                        Text("📋 Isi Otomatis dari Absensi Produksi",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (att.toIntOrNull() != null && att.toInt() > 0) {
+                        Spacer(Modifier.size(4.dp))
+                        val dailyRate = (amt.replace(",", "").toDoubleOrNull() ?: 0.0) / (att.toIntOrNull() ?: 1)
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                "Rp ${Formatters.rupiah(dailyRate)} / shift",
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             },
             confirmButton = {
