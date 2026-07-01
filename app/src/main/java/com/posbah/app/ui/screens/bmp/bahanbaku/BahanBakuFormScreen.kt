@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
@@ -77,7 +78,7 @@ import com.posbah.app.util.CameraUtils
 import com.posbah.app.util.Formatters
 import java.io.File
 
-private val JENIS_BAHAN_OPTIONS = listOf("PP Original", "PP Peletan", "PP Gilingan", "PE", "HDPE", "LDPE", "PVC", "ABS", "PS", "Lainnya")
+private val JENIS_BAHAN_OPTIONS = listOf("PP Original", "PP Peletan", "PP Gilingan", "PE", "HDPE", "LDPE", "PVC", "ABS", "PS", "Pewarna Merah", "Pewarna Biru", "Pewarna Hijau", "Lainnya")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -179,6 +180,52 @@ fun BahanBakuFormScreen(
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth().testTag("bb-no-tagihan")
                         )
+                        Spacer(Modifier.height(10.dp))
+
+                        val formattedDate = remember(header.tanggal) {
+                            Formatters.dateLong(header.tanggal)
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    val cal = java.util.Calendar.getInstance().apply { timeInMillis = header.tanggal }
+                                    android.app.DatePickerDialog(
+                                        context,
+                                        { _, year, month, dayOfMonth ->
+                                            val selectedCal = java.util.Calendar.getInstance().apply {
+                                                set(year, month, dayOfMonth, 12, 0, 0)
+                                            }
+                                            viewModel.updateHeader { it.copy(tanggal = selectedCal.timeInMillis) }
+                                        },
+                                        cal.get(java.util.Calendar.YEAR),
+                                        cal.get(java.util.Calendar.MONTH),
+                                        cal.get(java.util.Calendar.DAY_OF_MONTH)
+                                    ).show()
+                                }
+                        ) {
+                            OutlinedTextField(
+                                value = formattedDate,
+                                onValueChange = {},
+                                readOnly = true,
+                                enabled = false,
+                                label = { Text("Tanggal Transaksi") },
+                                trailingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Outlined.DateRange,
+                                        contentDescription = "Pilih Tanggal"
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth().testTag("bb-tanggal"),
+                                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                                    disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                                    disabledBorderColor = MaterialTheme.colorScheme.outline,
+                                    disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                        }
                         Spacer(Modifier.height(10.dp))
 
                         ExposedDropdownMenuBox(
