@@ -1009,75 +1009,230 @@ private fun MachineShiftCard(
                                     }
                                 }
                             }
-                            // Color rows
-                            entry.campuranBahan.forEachIndexed { ci, colorEntry ->
-                                var warnaDropOpen by remember { mutableStateOf(false) }
-                                var batchDropOpen by remember { mutableStateOf(false) }
-                                val batchDisplay = colorEntry.selectedRawMaterial?.let {
-                                    "Batch: ${it.noTagihan} (${it.supplier ?: "Tanpa Supplier"})"
-                                } ?: "Pilih Batch Bahan Baku"
 
-                                Column(
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                            // 1. Bahan Utama (Warna 1)
+                            val mainMaterial = entry.campuranBahan.firstOrNull() ?: ColorMixEntry()
+                            var mainWarnaDropOpen by remember { mutableStateOf(false) }
+                            var mainBatchDropOpen by remember { mutableStateOf(false) }
+                            val mainBatchDisplay = mainMaterial.selectedRawMaterial?.let {
+                                "Batch: ${it.noTagihan} (${it.supplier ?: "Tanpa Supplier"})"
+                            } ?: "Pilih Batch Bahan Utama"
+
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    "Bahan Utama (Warna 1)",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Box(modifier = Modifier.weight(1.8f)) {
-                                            ExposedDropdownMenuBox(expanded = warnaDropOpen, onExpandedChange = { warnaDropOpen = !warnaDropOpen }) {
-                                                OutlinedTextField(
-                                                    value = colorEntry.warna,
-                                                    onValueChange = { v ->
-                                                        onUpdate { d ->
-                                                            val nl = d.campuranBahan.toMutableList()
-                                                            if (ci in nl.indices) nl[ci] = nl[ci].copy(warna = v)
-                                                            d.copy(campuranBahan = nl)
-                                                        }
-                                                    },
-                                                    label = { Text("Pewarna ${ci + 1}") },
-                                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = warnaDropOpen) },
-                                                    singleLine = true,
-                                                    modifier = Modifier.fillMaxWidth().menuAnchor()
-                                                )
-                                                ExposedDropdownMenu(expanded = warnaDropOpen, onDismissRequest = { warnaDropOpen = false }) {
-                                                    WARNA_OPTIONS.forEach { wOpt ->
-                                                        DropdownMenuItem(
-                                                            text = { Text(wOpt) },
-                                                            onClick = {
-                                                                onUpdate { d ->
-                                                                    val nl = d.campuranBahan.toMutableList()
-                                                                    if (ci in nl.indices) nl[ci] = nl[ci].copy(warna = wOpt)
-                                                                    d.copy(campuranBahan = nl)
-                                                                }
-                                                                warnaDropOpen = false
-                                                            }
-                                                        )
+                                    Box(modifier = Modifier.weight(1.8f)) {
+                                        ExposedDropdownMenuBox(expanded = mainWarnaDropOpen, onExpandedChange = { mainWarnaDropOpen = !mainWarnaDropOpen }) {
+                                            OutlinedTextField(
+                                                value = mainMaterial.warna,
+                                                onValueChange = { v ->
+                                                    onUpdate { d ->
+                                                        val nl = d.campuranBahan.toMutableList()
+                                                        if (nl.isNotEmpty()) nl[0] = nl[0].copy(warna = v)
+                                                        d.copy(campuranBahan = nl)
                                                     }
+                                                },
+                                                label = { Text("Warna Utama") },
+                                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = mainWarnaDropOpen) },
+                                                singleLine = true,
+                                                modifier = Modifier.fillMaxWidth().menuAnchor()
+                                            )
+                                            ExposedDropdownMenu(expanded = mainWarnaDropOpen, onDismissRequest = { mainWarnaDropOpen = false }) {
+                                                WARNA_OPTIONS.forEach { wOpt ->
+                                                    DropdownMenuItem(
+                                                        text = { Text(wOpt) },
+                                                        onClick = {
+                                                            onUpdate { d ->
+                                                                val nl = d.campuranBahan.toMutableList()
+                                                                if (nl.isNotEmpty()) nl[0] = nl[0].copy(warna = wOpt)
+                                                                d.copy(campuranBahan = nl)
+                                                            }
+                                                            mainWarnaDropOpen = false
+                                                        }
+                                                    )
                                                 }
                                             }
                                         }
-                                        OutlinedTextField(
-                                            value = colorEntry.rasio,
-                                            onValueChange = { v ->
-                                                onUpdate { d ->
-                                                    val nl = d.campuranBahan.toMutableList()
-                                                    if (ci in nl.indices) nl[ci] = nl[ci].copy(rasio = v)
-                                                    d.copy(campuranBahan = nl)
+                                    }
+                                    OutlinedTextField(
+                                        value = mainMaterial.rasio,
+                                        onValueChange = { v ->
+                                            onUpdate { d ->
+                                                val nl = d.campuranBahan.toMutableList()
+                                                if (nl.isNotEmpty()) nl[0] = nl[0].copy(rasio = v)
+                                                d.copy(campuranBahan = nl)
+                                            }
+                                        },
+                                        label = { Text("Bagian") },
+                                        singleLine = true,
+                                        suffix = { Text("×") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                        modifier = Modifier.weight(0.9f)
+                                    )
+                                }
+
+                                // Batch Dropdown untuk Bahan Utama
+                                Box(modifier = Modifier.fillMaxWidth().padding(start = 4.dp)) {
+                                    OutlinedTextField(
+                                        value = mainBatchDisplay,
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text("Batch Bahan Utama") },
+                                        trailingIcon = {
+                                            IconButton(onClick = { mainBatchDropOpen = true }) {
+                                                Icon(Icons.Outlined.ArrowDropDown, null)
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth().clickable { mainBatchDropOpen = true }
+                                    )
+                                    DropdownMenu(
+                                        expanded = mainBatchDropOpen,
+                                        onDismissRequest = { mainBatchDropOpen = false },
+                                        modifier = Modifier.fillMaxWidth(0.85f)
+                                    ) {
+                                        rawMaterials.forEach { rm ->
+                                            DropdownMenuItem(
+                                                text = {
+                                                    Column {
+                                                        Text("No: ${rm.noTagihan}", fontWeight = FontWeight.Bold)
+                                                        Text("Supplier: ${rm.supplier ?: "—"}", style = MaterialTheme.typography.bodySmall)
+                                                        Text("Tgl: ${Formatters.dateLong(rm.tanggal)}", style = MaterialTheme.typography.bodySmall)
+                                                    }
+                                                },
+                                                onClick = {
+                                                    onUpdate { d ->
+                                                        val nl = d.campuranBahan.toMutableList()
+                                                        if (nl.isNotEmpty()) nl[0] = nl[0].copy(selectedRawMaterial = rm)
+                                                        d.copy(campuranBahan = nl)
+                                                    }
+                                                    mainBatchDropOpen = false
                                                 }
-                                            },
-                                            label = { Text("Bagian") },
-                                            singleLine = true,
-                                            suffix = { Text("×") },
-                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                            modifier = Modifier.weight(0.9f)
-                                        )
-                                        if (entry.campuranBahan.size > 1) {
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 2. Checkbox: Bahan Pewarna (Campuran)
+                            val isGunakanPewarna = entry.campuranBahan.size > 1
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    onUpdate { d ->
+                                        if (isGunakanPewarna) {
+                                            d.copy(campuranBahan = d.campuranBahan.take(1))
+                                        } else {
+                                            d.copy(campuranBahan = d.campuranBahan + ColorMixEntry(rasio = "1"))
+                                        }
+                                    }
+                                },
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = isGunakanPewarna,
+                                    onCheckedChange = { checked ->
+                                        onUpdate { d ->
+                                            if (!checked) {
+                                                d.copy(campuranBahan = d.campuranBahan.take(1))
+                                            } else {
+                                                d.copy(campuranBahan = d.campuranBahan + ColorMixEntry(rasio = "1"))
+                                            }
+                                        }
+                                    }
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        "Gunakan Bahan Pewarna Tambahan",
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+                                    )
+                                    Text(
+                                        "Centang untuk membandingkan takaran pewarna dengan bahan utama",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            // 3. Pewarna rows (hanya jika isGunakanPewarna)
+                            if (isGunakanPewarna) {
+                                entry.campuranBahan.drop(1).forEachIndexed { index, colorEntry ->
+                                    val ci = index + 1 // Pewarna 1, Pewarna 2, etc.
+                                    val fullIndex = index + 1
+                                    var warnaDropOpen by remember { mutableStateOf(false) }
+                                    var batchDropOpen by remember { mutableStateOf(false) }
+                                    val batchDisplay = colorEntry.selectedRawMaterial?.let {
+                                        "Batch: ${it.noTagihan} (${it.supplier ?: "Tanpa Supplier"})"
+                                    } ?: "Pilih Batch Pewarna"
+
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(modifier = Modifier.weight(1.8f)) {
+                                                ExposedDropdownMenuBox(expanded = warnaDropOpen, onExpandedChange = { warnaDropOpen = !warnaDropOpen }) {
+                                                    OutlinedTextField(
+                                                        value = colorEntry.warna,
+                                                        onValueChange = { v ->
+                                                            onUpdate { d ->
+                                                                val nl = d.campuranBahan.toMutableList()
+                                                                if (fullIndex in nl.indices) nl[fullIndex] = nl[fullIndex].copy(warna = v)
+                                                                d.copy(campuranBahan = nl)
+                                                            }
+                                                        },
+                                                        label = { Text("Pewarna $ci") },
+                                                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = warnaDropOpen) },
+                                                        singleLine = true,
+                                                        modifier = Modifier.fillMaxWidth().menuAnchor()
+                                                    )
+                                                    ExposedDropdownMenu(expanded = warnaDropOpen, onDismissRequest = { warnaDropOpen = false }) {
+                                                        WARNA_OPTIONS.forEach { wOpt ->
+                                                            DropdownMenuItem(
+                                                                text = { Text(wOpt) },
+                                                                onClick = {
+                                                                    onUpdate { d ->
+                                                                        val nl = d.campuranBahan.toMutableList()
+                                                                        if (fullIndex in nl.indices) nl[fullIndex] = nl[fullIndex].copy(warna = wOpt)
+                                                                        d.copy(campuranBahan = nl)
+                                                                    }
+                                                                    warnaDropOpen = false
+                                                                }
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            OutlinedTextField(
+                                                value = colorEntry.rasio,
+                                                onValueChange = { v ->
+                                                    onUpdate { d ->
+                                                        val nl = d.campuranBahan.toMutableList()
+                                                        if (fullIndex in nl.indices) nl[fullIndex] = nl[fullIndex].copy(rasio = v)
+                                                        d.copy(campuranBahan = nl)
+                                                    }
+                                                },
+                                                label = { Text("Bagian") },
+                                                singleLine = true,
+                                                suffix = { Text("×") },
+                                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                                modifier = Modifier.weight(0.9f)
+                                            )
                                             IconButton(
                                                 onClick = {
                                                     onUpdate { d ->
-                                                        val nl = d.campuranBahan.toMutableList().also { it.removeAt(ci) }
+                                                        val nl = d.campuranBahan.toMutableList().also { it.removeAt(fullIndex) }
                                                         d.copy(campuranBahan = nl)
                                                     }
                                                 },
@@ -1086,57 +1241,57 @@ private fun MachineShiftCard(
                                                 Icon(Icons.Outlined.Close, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
                                             }
                                         }
-                                    }
 
-                                    // Batch Dropdown untuk baris warna ini
-                                    Box(modifier = Modifier.fillMaxWidth().padding(start = 4.dp)) {
-                                        OutlinedTextField(
-                                            value = batchDisplay,
-                                            onValueChange = {},
-                                            readOnly = true,
-                                            label = { Text("Batch Bahan Baku (Pewarna ${ci + 1})") },
-                                            trailingIcon = {
-                                                IconButton(onClick = { batchDropOpen = true }) {
-                                                    Icon(Icons.Outlined.ArrowDropDown, null)
-                                                }
-                                            },
-                                            modifier = Modifier.fillMaxWidth().clickable { batchDropOpen = true }
-                                        )
-                                        DropdownMenu(
-                                            expanded = batchDropOpen,
-                                            onDismissRequest = { batchDropOpen = false },
-                                            modifier = Modifier.fillMaxWidth(0.85f)
-                                        ) {
-                                            rawMaterials.forEach { rm ->
-                                                DropdownMenuItem(
-                                                    text = {
-                                                        Column {
-                                                            Text("No: ${rm.noTagihan}", fontWeight = FontWeight.Bold)
-                                                            Text("Supplier: ${rm.supplier ?: "—"}", style = MaterialTheme.typography.bodySmall)
-                                                            Text("Tgl: ${Formatters.dateLong(rm.tanggal)}", style = MaterialTheme.typography.bodySmall)
-                                                        }
-                                                    },
-                                                    onClick = {
-                                                        onUpdate { d ->
-                                                            val nl = d.campuranBahan.toMutableList()
-                                                            if (ci in nl.indices) nl[ci] = nl[ci].copy(selectedRawMaterial = rm)
-                                                            d.copy(campuranBahan = nl)
-                                                        }
-                                                        batchDropOpen = false
+                                        // Batch Dropdown untuk Pewarna
+                                        Box(modifier = Modifier.fillMaxWidth().padding(start = 4.dp)) {
+                                            OutlinedTextField(
+                                                value = batchDisplay,
+                                                onValueChange = {},
+                                                readOnly = true,
+                                                label = { Text("Batch Pewarna $ci") },
+                                                trailingIcon = {
+                                                    IconButton(onClick = { batchDropOpen = true }) {
+                                                        Icon(Icons.Outlined.ArrowDropDown, null)
                                                     }
-                                                )
+                                                },
+                                                modifier = Modifier.fillMaxWidth().clickable { batchDropOpen = true }
+                                            )
+                                            DropdownMenu(
+                                                expanded = batchDropOpen,
+                                                onDismissRequest = { batchDropOpen = false },
+                                                modifier = Modifier.fillMaxWidth(0.85f)
+                                            ) {
+                                                rawMaterials.forEach { rm ->
+                                                    DropdownMenuItem(
+                                                        text = {
+                                                            Column {
+                                                                Text("No: ${rm.noTagihan}", fontWeight = FontWeight.Bold)
+                                                                Text("Supplier: ${rm.supplier ?: "—"}", style = MaterialTheme.typography.bodySmall)
+                                                                Text("Tgl: ${Formatters.dateLong(rm.tanggal)}", style = MaterialTheme.typography.bodySmall)
+                                                            }
+                                                        },
+                                                        onClick = {
+                                                            onUpdate { d ->
+                                                                val nl = d.campuranBahan.toMutableList()
+                                                                if (fullIndex in nl.indices) nl[fullIndex] = nl[fullIndex].copy(selectedRawMaterial = rm)
+                                                                d.copy(campuranBahan = nl)
+                                                            }
+                                                            batchDropOpen = false
+                                                        }
+                                                    )
+                                                }
                                             }
                                         }
                                     }
                                 }
-                            }
-                            TextButton(
-                                onClick = { onUpdate { d -> d.copy(campuranBahan = d.campuranBahan + ColorMixEntry()) } },
-                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
-                            ) {
-                                Icon(Icons.Outlined.Add, null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("Tambah Pewarna Lain", style = MaterialTheme.typography.bodySmall)
+                                TextButton(
+                                    onClick = { onUpdate { d -> d.copy(campuranBahan = d.campuranBahan + ColorMixEntry()) } },
+                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                                ) {
+                                    Icon(Icons.Outlined.Add, null, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Tambah Pewarna Lain", style = MaterialTheme.typography.bodySmall)
+                                }
                             }
                         }
                     }
