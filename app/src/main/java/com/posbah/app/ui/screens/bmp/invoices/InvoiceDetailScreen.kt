@@ -715,7 +715,7 @@ private fun generateInvoiceHtml(
     val logoCellWidth = if (isTraditional) "50px" else "75px"
     val logoPaddingRight = if (isTraditional) "8px" else "12px"
 
-    val pageSizeCss = if (isTraditional) "size: 240mm 279mm; margin: 0.5cm;" else "size: 210mm 297mm; margin: 1cm;"
+    val pageSizeCss = if (isTraditional) "size: 240mm 279mm; margin: 0.5cm;" else "size: 210mm 297mm; margin: 4cm 3cm 3cm 4cm;"
     val printContainerCss = if (isTraditional) """
         .print-container {
             width: 215mm;
@@ -1143,7 +1143,7 @@ private fun generateSuratJalanHtml(
     val logoCellWidth = if (isTraditional) "50px" else "75px"
     val logoPaddingRight = if (isTraditional) "8px" else "12px"
 
-    val pageSizeCss = if (isTraditional) "size: 240mm 279mm; margin: 0.5cm;" else "size: 210mm 297mm; margin: 1cm;"
+    val pageSizeCss = if (isTraditional) "size: 240mm 279mm; margin: 0.5cm;" else "size: 210mm 297mm; margin: 4cm 3cm 3cm 4cm;"
     val printContainerCss = if (isTraditional) """
         .print-container {
             width: 215mm;

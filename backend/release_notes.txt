@@ -1,4 +1,19 @@
+POSBah v2.19.27 - Penyesuaian Margin Cetak A4
+
+Halo Kak! POSBah v2.19.27 menyempurnakan layout cetak dokumen:
+1. Margin Cetak A4 Baru: Mengubah ukuran margin cetak A4 (modern) untuk Invoice & Surat Jalan menjadi:
+   - Atas (Top): 4 cm
+   - Kiri (Left): 4 cm
+   - Kanan (Right): 3 cm
+   - Bawah (Bottom): 3 cm
+2. Pengambilan saran harga di invoice form juga telah disempurnakan agar sepenuhnya reaktif.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.26 - Lacak Harga Klien & Saran Harga Pintar di Invoice
+
 
 Halo Kak! POSBah v2.19.26 menghadirkan fitur manajemen harga yang cerdas:
 1. Lacak Harga Klien: Di halaman Master Produk, ketuk ikon grafik (📈) di pojok kanan atas. Akan muncul daftar semua produk beserta klien yang pernah membeli dan harga terakhirnya.
