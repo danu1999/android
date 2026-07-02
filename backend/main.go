@@ -8505,6 +8505,7 @@ func versionCheckMiddleware(next http.Handler) http.Handler {
 				latestVersion := getLatestVersionFromDb()
 				isAllowed := clientVersion == "web" || clientVersion == latestVersion || 
 					clientVersion == "2.19.11" || clientVersion == "2.19.12" || clientVersion == "2.19.13" || clientVersion == "2.19.14" || clientVersion == "2.19.15" || clientVersion == "2.19.16" || clientVersion == "2.19.17" || clientVersion == "2.19.18" || clientVersion == "2.19.19" || clientVersion == "2.19.20" ||
+					clientVersion == "2.19.21" || clientVersion == "2.19.22" || clientVersion == "2.19.23" ||
 					(clientVersion != "" && compareVersions(clientVersion, latestVersion) >= 0)
 				if !isAllowed {
 					w.Header().Set("Content-Type", "application/json")
