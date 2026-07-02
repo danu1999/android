@@ -224,7 +224,8 @@ fun InvoiceFormScreen(
                     machines = ui.machines,
                     onChange = { trans -> viewModel.updateProductLine(idx) { trans(it) } },
                     onRemove = { viewModel.removeProductLine(idx) },
-                    testTagPrefix = "line-$idx"
+                    testTagPrefix = "line-$idx",
+                    clientLatestPrices = ui.clientLatestPrices
                 )
             }
 
@@ -500,7 +501,8 @@ private fun ProductLineEditor(
     machines: List<com.posbah.app.data.local.entities.BmpMachineEntity> = emptyList(),
     onChange: ((BmpProductEntity) -> BmpProductEntity) -> Unit,
     onRemove: () -> Unit,
-    testTagPrefix: String
+    testTagPrefix: String,
+    clientLatestPrices: Map<Long, com.posbah.app.data.repository.BmpClientLatestPriceData> = emptyMap()
 ) {
     var showProductPicker by remember { mutableStateOf(false) }
     val matchedMaster = masterProducts.find { it.id == line.masterItemID }
@@ -622,6 +624,32 @@ private fun ProductLineEditor(
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.weight(1.2f)
+                )
+            }
+            // v2.19.26: Saran harga terakhir klien untuk produk ini
+            val clientPriceSuggestion = line.masterItemID?.let { mid ->
+                if (mid > 0) clientLatestPrices[mid] else null
+            }
+            if (clientPriceSuggestion != null) {
+                val dateStr = remember(clientPriceSuggestion.purchaseDate) {
+                    if (clientPriceSuggestion.purchaseDate > 0) {
+                        java.text.SimpleDateFormat("dd/MM/yy", java.util.Locale.getDefault())
+                            .format(java.util.Date(clientPriceSuggestion.purchaseDate))
+                    } else ""
+                }
+                Spacer(Modifier.height(4.dp))
+                androidx.compose.foundation.text.ClickableText(
+                    text = androidx.compose.ui.text.buildAnnotatedString {
+                        append("Harga terakhir klien: ")
+                        pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold))
+                        append(com.posbah.app.util.Formatters.rupiah(clientPriceSuggestion.latestPrice))
+                        pop()
+                        if (dateStr.isNotBlank()) append(" ($dateStr)")
+                        append("  \u2192 Terapkan")
+                    },
+                    style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF1F8B4C)),
+                    onClick = { onChange { it.copy(price = clientPriceSuggestion.latestPrice) } },
+                    modifier = Modifier.testTag("$testTagPrefix-price-suggestion")
                 )
             }
             Spacer(Modifier.height(8.dp))

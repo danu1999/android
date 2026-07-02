@@ -491,7 +491,9 @@ data class InvoiceFormUi(
     val showProductSheet: Boolean = false,
     val isLoading: Boolean = false,
     val saved: Boolean = false,
-    val saveError: String? = null
+    val saveError: String? = null,
+    /** v2.19.26: Saran harga terakhir klien per produk — key=masterItemID, value={price, date} */
+    val clientLatestPrices: Map<Long, com.posbah.app.data.repository.BmpClientLatestPriceData> = emptyMap()
 )
 
 @HiltViewModel
@@ -502,6 +504,7 @@ class InvoiceFormViewModel @Inject constructor(
     private val masterRepo: BmpMasterProductRepository,
     private val machineRepo: BmpMachineRepository,
     private val authRepository: AuthRepository,
+    private val priceTrackingRepo: com.posbah.app.data.repository.BmpPriceTrackingRepository,
     savedState: SavedStateHandle
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
@@ -553,6 +556,13 @@ class InvoiceFormViewModel @Inject constructor(
 
     fun selectClient(client: BmpClientEntity?) {
         updateInvoice { it.copy(clientId = client?.id) }
+        // v2.19.26: Fetch harga terakhir klien ini untuk semua produk (saran harga di invoice)
+        val clientId = client?.id ?: return
+        viewModelScope.launch {
+            val priceList = priceTrackingRepo.fetchClientLatestPrices(clientId)
+            val priceMap = priceList.associateBy { it.masterItemID }
+            _ui.update { it.copy(clientLatestPrices = priceMap) }
+        }
     }
 
     fun addProductLine(masterProduct: BmpMasterProductEntity) {

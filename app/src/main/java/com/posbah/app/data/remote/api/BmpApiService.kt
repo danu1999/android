@@ -228,4 +228,13 @@ interface BmpApiService {
     suspend fun saveDepreciation(
         @Body body: Map<String, Any?>
     ): Response<Map<String, Any?>>
+
+    // ── Price Tracking (v2.19.26) ─────────────────────────────────────────────
+    @GET("api/rt/bmp/client-prices")
+    suspend fun getClientPrices(): Response<List<Map<String, Any?>>>
+
+    @GET("api/rt/bmp/clients/latest-prices/{clientId}")
+    suspend fun getClientLatestPrices(
+        @Path("clientId") clientId: Long
+    ): Response<List<Map<String, Any?>>>
 }

@@ -217,6 +217,10 @@ func main() {
 	http.HandleFunc("/api/rt/bmp/machines/", handleRtBmpMachinesById)
 	http.HandleFunc("/api/rt/bmp/molds", handleRtBmpMolds)
 	http.HandleFunc("/api/rt/bmp/molds/", handleRtBmpMoldsById)
+
+	// v2.19.26: Price tracking — harga jual per klien & saran harga invoice
+	http.HandleFunc("/api/rt/bmp/client-prices", handleRtBmpClientPrices)
+	http.HandleFunc("/api/rt/bmp/clients/latest-prices/", handleRtBmpClientLatestPrices)
 	http.HandleFunc("/api/rt/bmp/production-materials", handleRtBmpProductionMaterials)
 	http.HandleFunc("/api/rt/bmp/production-materials/", handleRtBmpProductionMaterialsById)
 

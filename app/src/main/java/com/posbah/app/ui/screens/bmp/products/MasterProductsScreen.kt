@@ -23,6 +23,7 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.TrendingUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -95,6 +96,7 @@ class MasterProductsViewModel @Inject constructor(
     private val bahanBakuRepo: com.posbah.app.data.repository.BmpBahanBakuRepository,
     private val machineRepo: com.posbah.app.data.repository.BmpMachineRepository,
     private val moldRepo: com.posbah.app.data.repository.BmpMoldRepository,
+    private val priceTrackingRepo: com.posbah.app.data.repository.BmpPriceTrackingRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
@@ -112,6 +114,18 @@ class MasterProductsViewModel @Inject constructor(
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()
     fun clearError() { _error.value = null }
+
+    // v2.19.26: Lacak Harga — state untuk price tracker bottom sheet
+    private val _clientPrices = MutableStateFlow<List<com.posbah.app.data.repository.BmpClientPriceData>>(emptyList())
+    val clientPrices = _clientPrices.asStateFlow()
+    private val _isPriceLoading = MutableStateFlow(false)
+    val isPriceLoading = _isPriceLoading.asStateFlow()
+
+    fun loadClientPrices() = viewModelScope.launch {
+        _isPriceLoading.value = true
+        _clientPrices.value = priceTrackingRepo.fetchClientPrices()
+        _isPriceLoading.value = false
+    }
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
@@ -316,6 +330,7 @@ data class HppResult(
     val hppLusin: Double
 )
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun MasterProductsScreen(
     onBack: () -> Unit,
@@ -336,6 +351,10 @@ fun MasterProductsScreen(
 
     var tempPhotoFile by remember { mutableStateOf<java.io.File?>(null) }
     var capturedPhotoFile by remember { mutableStateOf<java.io.File?>(null) }
+    // v2.19.26: State bottom sheet Lacak Harga
+    var showPriceTracker by remember { mutableStateOf(false) }
+    val clientPrices by viewModel.clientPrices.collectAsState()
+    val isPriceLoading by viewModel.isPriceLoading.collectAsState()
 
     LaunchedEffect(form.show, form.editing?.id) {
         if (form.show) {
@@ -388,6 +407,17 @@ fun MasterProductsScreen(
                 subtitle = "${list.size} item",
                 onBack = onBack,
                 actions = {
+                    // v2.19.26: Tombol Lacak Harga Klien
+                    IconButton(onClick = {
+                        showPriceTracker = true
+                        viewModel.loadClientPrices()
+                    }, modifier = Modifier.testTag("btn-price-tracker")) {
+                        Icon(
+                            imageVector = Icons.Outlined.TrendingUp,
+                            contentDescription = "Lacak Harga Klien",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                     IconButton(onClick = onNavigateToMachines) {
                         Icon(
                             imageVector = Icons.Outlined.Settings,
@@ -1188,6 +1218,85 @@ fun MasterProductsScreen(
             },
             dismissButton = { TextButton(onClick = viewModel::closeForm) { Text("Batal") } }
         )
+    }
+
+    // v2.19.26: Bottom Sheet Lacak Harga Klien
+    if (showPriceTracker) {
+        androidx.compose.material3.ModalBottomSheet(
+            onDismissRequest = { showPriceTracker = false },
+            sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 32.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Lacak Harga Klien", style = MaterialTheme.typography.titleLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    IconButton(onClick = { showPriceTracker = false }) {
+                        Icon(Icons.Outlined.Close, contentDescription = "Tutup")
+                    }
+                }
+                if (isPriceLoading) {
+                    Spacer(Modifier.height(24.dp))
+                    androidx.compose.material3.LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(8.dp))
+                    Text("Memuat data harga...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.CenterHorizontally))
+                } else if (clientPrices.isEmpty()) {
+                    Spacer(Modifier.height(24.dp))
+                    Text("Belum ada data harga. Buat invoice terlebih dahulu.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.align(Alignment.CenterHorizontally))
+                } else {
+                    Spacer(Modifier.height(8.dp))
+                    // Group by productName
+                    val grouped = clientPrices.groupBy { it.productName }
+                    androidx.compose.foundation.lazy.LazyColumn(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 520.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        grouped.forEach { (productName, entries) ->
+                            item {
+                                Spacer(Modifier.height(8.dp))
+                                androidx.compose.material3.Surface(
+                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        productName,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+                            items(entries, key = { "${it.clientId}_${it.masterItemID}" }) { entry ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(entry.clientName, style = MaterialTheme.typography.bodyMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                                        val dateStr = if (entry.latestPurchaseDate > 0)
+                                            java.text.SimpleDateFormat("dd/MM/yy", java.util.Locale.getDefault()).format(java.util.Date(entry.latestPurchaseDate))
+                                        else ""
+                                        if (dateStr.isNotBlank()) Text(dateStr, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Text(com.posbah.app.util.Formatters.rupiah(entry.latestPrice), style = MaterialTheme.typography.bodyMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                        if (entry.highestPrice > entry.latestPrice) {
+                                            Text("Tertinggi: ${com.posbah.app.util.Formatters.rupiah(entry.highestPrice)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                                        }
+                                    }
+                                }
+                                androidx.compose.material3.HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

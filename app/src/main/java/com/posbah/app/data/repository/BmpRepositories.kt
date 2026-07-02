@@ -271,6 +271,25 @@ data class BmpSettingsData(
 
 // PrintSettingsData — defined in MissingRepositories.kt (same package)
 
+// v2.19.26: Price Tracking data classes
+/** Harga jual produk ke klien tertentu — untuk halaman Lacak Harga di Master Produk */
+data class BmpClientPriceData(
+    val clientId: Long = 0,
+    val clientName: String = "",
+    val masterItemID: Long = 0,
+    val productName: String = "",
+    val highestPrice: Double = 0.0,
+    val latestPrice: Double = 0.0,
+    val latestPurchaseDate: Long = 0
+)
+
+/** Harga terakhir per produk untuk 1 klien — untuk saran harga di form Invoice */
+data class BmpClientLatestPriceData(
+    val masterItemID: Long = 0,
+    val latestPrice: Double = 0.0,
+    val purchaseDate: Long = 0
+)
+
 
 // ── Converters from API Map to data classes ────────────────────────────────────
 
@@ -3211,4 +3230,39 @@ class BmpMoldRepository @Inject constructor(
                 )
             }
         }
+}
+
+// -- v2.19.26: BMP Price Tracking Repository ----------------------------------
+
+@javax.inject.Singleton
+class BmpPriceTrackingRepository @javax.inject.Inject constructor(
+    private val api: com.posbah.app.data.remote.api.BmpApiService
+) {
+    /** Ambil semua riwayat harga jual per produk per klien (untuk layar Lacak Harga di Master Produk) */
+    suspend fun fetchClientPrices(): List<BmpClientPriceData> = try {
+        val resp = api.getClientPrices()
+        resp.body()?.map { m ->
+            BmpClientPriceData(
+                clientId = (m["clientId"] as? Number)?.toLong() ?: 0L,
+                clientName = m["clientName"] as? String ?: "",
+                masterItemID = (m["masterItemID"] as? Number)?.toLong() ?: 0L,
+                productName = m["productName"] as? String ?: "",
+                highestPrice = (m["highestPrice"] as? Number)?.toDouble() ?: 0.0,
+                latestPrice = (m["latestPrice"] as? Number)?.toDouble() ?: 0.0,
+                latestPurchaseDate = (m["latestPurchaseDate"] as? Number)?.toLong() ?: 0L
+            )
+        } ?: emptyList()
+    } catch (e: Exception) { emptyList() }
+
+    /** Ambil harga terakhir semua produk untuk 1 klien (1 produk = 1 harga terbaru, untuk saran harga di form Invoice) */
+    suspend fun fetchClientLatestPrices(clientId: Long): List<BmpClientLatestPriceData> = try {
+        val resp = api.getClientLatestPrices(clientId)
+        resp.body()?.map { m ->
+            BmpClientLatestPriceData(
+                masterItemID = (m["masterItemID"] as? Number)?.toLong() ?: 0L,
+                latestPrice = (m["latestPrice"] as? Number)?.toDouble() ?: 0.0,
+                purchaseDate = (m["purchaseDate"] as? Number)?.toLong() ?: 0L
+            )
+        } ?: emptyList()
+    } catch (e: Exception) { emptyList() }
 }

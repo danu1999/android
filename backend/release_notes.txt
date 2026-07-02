@@ -1,3 +1,14 @@
+POSBah v2.19.26 - Lacak Harga Klien & Saran Harga Pintar di Invoice
+
+Halo Kak! POSBah v2.19.26 menghadirkan fitur manajemen harga yang cerdas:
+1. Lacak Harga Klien: Di halaman Master Produk, ketuk ikon grafik (📈) di pojok kanan atas. Akan muncul daftar semua produk beserta klien yang pernah membeli dan harga terakhirnya.
+2. Saran Harga Otomatis di Invoice: Saat membuat invoice, setelah memilih klien kemudian memilih produk, akan muncul teks hijau "Harga terakhir klien: Rp X.XXX (dd/mm/yy)". Ketuk teks tersebut untuk langsung mengisi kolom harga secara otomatis!
+3. Data selalu sinkron: Jika invoice diedit atau dihapus, data lacak harga otomatis menyesuaikan tanpa perlu tindakan tambahan.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.25 - HPP Lebih Akurat & Manajemen Matras Lengkap
 
 Halo Kak! POSBah v2.19.25 menyempurnakan akurasi keuangan manufaktur:

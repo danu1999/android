@@ -2861,3 +2861,70 @@ func handleRtBmpMoldsById(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 405, "method not allowed")
 	}
 }
+
+// ── BMP — Price Tracking (v2.19.26) ─────────────────────────────────────────
+
+// handleRtBmpClientPrices: GET harga jual semua produk ke semua klien (untuk halaman Lacak Harga)
+// Response: list {clientId, clientName, masterItemID, productName, highestPrice, latestPrice, latestPurchaseDate}
+func handleRtBmpClientPrices(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	if r.Method != http.MethodGet { jsonErr(w, 405, "method not allowed"); return }
+
+	rows, err := db.Query(`
+		SELECT 
+			i."clientId",
+			c."clientName",
+			p."masterItemID",
+			mp.title AS "productName",
+			MAX(p.price) AS "highestPrice",
+			(SELECT p2.price FROM bmp_products p2 
+			 JOIN bmp_invoices i2 ON p2."invoiceId" = i2.id 
+			 WHERE i2."clientId" = i."clientId" AND p2."masterItemID" = p."masterItemID" 
+			   AND i2."isDeleted" = FALSE AND p2."isDeleted" = FALSE 
+			 ORDER BY i2."createdAt" DESC LIMIT 1) AS "latestPrice",
+			MAX(i."createdAt") AS "latestPurchaseDate"
+		FROM bmp_products p
+		JOIN bmp_invoices i ON p."invoiceId" = i.id
+		JOIN bmp_clients c ON i."clientId" = c.id
+		JOIN bmp_master_products mp ON p."masterItemID" = mp.id
+		WHERE i."isDeleted" = FALSE AND p."isDeleted" = FALSE AND i."tenantId" = $1
+		  AND p."masterItemID" IS NOT NULL AND p."masterItemID" > 0
+		GROUP BY i."clientId", c."clientName", p."masterItemID", mp.title
+		ORDER BY mp.title ASC, c."clientName" ASC
+	`, tenantId)
+	if err != nil { jsonErr(w, 500, err.Error()); return }
+	defer rows.Close()
+	jsonOK(w, rowsToJSON(rows))
+}
+
+// handleRtBmpClientLatestPrices: GET harga terakhir 1 klien untuk semua produk (untuk saran harga di invoice form)
+// URL: /api/rt/bmp/clients/latest-prices/{clientId}
+// Response: list {masterItemID, latestPrice, purchaseDate}  — DISTINCT ON masterItemID, newest first
+func handleRtBmpClientLatestPrices(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	if r.Method != http.MethodGet { jsonErr(w, 405, "method not allowed"); return }
+
+	clientIdStr := strings.TrimPrefix(r.URL.Path, "/api/rt/bmp/clients/latest-prices/")
+	clientId, _ := strconv.ParseInt(clientIdStr, 10, 64)
+	if clientId == 0 { jsonErr(w, 400, "invalid client id"); return }
+
+	rows, err := db.Query(`
+		SELECT DISTINCT ON (p."masterItemID")
+			p."masterItemID",
+			p.price AS "latestPrice",
+			i."createdAt" AS "purchaseDate"
+		FROM bmp_products p
+		JOIN bmp_invoices i ON p."invoiceId" = i.id
+		WHERE i."clientId" = $1 
+		  AND i."tenantId" = $2 
+		  AND i."isDeleted" = FALSE 
+		  AND p."isDeleted" = FALSE
+		  AND p."masterItemID" IS NOT NULL AND p."masterItemID" > 0
+		ORDER BY p."masterItemID", i."createdAt" DESC
+	`, clientId, tenantId)
+	if err != nil { jsonErr(w, 500, err.Error()); return }
+	defer rows.Close()
+	jsonOK(w, rowsToJSON(rows))
+}
