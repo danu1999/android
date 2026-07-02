@@ -1925,6 +1925,7 @@ func handleDownloadApk(w http.ResponseWriter, r *http.Request) {
 	if direct {
 		var apkPath string
 		pathsToCheck := []string{
+			"/var/www/html/app-release.apk",                                              // v2.19.26+: primary location
 			filepath.Join("/home/muizz9900", fmt.Sprintf("posbah-v%s.apk", version)),
 			filepath.Join("/home/muizz9900", fmt.Sprintf("posbah-v%s-debug.apk", version)),
 			fmt.Sprintf("./posbah-v%s.apk", version),
@@ -1939,14 +1940,13 @@ func handleDownloadApk(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if apkPath != "" {
-			filename := filepath.Base(apkPath)
+			filename := fmt.Sprintf("posbah-v%s.apk", version)
 			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 			w.Header().Set("Content-Type", "application/vnd.android.package-archive")
 			http.ServeFile(w, r, apkPath)
 			return
 		}
-		// Fallback redirect to Google Drive
-		http.Redirect(w, r, "https://drive.google.com/uc?export=download&id=1grCDSGp1qacBES1hcO29d_03HNPstdbM", http.StatusFound)
+		http.Error(w, "APK tidak ditemukan, hubungi admin.", http.StatusNotFound)
 		return
 	}
 
