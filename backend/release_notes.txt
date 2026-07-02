@@ -1,3 +1,13 @@
+POSBah v2.19.28 - Mengembalikan Desain Cetak JPG & Margin A4
+
+Halo Kak! POSBah v2.19.28 mengembalikan (revert) desain layout cetak sesuai permintaan Anda:
+1. Desain Cetak JPG Asli: Menghilangkan tambahan margin putih (24dp) di sekeliling cetak JPG agar rasio visual kembali penuh ke ukuran aslinya.
+2. Margin Cetak A4 Semula: Mengembalikan margin cetak A4 Modern untuk Invoice dan Surat Jalan ke ukuran standar semula (1 cm di setiap sisi), tidak lagi menggunakan margin kustom 4cm/3cm.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.27 - Penyesuaian Margin Cetak A4
 
 Halo Kak! POSBah v2.19.27 menyempurnakan layout cetak dokumen:

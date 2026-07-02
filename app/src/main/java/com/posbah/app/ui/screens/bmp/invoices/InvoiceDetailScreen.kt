@@ -715,7 +715,7 @@ private fun generateInvoiceHtml(
     val logoCellWidth = if (isTraditional) "50px" else "75px"
     val logoPaddingRight = if (isTraditional) "8px" else "12px"
 
-    val pageSizeCss = if (isTraditional) "size: 240mm 279mm; margin: 0.5cm;" else "size: 210mm 297mm; margin: 4cm 3cm 3cm 4cm;"
+    val pageSizeCss = if (isTraditional) "size: 240mm 279mm; margin: 0.5cm;" else "size: 210mm 297mm; margin: 1cm;"
     val printContainerCss = if (isTraditional) """
         .print-container {
             width: 215mm;
@@ -1143,7 +1143,7 @@ private fun generateSuratJalanHtml(
     val logoCellWidth = if (isTraditional) "50px" else "75px"
     val logoPaddingRight = if (isTraditional) "8px" else "12px"
 
-    val pageSizeCss = if (isTraditional) "size: 240mm 279mm; margin: 0.5cm;" else "size: 210mm 297mm; margin: 4cm 3cm 3cm 4cm;"
+    val pageSizeCss = if (isTraditional) "size: 240mm 279mm; margin: 0.5cm;" else "size: 210mm 297mm; margin: 1cm;"
     val printContainerCss = if (isTraditional) """
         .print-container {
             width: 215mm;
@@ -1535,26 +1535,14 @@ private fun printColoredJpg(context: Context, html: String, fileName: String) {
                     val canvas = android.graphics.Canvas(bitmap)
                     webView.draw(canvas)
 
-                    // v2.19.25: Tambah margin putih 24px di setiap sisi agar hasil JPG lebih rapi
-                    val marginPx = (24 * density).toInt()
-                    val paddedBitmap = android.graphics.Bitmap.createBitmap(
-                        finalW + marginPx * 2,
-                        finalH + marginPx * 2,
-                        android.graphics.Bitmap.Config.ARGB_8888
-                    )
-                    paddedBitmap.eraseColor(android.graphics.Color.WHITE)
-                    val paddedCanvas = android.graphics.Canvas(paddedBitmap)
-                    paddedCanvas.drawBitmap(bitmap, marginPx.toFloat(), marginPx.toFloat(), null)
-                    bitmap.recycle()
-
                     val cachePath = File(context.cacheDir, "images")
                     cachePath.mkdirs()
                     val file = File(cachePath, "$fileName.jpg")
                     FileOutputStream(file).use { stream ->
-                        paddedBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, stream)
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, stream)
                         stream.flush()
                     }
-                    paddedBitmap.recycle()
+                    bitmap.recycle()
 
                     val contentUri = FileProvider.getUriForFile(
                         context,
