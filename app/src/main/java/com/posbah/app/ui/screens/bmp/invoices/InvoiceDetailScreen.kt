@@ -1535,15 +1535,26 @@ private fun printColoredJpg(context: Context, html: String, fileName: String) {
                     val canvas = android.graphics.Canvas(bitmap)
                     webView.draw(canvas)
 
-                    // Simpan ke cache
+                    // v2.19.25: Tambah margin putih 24px di setiap sisi agar hasil JPG lebih rapi
+                    val marginPx = (24 * density).toInt()
+                    val paddedBitmap = android.graphics.Bitmap.createBitmap(
+                        finalW + marginPx * 2,
+                        finalH + marginPx * 2,
+                        android.graphics.Bitmap.Config.ARGB_8888
+                    )
+                    paddedBitmap.eraseColor(android.graphics.Color.WHITE)
+                    val paddedCanvas = android.graphics.Canvas(paddedBitmap)
+                    paddedCanvas.drawBitmap(bitmap, marginPx.toFloat(), marginPx.toFloat(), null)
+                    bitmap.recycle()
+
                     val cachePath = File(context.cacheDir, "images")
                     cachePath.mkdirs()
                     val file = File(cachePath, "$fileName.jpg")
                     FileOutputStream(file).use { stream ->
-                        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, stream)
+                        paddedBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, stream)
                         stream.flush()
                     }
-                    bitmap.recycle()
+                    paddedBitmap.recycle()
 
                     val contentUri = FileProvider.getUriForFile(
                         context,
