@@ -1,3 +1,13 @@
+POSBah v2.19.23 - Dukungan Multi-Operator per Mesin & Integrasi Payroll Otomatis
+
+Halo Kak! POSBah v2.19.23 hadir dengan fitur manajemen absensi operator shift yang lebih fleksibel:
+1. Multi-Operator per Shift: Kakak kini dapat menambahkan lebih dari satu operator yang bertugas pada mesin yang sama dalam satu shift (minimal 1 operator wajib diisi, tidak boleh kosong/kurang dari 1).
+2. Integrasi Payroll & HPP Otomatis: Jam kerja dan kehadiran dari seluruh operator mesin yang terdaftar dalam shift akan secara otomatis terakumulasi ke dalam penggajian bulanan (autofill) dan dialokasikan ke perhitungan HPP produk secara proporsional.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.22 - Link Batch Bahan Baku pada Campuran Pewarna & Pengurangan Stok Proporsional
 
 Halo Kak! POSBah v2.19.22 hadir dengan fitur pengelolaan bahan baku campuran pewarna yang lebih presisi:

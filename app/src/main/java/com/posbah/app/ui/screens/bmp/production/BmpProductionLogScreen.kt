@@ -78,6 +78,12 @@ fun detectCurrentShift(): ShiftType {
  * State per mesin untuk satu sesi shift produksi.
  * v2.19.21: tambah shiftName, operatorEmployeeId, checkIn/Out per mesin.
  */
+data class OperatorAttendanceEntry(
+    val employeeId: Long? = null,
+    val checkIn: String = "07:00",
+    val checkOut: String = "15:00"
+)
+
 data class MachineShiftEntry(
     val machine: BmpMachineEntity,
     val isRunningToday: Boolean = true,
@@ -94,17 +100,14 @@ data class MachineShiftEntry(
     val isCampuranBahan: Boolean = false,
     /** Campuran warna: [{warna:"Merah",rasio:"1"},{warna:"Natural",rasio:"9"}] */
     val campuranBahan: List<ColorMixEntry> = listOf(ColorMixEntry()),
-    /** v2.19.21: ID operator yang bertugas di mesin ini pada shift ini */
-    val operatorEmployeeId: Long? = null,
-    /** v2.19.21: Jam masuk operator format HH:mm */
-    val operatorCheckIn: String = "07:00",
-    /** v2.19.21: Jam keluar operator format HH:mm */
-    val operatorCheckOut: String = "15:00"
+    /** v2.19.22: Daftar operator yang bertugas di mesin ini pada shift ini */
+    val operators: List<OperatorAttendanceEntry> = listOf(OperatorAttendanceEntry())
 ) {
     val missingFields: List<String>
         get() = if (!isRunningToday) emptyList() else buildList {
             if (selectedProduct == null) add("Produk")
             if (qtyProduced.toDoubleOrNull()?.let { it > 0 } != true) add("Jumlah Produksi")
+            if (operators.any { it.employeeId == null }) add("Operator")
         }
     val hasErrors: Boolean get() = missingFields.isNotEmpty()
     val estimatedMaterial: Double
@@ -157,7 +160,13 @@ class BmpProductionLogViewModel @Inject constructor(
         _activeShift.value = shift
         // Update default check-in/out di semua entri
         _shiftEntries.update { list ->
-            list.map { it.copy(operatorCheckIn = shift.defaultCheckIn, operatorCheckOut = shift.defaultCheckOut) }
+            list.map { entry ->
+                entry.copy(
+                    operators = entry.operators.map { op ->
+                        op.copy(checkIn = shift.defaultCheckIn, checkOut = shift.defaultCheckOut)
+                    }
+                )
+            }
         }
     }
 
@@ -288,18 +297,19 @@ class BmpProductionLogViewModel @Inject constructor(
                     }
             } else null
 
-            // Serialize workers attendance (1 operator per mesin)
-            val attendanceJson = if (entry.operatorEmployeeId != null) {
-                val empName = employees.value.find { it.id == entry.operatorEmployeeId }?.name ?: ""
-                serializeWorkersAttendance(listOf(
+            // Serialize workers attendance (can have multiple operators, min 1)
+            val attendanceItems = entry.operators.mapNotNull { op ->
+                if (op.employeeId != null) {
+                    val empName = employees.value.find { it.id == op.employeeId }?.name ?: ""
                     BmpMachineWorkerAttendance(
-                        employeeId = entry.operatorEmployeeId,
+                        employeeId = op.employeeId,
                         employeeName = empName,
-                        checkIn = entry.operatorCheckIn,
-                        checkOut = entry.operatorCheckOut
+                        checkIn = op.checkIn,
+                        checkOut = op.checkOut
                     )
-                ))
-            } else null
+                } else null
+            }
+            val attendanceJson = serializeWorkersAttendance(attendanceItems)
 
             val log = BmpProductionLogEntity(
                 tenantId = tenantId,
@@ -312,7 +322,7 @@ class BmpProductionLogViewModel @Inject constructor(
                 cycleTimeActual = cycleTime,
                 electricityCostActual = electricityCost,
                 colorMixture = colorMixtureJson,
-                operatorName = employees.value.find { it.id == entry.operatorEmployeeId }?.name,
+                operatorName = attendanceItems.joinToString(", ") { it.employeeName }.ifBlank { null },
                 workersAttendance = attendanceJson,
                 shiftName = _activeShift.value.name,
                 productionDate = System.currentTimeMillis()
@@ -354,7 +364,7 @@ class BmpProductionLogViewModel @Inject constructor(
                         qtyRejected = "0",
                         cycleTimeInput = "",
                         selectedRawMaterial = null,
-                        operatorEmployeeId = null
+                        operators = listOf(OperatorAttendanceEntry())
                     ) else entry
                 }
             }
@@ -895,72 +905,124 @@ private fun MachineShiftCard(
                         }
                     }
 
-                    // 5a. Absensi Operator (1 orang per mesin)
+                    // 5a. Absensi Operator (min 1 orang per mesin)
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                     Text(
                         "👷 Operator Shift Ini",
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.primary
                     )
-                    var operatorDropdown by remember { mutableStateOf(false) }
-                    val selectedEmpName = employees.find { it.id == entry.operatorEmployeeId }?.name
-                    ExposedDropdownMenuBox(
-                        expanded = operatorDropdown,
-                        onExpandedChange = { operatorDropdown = it }
-                    ) {
-                        OutlinedTextField(
-                            value = selectedEmpName ?: "— Pilih Operator (Opsional) —",
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Operator Mesin") },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = operatorDropdown) },
-                            modifier = Modifier.menuAnchor().fillMaxWidth()
-                        )
-                        ExposedDropdownMenu(
-                            expanded = operatorDropdown,
-                            onDismissRequest = { operatorDropdown = false }
+
+                    entry.operators.forEachIndexed { opIdx, op ->
+                        var opDropdownOpen by remember { mutableStateOf(false) }
+                        val selectedEmpName = employees.find { it.id == op.employeeId }?.name
+
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            DropdownMenuItem(
-                                text = { Text("— Tanpa operator —", color = Color.Gray) },
-                                onClick = { onUpdate { it.copy(operatorEmployeeId = null) }; operatorDropdown = false }
-                            )
-                            employees.filter { it.isActive }.forEach { emp ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Column {
-                                            Text(emp.name, fontWeight = FontWeight.Medium)
-                                            Text(emp.role, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(modifier = Modifier.weight(1.8f)) {
+                                    ExposedDropdownMenuBox(
+                                        expanded = opDropdownOpen,
+                                        onExpandedChange = { opDropdownOpen = it }
+                                    ) {
+                                        OutlinedTextField(
+                                            value = selectedEmpName ?: "— Pilih Operator ${opIdx + 1} —",
+                                            onValueChange = {},
+                                            readOnly = true,
+                                            label = { Text("Operator ${opIdx + 1}") },
+                                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = opDropdownOpen) },
+                                            modifier = Modifier.menuAnchor().fillMaxWidth()
+                                        )
+                                        ExposedDropdownMenu(
+                                            expanded = opDropdownOpen,
+                                            onDismissRequest = { opDropdownOpen = false }
+                                        ) {
+                                            employees.filter { it.isActive }.forEach { emp ->
+                                                DropdownMenuItem(
+                                                    text = {
+                                                        Column {
+                                                            Text(emp.name, fontWeight = FontWeight.Medium)
+                                                            Text(emp.role, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                                        }
+                                                    },
+                                                    onClick = {
+                                                        onUpdate { d ->
+                                                            val nl = d.operators.toMutableList()
+                                                            if (opIdx in nl.indices) nl[opIdx] = nl[opIdx].copy(employeeId = emp.id)
+                                                            d.copy(operators = nl)
+                                                        }
+                                                        opDropdownOpen = false
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                if (entry.operators.size > 1) {
+                                    IconButton(
+                                        onClick = {
+                                            onUpdate { d ->
+                                                val nl = d.operators.toMutableList().also { it.removeAt(opIdx) }
+                                                d.copy(operators = nl)
+                                            }
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Outlined.Close, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            }
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedTextField(
+                                    value = op.checkIn,
+                                    onValueChange = { v ->
+                                        onUpdate { d ->
+                                            val nl = d.operators.toMutableList()
+                                            if (opIdx in nl.indices) nl[opIdx] = nl[opIdx].copy(checkIn = v)
+                                            d.copy(operators = nl)
                                         }
                                     },
-                                    onClick = { onUpdate { it.copy(operatorEmployeeId = emp.id) }; operatorDropdown = false }
+                                    label = { Text("Jam Masuk") },
+                                    singleLine = true,
+                                    placeholder = { Text("07:00") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedTextField(
+                                    value = op.checkOut,
+                                    onValueChange = { v ->
+                                        onUpdate { d ->
+                                            val nl = d.operators.toMutableList()
+                                            if (opIdx in nl.indices) nl[opIdx] = nl[opIdx].copy(checkOut = v)
+                                            d.copy(operators = nl)
+                                        }
+                                    },
+                                    label = { Text("Jam Keluar") },
+                                    singleLine = true,
+                                    placeholder = { Text("15:00") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier.weight(1f)
                                 )
                             }
                         }
                     }
-                    if (entry.operatorEmployeeId != null) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedTextField(
-                                value = entry.operatorCheckIn,
-                                onValueChange = { v -> onUpdate { it.copy(operatorCheckIn = v) } },
-                                label = { Text("Jam Masuk") },
-                                singleLine = true,
-                                placeholder = { Text("07:00") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                modifier = Modifier.weight(1f)
-                            )
-                            OutlinedTextField(
-                                value = entry.operatorCheckOut,
-                                onValueChange = { v -> onUpdate { it.copy(operatorCheckOut = v) } },
-                                label = { Text("Jam Keluar") },
-                                singleLine = true,
-                                placeholder = { Text("15:00") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
+
+                    TextButton(
+                        onClick = { onUpdate { d -> d.copy(operators = d.operators + OperatorAttendanceEntry()) } },
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        Icon(Icons.Outlined.Add, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Tambah Operator", style = MaterialTheme.typography.bodySmall)
                     }
 
-                    // 5b. Campuran Warna (opsional)
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth().clickable {
