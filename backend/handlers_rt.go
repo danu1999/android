@@ -2494,6 +2494,30 @@ func updateAndCalculateCOGS(tenantId string, startMs int64, endMs int64, dateStr
 		overheadAllocationPerUnit = foh / totalProduced
 	}
 
+	// === v2.19.25: Pre-compute ACTUAL electricity cost per machine from production logs ===
+	// Ganti sumber electricity dari field statis mesin → SUM aktual dari log produksi per shift
+	machineActualElecCost := make(map[int64]float64) // machineId → total electricity cost in period
+	{
+		elecRows, errE := db.Query(`
+			SELECT machine_id, COALESCE(SUM(electricity_cost_actual), 0.0)
+			FROM bmp_production_logs
+			WHERE "tenantId"=$1 AND "productionDate">=$2 AND "productionDate"<$3
+			  AND "isDeleted"=FALSE AND machine_id IS NOT NULL AND electricity_cost_actual > 0
+			GROUP BY machine_id
+		`, tenantId, startMs, endMs)
+		if errE == nil {
+			defer elecRows.Close()
+			for elecRows.Next() {
+				var machId int64
+				var totalElec float64
+				if elecRows.Scan(&machId, &totalElec) == nil && machId > 0 {
+					machineActualElecCost[machId] = totalElec
+				}
+			}
+		}
+		log.Printf("[HPP] Electricity actual pre-computed for %d machines in period %s", len(machineActualElecCost), dateStr)
+	}
+
 	// === v2.19.21: Pre-compute actual operator labor cost per machine from attendance ===
 	type MachineActualLabor struct {
 		TotalLaborCost  float64 // total salary of operators allocated to this machine
@@ -2658,8 +2682,12 @@ func updateAndCalculateCOGS(tenantId string, startMs int64, endMs int64, dateStr
 
 		if item.HasMachine && item.MachineIsActive && item.CycleTime > 0 {
 			// --- Machine overhead (electricity + machine depreciation + fixed overhead) ---
-			machineFixedOverhead := item.DeprecMonthly + item.OvhdAllocMonthly +
-				item.ElecCostDaily*workDaysInPeriod
+			// v2.19.25: Pakai listrik aktual dari log produksi per shift; fallback ke statis jika belum ada log
+			elecCostForPeriod := machineActualElecCost[item.MachineId]
+			if elecCostForPeriod == 0 {
+				elecCostForPeriod = item.ElecCostDaily * workDaysInPeriod // fallback statis
+			}
+			machineFixedOverhead := item.DeprecMonthly + item.OvhdAllocMonthly + elecCostForPeriod
 
 			// --- Actual operator labor from attendance ---
 			if actualLabor, ok := machineActualLabor[item.MachineId]; ok && actualLabor.TotalSecsWorked > 0 {

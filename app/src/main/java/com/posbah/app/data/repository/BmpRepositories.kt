@@ -3180,6 +3180,20 @@ class BmpMoldRepository @Inject constructor(
         }
     }
 
+    /** v2.19.25: Reset usage_count matras ke 0 setelah servis/penggantian cetakan */
+    suspend fun resetUsageCount(id: Long): OnlineWriteResult {
+        val snapshot = _items.value
+        _items.value = snapshot.map { if (it.id == id) it.copy(usageCount = 0) else it }
+        return try {
+            api.updateMold(id, mapOf("usage_count" to 0))
+            refresh()
+            OnlineWriteResult.Success
+        } catch (e: Exception) {
+            _items.value = snapshot
+            OnlineWriteResult.Error(e.message ?: "Gagal reset pemakaian cetakan")
+        }
+    }
+
     fun observe(tenantId: String): Flow<List<com.posbah.app.data.local.entities.BmpMoldEntity>> =
         _items.map { list ->
             list.map {

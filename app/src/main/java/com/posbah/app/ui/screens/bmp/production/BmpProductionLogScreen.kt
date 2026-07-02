@@ -278,6 +278,13 @@ class BmpProductionLogViewModel @Inject constructor(
             return@launch
         }
 
+        // v2.19.25: Warning jika mesin tidak punya matras terpasang (HPP penyusutan matras tidak akan terhitung)
+        val noMoldMachines = runningEntries.filter { it.machine.moldId == null }.map { it.machine.name }
+        if (noMoldMachines.isNotEmpty()) {
+            // Tetap lanjut simpan, tapi catat warning di log
+            android.util.Log.w("ProductionLog", "Mesin tanpa matras: ${noMoldMachines.joinToString(", ")} — komponen penyusutan matras tidak akan dihitung di HPP")
+        }
+
         var savedCount = 0
         for (entry in runningEntries) {
             val product = entry.selectedProduct ?: continue

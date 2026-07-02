@@ -1196,18 +1196,6 @@ func initSchema() error {
 		}
 	}
 
-	// v2.19.24: Database sequence alignment for BMP tables to prevent primary key conflicts
-	sequenceFixMigrations := []string{
-		`SELECT setval('bmp_invoices_id_seq', COALESCE((SELECT MAX(id) FROM bmp_invoices), 0) + 1, false);`,
-		`SELECT setval('bmp_products_id_seq', COALESCE((SELECT MAX(id) FROM bmp_products), 0) + 1, false);`,
-		`SELECT setval('bmp_clients_id_seq', COALESCE((SELECT MAX(id) FROM bmp_clients), 0) + 1, false);`,
-	}
-	for _, q := range sequenceFixMigrations {
-		if _, err := db.Exec(q); err != nil {
-			log.Printf("[migration] sequence fix warning: %v", err)
-		}
-	}
-
 	log.Println("Database schemas verified / migrated successfully.")
 	return nil
 }

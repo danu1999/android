@@ -205,6 +205,16 @@ class MachineMoldViewModel @Inject constructor(
             Toast.makeText(context, "Cetakan/Matras berhasil dihapus", Toast.LENGTH_SHORT).show()
         }
     }
+
+    /** v2.19.25: Reset usage_count setelah matras diservis */
+    fun resetMoldUsage(id: Long) = viewModelScope.launch {
+        val res = moldRepo.resetUsageCount(id)
+        if (res is OnlineWriteResult.Error) {
+            _error.value = res.message
+        } else {
+            Toast.makeText(context, "✅ Pemakaian matras berhasil direset ke 0", Toast.LENGTH_SHORT).show()
+        }
+    }
 }
 
 @Composable
@@ -318,7 +328,8 @@ fun MachineMoldManagementScreen(
                                 mold = mold,
                                 matchedProductTitle = matchedProd?.title ?: "Belum Terhubung ke Produk",
                                 onEdit = { viewModel.openMoldEdit(mold) },
-                                onDelete = { viewModel.deleteMold(mold.id) }
+                                onDelete = { viewModel.deleteMold(mold.id) },
+                                onResetUsage = { viewModel.resetMoldUsage(mold.id) }
                             )
                         }
                     }
@@ -670,7 +681,8 @@ fun MoldCard(
     mold: BmpMoldEntity,
     matchedProductTitle: String,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onResetUsage: () -> Unit = {}
 ) {
     val usagePct = if (mold.expectedShotsLifetime > 0)
         (mold.usageCount.toFloat() / mold.expectedShotsLifetime.toFloat()).coerceIn(0f, 1f)
@@ -776,6 +788,36 @@ fun MoldCard(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSecondaryContainer
                 )
+            }
+            // v2.19.25: Tombol reset pemakaian setelah servis (muncul jika usage >= 70%)
+            if (usagePct >= 0.7f) {
+                Spacer(Modifier.height(8.dp))
+                var showResetConfirm by remember { mutableStateOf(false) }
+                OutlinedButton(
+                    onClick = { showResetConfirm = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = Color(0xFFE65100)
+                    )
+                ) {
+                    Text("🔧 Reset Pemakaian Setelah Servis")
+                }
+                if (showResetConfirm) {
+                    AlertDialog(
+                        onDismissRequest = { showResetConfirm = false },
+                        title = { Text("Konfirmasi Reset") },
+                        text = { Text("Yakin ingin mereset pemakaian matras \"${mold.name}\" ke 0? Lakukan ini hanya setelah matras sudah diservis atau diganti.") },
+                        confirmButton = {
+                            Button(
+                                onClick = { onResetUsage(); showResetConfirm = false },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100))
+                            ) { Text("Ya, Reset") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showResetConfirm = false }) { Text("Batal") }
+                        }
+                    )
+                }
             }
         }
     }

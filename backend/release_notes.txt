@@ -1,3 +1,15 @@
+POSBah v2.19.25 - HPP Lebih Akurat & Manajemen Matras Lengkap
+
+Halo Kak! POSBah v2.19.25 menyempurnakan akurasi keuangan manufaktur:
+1. HPP Listrik Riil: Biaya listrik di HPP kini diambil dari total aktual yang diinput per shift di Log Produksi (bukan lagi nilai statis mesin). Makin presisi!
+2. Catatan Estimasi HPP: Di form produk, ada keterangan "⚠️ Estimasi" di bawah angka HPP agar tidak salah tafsir sebelum log produksi disimpan ke server.
+3. Reset Pemakaian Matras: Tombol "🔧 Reset Pemakaian Setelah Servis" kini muncul otomatis di kartu matras ketika pemakaian sudah ≥70%. Ada dialog konfirmasi sebelum reset.
+4. Validasi Matras: Sistem mencatat peringatan di log jika mesin beroperasi tanpa matras terpasang, sehingga lebih mudah mendeteksi data HPP yang tidak lengkap.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.24 - Pembersihan UI Mesin & Penyusutan Matras Otomatis
 
 Halo Kak! POSBah v2.19.24 hadir dengan efisiensi form dan penyempurnaan relasi keuangan:
