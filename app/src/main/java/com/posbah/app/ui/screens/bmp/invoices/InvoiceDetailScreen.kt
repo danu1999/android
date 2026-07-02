@@ -1478,95 +1478,134 @@ private fun printHtml(context: Context, html: String, jobName: String, isColor: 
 private fun printColoredJpg(context: Context, html: String, fileName: String) {
     Toast.makeText(context, "Sedang memproses JPG…", Toast.LENGTH_SHORT).show()
 
-    // ⚠️ WAJIB dipanggil SEBELUM WebView dibuat — aktifkan render seluruh dokumen
-    // (default WebView hanya render viewport yang terlihat)
-    WebView.enableSlowWholeDocumentDraw()
-
-    val density = context.resources.displayMetrics.density
-    val renderWidthPx = (794 * density).toInt() // v2.19.2: Mengubah lebar render JPG ke mode Portrait (794dp setara lebar A4 standar)
-
     val webView = WebView(context)
-    // ✅ KUNCI: matikan hardware acceleration agar Canvas.draw() bisa capture bitmap
-    // WebView hardware-accelerated render ke GPU layer yang tidak bisa di-read dari CPU
-    webView.setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null)
-
     webView.settings.apply {
         javaScriptEnabled = false
         useWideViewPort = true
         loadWithOverviewMode = true
-        // Jangan blokir network: tanda tangan penerima mungkin perlu load dari URL
-        // jika file lokal tidak tersedia (fallback). Base64 tetap prioritas utama.
         blockNetworkLoads = false
     }
 
-    // Set ukuran awal sebelum load agar WebView tahu dimensinya saat render
-    webView.measure(
-        android.view.View.MeasureSpec.makeMeasureSpec(renderWidthPx, android.view.View.MeasureSpec.EXACTLY),
-        android.view.View.MeasureSpec.makeMeasureSpec(0, android.view.View.MeasureSpec.UNSPECIFIED)
-    )
-    webView.layout(0, 0, renderWidthPx, 2000) // tinggi awal, akan di-update setelah render
-
     webView.webViewClient = object : WebViewClient() {
         override fun onPageFinished(view: WebView?, url: String?) {
-            // Tunggu 600ms agar rendering CSS + Base64 images selesai sepenuhnya
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                 try {
-                    // Re-measure setelah halaman selesai render untuk dapat tinggi aktual
-                    webView.measure(
-                        android.view.View.MeasureSpec.makeMeasureSpec(
-                            renderWidthPx,
-                            android.view.View.MeasureSpec.EXACTLY
-                        ),
-                        android.view.View.MeasureSpec.makeMeasureSpec(
-                            0,
-                            android.view.View.MeasureSpec.UNSPECIFIED
-                        )
-                    )
-                    val finalW = webView.measuredWidth.takeIf { it > 0 } ?: renderWidthPx
-                    val finalH = webView.measuredHeight.takeIf { it > 0 }
-                        ?: (webView.contentHeight * density).toInt().takeIf { it > 0 }
-                        ?: 2000
-                    webView.layout(0, 0, finalW, finalH)
+                    val printAdapter = webView.createPrintDocumentAdapter(fileName)
+                    val printAttributes = android.print.PrintAttributes.Builder()
+                        .setMediaSize(android.print.PrintAttributes.MediaSize.ISO_A4)
+                        .setResolution(android.print.PrintAttributes.Resolution("pdf", "pdf", 300, 300))
+                        .setMinMargins(android.print.PrintAttributes.Margins.NO_MARGINS)
+                        .build()
 
-                    val bitmap = android.graphics.Bitmap.createBitmap(
-                        finalW, finalH, android.graphics.Bitmap.Config.ARGB_8888
+                    val tempPdf = File(context.cacheDir, "$fileName.pdf")
+                    val pfd = android.os.ParcelFileDescriptor.open(
+                        tempPdf,
+                        android.os.ParcelFileDescriptor.MODE_READ_WRITE or android.os.ParcelFileDescriptor.MODE_CREATE or android.os.ParcelFileDescriptor.MODE_TRUNCATE
                     )
-                    bitmap.eraseColor(android.graphics.Color.WHITE) // background putih untuk JPEG
-                    val canvas = android.graphics.Canvas(bitmap)
-                    webView.draw(canvas)
 
-                    val cachePath = File(context.cacheDir, "images")
-                    cachePath.mkdirs()
-                    val file = File(cachePath, "$fileName.jpg")
-                    FileOutputStream(file).use { stream ->
-                        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, stream)
-                        stream.flush()
-                    }
-                    bitmap.recycle()
+                    printAdapter.onLayout(
+                        null,
+                        printAttributes,
+                        null,
+                        object : android.print.PrintHelperCallbacks.LayoutCallback() {
+                            override fun onLayoutFinished(info: android.print.PrintDocumentInfo?, changed: Boolean) {
+                                printAdapter.onWrite(
+                                    arrayOf(android.print.PageRange.ALL_PAGES),
+                                    pfd,
+                                    null,
+                                    object : android.print.PrintHelperCallbacks.WriteCallback() {
+                                        override fun onWriteFinished(pages: Array<out android.print.PageRange>?) {
+                                            try {
+                                                pfd.close()
 
-                    val contentUri = FileProvider.getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
-                        file
-                    )
-                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                        type = "image/jpeg"
-                        putExtra(Intent.EXTRA_STREAM, contentUri)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    context.startActivity(
-                        Intent.createChooser(shareIntent, "Bagikan JPG Invoice").apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
+                                                val outputDir = File(context.cacheDir, "images")
+                                                outputDir.mkdirs()
+
+                                                val generatedFiles = mutableListOf<File>()
+                                                val readPfd = android.os.ParcelFileDescriptor.open(tempPdf, android.os.ParcelFileDescriptor.MODE_READ_ONLY)
+                                                val renderer = android.graphics.pdf.PdfRenderer(readPfd)
+
+                                                for (i in 0 until renderer.pageCount) {
+                                                    val page = renderer.openPage(i)
+                                                    // Render high resolution (3.0f scale) for crisp layout
+                                                    val width = (page.width * 3.0f).toInt()
+                                                    val height = (page.height * 3.0f).toInt()
+
+                                                    val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
+                                                    bitmap.eraseColor(android.graphics.Color.WHITE)
+
+                                                    page.render(bitmap, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
+                                                    page.close()
+
+                                                    val pageFile = File(outputDir, "${fileName}_page_${i + 1}.jpg")
+                                                    FileOutputStream(pageFile).use { out ->
+                                                        bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, out)
+                                                        out.flush()
+                                                    }
+                                                    bitmap.recycle()
+                                                    generatedFiles.add(pageFile)
+                                                }
+                                                renderer.close()
+                                                readPfd.close()
+
+                                                try { tempPdf.delete() } catch (e: Exception) {}
+
+                                                if (generatedFiles.isNotEmpty()) {
+                                                    val uris = ArrayList<android.net.Uri>()
+                                                    for (f in generatedFiles) {
+                                                        uris.add(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", f))
+                                                    }
+
+                                                    val shareIntent = Intent().apply {
+                                                        action = if (uris.size > 1) Intent.ACTION_SEND_MULTIPLE else Intent.ACTION_SEND
+                                                        type = "image/jpeg"
+                                                        if (uris.size > 1) {
+                                                            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+                                                        } else {
+                                                            putExtra(Intent.EXTRA_STREAM, uris[0])
+                                                        }
+                                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                    }
+
+                                                    context.startActivity(
+                                                        Intent.createChooser(shareIntent, "Bagikan JPG Invoice").apply {
+                                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                        }
+                                                    )
+                                                }
+                                            } catch (e: Exception) {
+                                                e.printStackTrace()
+                                                Toast.makeText(context, "Gagal membuat JPG: ${e.message}", Toast.LENGTH_LONG).show()
+                                            }
+                                        }
+
+                                        override fun onWriteFailed(error: CharSequence?) {
+                                            try { pfd.close() } catch (e: Exception) {}
+                                            Toast.makeText(context, "Gagal menulis dokumen: $error", Toast.LENGTH_LONG).show()
+                                        }
+
+                                        override fun onWriteCancelled() {
+                                            try { pfd.close() } catch (e: Exception) {}
+                                        }
+                                    }
+                                )
+                            }
+
+                            override fun onLayoutFailed(error: CharSequence?) {
+                                try { pfd.close() } catch (e: Exception) {}
+                                Toast.makeText(context, "Gagal layout dokumen: $error", Toast.LENGTH_LONG).show()
+                            }
+
+                            override fun onLayoutCancelled() {
+                                try { pfd.close() } catch (e: Exception) {}
+                            }
+                        },
+                        null
                     )
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    Toast.makeText(
-                        context,
-                        "Gagal membuat JPG: ${e.message}",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    Toast.makeText(context, "Gagal memproses halaman: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }, 600)
         }

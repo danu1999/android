@@ -1,3 +1,13 @@
+POSBah v2.19.29 - Paginasi Cetak JPG A4 & Margin 1cm Rapi
+
+Halo Kak! POSBah v2.19.29 menghadirkan pembaruan cetak JPG yang canggih:
+1. Paginasi Otomatis Cetak JPG A4: Cetak JPG kini secara cerdas mengikuti ukuran fisik A4 standar dengan pembagian halaman otomatis (tidak memotong tulisan di tengah-tengah halaman) dan margin 1 cm di semua sisi. Jika dokumen panjang, gambar JPG akan dibagi menjadi halaman 1, halaman 2, dst. secara rapi ketika dikirim ke WhatsApp.
+2. Desain Layout & Kerapian Terjaga: Mengikuti spesifikasi cetak dokumen A4 resmi.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.28 - Mengembalikan Desain Cetak JPG & Margin A4
 
 Halo Kak! POSBah v2.19.28 mengembalikan (revert) desain layout cetak sesuai permintaan Anda:
