@@ -2224,12 +2224,16 @@ func triggerProductionLogCompletion(tenantId string, logId int64) error {
 	var productionDate int64
 	var cycleTimeActual float64
 	var electricityCostActual float64
+	var rawMaterialIdParam int64
+	var colorMixture sql.NullString
+
 	err := db.QueryRow(`
 		SELECT "masterProductId", "quantityProduced", "productionDate",
-		       COALESCE(cycle_time_actual, 0), COALESCE(electricity_cost_actual, 0)
+		       COALESCE(cycle_time_actual, 0), COALESCE(electricity_cost_actual, 0),
+		       COALESCE("rawMaterialId", 0), COALESCE(color_mixture, '')
 		FROM bmp_production_logs 
 		WHERE id=$1 AND "tenantId"=$2 AND "isDeleted"=FALSE
-	`, logId, tenantId).Scan(&masterProductId, &quantityProduced, &productionDate, &cycleTimeActual, &electricityCostActual)
+	`, logId, tenantId).Scan(&masterProductId, &quantityProduced, &productionDate, &cycleTimeActual, &electricityCostActual, &rawMaterialIdParam, &colorMixture)
 	if err != nil {
 		return err
 	}
@@ -2240,6 +2244,29 @@ func triggerProductionLogCompletion(tenantId string, logId int64) error {
 		_, _ = db.Exec(`UPDATE bmp_master_products SET "cycleTime"=$1 WHERE id=$2 AND "tenantId"=$3`,
 			cycleTimeActual, masterProductId, tenantId)
 		log.Printf("[HPP] Cycle time updated for masterProduct %d: %.2fs (from log %d)", masterProductId, cycleTimeActual, logId)
+	}
+
+	// v2.19.22: Parse color_mixture JSON to extract raw material batches for mixtures
+	type ColorMixEntry struct {
+		Color         string  `json:"color"`
+		Rasio         string  `json:"rasio"`
+		RawMaterialId *int64  `json:"raw_material_id"`
+	}
+	var mixEntries []ColorMixEntry
+	if colorMixture.Valid && colorMixture.String != "" {
+		_ = json.Unmarshal([]byte(colorMixture.String), &mixEntries)
+	}
+
+	var validMix []ColorMixEntry
+	var totalRatio float64 = 0.0
+	for _, entry := range mixEntries {
+		if entry.RawMaterialId != nil && *entry.RawMaterialId > 0 {
+			ratio, errR := strconv.ParseFloat(entry.Rasio, 64)
+			if errR == nil && ratio > 0 {
+				validMix = append(validMix, entry)
+				totalRatio += ratio
+			}
+		}
 	}
 
 	// 1. Clear any existing materials for this log
@@ -2262,24 +2289,71 @@ func triggerProductionLogCompletion(tenantId string, logId int64) error {
 		if errS := rows.Scan(&jenisBahan, &bomQty); errS == nil {
 			qtyUsed := bomQty * quantityProduced
 			
-			// Find rawMaterialId (latest active purchase of this material)
-			var rawMaterialId int64 = 0
-			_ = db.QueryRow(`
-				SELECT bbi.id 
-				FROM bmp_bahan_baku_item bbi 
-				JOIN bmp_bahan_baku bb ON bbi."bahanBakuId" = bb.id AND bbi."tenantId" = bb."tenantId" 
-				WHERE bb."tenantId"=$1 AND bbi."jenisBahan"=$2 AND bb."isDeleted"=FALSE AND bbi."isDeleted"=FALSE 
-				ORDER BY bb.tanggal DESC, bbi.id DESC 
-				LIMIT 1
-			`, tenantId, jenisBahan).Scan(&rawMaterialId)
-
-			// Insert detail pemakaian
-			_, _ = db.Exec(`
-				INSERT INTO bmp_production_materials ("tenantId", "productionLogId", "rawMaterialId", "jenisBahan", "quantityUsed", "createdAt", "updatedAt")
-				VALUES ($1, $2, $3, $4, $5, $6, $6)
-				ON CONFLICT ("tenantId", "productionLogId", "rawMaterialId") 
-				DO UPDATE SET "quantityUsed"=$5, "isDeleted"=FALSE, "updatedAt"=$6
-			`, tenantId, logId, rawMaterialId, jenisBahan, qtyUsed, nowMillis())
+			if len(validMix) > 0 && totalRatio > 0 {
+				// Proportional allocation based on mixture ratio & batches
+				for _, mix := range validMix {
+					ratio, _ := strconv.ParseFloat(mix.Rasio, 64)
+					partQty := qtyUsed * (ratio / totalRatio)
+					
+					// Find item id matching bahanBakuId and jenisBahan
+					var itemRawMaterialId int64 = 0
+					_ = db.QueryRow(`
+						SELECT id FROM bmp_bahan_baku_item 
+						WHERE "bahanBakuId"=$1 AND "jenisBahan"=$2 AND "isDeleted"=FALSE
+						LIMIT 1
+					`, *mix.RawMaterialId, jenisBahan).Scan(&itemRawMaterialId)
+					
+					// Fallback to latest active purchase if not found in this specific batch
+					if itemRawMaterialId == 0 {
+						_ = db.QueryRow(`
+							SELECT bbi.id 
+							FROM bmp_bahan_baku_item bbi 
+							JOIN bmp_bahan_baku bb ON bbi."bahanBakuId" = bb.id AND bbi."tenantId" = bb."tenantId" 
+							WHERE bb."tenantId"=$1 AND bbi."jenisBahan"=$2 AND bb."isDeleted"=FALSE AND bbi."isDeleted"=FALSE 
+							ORDER BY bb.tanggal DESC, bbi.id DESC 
+							LIMIT 1
+						`, tenantId, jenisBahan).Scan(&itemRawMaterialId)
+					}
+					
+					if itemRawMaterialId > 0 && partQty > 0 {
+						_, _ = db.Exec(`
+							INSERT INTO bmp_production_materials ("tenantId", "productionLogId", "rawMaterialId", "jenisBahan", "quantityUsed", "createdAt", "updatedAt")
+							VALUES ($1, $2, $3, $4, $5, $6, $6)
+							ON CONFLICT ("tenantId", "productionLogId", "rawMaterialId") 
+							DO UPDATE SET "quantityUsed"=$5, "isDeleted"=FALSE, "updatedAt"=$6
+						`, tenantId, logId, itemRawMaterialId, jenisBahan, partQty, nowMillis())
+					}
+				}
+			} else {
+				// Default behavior: use global rawMaterialId or latest purchase fallback
+				var itemRawMaterialId int64 = 0
+				if rawMaterialIdParam > 0 {
+					_ = db.QueryRow(`
+						SELECT id FROM bmp_bahan_baku_item 
+						WHERE "bahanBakuId"=$1 AND "jenisBahan"=$2 AND "isDeleted"=FALSE
+						LIMIT 1
+					`, rawMaterialIdParam, jenisBahan).Scan(&itemRawMaterialId)
+				}
+				if itemRawMaterialId == 0 {
+					_ = db.QueryRow(`
+						SELECT bbi.id 
+						FROM bmp_bahan_baku_item bbi 
+						JOIN bmp_bahan_baku bb ON bbi."bahanBakuId" = bb.id AND bbi."tenantId" = bb."tenantId" 
+						WHERE bb."tenantId"=$1 AND bbi."jenisBahan"=$2 AND bb."isDeleted"=FALSE AND bbi."isDeleted"=FALSE 
+						ORDER BY bb.tanggal DESC, bbi.id DESC 
+						LIMIT 1
+					`, tenantId, jenisBahan).Scan(&itemRawMaterialId)
+				}
+				
+				if itemRawMaterialId > 0 && qtyUsed > 0 {
+					_, _ = db.Exec(`
+						INSERT INTO bmp_production_materials ("tenantId", "productionLogId", "rawMaterialId", "jenisBahan", "quantityUsed", "createdAt", "updatedAt")
+						VALUES ($1, $2, $3, $4, $5, $6, $6)
+						ON CONFLICT ("tenantId", "productionLogId", "rawMaterialId") 
+						DO UPDATE SET "quantityUsed"=$5, "isDeleted"=FALSE, "updatedAt"=$6
+					`, tenantId, logId, itemRawMaterialId, jenisBahan, qtyUsed, nowMillis())
+				}
+			}
 		}
 	}
 

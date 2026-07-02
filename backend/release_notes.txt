@@ -1,3 +1,13 @@
+POSBah v2.19.22 - Link Batch Bahan Baku pada Campuran Pewarna & Pengurangan Stok Proporsional
+
+Halo Kak! POSBah v2.19.22 hadir dengan fitur pengelolaan bahan baku campuran pewarna yang lebih presisi:
+1. Link Batch per Pewarna: Saat mencentang "Campuran Pewarna" di Log Produksi, Anda kini dapat memilih Batch Bahan Baku (No Tagihan/Supplier) secara mandiri untuk masing-masing warna/pewarna yang dicampur.
+2. Pengurangan Stok Proporsional: Pengurangan stok bahan baku gudang dan perhitungan HPP kini dipecah secara proporsional sesuai rasio campuran dan harga masing-masing batch yang digunakan.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.21 - Shift Produksi 3 Waktu, Absensi Operator & Notifikasi Matras
 
 Halo Kak! POSBah v2.19.21 hadir dengan peningkatan besar pada sistem produksi manufaktur:

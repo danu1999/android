@@ -197,7 +197,8 @@ class BahanBakuListViewModel @Inject constructor(
 /** Entri satu warna dalam campuran bahan baku (misal: Merah 1 bagian, PP Natural 9 bagian) */
 data class ColorMixEntry(
     val warna: String = "",
-    val rasio: String = "1"
+    val rasio: String = "1",
+    val selectedRawMaterial: com.posbah.app.data.repository.BmpBahanBakuData? = null
 )
 
 data class BahanBakuItemDraft(
