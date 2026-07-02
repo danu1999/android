@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
@@ -547,6 +548,18 @@ class InvoiceFormViewModel @Inject constructor(
                 _ui.update { it.copy(productLines = products) }
             }
         }
+        // v2.19.26: Secara reaktif fetch harga terakhir klien setiap kali clientId berubah (baru/edit/ganti klien)
+        viewModelScope.launch {
+            _ui.map { it.invoice?.clientId }.distinctUntilChanged().collect { clientId ->
+                if (clientId != null && clientId > 0L) {
+                    val priceList = priceTrackingRepo.fetchClientLatestPrices(clientId)
+                    val priceMap = priceList.associateBy { it.masterItemID }
+                    _ui.update { it.copy(clientLatestPrices = priceMap) }
+                } else {
+                    _ui.update { it.copy(clientLatestPrices = emptyMap()) }
+                }
+            }
+        }
     }
 
     fun updateInvoice(transform: (BmpInvoiceEntity) -> BmpInvoiceEntity) {
@@ -556,13 +569,6 @@ class InvoiceFormViewModel @Inject constructor(
 
     fun selectClient(client: BmpClientEntity?) {
         updateInvoice { it.copy(clientId = client?.id) }
-        // v2.19.26: Fetch harga terakhir klien ini untuk semua produk (saran harga di invoice)
-        val clientId = client?.id ?: return
-        viewModelScope.launch {
-            val priceList = priceTrackingRepo.fetchClientLatestPrices(clientId)
-            val priceMap = priceList.associateBy { it.masterItemID }
-            _ui.update { it.copy(clientLatestPrices = priceMap) }
-        }
     }
 
     fun addProductLine(masterProduct: BmpMasterProductEntity) {
