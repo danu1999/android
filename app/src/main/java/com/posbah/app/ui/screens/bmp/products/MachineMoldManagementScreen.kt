@@ -358,28 +358,11 @@ fun MachineMoldManagementScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    OutlinedTextField(
-                        value = if (edit.electricityCostDaily == 0.0) "" else edit.electricityCostDaily.toLong().toString(),
-                        onValueChange = { v ->
-                            val n = v.replace(",", "").replace(".", "").toDoubleOrNull() ?: 0.0
-                            viewModel.updateMachineField { it.copy(electricityCostDaily = n) }
-                        },
-                        label = { Text("Biaya Listrik Nominal Harian (Rp/Hari)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = if (edit.operatorSalaryMonthly == 0.0) "" else edit.operatorSalaryMonthly.toLong().toString(),
-                        onValueChange = { v ->
-                            val n = v.replace(",", "").replace(".", "").toDoubleOrNull() ?: 0.0
-                            viewModel.updateMachineField { it.copy(operatorSalaryMonthly = n) }
-                        },
-                        label = { Text("Gaji Operator / Bulan (Rp)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    // v2.19.24: Biaya listrik harian dihapus dari form mesin.
+                    // Diisi langsung di halaman Log Produksi (electricityCostActual per shift).
+                    // Field electricityCostDaily di entity tetap ada sebagai pre-fill default.
+                    // v2.19.24: Gaji operator dihapus dari form mesin.
+                    // Upah riil kini berasal dari absensi operator di Log Produksi per shift.
                     OutlinedTextField(
                         value = edit.overheadAllocatedMonthly.let { if (it == 0.0) "" else it.toLong().toString() },
                         onValueChange = { v ->
@@ -632,10 +615,8 @@ fun MachineCard(
                 Text("Penyusutan Bulanan:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 Text(Formatters.rupiah(machine.depreciationMonthly), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
             }
-            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                Text("Listrik Nominal Harian:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                Text(Formatters.rupiah(machine.electricityCostDaily), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-            }
+            // v2.19.24: Biaya listrik harian dihapus dari tampilan kartu mesin
+            // (diisi langsung di halaman Log Produksi per shift)
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 Text("BOP Bulanan Alokasi:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 Text(Formatters.rupiah(machine.overheadAllocatedMonthly), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)

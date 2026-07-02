@@ -2246,6 +2246,29 @@ func triggerProductionLogCompletion(tenantId string, logId int64) error {
 		log.Printf("[HPP] Cycle time updated for masterProduct %d: %.2fs (from log %d)", masterProductId, cycleTimeActual, logId)
 	}
 
+	// v2.19.24: Auto-increment mold usage_count saat log produksi disimpan
+	// Hitung total shots = quantityProduced + quantityRejected (keduanya pakai cetakan)
+	{
+		var moldIdForLog sql.NullInt64
+		var quantityRejectedForLog float64
+		_ = db.QueryRow(`
+			SELECT m.mold_id, COALESCE(pl."quantityRejected", 0)
+			FROM bmp_production_logs pl
+			LEFT JOIN bmp_machines m ON pl."machineId" = m.id AND m."isDeleted" = FALSE
+			WHERE pl.id = $1 AND pl."tenantId" = $2
+		`, logId, tenantId).Scan(&moldIdForLog, &quantityRejectedForLog)
+		if moldIdForLog.Valid && moldIdForLog.Int64 > 0 {
+			totalShots := quantityProduced + quantityRejectedForLog
+			if totalShots > 0 {
+				_, _ = db.Exec(`
+					UPDATE bmp_molds SET usage_count = COALESCE(usage_count, 0) + $1
+					WHERE id = $2 AND "tenantId" = $3 AND "isDeleted" = FALSE
+				`, totalShots, moldIdForLog.Int64, tenantId)
+				log.Printf("[MOLD] usage_count +%.0f for mold_id=%d (log=%d)", totalShots, moldIdForLog.Int64, logId)
+			}
+		}
+	}
+
 	// v2.19.22: Parse color_mixture JSON to extract raw material batches for mixtures
 	type ColorMixEntry struct {
 		Color         string  `json:"color"`

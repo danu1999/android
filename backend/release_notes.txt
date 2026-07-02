@@ -1,3 +1,15 @@
+POSBah v2.19.24 - Pembersihan UI Mesin & Penyusutan Matras Otomatis
+
+Halo Kak! POSBah v2.19.24 hadir dengan efisiensi form dan penyempurnaan relasi keuangan:
+1. UI Mesin Lebih Bersih: Input "Biaya Listrik Harian" dan "Gaji Operator/Bulan" dihapus dari form Mesin karena sudah diisi secara akurat di Log Produksi (biaya listrik aktual per shift) dan Penggajian (upah riil dari absensi). Tidak ada lagi data ganda!
+2. Penyusutan Matras Otomatis: Setiap kali log produksi disimpan, usage_count matras yang terpasang pada mesin tersebut akan otomatis bertambah sesuai jumlah produksi + reject pada shift tersebut.
+3. Progress Matras Real-Time: Badge peringatan dan progress bar pemakaian matras di halaman Mesin & Matras kini menampilkan data usage_count yang terus diperbarui dari log produksi.
+4. HPP Lebih Presisi: Penyusutan matras per pcs (Harga Matras / Batas Umur) sudah masuk dalam formula HPP produk otomatis.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.23 - Dukungan Multi-Operator per Mesin & Integrasi Payroll Otomatis
 
 Halo Kak! POSBah v2.19.23 hadir dengan fitur manajemen absensi operator shift yang lebih fleksibel:

@@ -195,7 +195,7 @@ class MasterProductsViewModel @Inject constructor(
                 if (!selectedMachine.isActive) {
                     0.0
                 } else {
-                    val totalGajiMesin = selectedMachine.operatorSalaryMonthly
+                    val totalGajiMesin = 0.0 // v2.19.24: gaji riil dari absensi Log Produksi (bukan field statis mesin)
                     val listrikMesin = selectedMachine.electricityCostDaily * s.hariKerjaSebulan
                     val overheadMesin = selectedMachine.depreciationMonthly + selectedMachine.overheadAllocatedMonthly + totalGajiMesin + listrikMesin
                     val totalDetikMesin = selectedMachine.hoursCapacityMonthly * 3600.0
@@ -507,7 +507,7 @@ fun MasterProductsScreen(
                     if (!selectedMachine.isActive) {
                         0.0
                     } else {
-                        val totalGajiMesin = selectedMachine.operatorSalaryMonthly
+                        val totalGajiMesin = 0.0 // v2.19.24: gaji riil dari absensi Log Produksi
                         val listrikMesin = selectedMachine.electricityCostDaily * s.hariKerjaSebulan
                         val overheadMesin = selectedMachine.depreciationMonthly + selectedMachine.overheadAllocatedMonthly + totalGajiMesin + listrikMesin
                         val totalDetikMesin = selectedMachine.hoursCapacityMonthly * 3600.0
@@ -541,7 +541,7 @@ fun MasterProductsScreen(
                         if (!selectedMachine.isActive) {
                             0.0
                         } else {
-                            val totalGajiMesin = selectedMachine.operatorSalaryMonthly
+                            val totalGajiMesin = 0.0 // v2.19.24: gaji riil dari absensi Log Produksi
                             val listrikMesin = selectedMachine.electricityCostDaily * s.hariKerjaSebulan
                             selectedMachine.depreciationMonthly + selectedMachine.overheadAllocatedMonthly + totalGajiMesin + listrikMesin
                         }
