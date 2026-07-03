@@ -1,3 +1,14 @@
+POSBah v2.19.31 - Notifikasi Progress Sinkronisasi Data
+
+Halo Kak! POSBah v2.19.31 menghadirkan fitur notifikasi transparansi sinkronisasi data:
+1. Notifikasi Progress Download ala WhatsApp: Saat sinkronisasi data berlangsung (faktur, produk, klien, arus kas), akan muncul notifikasi resmi di baris notifikasi HP Anda lengkap dengan progress bar (1/4, 2/4, 3/4, 4/4).
+2. Kepastian Pengguna: Memastikan pengguna mengetahui bahwa aplikasi sedang aktif memperbarui data dari server dan tidak mengalami freeze/macet saat proses berlangsung.
+3. Otomatis Bersih: Notifikasi akan langsung hilang secara otomatis begitu sinkronisasi data selesai.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.30 - Deteksi RAM Otomatis & Kualitas JPG Dinamis
 
 Halo Kak! POSBah v2.19.30 menghadirkan teknologi cetak JPG yang lebih cerdas:

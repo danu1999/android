@@ -12,6 +12,7 @@ import com.posbah.app.data.repository.BmpStockRepository
 import com.posbah.app.data.repository.BmpProductionLogRepository
 import com.posbah.app.data.repository.BmpSettingsRepository
 import com.posbah.app.data.remote.api.BmpApiService
+import com.posbah.app.service.DataSyncForegroundService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -196,14 +197,56 @@ class BmpDashboardViewModel @Inject constructor(
                     e.printStackTrace()
                 }
             }
-            // Seeding is handled online on tenant bootstrap
+            // Sync data utama dengan notifikasi progress ala WhatsApp migration
             viewModelScope.launch {
                 try {
+                    val totalSteps = 4
+                    DataSyncForegroundService.startSync(
+                        context,
+                        initialTitle = "POSBah — Memperbarui Data",
+                        initialMessage = "Menghubungkan ke server..."
+                    )
+
+                    // Step 1: Invoice
+                    DataSyncForegroundService.updateProgress(
+                        context,
+                        title = "POSBah — Memperbarui Data",
+                        message = "Mengunduh data Faktur... (1/$totalSteps)",
+                        progress = 1, maxProgress = totalSteps
+                    )
                     invoiceRepo.refresh()
+
+                    // Step 2: Klien
+                    DataSyncForegroundService.updateProgress(
+                        context,
+                        title = "POSBah — Memperbarui Data",
+                        message = "Mengunduh data Klien... (2/$totalSteps)",
+                        progress = 2, maxProgress = totalSteps
+                    )
                     clientRepo.refresh()
+
+                    // Step 3: Arus Kas
+                    DataSyncForegroundService.updateProgress(
+                        context,
+                        title = "POSBah — Memperbarui Data",
+                        message = "Mengunduh Arus Kas... (3/$totalSteps)",
+                        progress = 3, maxProgress = totalSteps
+                    )
                     cashFlowRepo.refresh()
+
+                    // Step 4: Bahan Baku
+                    DataSyncForegroundService.updateProgress(
+                        context,
+                        title = "POSBah — Memperbarui Data",
+                        message = "Mengunduh Bahan Baku... (4/$totalSteps)",
+                        progress = 4, maxProgress = totalSteps
+                    )
                     bahanBakuRepo.refresh()
+
+                    // Selesai
+                    DataSyncForegroundService.stopSync(context, "Semua data berhasil diperbarui ✓")
                 } catch (e: Exception) {
+                    DataSyncForegroundService.stopSync(context, null)
                     e.printStackTrace()
                 }
             }
