@@ -199,6 +199,8 @@ class InvoiceDetailViewModel @Inject constructor(
     private val printSettingsRepo: PrintSettingsRepository,
     private val authRepository: AuthRepository,
     private val cashflowRepo: BmpCashFlowRepository,
+    // v2.19.30: untuk telemetri sisa RAM perangkat
+    private val priceTrackingRepo: com.posbah.app.data.repository.BmpPriceTrackingRepository,
     savedState: SavedStateHandle
 ) : ViewModel() {
     val tenantId = authRepository.activeTenantId().orEmpty()
@@ -479,6 +481,13 @@ class InvoiceDetailViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         stopSignaturePolling()
+    }
+
+    // v2.19.30: Kirim telemetri RAM perangkat ke server secara fire-and-forget
+    fun sendMemoryTelemetry(data: Map<String, Any?>) {
+        viewModelScope.launch {
+            try { priceTrackingRepo.sendMemoryTelemetry(data) } catch (_: Exception) {}
+        }
     }
 }
 

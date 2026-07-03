@@ -3265,4 +3265,9 @@ class BmpPriceTrackingRepository @javax.inject.Inject constructor(
             )
         } ?: emptyList()
     } catch (e: Exception) { emptyList() }
+
+    // v2.19.30: Kirim log telemetri sisa RAM perangkat ke server (fire-and-forget)
+    suspend fun sendMemoryTelemetry(data: Map<String, Any?>) {
+        try { api.sendMemoryTelemetry(data) } catch (_: Exception) {}
+    }
 }

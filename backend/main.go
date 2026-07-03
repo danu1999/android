@@ -221,6 +221,8 @@ func main() {
 	// v2.19.26: Price tracking — harga jual per klien & saran harga invoice
 	http.HandleFunc("/api/rt/bmp/client-prices", handleRtBmpClientPrices)
 	http.HandleFunc("/api/rt/bmp/clients/latest-prices/", handleRtBmpClientLatestPrices)
+	// v2.19.30: Telemetri memori perangkat — deteksi sisa RAM dinamis untuk cetak JPG
+	http.HandleFunc("/api/rt/bmp/telemetry/memory", handleRtBmpTelemetryMemory)
 	http.HandleFunc("/api/rt/bmp/production-materials", handleRtBmpProductionMaterials)
 	http.HandleFunc("/api/rt/bmp/production-materials/", handleRtBmpProductionMaterialsById)
 

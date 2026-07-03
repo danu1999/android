@@ -2928,3 +2928,83 @@ func handleRtBmpClientLatestPrices(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	jsonOK(w, rowsToJSON(rows))
 }
+
+// ─── Helper type converters (untuk data dari JSON body interface{}) ──────────
+
+// toLong: konversi interface{} ke int64 (JSON numbers decoded sebagai float64)
+func toLong(v interface{}) int64 {
+	switch val := v.(type) {
+	case float64:
+		return int64(val)
+	case float32:
+		return int64(val)
+	case int64:
+		return val
+	case int:
+		return int64(val)
+	}
+	return 0
+}
+
+// toFloat: konversi interface{} ke float64
+func toFloat(v interface{}) float64 {
+	switch val := v.(type) {
+	case float64:
+		return val
+	case float32:
+		return float64(val)
+	case int64:
+		return float64(val)
+	case int:
+		return float64(val)
+	}
+	return 0.0
+}
+
+// toBool: konversi interface{} ke bool
+func toBool(v interface{}) bool {
+	if val, ok := v.(bool); ok {
+		return val
+	}
+	return false
+}
+
+// ─── Telemetri Memori Perangkat ───────────────────────────────────────────────
+
+// handleRtBmpTelemetryMemory: Menyimpan log memori perangkat dari APK ke database.
+// APK mengirim data ini sesaat sebelum cetak JPG agar kita bisa memantau
+// kondisi HP user secara terpusat di server.
+func handleRtBmpTelemetryMemory(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	if r.Method != http.MethodPost { jsonErr(w, 405, "method not allowed"); return }
+
+	var body map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		jsonErr(w, 400, "invalid body")
+		return
+	}
+
+	_, err := db.Exec(`
+		INSERT INTO "bmp_device_memory_logs" (
+			"tenantId", "deviceModel", "androidVersion", "totalMemoryMb",
+			"availableMemoryMb", "isLowMemory", "selectedScale", "invoiceNumber", "createdAt"
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	`,
+		tenantId,
+		body["deviceModel"],
+		body["androidVersion"],
+		toLong(body["totalMemoryMb"]),
+		toLong(body["availableMemoryMb"]),
+		toBool(body["isLowMemory"]),
+		toFloat(body["selectedScale"]),
+		body["invoiceNumber"],
+		nowMillis(),
+	)
+	if err != nil {
+		jsonErr(w, 500, err.Error())
+		return
+	}
+	jsonOK(w, map[string]interface{}{"ok": true})
+}
+

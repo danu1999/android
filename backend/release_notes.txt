@@ -1,3 +1,14 @@
+POSBah v2.19.30 - Deteksi RAM Otomatis & Kualitas JPG Dinamis
+
+Halo Kak! POSBah v2.19.30 menghadirkan teknologi cetak JPG yang lebih cerdas:
+1. Deteksi RAM Otomatis: APK kini secara cerdas mendeteksi sisa RAM yang benar-benar tersedia di HP Anda sebelum mencetak JPG. Jika HP Anda memiliki RAM lebih dari 1.5 GB tersedia, gambar akan dicetak dalam kualitas Ultra HD. Jika RAM sedang (800 MB - 1.5 GB), kualitas HD+. Jika RAM terbatas, sistem akan otomatis menggunakan kualitas standar yang aman agar HP tidak lag atau keluar sendiri.
+2. Kualitas JPG Semakin Tajam: HP dengan RAM besar akan secara otomatis mendapatkan hasil cetak JPG yang lebih jernih dan tajam saat di-zoom di WhatsApp.
+3. Aman untuk Semua HP: Fitur ini memastikan cetak JPG bekerja optimal di semua tipe HP, dari yang terbaru hingga yang lebih lama.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.29 - Paginasi Cetak JPG A4 & Margin 1cm Rapi
 
 Halo Kak! POSBah v2.19.29 menghadirkan pembaruan cetak JPG yang canggih:

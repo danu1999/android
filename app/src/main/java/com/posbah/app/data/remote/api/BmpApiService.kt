@@ -237,4 +237,10 @@ interface BmpApiService {
     suspend fun getClientLatestPrices(
         @Path("clientId") clientId: Long
     ): Response<List<Map<String, Any?>>>
+
+    // ─── Telemetri Memori Perangkat (v2.19.30) ───────────────────────────────
+    @POST("api/rt/bmp/telemetry/memory")
+    suspend fun sendMemoryTelemetry(
+        @Body body: Map<String, Any?>
+    ): Response<Map<String, Any?>>
 }

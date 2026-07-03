@@ -226,7 +226,7 @@ fun InvoiceDetailScreen(
                             modifier = Modifier
                                 .clickable {
                                     val html = generateInvoiceHtml(context, inv, ui.products, ui.client, ui.settings, ui.printConfig.jpg, ui.printConfig, defaultCompanyName = ui.defaultCompanyName)
-                                    printColoredJpg(context, html, "Invoice_${inv.number}")
+                                    printColoredJpg(context, html, "Invoice_${inv.number}", viewModel)
                                 }
                                 .background(Color.Transparent)
                         )
@@ -1475,7 +1475,7 @@ private fun printHtml(context: Context, html: String, jobName: String, isColor: 
     webView.loadDataWithBaseURL("https://www.zedmz.cloud", html, "text/html", "UTF-8", null)
 }
 
-private fun printColoredJpg(context: Context, html: String, fileName: String) {
+private fun printColoredJpg(context: Context, html: String, fileName: String, viewModel: InvoiceDetailViewModel) {
     Toast.makeText(context, "Sedang memproses JPG…", Toast.LENGTH_SHORT).show()
 
     val webView = WebView(context)
@@ -1491,6 +1491,23 @@ private fun printColoredJpg(context: Context, html: String, fileName: String) {
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                 try {
                     val printAdapter = webView.createPrintDocumentAdapter(fileName)
+
+                    // ─── Deteksi Sisa RAM Aktual Perangkat (v2.19.30) ─────────────────
+                    val activityManager = context.getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+                    val memInfo = android.app.ActivityManager.MemoryInfo()
+                    activityManager.getMemoryInfo(memInfo)
+                    val totalRamMb  = (memInfo.totalMem  / (1024.0 * 1024.0)).toLong()
+                    val availRamMb  = (memInfo.availMem  / (1024.0 * 1024.0)).toLong()
+                    val isLowMem    = memInfo.lowMemory
+                    // Skala render dinamis berdasarkan RAM yang benar-benar tersedia
+                    val scaleFactor: Float = when {
+                        isLowMem        -> 3.0f  // RAM kritis — paksa resolusi aman
+                        availRamMb > 1500 -> 5.0f  // Sisa RAM >1.5 GB — Ultra HD
+                        availRamMb > 800  -> 4.0f  // Sisa RAM 800 MB–1.5 GB — HD+
+                        else            -> 3.0f  // Sisa RAM <800 MB — Standar
+                    }
+                    // ─────────────────────────────────────────────────────────────────
+
                     val printAttributes = android.print.PrintAttributes.Builder()
                         .setMediaSize(android.print.PrintAttributes.MediaSize.ISO_A4)
                         .setResolution(android.print.PrintAttributes.Resolution("pdf", "pdf", 300, 300))
@@ -1527,9 +1544,9 @@ private fun printColoredJpg(context: Context, html: String, fileName: String) {
 
                                                 for (i in 0 until renderer.pageCount) {
                                                     val page = renderer.openPage(i)
-                                                    // Render high resolution (3.0f scale) for crisp layout
-                                                    val width = (page.width * 3.0f).toInt()
-                                                    val height = (page.height * 3.0f).toInt()
+                                                    // Render dengan skala dinamis berdasarkan sisa RAM perangkat
+                                                    val width  = (page.width  * scaleFactor).toInt()
+                                                    val height = (page.height * scaleFactor).toInt()
 
                                                     val bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888)
                                                     bitmap.eraseColor(android.graphics.Color.WHITE)
@@ -1573,6 +1590,17 @@ private fun printColoredJpg(context: Context, html: String, fileName: String) {
                                                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                                         }
                                                     )
+
+                                                    // v2.19.30: Kirim telemetri sisa RAM ke server (background, tidak blokir UI)
+                                                    viewModel.sendMemoryTelemetry(mapOf(
+                                                        "deviceModel"       to "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
+                                                        "androidVersion"    to android.os.Build.VERSION.RELEASE,
+                                                        "totalMemoryMb"     to totalRamMb,
+                                                        "availableMemoryMb" to availRamMb,
+                                                        "isLowMemory"       to isLowMem,
+                                                        "selectedScale"     to scaleFactor,
+                                                        "invoiceNumber"     to fileName
+                                                    ))
                                                 }
                                             } catch (e: Exception) {
                                                 e.printStackTrace()
