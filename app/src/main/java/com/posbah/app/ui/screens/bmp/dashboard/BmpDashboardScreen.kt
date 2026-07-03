@@ -234,12 +234,19 @@ fun BmpDashboardScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                val isOwner = ui.role == "OWNER"
                 item {
-                    HeroCard(ui = ui)
+                    if (isOwner) {
+                        HeroCard(ui = ui)
+                    } else {
+                        WelcomeCard(role = ui.role)
+                    }
                 }
-                item {
-                    Spacer(Modifier.height(4.dp))
-                    CashFlowTrendChart(history = ui.cashFlowHistory)
+                if (isOwner) {
+                    item {
+                        Spacer(Modifier.height(4.dp))
+                        CashFlowTrendChart(history = ui.cashFlowHistory)
+                    }
                 }
                 if (ui.tenantId == "demo_tenant") {
                     item {
@@ -258,82 +265,86 @@ fun BmpDashboardScreen(
                         AdminPanelCard(onAdminClick = { onNavigate(Screen.AdminPanel.route) })
                     }
                 }
-                item {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Box(Modifier.weight(1f)) {
-                            StatChip(
-                                label = "Invoice",
-                                value = Formatters.number(ui.invoiceCount.toLong()),
-                                accent = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        Box(Modifier.weight(1f)) {
-                            StatChip(
-                                label = "Klien",
-                                value = Formatters.number(ui.clientCount.toLong()),
-                                accent = MaterialTheme.colorScheme.tertiary
-                            )
-                        }
-                    }
-                }
-                item {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Box(Modifier.weight(1f)) {
-                            StatChip(
-                                label = "Cashflow Masuk",
-                                value = Formatters.rupiah(ui.totalIn),
-                                accent = androidx.compose.ui.graphics.Color(0xFF22C57E)
-                            )
-                        }
-                        Box(Modifier.weight(1f)) {
-                            StatChip(
-                                label = "Cashflow Keluar",
-                                value = Formatters.rupiah(ui.totalOut),
-                                accent = MaterialTheme.colorScheme.error
-                            )
+                if (isOwner) {
+                    item {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Box(Modifier.weight(1f)) {
+                                StatChip(
+                                    label = "Invoice",
+                                    value = Formatters.number(ui.invoiceCount.toLong()),
+                                    accent = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Box(Modifier.weight(1f)) {
+                                StatChip(
+                                    label = "Klien",
+                                    value = Formatters.number(ui.clientCount.toLong()),
+                                    accent = MaterialTheme.colorScheme.tertiary
+                                )
+                            }
                         }
                     }
-                }
-                item {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Box(Modifier.weight(1f)) {
-                            StatChip(
-                                label = "Saldo Kas Riil",
-                                value = Formatters.rupiah(ui.saldoKasRiil),
-                                accent = if (ui.saldoKasRiil >= 0)
-                                    androidx.compose.ui.graphics.Color(0xFF3B82F6)
-                                else MaterialTheme.colorScheme.error
-                            )
+                    item {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Box(Modifier.weight(1f)) {
+                                StatChip(
+                                    label = "Cashflow Masuk",
+                                    value = Formatters.rupiah(ui.totalIn),
+                                    accent = androidx.compose.ui.graphics.Color(0xFF22C57E)
+                                )
+                            }
+                            Box(Modifier.weight(1f)) {
+                                StatChip(
+                                    label = "Cashflow Keluar",
+                                    value = Formatters.rupiah(ui.totalOut),
+                                    accent = MaterialTheme.colorScheme.error
+                                )
+                            }
                         }
-                        Box(Modifier.weight(1f)) {
-                            StatChip(
-                                label = "Simulasi Saldo",
-                                value = Formatters.rupiah(ui.simulasiSaldo),
-                                accent = if (ui.simulasiSaldo >= 0)
-                                    MaterialTheme.colorScheme.tertiary
-                                else MaterialTheme.colorScheme.error
-                            )
+                    }
+                    item {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Box(Modifier.weight(1f)) {
+                                StatChip(
+                                    label = "Saldo Kas Riil",
+                                    value = Formatters.rupiah(ui.saldoKasRiil),
+                                    accent = if (ui.saldoKasRiil >= 0)
+                                        androidx.compose.ui.graphics.Color(0xFF3B82F6)
+                                    else MaterialTheme.colorScheme.error
+                                )
+                            }
+                            Box(Modifier.weight(1f)) {
+                                StatChip(
+                                    label = "Simulasi Saldo",
+                                    value = Formatters.rupiah(ui.simulasiSaldo),
+                                    accent = if (ui.simulasiSaldo >= 0)
+                                        MaterialTheme.colorScheme.tertiary
+                                    else MaterialTheme.colorScheme.error
+                                )
+                            }
                         }
                     }
                 }
 
                 if (kpiState is UiState.Success) {
                     val kpiData = (kpiState as UiState.Success).data
-                    item {
-                        Spacer(Modifier.height(4.dp))
-                        OverdueInvoiceCard(
-                            overdueCount = kpiData.overdueCount,
-                            onClick = { onNavigate(Screen.BmpInvoices.build(null, filterOverdue = true)) }
-                        )
+                    if (isOwner) {
+                        item {
+                            Spacer(Modifier.height(4.dp))
+                            OverdueInvoiceCard(
+                                overdueCount = kpiData.overdueCount,
+                                onClick = { onNavigate(Screen.BmpInvoices.build(null, filterOverdue = true)) }
+                            )
+                        }
                     }
                     
                     item {
@@ -507,6 +518,35 @@ private fun AdminPanelCard(onAdminClick: () -> Unit) {
                 label = "Buka Panel Admin",
                 onClick = onAdminClick,
                 modifier = Modifier.fillMaxWidth().testTag("btn-open-admin")
+            )
+        }
+    }
+}
+
+@Composable
+private fun WelcomeCard(role: String) {
+    Surface(
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.fillMaxWidth().testTag("welcome-card")
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text(
+                "SELAMAT DATANG",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                if (role == "ADMIN") "Administrator" else "Supervisor",
+                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
+                color = MaterialTheme.colorScheme.onPrimary
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Modul Invoice & Manufaktur POSBah",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f)
             )
         }
     }
