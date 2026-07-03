@@ -225,8 +225,10 @@ class EmployeesViewModel @Inject constructor(
         }
 
         val toSave = e.copy(employeeId = finalEmployeeId)
-        val generatedId = repo.upsert(toSave)
-        val targetId = if (e.id != 0L) e.id else generatedId
+        val res = repo.upsert(toSave)
+        if (res is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+            error.value = res.message
+        }
     }
 
     fun softDelete(id: Long) = viewModelScope.launch(Dispatchers.IO) {
@@ -375,123 +377,125 @@ fun EmployeesScreen(
         }
     ) { padding ->
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {
-            if (list.isEmpty()) {
-                EmptyState(
-                    "Belum ada karyawan",
-                    "Tambah karyawan untuk mulai mengelola data gaji",
-                    "+ Tambah Karyawan",
-                    onAction = {
-                        formEdit = BmpEmployeeEntity(tenantId = viewModel.tenantId, name = "", salaryAmount = 0.0)
-                    }
-                )
-            } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    item {
-                        val activeSettings by viewModel.settings.collectAsState()
-                        val currentMode = activeSettings?.attendanceMode ?: "SUPERVISOR"
-                        val ip = activeSettings?.fingerprintIp.orEmpty()
-                        val port = activeSettings?.fingerprintPort ?: "4370"
+            LazyColumn(
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    val activeSettings by viewModel.settings.collectAsState()
+                    val currentMode = activeSettings?.attendanceMode ?: "SUPERVISOR"
+                    val ip = activeSettings?.fingerprintIp.orEmpty()
+                    val port = activeSettings?.fingerprintPort ?: "4370"
 
-                        var showSettingsDialog by remember { mutableStateOf(false) }
+                    var showSettingsDialog by remember { mutableStateOf(false) }
 
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(14.dp)) {
-                                Text("Metode Absensi Staf", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    if (currentMode == "SUPERVISOR") "Status: Supervisor (Manual via Log Produksi)"
-                                    else "Status: Mesin Fingerprint Terkoneksi ($ip:$port)",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    androidx.compose.material3.OutlinedButton(
-                                        onClick = { viewModel.saveAttendanceSettings("SUPERVISOR", ip, port) },
-                                        colors = ButtonDefaults.outlinedButtonColors(
-                                            containerColor = if (currentMode == "SUPERVISOR") MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent,
-                                            contentColor = if (currentMode == "SUPERVISOR") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                        ),
-                                        modifier = Modifier.weight(1f),
-                                        border = BorderStroke(
-                                            1.dp,
-                                            if (currentMode == "SUPERVISOR") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
-                                        ),
-                                        shape = RoundedCornerShape(8.dp)
-                                    ) {
-                                        Text("Supervisor", fontSize = 11.sp, fontWeight = if (currentMode == "SUPERVISOR") FontWeight.Bold else FontWeight.Normal)
-                                    }
-                                    androidx.compose.material3.OutlinedButton(
-                                        onClick = {
-                                            viewModel.saveAttendanceSettings("FINGERPRINT", ip, port)
-                                            showSettingsDialog = true
-                                        },
-                                        colors = ButtonDefaults.outlinedButtonColors(
-                                            containerColor = if (currentMode == "FINGERPRINT") MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent,
-                                            contentColor = if (currentMode == "FINGERPRINT") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                        ),
-                                        modifier = Modifier.weight(1f),
-                                        border = BorderStroke(
-                                            1.dp,
-                                            if (currentMode == "FINGERPRINT") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
-                                        ),
-                                        shape = RoundedCornerShape(8.dp)
-                                    ) {
-                                        Text("Fingerprint", fontSize = 11.sp, fontWeight = if (currentMode == "FINGERPRINT") FontWeight.Bold else FontWeight.Normal)
-                                    }
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Text("Metode Absensi Staf", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                if (currentMode == "SUPERVISOR") "Status: Supervisor (Manual via Log Produksi)"
+                                else "Status: Mesin Fingerprint Terkoneksi ($ip:$port)",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                androidx.compose.material3.OutlinedButton(
+                                    onClick = { viewModel.saveAttendanceSettings("SUPERVISOR", ip, port) },
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        containerColor = if (currentMode == "SUPERVISOR") MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent,
+                                        contentColor = if (currentMode == "SUPERVISOR") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    ),
+                                    modifier = Modifier.weight(1f),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (currentMode == "SUPERVISOR") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                                    ),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text("Supervisor", fontSize = 11.sp, fontWeight = if (currentMode == "SUPERVISOR") FontWeight.Bold else FontWeight.Normal)
+                                }
+                                androidx.compose.material3.OutlinedButton(
+                                    onClick = {
+                                        viewModel.saveAttendanceSettings("FINGERPRINT", ip, port)
+                                        showSettingsDialog = true
+                                    },
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        containerColor = if (currentMode == "FINGERPRINT") MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent,
+                                        contentColor = if (currentMode == "FINGERPRINT") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    ),
+                                    modifier = Modifier.weight(1f),
+                                    border = BorderStroke(
+                                        1.dp,
+                                        if (currentMode == "FINGERPRINT") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                                    ),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text("Fingerprint", fontSize = 11.sp, fontWeight = if (currentMode == "FINGERPRINT") FontWeight.Bold else FontWeight.Normal)
                                 }
                             }
                         }
-
-                        if (showSettingsDialog) {
-                            var ipText by remember { mutableStateOf(ip) }
-                            var portText by remember { mutableStateOf(port) }
-                            AlertDialog(
-                                onDismissRequest = { showSettingsDialog = false },
-                                title = { Text("Pengaturan Mesin Fingerprint") },
-                                text = {
-                                    Column {
-                                        Text("Masukkan detail koneksi agar mesin fingerprint fisik dapat tersambung dengan APK.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Spacer(Modifier.height(12.dp))
-                                        OutlinedTextField(
-                                            value = ipText,
-                                            onValueChange = { ipText = it },
-                                            label = { Text("IP Address Mesin") },
-                                            placeholder = { Text("cth: 192.168.1.201") },
-                                            singleLine = true,
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                        Spacer(Modifier.height(8.dp))
-                                        OutlinedTextField(
-                                            value = portText,
-                                            onValueChange = { portText = it },
-                                            label = { Text("Port Mesin") },
-                                            placeholder = { Text("cth: 4370") },
-                                            singleLine = true,
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-                                },
-                                confirmButton = {
-                                    TextButton(onClick = {
-                                        viewModel.saveAttendanceSettings("FINGERPRINT", ipText, portText)
-                                        showSettingsDialog = false
-                                    }) { Text("Simpan & Hubungkan") }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = { showSettingsDialog = false }) { Text("Batal") }
-                                }
-                            )
-                        }
                     }
 
+                    if (showSettingsDialog) {
+                        var ipText by remember { mutableStateOf(ip) }
+                        var portText by remember { mutableStateOf(port) }
+                        AlertDialog(
+                            onDismissRequest = { showSettingsDialog = false },
+                            title = { Text("Pengaturan Mesin Fingerprint") },
+                            text = {
+                                Column {
+                                    Text("Masukkan detail koneksi agar mesin fingerprint fisik dapat tersambung dengan APK.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Spacer(Modifier.height(12.dp))
+                                    OutlinedTextField(
+                                        value = ipText,
+                                        onValueChange = { ipText = it },
+                                        label = { Text("IP Address Mesin") },
+                                        placeholder = { Text("cth: 192.168.1.201") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    Spacer(Modifier.height(8.dp))
+                                    OutlinedTextField(
+                                        value = portText,
+                                        onValueChange = { portText = it },
+                                        label = { Text("Port Mesin") },
+                                        placeholder = { Text("cth: 4370") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    viewModel.saveAttendanceSettings("FINGERPRINT", ipText, portText)
+                                    showSettingsDialog = false
+                                }) { Text("Simpan & Hubungkan") }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showSettingsDialog = false }) { Text("Batal") }
+                            }
+                        )
+                    }
+                }
+
+                if (list.isEmpty()) {
+                    item {
+                        EmptyState(
+                            "Belum ada karyawan",
+                            "Tambah karyawan untuk mulai mengelola data gaji",
+                            "+ Tambah Karyawan",
+                            onAction = {
+                                formEdit = BmpEmployeeEntity(tenantId = viewModel.tenantId, name = "", salaryAmount = 0.0)
+                            }
+                        )
+                    }
+                } else {
                     items(list, key = { it.id }) { e ->
                         Surface(
                             shape = RoundedCornerShape(14.dp),

@@ -173,6 +173,8 @@ data class BmpEmployeeData(
     val phone: String? = null,
     val email: String? = null,
     val isActive: Boolean = true,
+    val employeeId: Long? = null,
+    val fingerprintPIN: String? = null,
     val updatedAt: Long = 0
 )
 
@@ -1622,11 +1624,13 @@ class BmpEmployeeRepository @Inject constructor(
                         tenantId = it["tenantId"] as? String ?: "",
                         name = it["name"] as? String ?: "",
                         role = it["role"] as? String ?: "KARYAWAN",
-                        salary = (it["salary"] as? Number)?.toDouble() ?: 0.0,
+                        salary = (it["salaryAmount"] as? Number)?.toDouble() ?: (it["salary"] as? Number)?.toDouble() ?: 0.0,
                         employeeType = it["employeeType"] as? String ?: "OPERATING_EXPENSE",
                         phone = it["phone"] as? String,
                         email = it["email"] as? String,
                         isActive = it["isActive"] as? Boolean ?: true,
+                        employeeId = (it["employeeId"] as? Number)?.toLong(),
+                        fingerprintPIN = it["fingerprintPIN"] as? String,
                         updatedAt = (it["updatedAt"] as? Number)?.toLong() ?: 0
                     )
                 } ?: emptyList()
@@ -1656,9 +1660,11 @@ class BmpEmployeeRepository @Inject constructor(
         }
         return try {
             val body = mapOf<String, Any?>(
-                "name" to emp.name, "role" to emp.role, "salary" to emp.salary,
+                "name" to emp.name, "role" to emp.role, "salaryAmount" to emp.salary,
                 "employeeType" to emp.employeeType,
-                "phone" to emp.phone, "email" to emp.email, "isActive" to emp.isActive
+                "phone" to emp.phone, "email" to emp.email, "isActive" to emp.isActive,
+                "employeeId" to emp.employeeId,
+                "fingerprintPIN" to emp.fingerprintPIN
             )
             if (emp.id == 0L) api.createBmpEmployee(body) else api.updateBmpEmployee(emp.id, body)
             refresh()  // sinkronisasi ID asli dari server
@@ -1704,8 +1710,8 @@ class BmpEmployeeRepository @Inject constructor(
                     salaryAmount = it.salary,
                     employeeType = it.employeeType,
                     isActive = it.isActive,
-                    fingerprintPIN = null,
-                    employeeId = null,
+                    fingerprintPIN = it.fingerprintPIN,
+                    employeeId = it.employeeId,
                     createdAt = System.currentTimeMillis(),
                     updatedAt = it.updatedAt,
                     isSynced = true
@@ -1729,7 +1735,7 @@ class BmpEmployeeRepository @Inject constructor(
             }
         }
 
-    suspend fun upsert(e: com.posbah.app.data.local.entities.BmpEmployeeEntity): Long {
+    suspend fun upsert(e: com.posbah.app.data.local.entities.BmpEmployeeEntity): OnlineWriteResult {
         val data = BmpEmployeeData(
             id = e.id,
             tenantId = e.tenantId,
@@ -1740,10 +1746,11 @@ class BmpEmployeeRepository @Inject constructor(
             phone = null,
             email = null,
             isActive = e.isActive,
+            employeeId = e.employeeId,
+            fingerprintPIN = e.fingerprintPIN,
             updatedAt = System.currentTimeMillis()
         )
-        val res = upsert(data)
-        return e.id
+        return upsert(data)
     }
 
     suspend fun softDelete(id: Long) {

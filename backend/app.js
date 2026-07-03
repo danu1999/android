@@ -1241,7 +1241,7 @@ async function saveBankInfo() {
 
         if (response.ok) {
             alert("Informasi Rekening Bank berhasil disimpan!");
-            printSettings = payload[0];
+            printSettings = { ...printSettings, ...payload[0] };
 
             // Re-render Display Mode HTML
             let displayHtml = "";
@@ -1486,7 +1486,7 @@ function triggerInvoicePrint() {
     let receiverSig = currentInvoice.receiverSignatureUrl || "";
     const receiverName = currentInvoice.receiverNameActual || (printSettings ? (printSettings.invoiceSignatureReceiverName || printSettings.invoice_signature_receiver_name || "") : "");
 
-    const senderSig = printSettings ? (printSettings.invoiceSignatureDrawnBase64 || printSettings.invoice_signature_drawn_base64 || "") : "";
+    const senderSig = printSettings ? (printSettings.invoiceSignatureDrawnBase64 || printSettings.invoice_signature_drawn_base64 || printSettings.invoiceSignatureDrawnUrl || printSettings.invoice_signature_drawn_url || "") : "";
     const senderName = printSettings ? (printSettings.invoiceSignatureSenderName || printSettings.invoice_signature_sender_name || "Admin") : "Admin";
 
     const signatureHtml = `
@@ -1776,7 +1776,7 @@ function triggerSjPrint() {
     let receiverSig = currentInvoice.receiverSignatureUrl || "";
     const receiverName = currentInvoice.receiverNameActual || (printSettings ? (printSettings.invoiceSignatureReceiverName || printSettings.invoice_signature_receiver_name || "") : "");
 
-    const senderSig = printSettings ? (printSettings.invoiceSignatureDrawnBase64 || printSettings.invoice_signature_drawn_base64 || "") : "";
+    const senderSig = printSettings ? (printSettings.invoiceSignatureDrawnBase64 || printSettings.invoice_signature_drawn_base64 || printSettings.invoiceSignatureDrawnUrl || printSettings.invoice_signature_drawn_url || "") : "";
     const senderName = printSettings ? (printSettings.invoiceSignatureSenderName || printSettings.invoice_signature_sender_name || "Admin") : "Admin";
 
     const paperSize = document.getElementById("select-paper-size").value;

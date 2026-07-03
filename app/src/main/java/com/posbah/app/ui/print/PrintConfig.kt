@@ -51,7 +51,7 @@ data class PrintConfig(
                     useSignature = entity.jpgUseSignature,
                     signatureSenderName = entity.jpgSignatureSenderName,
                     signatureReceiverName = entity.jpgSignatureReceiverName,
-                    signatureDrawnBase64 = entity.jpgSignatureDrawnBase64,
+                    signatureDrawnBase64 = entity.jpgSignatureDrawnBase64?.ifBlank { null } ?: entity.jpgSignatureDrawnUrl,
                     isColor = entity.jpgIsColor,
                     templateType = entity.jpgTemplateType
                 ),
@@ -61,7 +61,7 @@ data class PrintConfig(
                     useSignature = entity.sjUseSignature,
                     signatureSenderName = entity.sjSignatureSenderName,
                     signatureReceiverName = entity.sjSignatureReceiverName,
-                    signatureDrawnBase64 = entity.sjSignatureDrawnBase64,
+                    signatureDrawnBase64 = entity.sjSignatureDrawnBase64?.ifBlank { null } ?: entity.sjSignatureDrawnUrl,
                     isColor = entity.sjIsColor,
                     templateType = entity.sjTemplateType
                 ),
@@ -71,7 +71,7 @@ data class PrintConfig(
                     useSignature = entity.invoiceUseSignature,
                     signatureSenderName = entity.invoiceSignatureSenderName,
                     signatureReceiverName = entity.invoiceSignatureReceiverName,
-                    signatureDrawnBase64 = entity.invoiceSignatureDrawnBase64,
+                    signatureDrawnBase64 = entity.invoiceSignatureDrawnBase64?.ifBlank { null } ?: entity.invoiceSignatureDrawnUrl,
                     isColor = entity.invoiceIsColor,
                     templateType = entity.invoiceTemplateType
                 ),
@@ -102,7 +102,7 @@ data class PrintConfig(
                     useSignature = data.jpgUseSignature,
                     signatureSenderName = data.jpgSignatureSenderName,
                     signatureReceiverName = data.jpgSignatureReceiverName,
-                    signatureDrawnBase64 = data.jpgSignatureDrawnBase64,
+                    signatureDrawnBase64 = data.jpgSignatureDrawnBase64?.ifBlank { null } ?: data.jpgSignatureDrawnUrl,
                     isColor = data.jpgIsColor,
                     templateType = data.jpgTemplateType
                 ),
@@ -112,7 +112,7 @@ data class PrintConfig(
                     useSignature = data.sjUseSignature,
                     signatureSenderName = data.sjSignatureSenderName,
                     signatureReceiverName = data.sjSignatureReceiverName,
-                    signatureDrawnBase64 = data.sjSignatureDrawnBase64,
+                    signatureDrawnBase64 = data.sjSignatureDrawnBase64?.ifBlank { null } ?: data.sjSignatureDrawnUrl,
                     isColor = data.sjIsColor,
                     templateType = data.sjTemplateType
                 ),
@@ -122,7 +122,7 @@ data class PrintConfig(
                     useSignature = data.invoiceUseSignature,
                     signatureSenderName = data.invoiceSignatureSenderName,
                     signatureReceiverName = data.invoiceSignatureReceiverName,
-                    signatureDrawnBase64 = data.invoiceSignatureDrawnBase64,
+                    signatureDrawnBase64 = data.invoiceSignatureDrawnBase64?.ifBlank { null } ?: data.invoiceSignatureDrawnUrl,
                     isColor = data.invoiceIsColor,
                     templateType = data.invoiceTemplateType
                 ),
