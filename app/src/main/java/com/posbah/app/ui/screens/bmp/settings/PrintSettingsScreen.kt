@@ -206,57 +206,13 @@ fun PrintSettingsScreen(
                                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
-                                    Text("Informasi Pembayaran", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                                    Text(
-                                        "Informasi bank/e-wallet untuk dicetak di JPG",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Spacer(modifier = Modifier.height(16.dp))
-
-                                    Text("Bank / E-Wallet", fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        listOf("BCA", "BRI", "MANDIRI", "DANA", "SHOPE").forEach { bank ->
-                                            val selected = d.bankName == bank
-                                            Box(
-                                                modifier = Modifier
-                                                    .weight(1f)
-                                                    .clip(RoundedCornerShape(8.dp))
-                                                    .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent)
-                                                    .border(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
-                                                    .clickable { viewModel.update { it.copy(bankName = bank) } }
-                                                    .padding(vertical = 8.dp),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text(bank, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface, fontSize = 12.sp)
-                                            }
+                                    BankInfoSection(
+                                        bankName = d.bankName.orEmpty(),
+                                        bankAccountNumber = d.bankAccountNumber.orEmpty(),
+                                        bankOwnerName = d.bankOwnerName.orEmpty(),
+                                        onUpdate = { name, num, owner ->
+                                            viewModel.update { it.copy(bankName = name, bankAccountNumber = num, bankOwnerName = owner) }
                                         }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(16.dp))
-
-                                    OutlinedTextField(
-                                        value = d.bankOwnerName,
-                                        onValueChange = { v -> viewModel.update { it.copy(bankOwnerName = v) } },
-                                        label = { Text("Atas Nama Pemilik") },
-                                        singleLine = true,
-                                        modifier = Modifier.fillMaxWidth().testTag("jpg-bank-owner")
-                                    )
-
-                                    Spacer(modifier = Modifier.height(16.dp))
-
-                                    val inputLabel = if (d.bankName == "DANA" || d.bankName == "SHOPE") "Nomor Akun Dana/Shopee" else "Nomor Rekening"
-                                    OutlinedTextField(
-                                        value = d.bankAccountNumber,
-                                        onValueChange = { v -> viewModel.update { it.copy(bankAccountNumber = v) } },
-                                        label = { Text(inputLabel) },
-                                        singleLine = true,
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        modifier = Modifier.fillMaxWidth().testTag("jpg-bank-number")
                                     )
                                 }
                             }
@@ -320,57 +276,13 @@ fun PrintSettingsScreen(
                                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                             ) {
                                 Column(modifier = Modifier.padding(16.dp)) {
-                                    Text("Informasi Pembayaran", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-                                    Text(
-                                        "Informasi bank/e-wallet untuk dicetak di invoice",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Spacer(modifier = Modifier.height(16.dp))
-
-                                    Text("Bank / E-Wallet", fontWeight = FontWeight.Medium, fontSize = 14.sp)
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        listOf("BCA", "BRI", "MANDIRI", "DANA", "SHOPE").forEach { bank ->
-                                            val selected = d.bankName == bank
-                                            Box(
-                                                modifier = Modifier
-                                                    .weight(1f)
-                                                    .clip(RoundedCornerShape(8.dp))
-                                                    .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent)
-                                                    .border(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
-                                                    .clickable { viewModel.update { it.copy(bankName = bank) } }
-                                                    .padding(vertical = 8.dp),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text(bank, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface, fontSize = 12.sp)
-                                            }
+                                    BankInfoSection(
+                                        bankName = d.bankName.orEmpty(),
+                                        bankAccountNumber = d.bankAccountNumber.orEmpty(),
+                                        bankOwnerName = d.bankOwnerName.orEmpty(),
+                                        onUpdate = { name, num, owner ->
+                                            viewModel.update { it.copy(bankName = name, bankAccountNumber = num, bankOwnerName = owner) }
                                         }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(16.dp))
-
-                                    OutlinedTextField(
-                                        value = d.bankOwnerName,
-                                        onValueChange = { v -> viewModel.update { it.copy(bankOwnerName = v) } },
-                                        label = { Text("Atas Nama Pemilik") },
-                                        singleLine = true,
-                                        modifier = Modifier.fillMaxWidth().testTag("inv-bank-owner")
-                                    )
-
-                                    Spacer(modifier = Modifier.height(16.dp))
-
-                                    val inputLabel = if (d.bankName == "DANA" || d.bankName == "SHOPE") "Nomor Akun Dana/Shopee" else "Nomor Rekening"
-                                    OutlinedTextField(
-                                        value = d.bankAccountNumber,
-                                        onValueChange = { v -> viewModel.update { it.copy(bankAccountNumber = v) } },
-                                        label = { Text(inputLabel) },
-                                        singleLine = true,
-                                        keyboardOptions =   KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        modifier = Modifier.fillMaxWidth().testTag("inv-bank-number")
                                     )
                                 }
                             }
@@ -863,6 +775,112 @@ private fun DocPrintSettingsCard(
                             onSignatureSaved(base64)
                             Toast.makeText(context, "Tanda tangan disimpan sementara", Toast.LENGTH_SHORT).show()
                         }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun BankInfoSection(
+    bankName: String,
+    bankAccountNumber: String,
+    bankOwnerName: String,
+    onUpdate: (name: String, number: String, owner: String) -> Unit
+) {
+    val names = remember(bankName) {
+        val parts = bankName.split("|")
+        List(4) { parts.getOrNull(it) ?: "" }
+    }
+    val accounts = remember(bankAccountNumber) {
+        val parts = bankAccountNumber.split("|")
+        List(4) { parts.getOrNull(it)?.takeIf { it.isNotBlank() } ?: "" }
+    }
+    val owners = remember(bankOwnerName) {
+        val parts = bankOwnerName.split("|")
+        List(4) { parts.getOrNull(it)?.takeIf { it.isNotBlank() } ?: "" }
+    }
+
+    Column {
+        Text(
+            "Informasi Pembayaran (Maksimal 4 Rekening)",
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 16.sp
+        )
+        Text(
+            "Informasi bank/e-wallet untuk dicetak di Invoice & Gambar Share",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+
+        for (i in 0 until 4) {
+            val idx = i + 1
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        if (i == 0) "Rekening $idx (Utama)" else "Rekening $idx",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Bank / E-Wallet name free-text input
+                    OutlinedTextField(
+                        value = names[i],
+                        onValueChange = { v ->
+                            val newNames = names.toMutableList().apply { set(i, v) }
+                            onUpdate(newNames.joinToString("|"), accounts.joinToString("|"), owners.joinToString("|"))
+                        },
+                        label = { Text("Bank / E-Wallet") },
+                        placeholder = { Text("cth: BCA, BRI, BNI, GOPAY, DANA, OVO", style = MaterialTheme.typography.bodySmall) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = owners[i],
+                        onValueChange = { v ->
+                            val newOwners = owners.toMutableList().apply { set(i, v) }
+                            onUpdate(names.joinToString("|"), accounts.joinToString("|"), newOwners.joinToString("|"))
+                        },
+                        label = { Text("Atas Nama Pemilik") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    val nameLower = names[i].lowercase()
+                    val inputLabel = when {
+                        nameLower.contains("dana") || nameLower.contains("shopee") ||
+                        nameLower.contains("shope") || nameLower.contains("ovo") ||
+                        nameLower.contains("gopay") || nameLower.contains("linkaja") -> "Nomor Akun E-Wallet"
+                        else -> "Nomor Rekening"
+                    }
+                    OutlinedTextField(
+                        value = accounts[i],
+                        onValueChange = { v ->
+                            val newAccs = accounts.toMutableList().apply { set(i, v.filter { it.isDigit() || it == '-' || it == ' ' }) }
+                            onUpdate(names.joinToString("|"), newAccs.joinToString("|"), owners.joinToString("|"))
+                        },
+                        label = { Text(inputLabel) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodyMedium
                     )
                 }
             }

@@ -245,6 +245,9 @@ func initSchema() error {
 			"hariKerjaSebulan" INT DEFAULT 26,
 			"biayaKarungPer1000" DOUBLE PRECISION DEFAULT 2100000,
 			"hoursPerDay" INT DEFAULT 24,
+			"attendanceMode" VARCHAR(50) DEFAULT 'SUPERVISOR',
+			"fingerprintIp" VARCHAR(50) DEFAULT '',
+			"fingerprintPort" VARCHAR(10) DEFAULT '4370',
 			"createdAt" BIGINT,
 			"updatedAt" BIGINT
 		);`,
@@ -331,9 +334,9 @@ func initSchema() error {
 			"jpgTemplateType" VARCHAR(50) DEFAULT 'MODERN',
 			"sjTemplateType" VARCHAR(50) DEFAULT 'MODERN',
 			"invoiceTemplateType" VARCHAR(50) DEFAULT 'MODERN',
-			"bankOwnerName" VARCHAR(100) DEFAULT '',
-			"bankName" VARCHAR(50) DEFAULT 'BCA',
-			"bankAccountNumber" VARCHAR(100) DEFAULT '',
+			"bankOwnerName" TEXT DEFAULT '',
+			"bankName" TEXT DEFAULT 'BCA',
+			"bankAccountNumber" TEXT DEFAULT '',
 			"logoPath" TEXT,
 			"createdAt" BIGINT,
 			"updatedAt" BIGINT,
@@ -773,6 +776,21 @@ func initSchema() error {
 		`CREATE INDEX IF NOT EXISTS idx_bmp_payrolls_employee    ON "bmp_payrolls"   ("employeeId", "tenantId");`,
 		`CREATE INDEX IF NOT EXISTS idx_bmp_bahan_tenant_date    ON "bmp_bahan_baku" ("tenantId", "tanggal" DESC);`,
 		`CREATE INDEX IF NOT EXISTS idx_employees_tenant_outlet  ON "employees"      ("tenantId", "outletId");`,
+
+		// v2.19.34: Expand print_settings bank columns ke TEXT agar bisa menyimpan 4 rekening
+		// sekaligus (pipe-separated) tanpa resiko truncation oleh VARCHAR(50/100)
+		`ALTER TABLE "print_settings" ALTER COLUMN "bankName" TYPE TEXT;`,
+		`ALTER TABLE "print_settings" ALTER COLUMN "bankOwnerName" TYPE TEXT;`,
+		`ALTER TABLE "print_settings" ALTER COLUMN "bankAccountNumber" TYPE TEXT;`,
+
+		// v2.19.35: Perbaikan mismatch skema pada tabel backup
+		`ALTER TABLE "backup_bmp_bahan_baku" ADD COLUMN IF NOT EXISTS "supplier" VARCHAR(255);`,
+		`ALTER TABLE "backup_bmp_bahan_baku_item" ADD COLUMN IF NOT EXISTS "color_mixture" TEXT DEFAULT NULL;`,
+
+		// Kolom pengaturan absensi untuk tabel bmp_settings
+		`ALTER TABLE "bmp_settings" ADD COLUMN IF NOT EXISTS "attendanceMode" VARCHAR(50) DEFAULT 'SUPERVISOR';`,
+		`ALTER TABLE "bmp_settings" ADD COLUMN IF NOT EXISTS "fingerprintIp" VARCHAR(50) DEFAULT '';`,
+		`ALTER TABLE "bmp_settings" ADD COLUMN IF NOT EXISTS "fingerprintPort" VARCHAR(10) DEFAULT '4370';`,
 	}
 
 	for _, q := range migrationQueries {

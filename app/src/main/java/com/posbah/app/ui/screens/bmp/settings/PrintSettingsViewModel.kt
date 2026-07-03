@@ -213,13 +213,13 @@ class PrintSettingsViewModel @Inject constructor(
         val t = _draftTenant.value
 
         // Validasi khusus modul BMP (Invoice & Manufaktur membutuhkan info bank)
+        // Cek per-slot Rekening 1 (Utama) saja — slot 2-4 bersifat opsional
         if (moduleKey == "BMP") {
-            if (d.bankOwnerName.isBlank()) {
-                onError("Kolom Atas Nama info pembayaran wajib diisi untuk Invoice & Manufaktur!")
-                return@launch
-            }
-            if (d.bankAccountNumber.isBlank()) {
-                onError("Kolom Nomor Rekening / Dana / Shopee wajib diisi untuk Invoice & Manufaktur!")
+            val firstOwner = d.bankOwnerName.split("|").firstOrNull()?.trim() ?: ""
+            val firstAccount = d.bankAccountNumber.split("|").firstOrNull()?.trim() ?: ""
+            val firstBankName = d.bankName.split("|").firstOrNull()?.trim() ?: ""
+            if (firstBankName.isBlank() || firstOwner.isBlank() || firstAccount.isBlank()) {
+                onError("Rekening 1 (Utama) wajib diisi lengkap (Nama Bank, Atas Nama, Nomor Rekening) untuk Invoice & Manufaktur!")
                 return@launch
             }
         }

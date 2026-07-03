@@ -495,7 +495,11 @@ func handleBmpPinLogin(w http.ResponseWriter, r *http.Request) {
 	json.NewDecoder(r.Body).Decode(&req)
 	var pinHash, name, role string
 	var id int64
-	err := db.QueryRow(`SELECT id, "pinHash", name, role FROM bmp_employees WHERE "tenantId"=$1 AND email=$2 AND "isActive"=TRUE LIMIT 1`,
+	err := db.QueryRow(`
+		SELECT be.id, e."pinHash", be.name, be.role 
+		FROM bmp_employees be 
+		JOIN employees e ON be."employeeId" = e.id 
+		WHERE be."tenantId"=$1 AND e.email=$2 AND be."isActive"=TRUE LIMIT 1`,
 		req.TenantId, req.Email).Scan(&id, &pinHash, &name, &role)
 	if err != nil {
 		jsonErr(w, 401, "employee not found"); return

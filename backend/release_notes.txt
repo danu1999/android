@@ -1,3 +1,27 @@
+POSBah v2.19.35 - Integrasi Absensi Fingerprint & Perbaikan Skema Backup
+
+Halo Kak! POSBah v2.19.35 menghadirkan perbaikan fitur absensi dan sinkronisasi database:
+1. Pilihan Metode Absensi Staf: Menyediakan pengaturan metode absensi staf (Supervisor/Manual via Log Produksi vs Mesin Fingerprint Fisik) di header menu Karyawan Manufaktur.
+2. Pengaturan Fingerprint APK: Memungkinkan pengguna mengatur detail koneksi IP Address & Port untuk menghubungkan mesin fingerprint fisik ke aplikasi.
+3. Perbaikan Sinkronisasi & Backup Database: Menyelaraskan struktur kolom tabel backup (tambah kolom supplier & color_mixture) untuk mencegah kegagalan pencadangan otomatis pada server.
+4. Perbaikan Login PIN Manufaktur: Memperbaiki endpoint login PIN bagi karyawan manufaktur (BMP) agar terotentikasi secara valid dengan akun terhubung.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
+POSBah v2.19.34 - Informasi Pembayaran: Input Bebas Nama Bank & Dukungan 4 Rekening Penuh
+
+Halo Kak! POSBah v2.19.34 menghadirkan perbaikan lengkap pada fitur Informasi Pembayaran:
+1. Input Nama Bank/E-Wallet Bebas: Kolom Nama Bank di Pengaturan Cetak kini berupa teks bebas — ketik bank atau e-wallet apapun (BCA, BRI, BNI, MANDIRI, GOPAY, OVO, LINKAJA, dll), tidak lagi terbatas pada 5 pilihan chip yang tersedia sebelumnya.
+2. Tampilan 4 Rekening di Web: Formulir edit rekening di dashboard web kini menampilkan seluruh 4 slot rekening sekaligus tanpa perlu scroll.
+3. Perbaikan Validasi: Sistem kini hanya mewajibkan Rekening 1 (Utama) diisi lengkap. Rekening 2, 3, dan 4 bersifat opsional.
+4. Perbaikan Database: Kolom data rekening diperluas ke tipe TEXT agar tidak ada data yang terpotong saat menyimpan 4 rekening.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.33 - Pembersihan Total Data Karyawan & Penyesuaian Outlet
 
 Halo Kak! POSBah v2.19.33 menghadirkan pembaruan manajemen karyawan:

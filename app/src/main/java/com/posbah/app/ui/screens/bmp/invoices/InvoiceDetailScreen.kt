@@ -839,6 +839,40 @@ private fun generateInvoiceHtml(
         </table>
     """.trimIndent()
 
+    val bankHtml = run {
+        val names = globalConfig.bankName.split("|")
+        val accs = globalConfig.bankAccountNumber.split("|")
+        val owners = globalConfig.bankOwnerName.split("|")
+        val maxLen = maxOf(names.size, accs.size, owners.size)
+        val builder = java.lang.StringBuilder()
+        var firstActive = true
+        for (i in 0 until maxLen) {
+            val n = names.getOrNull(i)?.trim().orEmpty()
+            val a = accs.getOrNull(i)?.trim().orEmpty()
+            val o = owners.getOrNull(i)?.trim().orEmpty()
+            if (n.isNotEmpty() || a.isNotEmpty() || o.isNotEmpty()) {
+                val labelText = if (firstActive) "Nama Bank" else ""
+                builder.append("""
+                    <div style="display: flex; align-items: flex-start; margin-bottom: 2.5px; line-height: 1.3; font-size: 9px; font-family: sans-serif;">
+                        <span style="width: 58px; flex-shrink: 0; font-weight: bold;">$labelText</span>
+                        <span style="margin-right: 4px; font-weight: bold;">:</span>
+                        <span>$n $a A.n $o</span>
+                    </div>
+                """.trimIndent())
+                firstActive = false
+            }
+        }
+        if (builder.isNotEmpty()) {
+            """
+            <div style="border-top: 1px solid #000000; padding-top: 4px; margin-bottom: 5px;">
+                $builder
+            </div>
+            """.trimIndent()
+        } else {
+            ""
+        }
+    }
+
     return """
         <!DOCTYPE html>
         <html lang="id">
@@ -983,11 +1017,7 @@ private fun generateInvoiceHtml(
             <table style="margin-top: 5px; width: 100%; page-break-inside: avoid; border-collapse: collapse; border: none;">
                 <tr>
                     <td style="width: 50%; vertical-align: top; padding-right: 15px; border: none;">
-                        ${if (globalConfig.bankOwnerName.isNotBlank() && globalConfig.bankAccountNumber.isNotBlank()) """
-                        <div style="font-size: 9px; border-top: 1px solid #000000; padding-top: 4px; margin-bottom: 5px; line-height: 1.3;">
-                            <strong>INFO PEMBAYARAN:</strong> ${globalConfig.bankName}: ${globalConfig.bankAccountNumber} a/n ${globalConfig.bankOwnerName}
-                        </div>
-                        """ else ""}
+                        $bankHtml
 
                         ${if (!invoice.notes.isNullOrBlank()) """
                         <div style="font-size: 8px; border-top: 1px solid #eeeeee; padding-top: 4px;">

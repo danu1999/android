@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -26,6 +27,10 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.BorderStroke
 
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -54,6 +59,7 @@ import com.posbah.app.data.local.entities.BmpEmployeeEntity
 import com.posbah.app.data.local.entities.BmpPayrollEntity
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpEmployeeRepository
+import com.posbah.app.data.repository.BmpSettingsRepository
 import com.posbah.app.data.repository.EmployeeRepository
 import com.posbah.app.data.repository.OutletRepository
 import com.posbah.app.data.repository.OutletData
@@ -90,6 +96,7 @@ class EmployeesViewModel @Inject constructor(
     private val outletRepo: OutletRepository,
     private val authRepository: AuthRepository,
     private val productionLogRepo: BmpProductionLogRepository,
+    private val settingsRepo: BmpSettingsRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     val tenantId = authRepository.activeTenantId().orEmpty()
@@ -97,17 +104,45 @@ class EmployeesViewModel @Inject constructor(
     val payrolls = repo.observePayrolls(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<BmpPayrollEntity>())
     val outlets = outletRepo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<OutletData>())
     val posEmployees = posEmployeeRepo.observeForTenant(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<EmployeeData>())
+    val settings = settingsRepo.settings.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     init {
         viewModelScope.launch {
             try { repo.refresh() } catch (_: Exception) {}
             try { repo.refreshPayrolls() } catch (_: Exception) {}
             try { posEmployeeRepo.refresh() } catch (_: Exception) {}
+            try { settingsRepo.refresh() } catch (_: Exception) {}
         }
     }
 
     val error = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     fun dismissError() { error.value = null }
+
+    fun saveAttendanceSettings(mode: String, ip: String, port: String) = viewModelScope.launch(Dispatchers.IO) {
+        val current = settings.value ?: com.posbah.app.data.local.entities.BmpSettingsEntity(tenantId = tenantId, clientName = "CV. BAHTERA MULYA PLASTIK")
+        val dataToSave = com.posbah.app.data.repository.BmpSettingsData(
+            id = current.id,
+            tenantId = current.tenantId,
+            companyName = current.clientName,
+            address = current.addressLine1,
+            phone = current.phoneNumber,
+            email = current.emailAddress,
+            npwp = current.taxNumber,
+            logoUrl = current.clientLogo,
+            listrikBulanan = current.listrikBulanan,
+            jumlahMesin = current.jumlahMesin,
+            jumlahKaryawan = current.jumlahKaryawan,
+            gajiHarian = current.gajiHarian,
+            hariKerjaSebulan = current.hariKerjaSebulan,
+            biayaKarungPer1000 = current.biayaKarungPer1000,
+            hoursPerDay = current.hoursPerDay,
+            attendanceMode = mode,
+            fingerprintIp = ip,
+            fingerprintPort = port,
+            updatedAt = System.currentTimeMillis()
+        )
+        settingsRepo.save(dataToSave)
+    }
 
     fun upsert(
         e: BmpEmployeeEntity,
@@ -354,6 +389,109 @@ fun EmployeesScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    item {
+                        val activeSettings by viewModel.settings.collectAsState()
+                        val currentMode = activeSettings?.attendanceMode ?: "SUPERVISOR"
+                        val ip = activeSettings?.fingerprintIp.orEmpty()
+                        val port = activeSettings?.fingerprintPort ?: "4370"
+
+                        var showSettingsDialog by remember { mutableStateOf(false) }
+
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Text("Metode Absensi Staf", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    if (currentMode == "SUPERVISOR") "Status: Supervisor (Manual via Log Produksi)"
+                                    else "Status: Mesin Fingerprint Terkoneksi ($ip:$port)",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    androidx.compose.material3.OutlinedButton(
+                                        onClick = { viewModel.saveAttendanceSettings("SUPERVISOR", ip, port) },
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            containerColor = if (currentMode == "SUPERVISOR") MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent,
+                                            contentColor = if (currentMode == "SUPERVISOR") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                        ),
+                                        modifier = Modifier.weight(1f),
+                                        border = BorderStroke(
+                                            1.dp,
+                                            if (currentMode == "SUPERVISOR") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                                        ),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("Supervisor", fontSize = 11.sp, fontWeight = if (currentMode == "SUPERVISOR") FontWeight.Bold else FontWeight.Normal)
+                                    }
+                                    androidx.compose.material3.OutlinedButton(
+                                        onClick = {
+                                            viewModel.saveAttendanceSettings("FINGERPRINT", ip, port)
+                                            showSettingsDialog = true
+                                        },
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            containerColor = if (currentMode == "FINGERPRINT") MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent,
+                                            contentColor = if (currentMode == "FINGERPRINT") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                        ),
+                                        modifier = Modifier.weight(1f),
+                                        border = BorderStroke(
+                                            1.dp,
+                                            if (currentMode == "FINGERPRINT") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+                                        ),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("Fingerprint", fontSize = 11.sp, fontWeight = if (currentMode == "FINGERPRINT") FontWeight.Bold else FontWeight.Normal)
+                                    }
+                                }
+                            }
+                        }
+
+                        if (showSettingsDialog) {
+                            var ipText by remember { mutableStateOf(ip) }
+                            var portText by remember { mutableStateOf(port) }
+                            AlertDialog(
+                                onDismissRequest = { showSettingsDialog = false },
+                                title = { Text("Pengaturan Mesin Fingerprint") },
+                                text = {
+                                    Column {
+                                        Text("Masukkan detail koneksi agar mesin fingerprint fisik dapat tersambung dengan APK.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Spacer(Modifier.height(12.dp))
+                                        OutlinedTextField(
+                                            value = ipText,
+                                            onValueChange = { ipText = it },
+                                            label = { Text("IP Address Mesin") },
+                                            placeholder = { Text("cth: 192.168.1.201") },
+                                            singleLine = true,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        Spacer(Modifier.height(8.dp))
+                                        OutlinedTextField(
+                                            value = portText,
+                                            onValueChange = { portText = it },
+                                            label = { Text("Port Mesin") },
+                                            placeholder = { Text("cth: 4370") },
+                                            singleLine = true,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        viewModel.saveAttendanceSettings("FINGERPRINT", ipText, portText)
+                                        showSettingsDialog = false
+                                    }) { Text("Simpan & Hubungkan") }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showSettingsDialog = false }) { Text("Batal") }
+                                }
+                            )
+                        }
+                    }
+
                     items(list, key = { it.id }) { e ->
                         Surface(
                             shape = RoundedCornerShape(14.dp),
@@ -618,6 +756,11 @@ fun EmployeesScreen(
     }
 
     payTarget?.let { target ->
+        val activeSettings by viewModel.settings.collectAsState()
+        val currentMode = activeSettings?.attendanceMode ?: "SUPERVISOR"
+        val ip = activeSettings?.fingerprintIp.orEmpty()
+        val port = activeSettings?.fingerprintPort ?: "4370"
+
         var amt by remember { mutableStateOf(target.salaryAmount.toLong().toString()) }
         var att by remember { mutableStateOf("26") }
         val autoAttendance by viewModel.autoAttendance.collectAsState()
@@ -649,14 +792,28 @@ fun EmployeesScreen(
                         modifier = Modifier.fillMaxWidth().testTag("pay-att")
                     )
                     Spacer(Modifier.size(6.dp))
-                    // Tombol Isi Otomatis dari Absensi Produksi
-                    androidx.compose.material3.OutlinedButton(
-                        onClick = { viewModel.fetchAttendanceFromProduction(target.id) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        androidx.compose.material.icons.Icons.Outlined.let {}
-                        Text("📋 Isi Otomatis dari Absensi Produksi",
-                            style = MaterialTheme.typography.bodySmall)
+                    if (currentMode == "FINGERPRINT") {
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text("Mode Absensi: Mesin Fingerprint", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.height(2.dp))
+                                Text("Data kehadiran ditarik otomatis dari mesin fingerprint terhubung ($ip:$port). Pastikan mesin aktif.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    } else {
+                        // Tombol Isi Otomatis dari Absensi Produksi
+                        androidx.compose.material3.OutlinedButton(
+                            onClick = { viewModel.fetchAttendanceFromProduction(target.id) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            androidx.compose.material.icons.Icons.Outlined.let {}
+                            Text("📋 Isi Otomatis dari Absensi Produksi",
+                                style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                     if (att.toIntOrNull() != null && att.toInt() > 0) {
                         Spacer(Modifier.size(4.dp))

@@ -266,6 +266,9 @@ data class BmpSettingsData(
     val hariKerjaSebulan: Int = 26,
     val biayaKarungPer1000: Double = 2_100_000.0,
     val hoursPerDay: Int = 24,
+    val attendanceMode: String = "SUPERVISOR",
+    val fingerprintIp: String = "",
+    val fingerprintPort: String = "4370",
     val updatedAt: Long = 0
 )
 
@@ -2702,6 +2705,9 @@ class BmpSettingsRepository @Inject constructor(
                 hariKerjaSebulan = data.hariKerjaSebulan,
                 biayaKarungPer1000 = data.biayaKarungPer1000,
                 hoursPerDay = data.hoursPerDay,
+                attendanceMode = data.attendanceMode,
+                fingerprintIp = data.fingerprintIp,
+                fingerprintPort = data.fingerprintPort,
                 updatedAt = data.updatedAt
             )
         }
@@ -2730,6 +2736,9 @@ class BmpSettingsRepository @Inject constructor(
                 hariKerjaSebulan = current.hariKerjaSebulan,
                 biayaKarungPer1000 = current.biayaKarungPer1000,
                 hoursPerDay = current.hoursPerDay,
+                attendanceMode = current.attendanceMode,
+                fingerprintIp = current.fingerprintIp,
+                fingerprintPort = current.fingerprintPort,
                 updatedAt = current.updatedAt
             )
         }
@@ -2753,6 +2762,9 @@ class BmpSettingsRepository @Inject constructor(
                     hariKerjaSebulan = (it["hariKerjaSebulan"] as? Number)?.toInt() ?: 26,
                     biayaKarungPer1000 = (it["biayaKarungPer1000"] as? Number)?.toDouble() ?: 2_100_000.0,
                     hoursPerDay = (it["hoursPerDay"] as? Number)?.toInt() ?: 24,
+                    attendanceMode = it["attendanceMode"] as? String ?: "SUPERVISOR",
+                    fingerprintIp = it["fingerprintIp"] as? String ?: "",
+                    fingerprintPort = it["fingerprintPort"] as? String ?: "4370",
                     updatedAt = (it["updatedAt"] as? Number)?.toLong() ?: 0
                 )
             }
@@ -2774,6 +2786,9 @@ class BmpSettingsRepository @Inject constructor(
                 hariKerjaSebulan = data.hariKerjaSebulan,
                 biayaKarungPer1000 = data.biayaKarungPer1000,
                 hoursPerDay = data.hoursPerDay,
+                attendanceMode = data.attendanceMode,
+                fingerprintIp = data.fingerprintIp,
+                fingerprintPort = data.fingerprintPort,
                 updatedAt = data.updatedAt
             )
         }
@@ -2797,7 +2812,10 @@ class BmpSettingsRepository @Inject constructor(
                 "gajiHarian" to settings.gajiHarian,
                 "hariKerjaSebulan" to settings.hariKerjaSebulan,
                 "biayaKarungPer1000" to settings.biayaKarungPer1000,
-                "hoursPerDay" to settings.hoursPerDay
+                "hoursPerDay" to settings.hoursPerDay,
+                "attendanceMode" to settings.attendanceMode,
+                "fingerprintIp" to settings.fingerprintIp,
+                "fingerprintPort" to settings.fingerprintPort
             ))
             
             // Update the cached flow immediately on success
@@ -2817,6 +2835,9 @@ class BmpSettingsRepository @Inject constructor(
                 hariKerjaSebulan = settings.hariKerjaSebulan,
                 biayaKarungPer1000 = settings.biayaKarungPer1000,
                 hoursPerDay = settings.hoursPerDay,
+                attendanceMode = settings.attendanceMode,
+                fingerprintIp = settings.fingerprintIp,
+                fingerprintPort = settings.fingerprintPort,
                 updatedAt = settings.updatedAt
             )
             
@@ -2845,6 +2866,9 @@ class BmpSettingsRepository @Inject constructor(
             hariKerjaSebulan = data.hariKerjaSebulan,
             biayaKarungPer1000 = data.biayaKarungPer1000,
             hoursPerDay = data.hoursPerDay,
+            attendanceMode = data.attendanceMode,
+            fingerprintIp = data.fingerprintIp,
+            fingerprintPort = data.fingerprintPort,
             updatedAt = data.updatedAt
         )
     }

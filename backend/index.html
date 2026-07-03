@@ -678,28 +678,55 @@
                 </h4>
                 
                 <!-- Display Mode -->
-                <div id="bank-info-display-container" style="font-size: 13px; background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
-                    <div style="margin-bottom: 6px;">Bank: <strong id="lbl-bank-name">-</strong></div>
-                    <div style="margin-bottom: 6px;">No. Rekening: <strong id="lbl-bank-account">-</strong></div>
-                    <div>Atas Nama: <strong id="lbl-bank-owner">-</strong></div>
+                <!-- Display Mode -->
+                <div id="bank-info-display-container" style="font-size: 13px; background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); line-height: 1.6;">
+                    <!-- Rendered dynamically by javascript -->
                 </div>
 
                 <!-- Edit Mode (Hidden by default) -->
                 <div id="bank-info-edit-container" style="display: none; background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
-                        <div>
-                            <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 4px; font-weight: 700; text-transform: uppercase;">Nama Bank</label>
-                            <input type="text" id="txt-bank-name" placeholder="BCA / Mandiri / dll" style="width: 100%; background: #1e293b; border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; outline: none; box-sizing: border-box;">
+                    <p style="font-size: 11px; font-weight: bold; color: var(--secondary); margin-bottom: 12px;">Daftar Rekening Pembayaran (Maksimal 4)</p>
+                    
+                    <!-- Slot 1 -->
+                    <div style="border-bottom: 1px dashed rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 10px;">
+                        <div style="font-size: 10px; font-weight: bold; color: var(--text-muted); margin-bottom: 6px;">REKENING 1 (UTAMA)</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px;">
+                            <input type="text" id="txt-bank-name-1" placeholder="Bank (cth: BCA)" style="width: 100%; background: #1e293b; border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 11px; outline: none; box-sizing: border-box;">
+                            <input type="text" id="txt-bank-account-1" placeholder="No. Rekening" style="width: 100%; background: #1e293b; border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 11px; outline: none; box-sizing: border-box;">
                         </div>
-                        <div>
-                            <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 4px; font-weight: 700; text-transform: uppercase;">No. Rekening</label>
-                            <input type="text" id="txt-bank-account" placeholder="Nomor rekening" style="width: 100%; background: #1e293b; border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; outline: none; box-sizing: border-box;">
+                        <input type="text" id="txt-bank-owner-1" placeholder="Atas Nama" style="width: 100%; background: #1e293b; border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 11px; outline: none; box-sizing: border-box;">
+                    </div>
+
+                    <!-- Slot 2 -->
+                    <div style="border-bottom: 1px dashed rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 10px;">
+                        <div style="font-size: 10px; font-weight: bold; color: var(--text-muted); margin-bottom: 6px;">REKENING 2</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px;">
+                            <input type="text" id="txt-bank-name-2" placeholder="Bank (cth: BRI)" style="width: 100%; background: #1e293b; border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 11px; outline: none; box-sizing: border-box;">
+                            <input type="text" id="txt-bank-account-2" placeholder="No. Rekening" style="width: 100%; background: #1e293b; border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 11px; outline: none; box-sizing: border-box;">
                         </div>
+                        <input type="text" id="txt-bank-owner-2" placeholder="Atas Nama" style="width: 100%; background: #1e293b; border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 11px; outline: none; box-sizing: border-box;">
                     </div>
-                    <div style="margin-bottom: 12px;">
-                        <label style="font-size: 10px; color: var(--text-muted); display: block; margin-bottom: 4px; font-weight: 700; text-transform: uppercase;">Atas Nama (Owner)</label>
-                        <input type="text" id="txt-bank-owner" placeholder="Nama pemilik rekening" style="width: 100%; background: #1e293b; border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; outline: none; box-sizing: border-box;">
+
+                    <!-- Slot 3 -->
+                    <div style="border-bottom: 1px dashed rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 10px;">
+                        <div style="font-size: 10px; font-weight: bold; color: var(--text-muted); margin-bottom: 6px;">REKENING 3</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px;">
+                            <input type="text" id="txt-bank-name-3" placeholder="Bank" style="width: 100%; background: #1e293b; border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 11px; outline: none; box-sizing: border-box;">
+                            <input type="text" id="txt-bank-account-3" placeholder="No. Rekening" style="width: 100%; background: #1e293b; border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 11px; outline: none; box-sizing: border-box;">
+                        </div>
+                        <input type="text" id="txt-bank-owner-3" placeholder="Atas Nama" style="width: 100%; background: #1e293b; border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 11px; outline: none; box-sizing: border-box;">
                     </div>
+
+                    <!-- Slot 4 -->
+                    <div style="padding-bottom: 10px; margin-bottom: 12px;">
+                        <div style="font-size: 10px; font-weight: bold; color: var(--text-muted); margin-bottom: 6px;">REKENING 4</div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px;">
+                            <input type="text" id="txt-bank-name-4" placeholder="Bank" style="width: 100%; background: #1e293b; border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 11px; outline: none; box-sizing: border-box;">
+                            <input type="text" id="txt-bank-account-4" placeholder="No. Rekening" style="width: 100%; background: #1e293b; border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 11px; outline: none; box-sizing: border-box;">
+                        </div>
+                        <input type="text" id="txt-bank-owner-4" placeholder="Atas Nama" style="width: 100%; background: #1e293b; border: 1px solid rgba(255,255,255,0.1); color: #fff; padding: 5px 8px; border-radius: 6px; font-size: 11px; outline: none; box-sizing: border-box;">
+                    </div>
+
                     <div style="display: flex; gap: 8px; justify-content: flex-end;">
                         <button id="btn-cancel-bank-edit" style="background: rgba(255,255,255,0.05); border: none; color: var(--text-muted); padding: 5px 10px; border-radius: 6px; font-size: 11px; cursor: pointer; font-weight: 600;">Batal</button>
                         <button id="btn-save-bank-info" style="background: var(--secondary); border: none; color: #fff; padding: 5px 12px; border-radius: 6px; font-size: 11px; cursor: pointer; font-weight: 600;">Simpan</button>

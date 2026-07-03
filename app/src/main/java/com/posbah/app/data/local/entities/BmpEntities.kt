@@ -150,6 +150,9 @@ data class BmpSettingsEntity(
     val hariKerjaSebulan: Int = 26,
     val biayaKarungPer1000: Double = 2_100_000.0,
     val hoursPerDay: Int = 24,
+    val attendanceMode: String = "SUPERVISOR",
+    val fingerprintIp: String = "",
+    val fingerprintPort: String = "4370",
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

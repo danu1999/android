@@ -1134,22 +1134,38 @@ window.showInvoiceDetails = function (invoiceId) {
     bankDisplay.style.display = "block";
     bankEdit.style.display = "none";
 
-    if (printSettings) {
-        document.getElementById("lbl-bank-name").innerText = printSettings.bankName || "-";
-        document.getElementById("lbl-bank-account").innerText = printSettings.bankAccountNumber || "-";
-        document.getElementById("lbl-bank-owner").innerText = printSettings.bankOwnerName || "-";
+    const bankNameVal = printSettings ? (printSettings.bankName || "") : "";
+    const bankAccountVal = printSettings ? (printSettings.bankAccountNumber || "") : "";
+    const bankOwnerVal = printSettings ? (printSettings.bankOwnerName || "") : "";
 
-        document.getElementById("txt-bank-name").value = printSettings.bankName || "";
-        document.getElementById("txt-bank-account").value = printSettings.bankAccountNumber || "";
-        document.getElementById("txt-bank-owner").value = printSettings.bankOwnerName || "";
-    } else {
-        document.getElementById("lbl-bank-name").innerText = "-";
-        document.getElementById("lbl-bank-account").innerText = "-";
-        document.getElementById("lbl-bank-owner").innerText = "-";
+    const names = bankNameVal.split("|");
+    const accs = bankAccountVal.split("|");
+    const owners = bankOwnerVal.split("|");
 
-        document.getElementById("txt-bank-name").value = "";
-        document.getElementById("txt-bank-account").value = "";
-        document.getElementById("txt-bank-owner").value = "";
+    // Render Display Mode HTML
+    let displayHtml = "";
+    let hasAnyAccount = false;
+    for (let i = 0; i < 4; i++) {
+        const n = (names[i] || "").trim();
+        const a = (accs[i] || "").trim();
+        const o = (owners[i] || "").trim();
+        if (n || a || o) {
+            hasAnyAccount = true;
+            displayHtml += `
+                <div style="margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed rgba(255,255,255,0.05);">
+                    <strong>${n}</strong> : ${a} <br>
+                    <span style="font-size: 11px; color: var(--text-muted);">A/N ${o}</span>
+                </div>
+            `;
+        }
+    }
+    bankDisplay.innerHTML = hasAnyAccount ? displayHtml : `<div style="color: var(--text-muted);">Info Pembayaran belum diisi.</div>`;
+
+    // Fill Inputs (Edit Mode)
+    for (let i = 1; i <= 4; i++) {
+        document.getElementById(`txt-bank-name-${i}`).value = (names[i-1] || "").trim();
+        document.getElementById(`txt-bank-account-${i}`).value = (accs[i-1] || "").trim();
+        document.getElementById(`txt-bank-owner-${i}`).value = (owners[i-1] || "").trim();
     }
 
     // Signature
@@ -1175,14 +1191,28 @@ window.showInvoiceDetails = function (invoiceId) {
 };
 
 async function saveBankInfo() {
-    const bankName = document.getElementById("txt-bank-name").value.trim();
-    const bankAccount = document.getElementById("txt-bank-account").value.trim();
-    const bankOwner = document.getElementById("txt-bank-owner").value.trim();
+    const names = [];
+    const accs = [];
+    const owners = [];
 
-    if (!bankName || !bankAccount || !bankOwner) {
-        alert("Harap isi semua kolom informasi rekening bank!");
+    for (let i = 1; i <= 4; i++) {
+        const name = document.getElementById(`txt-bank-name-${i}`).value.trim();
+        const acc = document.getElementById(`txt-bank-account-${i}`).value.trim();
+        const owner = document.getElementById(`txt-bank-owner-${i}`).value.trim();
+        names.push(name);
+        accs.push(acc);
+        owners.push(owner);
+    }
+
+    // At least the first account is required
+    if (!names[0] || !accs[0] || !owners[0]) {
+        alert("Harap isi setidaknya Rekening 1 (Utama) secara lengkap!");
         return;
     }
+
+    const mergedNames = names.join("|");
+    const mergedAccs = accs.join("|");
+    const mergedOwners = owners.join("|");
 
     const tenantId = localStorage.getItem("tenantId");
     const email = localStorage.getItem("email");
@@ -1191,9 +1221,9 @@ async function saveBankInfo() {
         id: printSettings && printSettings.id ? printSettings.id : Date.now(),
         tenantId: tenantId,
         moduleKey: "BMP",
-        bankName: bankName,
-        bankAccountNumber: bankAccount,
-        bankOwnerName: bankOwner,
+        bankName: mergedNames,
+        bankAccountNumber: mergedAccs,
+        bankOwnerName: mergedOwners,
         updatedAt: Date.now()
     }];
 
@@ -1210,12 +1240,27 @@ async function saveBankInfo() {
         });
 
         if (response.ok) {
-            alert("Informasi Bank berhasil disimpan!");
+            alert("Informasi Rekening Bank berhasil disimpan!");
             printSettings = payload[0];
 
-            document.getElementById("lbl-bank-name").innerText = bankName;
-            document.getElementById("lbl-bank-account").innerText = bankAccount;
-            document.getElementById("lbl-bank-owner").innerText = bankOwner;
+            // Re-render Display Mode HTML
+            let displayHtml = "";
+            let hasAnyAccount = false;
+            for (let i = 0; i < 4; i++) {
+                const n = names[i].trim();
+                const a = accs[i].trim();
+                const o = owners[i].trim();
+                if (n || a || o) {
+                    hasAnyAccount = true;
+                    displayHtml += `
+                        <div style="margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed rgba(255,255,255,0.05);">
+                            <strong>${n}</strong> : ${a} <br>
+                            <span style="font-size: 11px; color: var(--text-muted);">A/N ${o}</span>
+                        </div>
+                    `;
+                }
+            }
+            bankDisplay.innerHTML = hasAnyAccount ? displayHtml : `<div style="color: var(--text-muted);">Info Pembayaran belum diisi.</div>`;
 
             document.getElementById("bank-info-edit-container").style.display = "none";
             document.getElementById("bank-info-display-container").style.display = "block";
@@ -1345,6 +1390,9 @@ async function shareSignatureLink() {
 function triggerInvoicePrint() {
     if (!currentInvoice) return;
 
+    const loggedInEmail = localStorage.getItem("email") || "";
+    const isCustomUser = loggedInEmail.trim().toLowerCase() === "bahteramulyap@gmail.com";
+
     const printArea = document.getElementById("print-area");
     const client = clients.find(c => c.id === currentInvoice.clientId);
     const clientName = client ? client.clientName : "-";
@@ -1396,18 +1444,40 @@ function triggerInvoicePrint() {
 
     let bankInfoHtmlContent = "";
     if (bankNameVal || bankAccountVal || bankOwnerVal) {
+        const names = bankNameVal.split("|");
+        const accs = bankAccountVal.split("|");
+        const owners = bankOwnerVal.split("|");
+        const maxLen = Math.max(names.length, accs.length, owners.length);
+        
+        let accountsContentHtml = "";
+        let firstActive = true;
+        for (let i = 0; i < maxLen; i++) {
+            const n = (names[i] || "").trim();
+            const a = (accs[i] || "").trim();
+            const o = (owners[i] || "").trim();
+            if (n || a || o) {
+                const labelText = firstActive ? "Nama Bank" : "";
+                accountsContentHtml += `
+                    <div style="display: flex; align-items: flex-start; margin-bottom: 2px; line-height: 1.3;">
+                        <span style="width: 80px; flex-shrink: 0; font-weight: bold;">${labelText}</span>
+                        <span style="margin-right: 6px; font-weight: bold;">:</span>
+                        <span>${n} ${a} A.n ${o}</span>
+                    </div>
+                `;
+                firstActive = false;
+            }
+        }
+
         if (isTraditional) {
             bankInfoHtmlContent = `
                 <div class="bank-info-box" style="font-size: 10px; margin-bottom: 2px; color: #000; text-align: left;">
-                    <strong>Info Pembayaran:</strong> ${bankNameVal} ${bankAccountVal} A/N ${bankOwnerVal}
+                    ${accountsContentHtml}
                 </div>
             `;
         } else {
             bankInfoHtmlContent = `
                 <div class="bank-info-box" style="font-size: 13px; margin-bottom: 15px; color: #000; text-align: left; margin-right: 15px;">
-                    <strong>Info Pembayaran :</strong><br>
-                    bank : ${bankNameVal} : ${bankAccountVal}<br>
-                    atas nama : ${bankOwnerVal}
+                    ${accountsContentHtml}
                 </div>
             `;
         }
@@ -1658,14 +1728,18 @@ function triggerInvoicePrint() {
 
         ${signatureHtml}
 
+        ${isCustomUser ? "" : `
         <div style="text-align: center; margin-top: 10px; font-size: ${isTraditional ? '9px' : '11px'}; color: #000; font-weight: bold; width: 100%; page-break-inside: avoid; break-inside: avoid;">
             Tanda tangan ini dicetak secara luring dan sah oleh POSBah.
         </div>
+        `}
 
+        ${isCustomUser ? "" : `
         <div class="footer">
             Terima kasih atas kerja sama Anda.${isTraditional ? " " : "<br>"}
             Faktur ini dihasilkan secara luring oleh POSBah.
         </div>
+        `}
     `;
 
     printArea.innerHTML = printHtml;
@@ -1674,6 +1748,9 @@ function triggerInvoicePrint() {
 
 function triggerSjPrint() {
     if (!currentInvoice) return;
+
+    const loggedInEmail = localStorage.getItem("email") || "";
+    const isCustomUser = loggedInEmail.trim().toLowerCase() === "bahteramulyap@gmail.com";
 
     const printArea = document.getElementById("print-area");
     const client = clients.find(c => c.id === currentInvoice.clientId);
@@ -1919,13 +1996,17 @@ function triggerSjPrint() {
 
         ${signatureHtml}
 
+        ${isCustomUser ? "" : `
         <div style="text-align: center; margin-top: 10px; font-size: ${isTraditional ? '9px' : '11px'}; color: #000; font-weight: bold; width: 100%; page-break-inside: avoid; break-inside: avoid;">
             Tanda tangan ini dicetak secara luring dan sah oleh POSBah.
         </div>
+        `}
 
+        ${isCustomUser ? "" : `
         <div class="footer">
             Surat Jalan ini sah dan diterbitkan secara luring oleh POSBah.
         </div>
+        `}
     `;
 
     printArea.innerHTML = printHtml;
