@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 sealed interface UiState<out T> {
@@ -206,6 +207,7 @@ class BmpDashboardViewModel @Inject constructor(
                         initialTitle = "POSBah — Memperbarui Data",
                         initialMessage = "Menghubungkan ke server..."
                     )
+                    delay(300)
 
                     // Step 1: Invoice
                     DataSyncForegroundService.updateProgress(
@@ -215,6 +217,7 @@ class BmpDashboardViewModel @Inject constructor(
                         progress = 1, maxProgress = totalSteps
                     )
                     invoiceRepo.refresh()
+                    delay(400)
 
                     // Step 2: Klien
                     DataSyncForegroundService.updateProgress(
@@ -224,6 +227,7 @@ class BmpDashboardViewModel @Inject constructor(
                         progress = 2, maxProgress = totalSteps
                     )
                     clientRepo.refresh()
+                    delay(400)
 
                     // Step 3: Arus Kas
                     DataSyncForegroundService.updateProgress(
@@ -233,6 +237,7 @@ class BmpDashboardViewModel @Inject constructor(
                         progress = 3, maxProgress = totalSteps
                     )
                     cashFlowRepo.refresh()
+                    delay(400)
 
                     // Step 4: Bahan Baku
                     DataSyncForegroundService.updateProgress(
@@ -242,6 +247,7 @@ class BmpDashboardViewModel @Inject constructor(
                         progress = 4, maxProgress = totalSteps
                     )
                     bahanBakuRepo.refresh()
+                    delay(400)
 
                     // Selesai
                     DataSyncForegroundService.stopSync(context, "Semua data berhasil diperbarui ✓")

@@ -47,6 +47,13 @@ class MainActivity : FragmentActivity() {
         val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
 
+        // Request Notification permission on Android 13+ (API 33+) for sync progress notifications
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
+            }
+        }
+
         // Setup active network connection guard callback
         val connectivityManager = getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
         val networkRequest = android.net.NetworkRequest.Builder()

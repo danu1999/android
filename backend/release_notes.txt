@@ -1,3 +1,14 @@
+POSBah v2.19.32 - Perbaikan Izin Notifikasi & Tampilan Progress Bar
+
+Halo Kak! POSBah v2.19.32 menyempurnakan fitur notifikasi progress sinkronisasi data:
+1. Izin Otomatis Android 13+: Aplikasi kini secara otomatis meminta izin notifikasi (POST_NOTIFICATIONS) saat pertama dibuka agar progress bar sinkronisasi diizinkan oleh sistem Android 13 & 14.
+2. Prioritas Tampilan Jelas: Kanal notifikasi disesuaikan ke prioritas standar tinggi (IMPORTANCE_DEFAULT) agar tampil jelas di bagian atas status bar notifikasi HP Anda.
+3. Animasi Progress Mulus: Penambahan animasi step (1/4, 2/4, 3/4, 4/4) yang teranimasi mulus sehingga terlihat jelas dan transparan saat data di-download.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.31 - Notifikasi Progress Sinkronisasi Data
 
 Halo Kak! POSBah v2.19.31 menghadirkan fitur notifikasi transparansi sinkronisasi data:

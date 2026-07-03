@@ -37,10 +37,14 @@ class DataSyncForegroundService : Service() {
                 putExtra(EXTRA_MESSAGE, initialMessage)
                 putExtra(EXTRA_INDETERMINATE, true)
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
 
@@ -60,7 +64,11 @@ class DataSyncForegroundService : Service() {
                 putExtra(EXTRA_MAX_PROGRESS, maxProgress)
                 putExtra(EXTRA_INDETERMINATE, indeterminate)
             }
-            context.startService(intent)
+            try {
+                context.startService(intent)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
 
         fun stopSync(context: Context, successMessage: String? = "Sinkronisasi Selesai") {
@@ -68,7 +76,11 @@ class DataSyncForegroundService : Service() {
                 action = ACTION_STOP_SYNC
                 putExtra(EXTRA_MESSAGE, successMessage)
             }
-            context.startService(intent)
+            try {
+                context.startService(intent)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
@@ -91,10 +103,16 @@ class DataSyncForegroundService : Service() {
                 val message = intent.getStringExtra(EXTRA_MESSAGE) ?: "Memulai pengunduhan..."
                 val notification = buildNotification(title, message, 0, 100, true)
                 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-                } else {
-                    startForeground(NOTIFICATION_ID, notification)
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+                    } else {
+                        startForeground(NOTIFICATION_ID, notification)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    // Fallback to normal notification if foreground start is restricted
+                    notificationManager.notify(NOTIFICATION_ID, notification)
                 }
             }
             ACTION_UPDATE_PROGRESS -> {
@@ -114,12 +132,16 @@ class DataSyncForegroundService : Service() {
                         .setSmallIcon(R.mipmap.ic_launcher)
                         .setContentTitle("POSBah — Sinkronisasi Selesai")
                         .setContentText(message)
-                        .setPriority(NotificationCompat.PRIORITY_LOW)
+                        .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                         .setAutoCancel(true)
                         .build()
                     notificationManager.notify(NOTIFICATION_ID + 1, doneNotification)
                 }
-                stopForeground(STOP_FOREGROUND_REMOVE)
+                try {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                } catch (e: Exception) {
+                    notificationManager.cancel(NOTIFICATION_ID)
+                }
                 stopSelf()
             }
         }
@@ -132,7 +154,7 @@ class DataSyncForegroundService : Service() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 CHANNEL_NAME,
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
                 description = "Notifikasi status progress sinkronisasi data POSBah"
                 setSound(null, null)
@@ -162,9 +184,10 @@ class DataSyncForegroundService : Service() {
             .setContentText(message)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setProgress(maxProgress, progress, indeterminate)
             .setContentIntent(pendingIntent)
             .build()
     }
 }
+
