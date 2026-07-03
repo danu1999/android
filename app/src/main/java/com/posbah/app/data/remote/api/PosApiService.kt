@@ -102,6 +102,10 @@ interface PosApiService {
         @Path("id") id: Long
     ): Response<Map<String, Any?>>
 
+    @DELETE("api/rt/employees/clear-all")
+    suspend fun clearAllEmployees(): Response<Map<String, Any?>>
+
+
     // ── Outlets ───────────────────────────────────────────────────────────────
     @GET("api/rt/outlets")
     suspend fun getOutlets(): Response<List<Map<String, Any?>>>

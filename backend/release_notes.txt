@@ -1,3 +1,14 @@
+POSBah v2.19.33 - Pembersihan Total Data Karyawan & Penyesuaian Outlet
+
+Halo Kak! POSBah v2.19.33 menghadirkan pembaruan manajemen karyawan:
+1. Pembersihan Total Data Karyawan: Seluruh data karyawan lama (baik POS/Invoice maupun BMP/Manufaktur) telah dibersihkan secara total di database server & lokal.
+2. Penyesuaian Penugasan Outlet: Pilihan "Seluruh Outlet" kini otomatis dihilangkan jika akun Anda hanya memiliki 1 outlet (misal: "Outlet Utama"). Sistem akan langsung mengunci dan memilih outlet utama tersebut secara akurat.
+3. Tombol Reset Karyawan: Tersedia tombol konfirmasi hapus massal bagi Pemilik Akun (Owner) di layar Manajemen Karyawan.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.32 - Perbaikan Izin Notifikasi & Tampilan Progress Bar
 
 Halo Kak! POSBah v2.19.32 menyempurnakan fitur notifikasi progress sinkronisasi data:

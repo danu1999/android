@@ -1678,6 +1678,18 @@ class BmpEmployeeRepository @Inject constructor(
         }
     }
 
+    suspend fun clearAllBmpEmployees(): OnlineWriteResult {
+        _employees.value = emptyList()
+        return try {
+            api.clearAllBmpEmployees()
+            refresh()
+            OnlineWriteResult.Success
+        } catch (e: Exception) {
+            OnlineWriteResult.Error(e.message ?: "Gagal membersihkan data karyawan manufaktur")
+        }
+    }
+
+
     fun observe(tenantId: String): Flow<List<com.posbah.app.data.local.entities.BmpEmployeeEntity>> =
         _employees.map { list ->
             list.map {

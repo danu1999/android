@@ -32,7 +32,9 @@ import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Storefront
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -111,6 +113,7 @@ fun EmployeeManagementScreen(
 
     var showDeleteConfirmDialog by remember { mutableStateOf(false) }
     var activeEmployeeForDelete by remember { mutableStateOf<Employee?>(null) }
+    var showClearAllConfirmDialog by remember { mutableStateOf(false) }
 
     var outletDropdownExpanded by remember { mutableStateOf(false) }
     var roleDropdownExpanded by remember { mutableStateOf(false) }
@@ -131,6 +134,12 @@ fun EmployeeManagementScreen(
                 onBack = onBack,
                 actions = {
                     if (state.isOwner) {
+                        if (state.employees.isNotEmpty()) {
+                            IconButton(onClick = { showClearAllConfirmDialog = true }) {
+                                Icon(Icons.Outlined.Delete, contentDescription = "Bersihkan Semua Karyawan", tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
+
                         IconButton(onClick = {
                             nameInput = ""
                             emailInput = ""
@@ -139,8 +148,9 @@ fun EmployeeManagementScreen(
                             roleInput = if (state.businessMode == "BMP") "ADMIN" else "KASIR"
                             salaryInput = ""
                             payPeriodInput = "MONTHLY"
-                            selectedOutletId = null
-                            selectedOutletName = "Seluruh Outlet"
+                            val defaultOutlet = state.outlets.firstOrNull()
+                            selectedOutletId = defaultOutlet?.id
+                            selectedOutletName = defaultOutlet?.name ?: "Outlet Utama"
                             showAddDialog = true
                         }) {
                             Icon(Icons.Outlined.Add, contentDescription = "Tambah Karyawan")
@@ -270,6 +280,7 @@ fun EmployeeManagementScreen(
                             items(state.employees) { emp ->
                                 EmployeeCard(
                                     employee = emp,
+                                    outlets = state.outlets,
                                     onPaySalary = { viewModel.paySalary(emp) },
                                     onChangeSalary = {
                                         activeEmployeeForSalaryChange = emp
@@ -443,14 +454,16 @@ fun EmployeeManagementScreen(
                             expanded = outletDropdownExpanded,
                             onDismissRequest = { outletDropdownExpanded = false }
                         ) {
-                            DropdownMenuItem(
-                                text = { Text("Seluruh Outlet") },
-                                onClick = {
-                                    selectedOutletId = null
-                                    selectedOutletName = "Seluruh Outlet"
-                                    outletDropdownExpanded = false
-                                }
-                            )
+                            if (state.outlets.size > 1) {
+                                DropdownMenuItem(
+                                    text = { Text("Seluruh Outlet") },
+                                    onClick = {
+                                        selectedOutletId = null
+                                        selectedOutletName = "Seluruh Outlet"
+                                        outletDropdownExpanded = false
+                                    }
+                                )
+                            }
                             state.outlets.forEach { outlet ->
                                 DropdownMenuItem(
                                     text = { Text(outlet.name) },
@@ -759,16 +772,47 @@ fun EmployeeManagementScreen(
             }
         )
     }
+
+    // Dialog Konfirmasi Bersihkan Semua Data Karyawan
+    if (showClearAllConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearAllConfirmDialog = false },
+            icon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("Bersihkan Semua Karyawan?") },
+
+            text = { Text("Seluruh data karyawan POS/Invoice akan dihapus bersih. Tindakan ini tidak dapat dibatalkan.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.clearAllEmployees()
+                        showClearAllConfirmDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Hapus Semua")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearAllConfirmDialog = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
 }
+
+
 
 @Composable
 fun EmployeeCard(
     employee: Employee,
+    outlets: List<com.posbah.app.data.local.entities.Outlet> = emptyList(),
     onPaySalary: () -> Unit,
     onChangeSalary: () -> Unit,
     onChangePassword: () -> Unit,
     onDelete: () -> Unit
 ) {
+
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
@@ -833,6 +877,18 @@ fun EmployeeCard(
                                 color = Color.Gray
                             )
                         }
+                        val assignedOutletName = remember(employee.outletId, outlets) {
+                            outlets.firstOrNull { it.id == employee.outletId }?.name
+                                ?: outlets.firstOrNull()?.name
+                                ?: "Outlet Utama"
+                        }
+
+                        Text(
+                            "Outlet: $assignedOutletName",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
                 }
 

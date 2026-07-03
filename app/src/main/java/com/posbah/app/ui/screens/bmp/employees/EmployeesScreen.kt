@@ -21,8 +21,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Badge
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FloatingActionButton
+
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -30,7 +34,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.ButtonDefaults
+
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -280,6 +284,11 @@ class EmployeesViewModel @Inject constructor(
             _autoAttendance.value = 0
         }
     }
+
+    fun clearAll() = viewModelScope.launch(Dispatchers.IO) {
+        repo.clearAllBmpEmployees()
+        try { repo.refresh() } catch (_: Exception) {}
+    }
 }
 
 @Composable
@@ -291,6 +300,7 @@ fun EmployeesScreen(
     val outlets by viewModel.outlets.collectAsState()
     var formEdit by remember { mutableStateOf<BmpEmployeeEntity?>(null) }
     var payTarget by remember { mutableStateOf<BmpEmployeeEntity?>(null) }
+    var showClearAllConfirmDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val errorState by viewModel.error.collectAsState()
@@ -303,7 +313,21 @@ fun EmployeesScreen(
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { PosBahTopBar(title = "Karyawan", subtitle = "${list.size} aktif", onBack = onBack) },
+        topBar = {
+            PosBahTopBar(
+                title = "Karyawan Manufaktur",
+                subtitle = "${list.size} aktif",
+                onBack = onBack,
+                actions = {
+                    if (list.isNotEmpty()) {
+                        IconButton(onClick = { showClearAllConfirmDialog = true }) {
+                            Icon(Icons.Outlined.Delete, contentDescription = "Bersihkan Semua Karyawan", tint = MaterialTheme.colorScheme.error)
+                        }
+                    }
+
+                }
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = {
@@ -352,7 +376,9 @@ fun EmployeesScreen(
                                 Column(Modifier.weight(1f)) {
                                     Text(e.name, style = MaterialTheme.typography.titleMedium)
                                     val pinText = if (!e.fingerprintPIN.isNullOrBlank()) "PIN: ${e.fingerprintPIN}" else "PIN Belum Set"
-                                    val outletName = outlets.firstOrNull { it.id == e.outletId }?.name ?: "Seluruh Outlet"
+                                    val outletName = outlets.firstOrNull { it.id == e.outletId }?.name
+                                        ?: outlets.firstOrNull()?.name
+                                        ?: "Outlet Utama"
                                     Text(
                                         "${e.position ?: "Karyawan"} • ${Formatters.rupiah(e.salaryAmount)} • $pinText • Outlet: $outletName",
                                         style = MaterialTheme.typography.bodySmall,
@@ -376,9 +402,10 @@ fun EmployeesScreen(
         var pin by remember { mutableStateOf(editing.fingerprintPIN.orEmpty()) }
         var salary by remember { mutableStateOf(if (editing.salaryAmount == 0.0) "" else editing.salaryAmount.toLong().toString()) }
         var selectedEmployeeType by remember { mutableStateOf(editing.employeeType) }
-        var selectedOutletId by remember { mutableStateOf(editing.outletId) }
+        val defaultOutlet = remember(outlets) { outlets.firstOrNull { it.id == editing.outletId } ?: outlets.firstOrNull() }
+        var selectedOutletId by remember { mutableStateOf(editing.outletId ?: defaultOutlet?.id) }
         var selectedOutletName by remember {
-            mutableStateOf(outlets.firstOrNull { it.id == editing.outletId }?.name ?: "Seluruh Outlet")
+            mutableStateOf(outlets.firstOrNull { it.id == editing.outletId }?.name ?: defaultOutlet?.name ?: "Outlet Utama")
         }
         var outletDropdownExpanded by remember { mutableStateOf(false) }
 
@@ -460,14 +487,16 @@ fun EmployeesScreen(
                             expanded = outletDropdownExpanded,
                             onDismissRequest = { outletDropdownExpanded = false }
                         ) {
-                            DropdownMenuItem(
-                                text = { Text("Seluruh Outlet") },
-                                onClick = {
-                                    selectedOutletId = null
-                                    selectedOutletName = "Seluruh Outlet"
-                                    outletDropdownExpanded = false
-                                }
-                            )
+                            if (outlets.size > 1) {
+                                DropdownMenuItem(
+                                    text = { Text("Seluruh Outlet") },
+                                    onClick = {
+                                        selectedOutletId = null
+                                        selectedOutletName = "Seluruh Outlet"
+                                        outletDropdownExpanded = false
+                                    }
+                                )
+                            }
                             outlets.forEach { outlet ->
                                 DropdownMenuItem(
                                     text = { Text(outlet.name) },
@@ -657,7 +686,35 @@ fun EmployeesScreen(
             dismissButton = { TextButton(onClick = { payTarget = null }) { Text("Batal") } }
         )
     }
+
+    // Dialog Konfirmasi Bersihkan Semua Data Karyawan Manufaktur
+    if (showClearAllConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearAllConfirmDialog = false },
+            icon = { Icon(Icons.Outlined.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("Bersihkan Semua Karyawan Manufaktur?") },
+
+            text = { Text("Seluruh data karyawan manufaktur akan dihapus bersih. Tindakan ini tidak dapat dibatalkan.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.clearAll()
+                        showClearAllConfirmDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Hapus Semua")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearAllConfirmDialog = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
 }
+
 
 @Composable
 fun PayrollScreen(

@@ -358,7 +358,24 @@ class EmployeeViewModel @Inject constructor(
         }
     }
 
+    fun clearAllEmployees() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            try {
+                withContext(Dispatchers.IO) {
+                    api.clearAllEmployees()
+                }
+                val user = authRepository.getActiveUser()
+                loadFromApi(user)
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoading = false, error = e.localizedMessage ?: "Gagal membersihkan data karyawan.") }
+            }
+        }
+    }
+
+
     fun dismissError() {
         _uiState.update { it.copy(error = null) }
     }
 }
+

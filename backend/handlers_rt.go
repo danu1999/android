@@ -3008,3 +3008,27 @@ func handleRtBmpTelemetryMemory(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, map[string]interface{}{"ok": true})
 }
 
+// handleRtClearAllEmployees: Menghapus seluruh data karyawan (POS / Invoice) untuk tenant aktif
+func handleRtClearAllEmployees(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+
+	_, err := db.Exec(`DELETE FROM "employees" WHERE "tenantId" = $1`, tenantId)
+	if err != nil { jsonErr(w, 500, err.Error()); return }
+	_, _ = db.Exec(`DELETE FROM "local_users" WHERE "tenantId" = $1 AND "role" != 'OWNER'`, tenantId)
+
+	jsonOK(w, map[string]interface{}{"ok": true, "message": "Semua data karyawan POS/Invoice telah dibersihkan."})
+}
+
+// handleRtClearAllBmpEmployees: Menghapus seluruh data karyawan (BMP / Manufaktur) untuk tenant aktif
+func handleRtClearAllBmpEmployees(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+
+	_, err := db.Exec(`DELETE FROM "bmp_employees" WHERE "tenantId" = $1`, tenantId)
+	if err != nil { jsonErr(w, 500, err.Error()); return }
+
+	jsonOK(w, map[string]interface{}{"ok": true, "message": "Semua data karyawan Manufaktur/BMP telah dibersihkan."})
+}
+
+

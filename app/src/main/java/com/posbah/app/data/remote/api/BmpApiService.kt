@@ -243,4 +243,9 @@ interface BmpApiService {
     suspend fun sendMemoryTelemetry(
         @Body body: Map<String, Any?>
     ): Response<Map<String, Any?>>
+
+    // ─── Clear All Employees (v2.19.33) ───────────────────────────────────────
+    @DELETE("api/rt/bmp/employees/clear-all")
+    suspend fun clearAllBmpEmployees(): Response<Map<String, Any?>>
 }
+
