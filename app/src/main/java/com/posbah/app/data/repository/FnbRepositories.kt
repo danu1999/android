@@ -1118,8 +1118,7 @@ class EmployeeRepository @Inject constructor(
 
     suspend fun refresh() {
         try {
-            val isBmp = securePrefs.currentBusinessMode == "BMP"
-            val resp = if (isBmp) bmpApi.getBmpEmployees() else api.getEmployees()
+            val resp = api.getEmployees()
             if (resp.isSuccessful) {
                 _employees.value = resp.body()?.map { it.toEmployeeData() } ?: emptyList()
             }
@@ -1162,8 +1161,7 @@ class EmployeeRepository @Inject constructor(
                 "lastPaidAt" to emp.lastPaidAt,
                 "outletId" to emp.outletId
             )
-            val isBmp = securePrefs.currentBusinessMode == "BMP"
-            val resp = if (isBmp) bmpApi.createBmpEmployee(body) else api.createEmployee(body)
+            val resp = api.createEmployee(body)
             if (resp.isSuccessful) {
                 val newId = (resp.body()?.get("id") as? Number)?.toLong() ?: 0L
                 val savedEmp = tempEmp.copy(id = newId)
@@ -1195,12 +1193,7 @@ class EmployeeRepository @Inject constructor(
                 "lastPaidAt" to emp.lastPaidAt,
                 "outletId" to emp.outletId
             )
-            val isBmp = securePrefs.currentBusinessMode == "BMP"
-            if (isBmp) {
-                bmpApi.updateBmpEmployee(emp.id, body)
-            } else {
-                api.updateEmployee(emp.id, body)
-            }
+            api.updateEmployee(emp.id, body)
         } catch (e: Exception) {
             _employees.value = snapshot
         }
@@ -1210,12 +1203,7 @@ class EmployeeRepository @Inject constructor(
         val snapshot = _employees.value
         _employees.value = snapshot.filter { it.id != id }
         try {
-            val isBmp = securePrefs.currentBusinessMode == "BMP"
-            if (isBmp) {
-                bmpApi.deleteBmpEmployee(id)
-            } else {
-                api.deleteEmployee(id)
-            }
+            api.deleteEmployee(id)
         } catch (e: Exception) {
             _employees.value = snapshot
         }
