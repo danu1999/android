@@ -263,6 +263,11 @@ class InvoiceDetailViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
+            try {
+                printSettingsRepo.refresh("BMP")
+            } catch (_: Exception) {}
+        }
+        viewModelScope.launch {
             invoiceRepo.observeProducts(invoiceId).collect { products ->
                 _ui.update { it.copy(products = products) }
             }

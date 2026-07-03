@@ -234,18 +234,34 @@ fun PosBahRoot(
         }
 
         composable(Screen.BmpClients.route) {
-            ClientsScreen(
-                onBack = { nav.popBackStack() },
-                onEdit = { id -> nav.navigate(Screen.BmpClientEdit.build(id)) },
-                onNavigateToInvoiceList = { clientId -> nav.navigate(Screen.BmpInvoices.build(clientId)) }
-            )
+            if (!viewModel.isOwner()) {
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    nav.navigate(Screen.BmpDashboard.route) {
+                        popUpTo(Screen.BmpDashboard.route) { inclusive = true }
+                    }
+                }
+            } else {
+                ClientsScreen(
+                    onBack = { nav.popBackStack() },
+                    onEdit = { id -> nav.navigate(Screen.BmpClientEdit.build(id)) },
+                    onNavigateToInvoiceList = { clientId -> nav.navigate(Screen.BmpInvoices.build(clientId)) }
+                )
+            }
         }
 
         composable(
             route = Screen.BmpClientEdit.route,
             arguments = listOf(navArgument("id") { type = NavType.StringType; defaultValue = "-1" })
         ) {
-            ClientEditScreen(onDone = { nav.popBackStack() })
+            if (!viewModel.isOwner()) {
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    nav.navigate(Screen.BmpDashboard.route) {
+                        popUpTo(Screen.BmpDashboard.route) { inclusive = true }
+                    }
+                }
+            } else {
+                ClientEditScreen(onDone = { nav.popBackStack() })
+            }
         }
 
         composable(
@@ -255,28 +271,52 @@ fun PosBahRoot(
                 navArgument("filterOverdue") { type = NavType.StringType; nullable = true; defaultValue = "false" }
             )
         ) {
-            InvoicesListScreen(
-                onBack = { nav.popBackStack() },
-                onCreate = { nav.navigate(Screen.BmpCreateInvoice.build(null)) },
-                onOpen = { id -> nav.navigate(Screen.BmpInvoiceDetail.build(id)) }
-            )
+            if (!viewModel.isOwner()) {
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    nav.navigate(Screen.BmpDashboard.route) {
+                        popUpTo(Screen.BmpDashboard.route) { inclusive = true }
+                    }
+                }
+            } else {
+                InvoicesListScreen(
+                    onBack = { nav.popBackStack() },
+                    onCreate = { nav.navigate(Screen.BmpCreateInvoice.build(null)) },
+                    onOpen = { id -> nav.navigate(Screen.BmpInvoiceDetail.build(id)) }
+                )
+            }
         }
 
         composable(
             route = Screen.BmpInvoiceDetail.route,
             arguments = listOf(navArgument("id") { type = NavType.StringType })
         ) {
-            InvoiceDetailScreen(
-                onBack = { nav.popBackStack() },
-                onEdit = { id -> nav.navigate(Screen.BmpCreateInvoice.build(id)) }
-            )
+            if (!viewModel.isOwner()) {
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    nav.navigate(Screen.BmpDashboard.route) {
+                        popUpTo(Screen.BmpDashboard.route) { inclusive = true }
+                    }
+                }
+            } else {
+                InvoiceDetailScreen(
+                    onBack = { nav.popBackStack() },
+                    onEdit = { id -> nav.navigate(Screen.BmpCreateInvoice.build(id)) }
+                )
+            }
         }
 
         composable(
             route = Screen.BmpCreateInvoice.route,
             arguments = listOf(navArgument("id") { type = NavType.StringType; defaultValue = "-1" })
         ) {
-            InvoiceFormScreen(onDone = { nav.popBackStack() })
+            if (!viewModel.isOwner()) {
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    nav.navigate(Screen.BmpDashboard.route) {
+                        popUpTo(Screen.BmpDashboard.route) { inclusive = true }
+                    }
+                }
+            } else {
+                InvoiceFormScreen(onDone = { nav.popBackStack() })
+            }
         }
 
         composable(Screen.BmpProducts.route) {
@@ -307,16 +347,32 @@ fun PosBahRoot(
         }
 
         composable(Screen.BmpPayments.route) {
-            PaymentsListScreen(onBack = { nav.popBackStack() })
+            if (!viewModel.isOwner()) {
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    nav.navigate(Screen.BmpDashboard.route) {
+                        popUpTo(Screen.BmpDashboard.route) { inclusive = true }
+                    }
+                }
+            } else {
+                PaymentsListScreen(onBack = { nav.popBackStack() })
+            }
         }
 
         composable(Screen.BmpCashFlow.route) {
-            CashFlowScreen(
-                onBack = { nav.popBackStack() },
-                onNavigateToInvoiceDetail = { id ->
-                    nav.navigate(Screen.BmpInvoiceDetail.build(id))
+            if (!viewModel.isOwner()) {
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    nav.navigate(Screen.BmpDashboard.route) {
+                        popUpTo(Screen.BmpDashboard.route) { inclusive = true }
+                    }
                 }
-            )
+            } else {
+                CashFlowScreen(
+                    onBack = { nav.popBackStack() },
+                    onNavigateToInvoiceDetail = { id ->
+                        nav.navigate(Screen.BmpInvoiceDetail.build(id))
+                    }
+                )
+            }
         }
 
         composable(Screen.BmpEmployees.route) {
@@ -344,10 +400,18 @@ fun PosBahRoot(
         }
 
         composable(Screen.BmpSettings.route) {
-            SettingsScreen(
-                onBack = { nav.popBackStack() },
-                onNavigateToPrintSettings = { nav.navigate(Screen.PrintSettings.build("BMP")) }
-            )
+            if (!viewModel.isOwner()) {
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    nav.navigate(Screen.BmpDashboard.route) {
+                        popUpTo(Screen.BmpDashboard.route) { inclusive = true }
+                    }
+                }
+            } else {
+                SettingsScreen(
+                    onBack = { nav.popBackStack() },
+                    onNavigateToPrintSettings = { nav.navigate(Screen.PrintSettings.build("BMP")) }
+                )
+            }
         }
 
         composable(

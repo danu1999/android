@@ -126,18 +126,23 @@ fun BmpDashboardScreen(
             BmpMenuItem("Penggajian", "Payroll & rekap", Icons.Outlined.PriceChange, "bmp/payroll", "menu-payroll"),
             BmpMenuItem("Pengaturan", "Profil perusahaan & sistem", Icons.Outlined.Settings, "bmp/settings", "menu-settings"),
         ).filter { item ->
-            val isManager = ui.role == "OWNER" || ui.role == "ADMIN" || ui.role == "SUPERVISOR"
-            if (!isManager) {
-                item.testTag != "menu-products" &&
-                item.testTag != "menu-financial-report" &&
-                item.testTag != "menu-employees" &&
-                item.testTag != "menu-payroll"
-            } else if (ui.role != "OWNER") {
-                item.testTag != "menu-financial-report" &&
-                item.testTag != "menu-employees" &&
-                item.testTag != "menu-payroll"
-            } else {
+            val isOwner = ui.role == "OWNER"
+            if (isOwner) {
                 true
+            } else {
+                val isManager = ui.role == "ADMIN" || ui.role == "SUPERVISOR"
+                if (isManager) {
+                    item.testTag != "menu-financial-report" &&
+                    item.testTag != "menu-employees" &&
+                    item.testTag != "menu-payroll" &&
+                    item.testTag != "menu-payments" &&
+                    item.testTag != "menu-settings" &&
+                    item.testTag != "menu-invoices" &&
+                    item.testTag != "menu-clients" &&
+                    item.testTag != "menu-cashflow"
+                } else {
+                    item.testTag == "menu-machines" || item.testTag == "menu-production"
+                }
             }
         }
     }
@@ -147,56 +152,60 @@ fun BmpDashboardScreen(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         floatingActionButton = {
-            Box(contentAlignment = Alignment.BottomEnd) {
-                FloatingActionButton(
-                    onClick = { fabMenuExpanded = !fabMenuExpanded },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.testTag("fab-quick-action")
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Add,
-                        contentDescription = "Aksi Cepat"
-                    )
-                }
-                
-                DropdownMenu(
-                    expanded = fabMenuExpanded,
-                    onDismissRequest = { fabMenuExpanded = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Buat Invoice Baru") },
-                        onClick = {
-                            fabMenuExpanded = false
-                            onNavigate(Screen.BmpCreateInvoice.build(null))
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Outlined.Description, contentDescription = null)
-                        },
-                        modifier = Modifier.testTag("menu-item-create-invoice")
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Tambah Klien Baru") },
-                        onClick = {
-                            fabMenuExpanded = false
-                            onNavigate(Screen.BmpClientEdit.build(null))
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Outlined.Group, contentDescription = null)
-                        },
-                        modifier = Modifier.testTag("menu-item-add-client")
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Catat Bahan Baku Baru") },
-                        onClick = {
-                            fabMenuExpanded = false
-                            onNavigate(Screen.BmpBahanBakuForm.build(null))
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Outlined.Science, contentDescription = null)
-                        },
-                        modifier = Modifier.testTag("menu-item-add-bahanbaku")
-                    )
+            if (ui.role == "OWNER" || ui.role == "ADMIN" || ui.role == "SUPERVISOR") {
+                Box(contentAlignment = Alignment.BottomEnd) {
+                    FloatingActionButton(
+                        onClick = { fabMenuExpanded = !fabMenuExpanded },
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.testTag("fab-quick-action")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = "Aksi Cepat"
+                        )
+                    }
+                    
+                    DropdownMenu(
+                        expanded = fabMenuExpanded,
+                        onDismissRequest = { fabMenuExpanded = false }
+                    ) {
+                        if (ui.role == "OWNER") {
+                            DropdownMenuItem(
+                                text = { Text("Buat Invoice Baru") },
+                                onClick = {
+                                    fabMenuExpanded = false
+                                    onNavigate(Screen.BmpCreateInvoice.build(null))
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Outlined.Description, contentDescription = null)
+                                },
+                                modifier = Modifier.testTag("menu-item-create-invoice")
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Tambah Klien Baru") },
+                                onClick = {
+                                    fabMenuExpanded = false
+                                    onNavigate(Screen.BmpClientEdit.build(null))
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Outlined.Group, contentDescription = null)
+                                },
+                                modifier = Modifier.testTag("menu-item-add-client")
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text("Catat Bahan Baku Baru") },
+                            onClick = {
+                                fabMenuExpanded = false
+                                onNavigate(Screen.BmpBahanBakuForm.build(null))
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Outlined.Science, contentDescription = null)
+                            },
+                            modifier = Modifier.testTag("menu-item-add-bahanbaku")
+                        )
+                    }
                 }
             }
         }
