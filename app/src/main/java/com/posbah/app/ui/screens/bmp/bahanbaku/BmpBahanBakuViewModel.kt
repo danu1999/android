@@ -31,6 +31,8 @@ class BahanBakuListViewModel @Inject constructor(
 ) : ViewModel() {
     private val tenantId = authRepo.activeTenantId().orEmpty()
 
+    fun isOwner(): Boolean = authRepo.getActiveSession()?.role == "OWNER"
+
     init {
         viewModelScope.launch {
             while (true) {

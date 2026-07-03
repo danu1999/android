@@ -247,7 +247,8 @@ fun BahanBakuListScreen(
                         onPayDebt = {
                             payDebtTarget = entry
                             payAmount = ""
-                        }
+                        },
+                        isOwner = viewModel.isOwner()
                     )
                 }
             }
@@ -537,7 +538,8 @@ private fun BahanBakuCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onPreviewPhoto: (String) -> Unit,
-    onPayDebt: () -> Unit
+    onPayDebt: () -> Unit,
+    isOwner: Boolean
 ) {
     val sisaHutang = entry.totalHarga - entry.nominal
     Surface(
@@ -570,13 +572,15 @@ private fun BahanBakuCard(
                 IconButton(onClick = onEdit, modifier = Modifier.testTag("btn-edit-bb-${entry.id}")) {
                     Icon(Icons.Outlined.Edit, contentDescription = "Edit", modifier = Modifier.size(18.dp))
                 }
-                IconButton(onClick = onDelete, modifier = Modifier.testTag("btn-delete-bb-${entry.id}")) {
-                    Icon(
-                        Icons.Outlined.Delete,
-                        contentDescription = "Hapus",
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(18.dp)
-                    )
+                if (isOwner) {
+                    IconButton(onClick = onDelete, modifier = Modifier.testTag("btn-delete-bb-${entry.id}")) {
+                        Icon(
+                            Icons.Outlined.Delete,
+                            contentDescription = "Hapus",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
             Spacer(Modifier.height(10.dp))

@@ -60,6 +60,8 @@ class MachineMoldViewModel @Inject constructor(
 ) : ViewModel() {
     private val tenantId = authRepo.activeTenantId().orEmpty()
 
+    fun isOwner(): Boolean = authRepo.getActiveSession()?.role == "OWNER"
+
     val machines = machineRepo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val molds = moldRepo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val products = productRepo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
@@ -303,7 +305,8 @@ fun MachineMoldManagementScreen(
                                 moldName = molds.find { it.id == machine.moldId }?.name,
                                 onEdit = { viewModel.openMachineEdit(machine) },
                                 onDelete = { viewModel.deleteMachine(machine.id) },
-                                onToggleActive = { viewModel.toggleMachineActive(machine) }
+                                onToggleActive = { viewModel.toggleMachineActive(machine) },
+                                isOwner = viewModel.isOwner()
                             )
                         }
                     }
@@ -329,7 +332,8 @@ fun MachineMoldManagementScreen(
                                 matchedProductTitle = matchedProd?.title ?: "Belum Terhubung ke Produk",
                                 onEdit = { viewModel.openMoldEdit(mold) },
                                 onDelete = { viewModel.deleteMold(mold.id) },
-                                onResetUsage = { viewModel.resetMoldUsage(mold.id) }
+                                onResetUsage = { viewModel.resetMoldUsage(mold.id) },
+                                isOwner = viewModel.isOwner()
                             )
                         }
                     }
@@ -574,7 +578,8 @@ fun MachineCard(
     moldName: String?,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    onToggleActive: () -> Unit
+    onToggleActive: () -> Unit,
+    isOwner: Boolean
 ) {
     Surface(
         shape = RoundedCornerShape(12.dp),
@@ -608,13 +613,15 @@ fun MachineCard(
                             modifier = Modifier.size(20.dp)
                         )
                     }
-                    IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
-                        Icon(
-                            Icons.Outlined.Delete,
-                            contentDescription = "Hapus",
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(20.dp)
-                        )
+                    if (isOwner) {
+                        IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                Icons.Outlined.Delete,
+                                contentDescription = "Hapus",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -682,7 +689,8 @@ fun MoldCard(
     matchedProductTitle: String,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    onResetUsage: () -> Unit = {}
+    onResetUsage: () -> Unit = {},
+    isOwner: Boolean
 ) {
     val usagePct = if (mold.expectedShotsLifetime > 0)
         (mold.usageCount.toFloat() / mold.expectedShotsLifetime.toFloat()).coerceIn(0f, 1f)
@@ -732,13 +740,15 @@ fun MoldCard(
                             modifier = Modifier.size(20.dp)
                         )
                     }
-                    IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
-                        Icon(
-                            Icons.Outlined.Delete,
-                            contentDescription = "Hapus",
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(20.dp)
-                        )
+                    if (isOwner) {
+                        IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                Icons.Outlined.Delete,
+                                contentDescription = "Hapus",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             }

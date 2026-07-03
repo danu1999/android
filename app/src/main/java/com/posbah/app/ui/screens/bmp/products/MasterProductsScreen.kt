@@ -127,6 +127,8 @@ class MasterProductsViewModel @Inject constructor(
         _isPriceLoading.value = false
     }
 
+    fun isOwner(): Boolean = authRepository.getActiveSession()?.role == "OWNER"
+
     init {
         viewModelScope.launch(Dispatchers.IO) {
             while (true) {
@@ -485,8 +487,10 @@ fun MasterProductsScreen(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                                TextButton(onClick = { viewModel.delete(p.id) }) {
-                                    Text("Hapus", color = MaterialTheme.colorScheme.error)
+                                if (viewModel.isOwner()) {
+                                    TextButton(onClick = { viewModel.delete(p.id) }) {
+                                        Text("Hapus", color = MaterialTheme.colorScheme.error)
+                                    }
                                 }
                             }
                         }

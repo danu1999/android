@@ -140,6 +140,8 @@ class BmpProductionLogViewModel @Inject constructor(
 
     private val tenantId = authRepository.activeTenantId().orEmpty()
 
+    fun isOwner(): Boolean = authRepository.getActiveSession()?.role == "OWNER"
+
     val products = masterProductRepo.observe(tenantId)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -522,7 +524,8 @@ fun BmpProductionLogScreen(
                 )
                 1 -> HistoryTab(
                     logItems = logItems,
-                    onDeleteRequest = { logToDelete = it }
+                    onDeleteRequest = { logToDelete = it },
+                    isOwner = viewModel.isOwner()
                 )
             }
         }
@@ -1419,7 +1422,8 @@ private fun MachineShiftCard(
 @Composable
 private fun HistoryTab(
     logItems: List<ProductionLogItem>,
-    onDeleteRequest: (BmpProductionLogEntity) -> Unit
+    onDeleteRequest: (BmpProductionLogEntity) -> Unit,
+    isOwner: Boolean
 ) {
     if (logItems.isEmpty()) {
         EmptyState(
@@ -1520,13 +1524,15 @@ private fun HistoryTab(
                                     color = Color(0xFF2E7D32)
                                 )
                             )
-                            Spacer(Modifier.height(4.dp))
-                            IconButton(
-                                onClick = { onDeleteRequest(log) },
-                                modifier = Modifier.size(26.dp)
-                            ) {
-                                Icon(Icons.Outlined.Delete, null,
-                                    tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                            if (isOwner) {
+                                Spacer(Modifier.height(4.dp))
+                                IconButton(
+                                    onClick = { onDeleteRequest(log) },
+                                    modifier = Modifier.size(26.dp)
+                                ) {
+                                    Icon(Icons.Outlined.Delete, null,
+                                        tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                                }
                             }
                         }
                     }
