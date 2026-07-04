@@ -8656,6 +8656,7 @@ func versionCheckMiddleware(next http.Handler) http.Handler {
 		path := r.URL.Path
 		if strings.HasPrefix(path, "/api/") {
 			isExempt := strings.HasPrefix(path, "/api/admin/") ||
+				path == "/api/ping" ||
 				path == "/api/download-apk" ||
 				path == "/api/dowload-apk" ||
 				path == "/api/apk-version" ||
