@@ -1,3 +1,16 @@
+POSBah v2.19.49 - Infrastruktur FnB Lanjutan: Recipe Inventory, Modifier Topping, Nomor Meja & Shift Kasir
+
+Halo Kak! POSBah v2.19.49 menghadirkan fondasi backend untuk fitur-fitur FnB Lanjutan:
+1. [Backend] Pengurangan stok bahan baku otomatis berdasarkan resep produk (Recipe-Based Inventory) setiap ada penjualan COMPLETED.
+2. [Backend] Dukungan modifier/topping dengan harga berbeda per varian ukuran produk.
+3. [Backend] Pelacakan nomor meja manual pada setiap transaksi FnB.
+4. [Backend] Sistem buka/tutup shift kasir dengan petty cash tracking (kas awal, kas akhir, selisih kas).
+5. [Database] 6 tabel baru: raw_materials, product_recipes, product_modifiers, transaction_item_modifiers, cashier_shifts + kolom tableNumber di transactions.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.48 - Sinkronisasi Biaya & Bahan Baku ke Komponen Olahan & Analisis Margin
 
 Halo Kak! POSBah v2.19.48 memperbaiki sinkronisasi biaya / bahan baku FnB:
@@ -7,6 +20,7 @@ Halo Kak! POSBah v2.19.48 memperbaiki sinkronisasi biaya / bahan baku FnB:
 Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
 
 ---
+
 
 POSBah v2.19.47 - Fix Catat Biaya / Bahan Baku Tersimpan ke Database
 

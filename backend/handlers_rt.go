@@ -92,6 +92,310 @@ func nowMillis() int64 {
 	return time.Now().UnixNano() / int64(time.Millisecond)
 }
 
+// deductRawMaterialsForTransaction: kurangi stok raw_materials berdasarkan resep (product_recipes)
+// untuk setiap item yang terjual pada transaksi COMPLETED. Dijalankan secara goroutine (async).
+func deductRawMaterialsForTransaction(transactionId int64, tenantId string) {
+	// Ambil semua item transaksi beserta produknya
+	rows, err := db.Query(`
+		SELECT ti."productId", ti."quantity"
+		FROM transaction_items ti
+		WHERE ti."transactionId" = $1
+	`, transactionId)
+	if err != nil {
+		log.Printf("[RecipeInventory] error fetching tx items for tx %d: %v", transactionId, err)
+		return
+	}
+	defer rows.Close()
+
+	type txItem struct {
+		productId int64
+		quantity  int64
+	}
+	var items []txItem
+	for rows.Next() {
+		var it txItem
+		rows.Scan(&it.productId, &it.quantity)
+		items = append(items, it)
+	}
+
+	// Untuk setiap item, kurangi stok bahan baku berdasarkan resep
+	for _, item := range items {
+		recipeRows, err := db.Query(`
+			SELECT pr."rawMaterialId", pr."quantityNeeded"
+			FROM product_recipes pr
+			WHERE pr."productId" = $1 AND pr."tenantId" = $2
+		`, item.productId, tenantId)
+		if err != nil {
+			continue
+		}
+		for recipeRows.Next() {
+			var rawMatId int64
+			var qtyNeeded float64
+			recipeRows.Scan(&rawMatId, &qtyNeeded)
+			totalDeduction := qtyNeeded * float64(item.quantity)
+			_, _ = db.Exec(`
+				UPDATE raw_materials SET
+					"stock" = GREATEST(0, "stock" - $1),
+					"updatedAt" = $2
+				WHERE id = $3 AND "tenantId" = $4 AND "isDeleted" = FALSE
+			`, totalDeduction, nowMillis(), rawMatId, tenantId)
+		}
+		recipeRows.Close()
+	}
+	log.Printf("[RecipeInventory] deducted raw materials for transaction %d", transactionId)
+}
+
+// ── Raw Materials (Stok Bahan Baku) ──────────────────────────────────────────
+func handleRtRawMaterials(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	switch r.Method {
+	case http.MethodGet:
+		outletId := r.URL.Query().Get("outletId")
+		var rows *sql.Rows
+		var err error
+		if outletId != "" {
+			rows, err = db.Query(`SELECT * FROM raw_materials WHERE "tenantId"=$1 AND ("outletId"=$2 OR "outletId" IS NULL) AND "isDeleted"=FALSE ORDER BY name ASC`, tenantId, outletId)
+		} else {
+			rows, err = db.Query(`SELECT * FROM raw_materials WHERE "tenantId"=$1 AND "isDeleted"=FALSE ORDER BY name ASC`, tenantId)
+		}
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		defer rows.Close()
+		jsonOK(w, rowsToJSON(rows))
+	case http.MethodPost:
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body)
+		body["tenantId"] = tenantId; body["createdAt"] = nowMillis(); body["updatedAt"] = nowMillis()
+		id, err := insertRow("raw_materials", body)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+func handleRtRawMaterialsById(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/raw-materials/")
+	id, _ := strconv.ParseInt(idStr, 10, 64)
+	switch r.Method {
+	case http.MethodPut:
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body)
+		body["updatedAt"] = nowMillis()
+		updateRow("raw_materials", id, tenantId, body)
+		jsonOK(w, map[string]interface{}{"ok": true})
+	case http.MethodDelete:
+		db.Exec(`UPDATE raw_materials SET "isDeleted"=TRUE,"updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, nowMillis(), id, tenantId)
+		jsonOK(w, map[string]interface{}{"ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+// ── Product Recipes (Mapping Resep ke Bahan Baku) ────────────────────────────
+func handleRtProductRecipes(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	switch r.Method {
+	case http.MethodGet:
+		productId := r.URL.Query().Get("productId")
+		var rows *sql.Rows
+		var err error
+		if productId != "" {
+			rows, err = db.Query(`
+				SELECT pr.*, rm.name AS "rawMaterialName", rm."recipeUnit", rm."purchaseUnit", rm."conversionRate"
+				FROM product_recipes pr
+				LEFT JOIN raw_materials rm ON rm.id = pr."rawMaterialId"
+				WHERE pr."tenantId"=$1 AND pr."productId"=$2`, tenantId, productId)
+		} else {
+			rows, err = db.Query(`SELECT * FROM product_recipes WHERE "tenantId"=$1`, tenantId)
+		}
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		defer rows.Close()
+		jsonOK(w, rowsToJSON(rows))
+	case http.MethodPost:
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body)
+		body["tenantId"] = tenantId; body["createdAt"] = nowMillis(); body["updatedAt"] = nowMillis()
+		id, err := insertRow("product_recipes", body)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+func handleRtProductRecipesById(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/product-recipes/")
+	id, _ := strconv.ParseInt(idStr, 10, 64)
+	switch r.Method {
+	case http.MethodPut:
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body)
+		body["updatedAt"] = nowMillis()
+		updateRow("product_recipes", id, tenantId, body)
+		jsonOK(w, map[string]interface{}{"ok": true})
+	case http.MethodDelete:
+		db.Exec(`DELETE FROM product_recipes WHERE id=$1 AND "tenantId"=$2`, id, tenantId)
+		jsonOK(w, map[string]interface{}{"ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+// ── Product Modifiers (Topping/Kustomisasi per Varian) ───────────────────────
+func handleRtProductModifiers(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	switch r.Method {
+	case http.MethodGet:
+		productId := r.URL.Query().Get("productId")
+		var rows *sql.Rows
+		var err error
+		if productId != "" {
+			rows, err = db.Query(`SELECT * FROM product_modifiers WHERE "tenantId"=$1 AND "productId"=$2 AND "isDeleted"=FALSE ORDER BY name ASC`, tenantId, productId)
+		} else {
+			rows, err = db.Query(`SELECT * FROM product_modifiers WHERE "tenantId"=$1 AND "isDeleted"=FALSE ORDER BY name ASC`, tenantId)
+		}
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		defer rows.Close()
+		jsonOK(w, rowsToJSON(rows))
+	case http.MethodPost:
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body)
+		body["tenantId"] = tenantId; body["createdAt"] = nowMillis(); body["updatedAt"] = nowMillis()
+		id, err := insertRow("product_modifiers", body)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+func handleRtProductModifiersById(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/product-modifiers/")
+	id, _ := strconv.ParseInt(idStr, 10, 64)
+	switch r.Method {
+	case http.MethodPut:
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body)
+		body["updatedAt"] = nowMillis()
+		updateRow("product_modifiers", id, tenantId, body)
+		jsonOK(w, map[string]interface{}{"ok": true})
+	case http.MethodDelete:
+		db.Exec(`UPDATE product_modifiers SET "isDeleted"=TRUE,"updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, nowMillis(), id, tenantId)
+		jsonOK(w, map[string]interface{}{"ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+// ── Transaction Item Modifiers ────────────────────────────────────────────────
+func handleRtTxItemModifiers(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	switch r.Method {
+	case http.MethodGet:
+		txItemId := r.URL.Query().Get("transactionItemId")
+		var rows *sql.Rows
+		var err error
+		if txItemId != "" {
+			rows, err = db.Query(`SELECT * FROM transaction_item_modifiers WHERE "tenantId"=$1 AND "transactionItemId"=$2`, tenantId, txItemId)
+		} else {
+			rows, err = db.Query(`SELECT * FROM transaction_item_modifiers WHERE "tenantId"=$1`, tenantId)
+		}
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		defer rows.Close()
+		jsonOK(w, rowsToJSON(rows))
+	case http.MethodPost:
+		var body []map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			// fallback: try single object
+			var single map[string]interface{}
+			json.NewDecoder(r.Body).Decode(&single)
+			single["tenantId"] = tenantId
+			id, err2 := insertRow("transaction_item_modifiers", single)
+			if err2 != nil { jsonErr(w, 500, err2.Error()); return }
+			jsonOK(w, map[string]interface{}{"id": id, "ok": true})
+			return
+		}
+		for _, item := range body {
+			item["tenantId"] = tenantId
+			insertRow("transaction_item_modifiers", item)
+		}
+		jsonOK(w, map[string]interface{}{"ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+// ── Cashier Shifts (Buka/Tutup Shift Kasir) ───────────────────────────────────
+func handleRtCashierShifts(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	switch r.Method {
+	case http.MethodGet:
+		status := r.URL.Query().Get("status")
+		employeeId := r.URL.Query().Get("employeeId")
+		var rows *sql.Rows
+		var err error
+		if employeeId != "" && status != "" {
+			rows, err = db.Query(`SELECT * FROM cashier_shifts WHERE "tenantId"=$1 AND "employeeId"=$2 AND "status"=$3 ORDER BY "openedAt" DESC LIMIT 1`, tenantId, employeeId, status)
+		} else if employeeId != "" {
+			rows, err = db.Query(`SELECT * FROM cashier_shifts WHERE "tenantId"=$1 AND "employeeId"=$2 ORDER BY "openedAt" DESC LIMIT 20`, tenantId, employeeId)
+		} else {
+			rows, err = db.Query(`SELECT * FROM cashier_shifts WHERE "tenantId"=$1 ORDER BY "openedAt" DESC LIMIT 50`, tenantId)
+		}
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		defer rows.Close()
+		jsonOK(w, rowsToJSON(rows))
+	case http.MethodPost:
+		// Buka shift baru
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body)
+		body["tenantId"] = tenantId
+		body["openedAt"] = nowMillis()
+		body["status"] = "OPEN"
+		body["createdAt"] = nowMillis(); body["updatedAt"] = nowMillis()
+		id, err := insertRow("cashier_shifts", body)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+func handleRtCashierShiftsById(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/cashier-shifts/")
+	id, _ := strconv.ParseInt(idStr, 10, 64)
+	switch r.Method {
+	case http.MethodPut:
+		// Tutup shift atau update ekspektasi kas akhir
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body)
+		body["updatedAt"] = nowMillis()
+		// Hitung selisih kas jika tutup shift
+		if body["status"] == "CLOSED" {
+			body["closedAt"] = nowMillis()
+			actualEnd, _ := body["actualEndCash"].(float64)
+			expectedEnd, _ := body["expectedEndCash"].(float64)
+			body["cashDifference"] = actualEnd - expectedEnd
+		}
+		updateRow("cashier_shifts", id, tenantId, body)
+		jsonOK(w, map[string]interface{}{"ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
 // insertRow: dynamic INSERT INTO "table" RETURNING id
 func insertRow(table string, data map[string]interface{}) (int64, error) {
 	cols := make([]string, 0, len(data))
@@ -397,11 +701,21 @@ func handleRtTransactions(w http.ResponseWriter, r *http.Request) {
 		if _, ok := body["createdAt"]; !ok { body["createdAt"] = nowMillis() }
 		id, err := insertRow("transactions", body)
 		if err != nil { jsonErr(w, 500, err.Error()); return }
+
+		// Auto-deduct raw material stock based on product recipes (Recipe-Based Inventory)
+		// Hanya dilakukan untuk transaksi COMPLETED tipe SALES
+		status, _ := body["status"].(string)
+		txType, _ := body["type"].(string)
+		if status == "COMPLETED" && (txType == "SALES" || txType == "") {
+			go deductRawMaterialsForTransaction(id, tenantId)
+		}
+
 		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
 	default:
 		jsonErr(w, 405, "method not allowed")
 	}
 }
+
 
 func handleRtTransactionsById(w http.ResponseWriter, r *http.Request) {
 	tenantId, ok := extractTenantId(r)

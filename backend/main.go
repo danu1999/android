@@ -179,6 +179,17 @@ func main() {
 	http.HandleFunc("/api/rt/outlets", handleRtOutlets)
 	http.HandleFunc("/api/rt/outlets/", handleRtOutletsById)
 
+	// FnB Lanjutan — Recipe Inventory, Modifiers, Shift Kasir
+	http.HandleFunc("/api/rt/raw-materials", handleRtRawMaterials)
+	http.HandleFunc("/api/rt/raw-materials/", handleRtRawMaterialsById)
+	http.HandleFunc("/api/rt/product-recipes", handleRtProductRecipes)
+	http.HandleFunc("/api/rt/product-recipes/", handleRtProductRecipesById)
+	http.HandleFunc("/api/rt/product-modifiers", handleRtProductModifiers)
+	http.HandleFunc("/api/rt/product-modifiers/", handleRtProductModifiersById)
+	http.HandleFunc("/api/rt/transaction-item-modifiers", handleRtTxItemModifiers)
+	http.HandleFunc("/api/rt/cashier-shifts", handleRtCashierShifts)
+	http.HandleFunc("/api/rt/cashier-shifts/", handleRtCashierShiftsById)
+
 	// BMP — Invoice & Manufaktur
 	http.HandleFunc("/api/rt/bmp/clients", handleRtBmpClients)
 	http.HandleFunc("/api/rt/bmp/clients/", handleRtBmpClientsById)

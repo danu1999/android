@@ -1042,6 +1042,111 @@ func initSchema() error {
 		}
 	}
 
+	// v2.19.49: Migrasi FnB Lanjutan — Recipe Inventory, Modifiers, Table Management, Shift Kasir
+	// Tujuan: mengotomatiskan pengurangan stok bahan baku saat penjualan, mendukung topping/modifier
+	// berbasis varian harga, nomor meja manual, dan sistem buka/tutup shift kasir (petty cash).
+	fnbAdvancedMigrations := []string{
+		// === 1. Stok Bahan Baku Fisik (Recipe Inventory) ===
+		// Menyimpan stok nyata bahan baku dapur per outlet/tenant.
+		// purchaseUnit: satuan beli (kg, dus), recipeUnit: satuan pakai resep (gram, pcs)
+		// conversionRate: 1 purchaseUnit = conversionRate recipeUnit (misal: 1 kg = 1000 gram)
+		`CREATE TABLE IF NOT EXISTS "raw_materials" (
+			"id" SERIAL PRIMARY KEY,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"outletId" INT,
+			"name" VARCHAR(255) NOT NULL,
+			"stock" DOUBLE PRECISION DEFAULT 0,
+			"purchaseUnit" VARCHAR(50) DEFAULT 'kg',
+			"recipeUnit" VARCHAR(50) DEFAULT 'gram',
+			"conversionRate" DOUBLE PRECISION DEFAULT 1.0,
+			"minStock" DOUBLE PRECISION DEFAULT 0,
+			"isDeleted" BOOLEAN DEFAULT FALSE,
+			"createdAt" BIGINT,
+			"updatedAt" BIGINT
+		);`,
+		`CREATE INDEX IF NOT EXISTS "idx_raw_materials_tenant" ON "raw_materials" ("tenantId", "isDeleted");`,
+		`CREATE INDEX IF NOT EXISTS "idx_raw_materials_outlet" ON "raw_materials" ("tenantId", "outletId") WHERE "isDeleted" = FALSE;`,
+
+		// === 2. Pemetaan Resep Produk (Recipe → Bahan Baku) ===
+		// Menghubungkan produk olahan ke bahan bakunya (Many-to-Many via junction table).
+		// quantityNeeded: jumlah bahan baku yang dikurangi per 1 porsi terjual (dalam recipeUnit).
+		`CREATE TABLE IF NOT EXISTS "product_recipes" (
+			"id" SERIAL PRIMARY KEY,
+			"productId" INT NOT NULL,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"rawMaterialId" INT NOT NULL,
+			"quantityNeeded" DOUBLE PRECISION NOT NULL,
+			"createdAt" BIGINT,
+			"updatedAt" BIGINT,
+			FOREIGN KEY ("rawMaterialId") REFERENCES "raw_materials"("id") ON DELETE CASCADE
+		);`,
+		`CREATE INDEX IF NOT EXISTS "idx_product_recipes_product" ON "product_recipes" ("tenantId", "productId");`,
+
+		// === 3. Modifiers/Topping Produk (per Varian) ===
+		// Mendefinisikan opsi tambahan (topping, kustomisasi) untuk produk/varian tertentu.
+		// variantId: NULL = berlaku global untuk semua varian; diisi = harga khusus varian tersebut.
+		`CREATE TABLE IF NOT EXISTS "product_modifiers" (
+			"id" SERIAL PRIMARY KEY,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"productId" INT NOT NULL,
+			"variantId" INT,
+			"name" VARCHAR(255) NOT NULL,
+			"price" DOUBLE PRECISION DEFAULT 0,
+			"costPrice" DOUBLE PRECISION DEFAULT 0,
+			"rawMaterialId" INT,
+			"isDeleted" BOOLEAN DEFAULT FALSE,
+			"createdAt" BIGINT,
+			"updatedAt" BIGINT,
+			FOREIGN KEY ("rawMaterialId") REFERENCES "raw_materials"("id") ON DELETE SET NULL
+		);`,
+		`CREATE INDEX IF NOT EXISTS "idx_product_modifiers_product" ON "product_modifiers" ("tenantId", "productId") WHERE "isDeleted" = FALSE;`,
+
+		// === 4. Pilihan Modifier di Item Transaksi ===
+		// Mencatat modifier spesifik yang dipilih kasir pada saat checkout per item pesanan.
+		`CREATE TABLE IF NOT EXISTS "transaction_item_modifiers" (
+			"id" SERIAL PRIMARY KEY,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"transactionItemId" INT NOT NULL,
+			"modifierId" INT NOT NULL,
+			"name" VARCHAR(255),
+			"price" DOUBLE PRECISION DEFAULT 0,
+			"quantity" INT DEFAULT 1,
+			FOREIGN KEY ("modifierId") REFERENCES "product_modifiers"("id") ON DELETE CASCADE
+		);`,
+		`CREATE INDEX IF NOT EXISTS "idx_tx_item_modifiers_txitem" ON "transaction_item_modifiers" ("transactionItemId");`,
+
+		// === 5. Shift Kasir & Petty Cash ===
+		// Melacak sesi kerja kasir: kas awal (buka toko), kas akhir nyata vs ekspektasi (tutup toko).
+		`CREATE TABLE IF NOT EXISTS "cashier_shifts" (
+			"id" SERIAL PRIMARY KEY,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"outletId" INT,
+			"employeeId" INT NOT NULL,
+			"openedAt" BIGINT NOT NULL,
+			"closedAt" BIGINT,
+			"startCash" DOUBLE PRECISION NOT NULL DEFAULT 0,
+			"expectedEndCash" DOUBLE PRECISION DEFAULT 0,
+			"actualEndCash" DOUBLE PRECISION DEFAULT 0,
+			"cashDifference" DOUBLE PRECISION DEFAULT 0,
+			"notes" TEXT,
+			"status" VARCHAR(50) DEFAULT 'OPEN',
+			"createdAt" BIGINT,
+			"updatedAt" BIGINT
+		);`,
+		`CREATE INDEX IF NOT EXISTS "idx_cashier_shifts_tenant_status" ON "cashier_shifts" ("tenantId", "status");`,
+		`CREATE INDEX IF NOT EXISTS "idx_cashier_shifts_employee" ON "cashier_shifts" ("tenantId", "employeeId", "openedAt" DESC);`,
+
+		// === 6. Nomor Meja pada Transaksi ===
+		`ALTER TABLE "transactions" ADD COLUMN IF NOT EXISTS "tableNumber" VARCHAR(50);`,
+		`CREATE INDEX IF NOT EXISTS "idx_tx_table_number" ON "transactions" ("tenantId", "tableNumber") WHERE "tableNumber" IS NOT NULL AND "isDeleted" = FALSE;`,
+	}
+	for _, q := range fnbAdvancedMigrations {
+		if _, err := db.Exec(q); err != nil {
+			log.Printf("[migration] fnb advanced warning (non-fatal): %v", err)
+		}
+	}
+
+
 	// Backfill: migrasikan data resep/BOM dari kolom jenisBahanBaku di bmp_master_products
 	// ke tabel bmp_product_ingredients secara otomatis.
 	_, _ = db.Exec(`
