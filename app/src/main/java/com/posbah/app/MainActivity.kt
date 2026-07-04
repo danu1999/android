@@ -54,16 +54,12 @@ class MainActivity : FragmentActivity() {
             }
         }
 
-        // Setup active network connection guard callback
         val connectivityManager = getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
-        val networkRequest = android.net.NetworkRequest.Builder()
-            .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            .build()
-
         val callback = object : android.net.ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: android.net.Network) {
                 super.onAvailable(network)
-                sessionState.setOnline(true)
+                // Default network changed/available, trigger active ping check to verify real internet
+                sessionState.triggerManualPingCheck()
             }
 
             override fun onLost(network: android.net.Network) {
@@ -80,11 +76,14 @@ class MainActivity : FragmentActivity() {
                 val isValidated = networkCapabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
                 if (hasInternet && isValidated) {
                     sessionState.setOnline(true)
+                } else {
+                    // Fallback to active ping check to verify if the server is reachable
+                    sessionState.triggerManualPingCheck()
                 }
             }
         }
         networkCallback = callback
-        connectivityManager.registerNetworkCallback(networkRequest, callback)
+        connectivityManager.registerDefaultNetworkCallback(callback)
 
         // Initial connection check
         val activeNetwork = connectivityManager.activeNetwork

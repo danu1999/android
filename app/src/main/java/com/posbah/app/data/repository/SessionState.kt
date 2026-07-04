@@ -123,19 +123,50 @@ class SessionState @Inject constructor(
     }
 
     suspend fun executePingCheck(): Boolean {
-        var conn: java.net.HttpURLConnection? = null
+        // Step 1: Raw Socket reachability check to Google Public DNS (Fastest & DNS-independent)
+        val socketReady = try {
+            val socket = java.net.Socket()
+            socket.connect(java.net.InetSocketAddress("8.8.8.8", 53), 1500)
+            socket.close()
+            true
+        } catch (e: Exception) {
+            android.util.Log.d("SessionState", "Raw Socket check failed: ${e.message}")
+            false
+        }
+
+        if (socketReady) {
+            // General internet is working! Now verify our server API is reachable.
+            var conn: java.net.HttpURLConnection? = null
+            try {
+                val url = java.net.URL("https://www.zedmz.cloud/api/ping")
+                conn = url.openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "GET"
+                conn.connectTimeout = 2000
+                conn.readTimeout = 2000
+                if (conn.responseCode in 200..299) {
+                    return true
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("SessionState", "VPS Ping failed but internet is active: ${e.message}")
+            } finally {
+                conn?.disconnect()
+            }
+        }
+
+        // Step 2: Fallback check directly to our server (in case Google DNS is blocked by some ISP)
+        var connFallback: java.net.HttpURLConnection? = null
         return try {
             val url = java.net.URL("https://www.zedmz.cloud/api/ping")
-            conn = url.openConnection() as java.net.HttpURLConnection
-            conn.requestMethod = "GET"
-            conn.connectTimeout = 3000
-            conn.readTimeout = 3000
-            conn.responseCode in 200..299
+            connFallback = url.openConnection() as java.net.HttpURLConnection
+            connFallback.requestMethod = "GET"
+            connFallback.connectTimeout = 3000
+            connFallback.readTimeout = 3000
+            connFallback.responseCode in 200..299
         } catch (e: Exception) {
             android.util.Log.w("SessionState", "Watchdog Ping Gagal: ${e.message}")
             false
         } finally {
-            conn?.disconnect()
+            connFallback?.disconnect()
         }
     }
 
