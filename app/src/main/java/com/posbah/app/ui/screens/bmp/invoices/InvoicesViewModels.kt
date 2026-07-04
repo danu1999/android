@@ -219,6 +219,11 @@ class InvoiceDetailViewModel @Inject constructor(
         _ui.update { it.copy(defaultCompanyName = computedDefault) }
 
         viewModelScope.launch {
+            try {
+                invoiceRepo.refresh()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
             val inv = invoiceRepo.getById(invoiceId)
             _ui.update { it.copy(invoice = inv) }
             inv?.clientId?.let { _ui.update { st -> st.copy(client = clientRepo.getById(it)) } }

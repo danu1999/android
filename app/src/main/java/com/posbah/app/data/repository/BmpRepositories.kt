@@ -62,7 +62,10 @@ data class BmpInvoiceData(
     val notes: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val isDeleted: Boolean = false,
-    val updatedAt: Long = 0
+    val updatedAt: Long = 0,
+    val receiverSignaturePath: String? = null,
+    val receiverSignatureUrl: String? = null,
+    val receiverNameActual: String? = null
 )
 
 data class BmpProductItemData(
@@ -326,7 +329,10 @@ fun Map<String, Any?>.toBmpInvoiceData() = BmpInvoiceData(
     notes = getCaseInsensitive("notes") as? String,
     createdAt = (getCaseInsensitive("createdAt") as? Number)?.toLong() ?: System.currentTimeMillis(),
     isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false,
-    updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0
+    updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0,
+    receiverSignaturePath = getCaseInsensitive("receiverSignaturePath") as? String,
+    receiverSignatureUrl = getCaseInsensitive("receiverSignatureUrl") as? String,
+    receiverNameActual = getCaseInsensitive("receiverNameActual") as? String
 )
 
 fun Map<String, Any?>.toBmpProductItemData() = BmpProductItemData(
@@ -626,7 +632,10 @@ class BmpInvoiceRepository @Inject constructor(
         isSynced = true,
         createdAt = createdAt,
         updatedAt = updatedAt,
-        slug = ""
+        slug = "",
+        receiverSignaturePath = receiverSignaturePath,
+        receiverSignatureUrl = receiverSignatureUrl,
+        receiverNameActual = receiverNameActual
     )
 
     fun observe(tenantId: String): kotlinx.coroutines.flow.Flow<List<com.posbah.app.data.local.entities.BmpInvoiceEntity>> =
@@ -693,7 +702,17 @@ class BmpInvoiceRepository @Inject constructor(
         try {
             val resp = api.getInvoices()
             if (resp.isSuccessful) {
-                _invoices.value = resp.body()?.map { it.toBmpInvoiceData() } ?: emptyList()
+                val oldList = _invoices.value
+                val newList = resp.body()?.map { map ->
+                    val fresh = map.toBmpInvoiceData()
+                    val existing = oldList.find { it.id == fresh.id }
+                    if (existing != null && existing.receiverSignatureUrl == fresh.receiverSignatureUrl) {
+                        fresh.copy(receiverSignaturePath = existing.receiverSignaturePath)
+                    } else {
+                        fresh
+                    }
+                } ?: emptyList()
+                _invoices.value = newList
             }
         } catch (_: Exception) {}
     }
@@ -1211,11 +1230,18 @@ class BmpInvoiceRepository @Inject constructor(
         invoiceId: Long
     ): RemoteSignatureResult {
         return try {
-            val inv = getById(invoiceId)
-            if (inv != null && !inv.receiverSignatureUrl.isNullOrEmpty()) {
-                RemoteSignatureResult.Success(inv.receiverSignatureUrl, inv.receiverNameActual ?: "")
+            val resp = api.getInvoices()
+            if (resp.isSuccessful) {
+                val invoicesList = resp.body()?.map { it.toBmpInvoiceData() } ?: emptyList()
+                _invoices.value = invoicesList
+                val inv = invoicesList.find { it.id == invoiceId }
+                if (inv != null && !inv.receiverSignatureUrl.isNullOrEmpty()) {
+                    RemoteSignatureResult.Success(inv.receiverSignatureUrl, inv.receiverNameActual ?: "")
+                } else {
+                    RemoteSignatureResult.Pending
+                }
             } else {
-                RemoteSignatureResult.Pending
+                RemoteSignatureResult.Error("Gagal mengambil data dari server: ${resp.message()}")
             }
         } catch (e: Exception) {
             RemoteSignatureResult.Error(e.message ?: "Gagal memeriksa tanda tangan remote")
@@ -1236,6 +1262,15 @@ class BmpInvoiceRepository @Inject constructor(
                 "receiverSignatureUrl" to signatureUrl,
                 "receiverNameActual" to receiverName
             ))
+            _invoices.value = _invoices.value.map { inv ->
+                if (inv.id == invoiceId) {
+                    inv.copy(
+                        receiverSignaturePath = localPath,
+                        receiverSignatureUrl = signatureUrl,
+                        receiverNameActual = receiverName
+                    )
+                } else inv
+            }
             OnlineWriteResult.Success
         } catch (e: Exception) { OnlineWriteResult.Error(e.message ?: "Gagal simpan tanda tangan") }
     }

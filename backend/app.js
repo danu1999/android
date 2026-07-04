@@ -1391,7 +1391,10 @@ function triggerInvoicePrint() {
     if (!currentInvoice) return;
 
     const loggedInEmail = localStorage.getItem("email") || "";
-    const isCustomUser = loggedInEmail.trim().toLowerCase() === "bahteramulyap@gmail.com";
+    const loggedInTenant = localStorage.getItem("tenantId") || "";
+    const isCustomUser = loggedInEmail.trim().toLowerCase() === "bahteramulyap@gmail.com" || 
+                         loggedInTenant === "ten_premium_bahteramulyap_gmail_com" ||
+                         loggedInTenant === "bahteramulyap@gmail.com";
 
     const printArea = document.getElementById("print-area");
     const client = clients.find(c => c.id === currentInvoice.clientId);
@@ -1750,7 +1753,10 @@ function triggerSjPrint() {
     if (!currentInvoice) return;
 
     const loggedInEmail = localStorage.getItem("email") || "";
-    const isCustomUser = loggedInEmail.trim().toLowerCase() === "bahteramulyap@gmail.com";
+    const loggedInTenant = localStorage.getItem("tenantId") || "";
+    const isCustomUser = loggedInEmail.trim().toLowerCase() === "bahteramulyap@gmail.com" || 
+                         loggedInTenant === "ten_premium_bahteramulyap_gmail_com" ||
+                         loggedInTenant === "bahteramulyap@gmail.com";
 
     const printArea = document.getElementById("print-area");
     const client = clients.find(c => c.id === currentInvoice.clientId);

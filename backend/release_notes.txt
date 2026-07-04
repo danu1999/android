@@ -1,3 +1,13 @@
+POSBah v2.19.41 - Sinkronisasi Tanda Tangan Real-time & Kustomisasi Cetak
+
+Halo Kak! POSBah v2.19.41 menghadirkan pembaruan sinkronisasi dan kustomisasi cetak:
+1. Sinkronisasi Tanda Tangan Real-time: Aplikasi (APK) sekarang menyinkronkan status tanda tangan penerima invoice & surat jalan secara instan dari web.
+2. Kustomisasi Tampilan Cetak Web: Menyembunyikan watermark posbah untuk pencetakan dokumen pada tenant Bahtera Mulya Plastik.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.35 - Integrasi Absensi Fingerprint & Perbaikan Skema Backup
 
 Halo Kak! POSBah v2.19.35 menghadirkan perbaikan fitur absensi dan sinkronisasi database:
