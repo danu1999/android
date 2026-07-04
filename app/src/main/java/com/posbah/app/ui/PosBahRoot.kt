@@ -41,6 +41,8 @@ import com.posbah.app.ui.screens.bmp.qr.QrScannerScreen
 import com.posbah.app.ui.screens.bmp.stock.BmpStockScreen
 import com.posbah.app.ui.screens.bmp.production.BmpProductionLogScreen
 import com.posbah.app.ui.screens.bmp.reports.FinancialAnalysisScreen
+import com.posbah.app.ui.screens.pos.ShiftManagementScreen
+import com.posbah.app.ui.screens.pos.RawMaterialManagementScreen
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -191,6 +193,16 @@ fun PosBahRoot(
 
         composable(Screen.EmployeeManagement.route) {
             EmployeeManagementScreen(onBack = { nav.popBackStack() })
+        }
+
+        // FnB Lanjutan — Shift Kasir
+        composable(Screen.ShiftManagement.route) {
+            ShiftManagementScreen(onBack = { nav.popBackStack() })
+        }
+
+        // FnB Lanjutan — Stok Bahan Baku
+        composable(Screen.RawMaterialManagement.route) {
+            RawMaterialManagementScreen(onBack = { nav.popBackStack() })
         }
 
         composable(Screen.RentalDashboard.route) {

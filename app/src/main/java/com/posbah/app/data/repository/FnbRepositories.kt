@@ -153,6 +153,114 @@ fun Map<String, Any?>.toTransactionItemData() = TransactionItemData(
     hppBreakdown = get("hppBreakdown") as? String
 )
 
+// ── Data classes untuk FnB Lanjutan ──────────────────────────────────────────
+
+data class RawMaterialData(
+    val id: Long = 0,
+    val tenantId: String = "",
+    val outletId: Long? = null,
+    val name: String = "",
+    val stock: Double = 0.0,
+    val purchaseUnit: String = "kg",   // satuan pembelian (kg, dus, lusin)
+    val recipeUnit: String = "gram",    // satuan resep/pemakaian (gram, pcs, ml)
+    val conversionRate: Double = 1.0,  // 1 purchaseUnit = conversionRate recipeUnit
+    val minStock: Double = 0.0,
+    val isDeleted: Boolean = false,
+    val updatedAt: Long = 0
+)
+
+data class ProductRecipeData(
+    val id: Long = 0,
+    val productId: Long = 0,
+    val tenantId: String = "",
+    val rawMaterialId: Long = 0,
+    val rawMaterialName: String = "",  // JOIN dari raw_materials
+    val recipeUnit: String = "",
+    val quantityNeeded: Double = 0.0,  // jumlah bahan dipakai per 1 porsi (dalam recipeUnit)
+    val updatedAt: Long = 0
+)
+
+data class ProductModifierData(
+    val id: Long = 0,
+    val tenantId: String = "",
+    val productId: Long = 0,
+    val variantId: Long? = null,       // null = berlaku semua varian; diisi = harga khusus varian
+    val name: String = "",
+    val price: Double = 0.0,
+    val costPrice: Double = 0.0,
+    val rawMaterialId: Long? = null,
+    val isDeleted: Boolean = false,
+    val updatedAt: Long = 0
+)
+
+data class CashierShiftData(
+    val id: Long = 0,
+    val tenantId: String = "",
+    val outletId: Long? = null,
+    val employeeId: Long = 0,
+    val openedAt: Long = 0,
+    val closedAt: Long? = null,
+    val startCash: Double = 0.0,
+    val expectedEndCash: Double = 0.0,
+    val actualEndCash: Double = 0.0,
+    val cashDifference: Double = 0.0,
+    val notes: String? = null,
+    val status: String = "OPEN"  // OPEN | CLOSED
+)
+
+fun Map<String, Any?>.toRawMaterialData() = RawMaterialData(
+    id = (get("id") as? Number)?.toLong() ?: 0,
+    tenantId = get("tenantId") as? String ?: "",
+    outletId = (get("outletId") as? Number)?.toLong(),
+    name = get("name") as? String ?: "",
+    stock = (get("stock") as? Number)?.toDouble() ?: 0.0,
+    purchaseUnit = get("purchaseUnit") as? String ?: "kg",
+    recipeUnit = get("recipeUnit") as? String ?: "gram",
+    conversionRate = (get("conversionRate") as? Number)?.toDouble() ?: 1.0,
+    minStock = (get("minStock") as? Number)?.toDouble() ?: 0.0,
+    isDeleted = get("isDeleted") as? Boolean ?: false,
+    updatedAt = (get("updatedAt") as? Number)?.toLong() ?: 0
+)
+
+fun Map<String, Any?>.toProductRecipeData() = ProductRecipeData(
+    id = (get("id") as? Number)?.toLong() ?: 0,
+    productId = (get("productId") as? Number)?.toLong() ?: 0,
+    tenantId = get("tenantId") as? String ?: "",
+    rawMaterialId = (get("rawMaterialId") as? Number)?.toLong() ?: 0,
+    rawMaterialName = get("rawMaterialName") as? String ?: "",
+    recipeUnit = get("recipeUnit") as? String ?: "",
+    quantityNeeded = (get("quantityNeeded") as? Number)?.toDouble() ?: 0.0,
+    updatedAt = (get("updatedAt") as? Number)?.toLong() ?: 0
+)
+
+fun Map<String, Any?>.toProductModifierData() = ProductModifierData(
+    id = (get("id") as? Number)?.toLong() ?: 0,
+    tenantId = get("tenantId") as? String ?: "",
+    productId = (get("productId") as? Number)?.toLong() ?: 0,
+    variantId = (get("variantId") as? Number)?.toLong(),
+    name = get("name") as? String ?: "",
+    price = (get("price") as? Number)?.toDouble() ?: 0.0,
+    costPrice = (get("costPrice") as? Number)?.toDouble() ?: 0.0,
+    rawMaterialId = (get("rawMaterialId") as? Number)?.toLong(),
+    isDeleted = get("isDeleted") as? Boolean ?: false,
+    updatedAt = (get("updatedAt") as? Number)?.toLong() ?: 0
+)
+
+fun Map<String, Any?>.toCashierShiftData() = CashierShiftData(
+    id = (get("id") as? Number)?.toLong() ?: 0,
+    tenantId = get("tenantId") as? String ?: "",
+    outletId = (get("outletId") as? Number)?.toLong(),
+    employeeId = (get("employeeId") as? Number)?.toLong() ?: 0,
+    openedAt = (get("openedAt") as? Number)?.toLong() ?: 0,
+    closedAt = (get("closedAt") as? Number)?.toLong(),
+    startCash = (get("startCash") as? Number)?.toDouble() ?: 0.0,
+    expectedEndCash = (get("expectedEndCash") as? Number)?.toDouble() ?: 0.0,
+    actualEndCash = (get("actualEndCash") as? Number)?.toDouble() ?: 0.0,
+    cashDifference = (get("cashDifference") as? Number)?.toDouble() ?: 0.0,
+    notes = get("notes") as? String,
+    status = get("status") as? String ?: "OPEN"
+)
+
 // ── ProductRepository ─────────────────────────────────────────────────────────
 
 @Singleton
@@ -1309,3 +1417,205 @@ class ProductDailyTargetRepository @Inject constructor(
     }
 }
 
+// ── RawMaterialRepository (Stok Bahan Baku Fisik) ────────────────────────────
+@Singleton
+class RawMaterialRepository @Inject constructor(
+    private val api: PosApiService,
+    private val securePrefs: SecurePreferences
+) {
+    private val _rawMaterials = MutableStateFlow<List<RawMaterialData>>(emptyList())
+    val rawMaterials = _rawMaterials.asStateFlow()
+
+    suspend fun refresh(outletId: Long? = null) {
+        try {
+            val resp = api.getRawMaterials(outletId?.toString())
+            if (resp.isSuccessful) {
+                _rawMaterials.value = resp.body()?.map { it.toRawMaterialData() } ?: emptyList()
+            }
+        } catch (_: Exception) {}
+    }
+
+    suspend fun list(outletId: Long? = null): List<RawMaterialData> {
+        return try {
+            val resp = api.getRawMaterials(outletId?.toString())
+            resp.body()?.map { it.toRawMaterialData() } ?: emptyList()
+        } catch (_: Exception) { emptyList() }
+    }
+
+    suspend fun create(name: String, purchaseUnit: String, recipeUnit: String,
+                       conversionRate: Double, stock: Double, outletId: Long? = null): Long {
+        return try {
+            val body = mutableMapOf<String, Any?>(
+                "name" to name,
+                "purchaseUnit" to purchaseUnit,
+                "recipeUnit" to recipeUnit,
+                "conversionRate" to conversionRate,
+                "stock" to stock
+            )
+            if (outletId != null) body["outletId"] = outletId
+            val resp = api.createRawMaterial(body)
+            (resp.body()?.get("id") as? Number)?.toLong() ?: 0L
+        } catch (_: Exception) { 0L }
+    }
+
+    suspend fun update(id: Long, stock: Double? = null, name: String? = null,
+                       purchaseUnit: String? = null, recipeUnit: String? = null,
+                       conversionRate: Double? = null): Boolean {
+        return try {
+            val body = mutableMapOf<String, Any?>()
+            if (stock != null) body["stock"] = stock
+            if (name != null) body["name"] = name
+            if (purchaseUnit != null) body["purchaseUnit"] = purchaseUnit
+            if (recipeUnit != null) body["recipeUnit"] = recipeUnit
+            if (conversionRate != null) body["conversionRate"] = conversionRate
+            api.updateRawMaterial(id, body).isSuccessful
+        } catch (_: Exception) { false }
+    }
+
+    suspend fun delete(id: Long): Boolean {
+        return try { api.deleteRawMaterial(id).isSuccessful } catch (_: Exception) { false }
+    }
+}
+
+// ── ProductRecipeRepository (Resep Produk) ────────────────────────────────────
+@Singleton
+class ProductRecipeRepository @Inject constructor(
+    private val api: PosApiService,
+    private val securePrefs: SecurePreferences
+) {
+    suspend fun listForProduct(productId: Long): List<ProductRecipeData> {
+        return try {
+            val resp = api.getProductRecipes(productId)
+            resp.body()?.map { it.toProductRecipeData() } ?: emptyList()
+        } catch (_: Exception) { emptyList() }
+    }
+
+    suspend fun create(productId: Long, rawMaterialId: Long, quantityNeeded: Double): Long {
+        return try {
+            val body = mapOf<String, Any?>(
+                "productId" to productId,
+                "rawMaterialId" to rawMaterialId,
+                "quantityNeeded" to quantityNeeded
+            )
+            val resp = api.createProductRecipe(body)
+            (resp.body()?.get("id") as? Number)?.toLong() ?: 0L
+        } catch (_: Exception) { 0L }
+    }
+
+    suspend fun delete(id: Long): Boolean {
+        return try { api.deleteProductRecipe(id).isSuccessful } catch (_: Exception) { false }
+    }
+}
+
+// ── ProductModifierRepository (Topping / Kustomisasi per Varian) ──────────────
+@Singleton
+class ProductModifierRepository @Inject constructor(
+    private val api: PosApiService,
+    private val securePrefs: SecurePreferences
+) {
+    suspend fun listForProduct(productId: Long): List<ProductModifierData> {
+        return try {
+            val resp = api.getProductModifiers(productId)
+            resp.body()?.map { it.toProductModifierData() } ?: emptyList()
+        } catch (_: Exception) { emptyList() }
+    }
+
+    /** Membuat modifier baru untuk produk, opsional untuk varian tertentu */
+    suspend fun create(productId: Long, name: String, price: Double, costPrice: Double,
+                       variantId: Long? = null, rawMaterialId: Long? = null): Long {
+        return try {
+            val body = mutableMapOf<String, Any?>(
+                "productId" to productId,
+                "name" to name,
+                "price" to price,
+                "costPrice" to costPrice
+            )
+            if (variantId != null) body["variantId"] = variantId
+            if (rawMaterialId != null) body["rawMaterialId"] = rawMaterialId
+            val resp = api.createProductModifier(body)
+            (resp.body()?.get("id") as? Number)?.toLong() ?: 0L
+        } catch (_: Exception) { 0L }
+    }
+
+    suspend fun update(id: Long, name: String? = null, price: Double? = null,
+                       costPrice: Double? = null): Boolean {
+        return try {
+            val body = mutableMapOf<String, Any?>()
+            if (name != null) body["name"] = name
+            if (price != null) body["price"] = price
+            if (costPrice != null) body["costPrice"] = costPrice
+            api.updateProductModifier(id, body).isSuccessful
+        } catch (_: Exception) { false }
+    }
+
+    suspend fun delete(id: Long): Boolean {
+        return try { api.deleteProductModifier(id).isSuccessful } catch (_: Exception) { false }
+    }
+}
+
+// ── CashierShiftRepository (Shift Kasir & Petty Cash) ────────────────────────
+@Singleton
+class CashierShiftRepository @Inject constructor(
+    private val api: PosApiService,
+    private val securePrefs: SecurePreferences
+) {
+    private val _activeShift = MutableStateFlow<CashierShiftData?>(null)
+    val activeShift = _activeShift.asStateFlow()
+
+    /** Cek apakah kasir memiliki shift OPEN aktif */
+    suspend fun checkActiveShift(employeeId: Long): CashierShiftData? {
+        return try {
+            val resp = api.getCashierShifts(employeeId = employeeId, status = "OPEN")
+            val shift = resp.body()?.firstOrNull()?.toCashierShiftData()
+            _activeShift.value = shift
+            shift
+        } catch (_: Exception) { null }
+    }
+
+    /** Buka shift kasir baru dengan kas awal */
+    suspend fun openShift(employeeId: Long, startCash: Double, outletId: Long? = null): CashierShiftData? {
+        return try {
+            val body = mutableMapOf<String, Any?>(
+                "employeeId" to employeeId,
+                "startCash" to startCash,
+                "status" to "OPEN"
+            )
+            if (outletId != null) body["outletId"] = outletId
+            val resp = api.openCashierShift(body)
+            if (resp.isSuccessful) {
+                val id = (resp.body()?.get("id") as? Number)?.toLong() ?: 0L
+                val newShift = CashierShiftData(
+                    id = id, employeeId = employeeId, startCash = startCash,
+                    openedAt = System.currentTimeMillis(), status = "OPEN", outletId = outletId
+                )
+                _activeShift.value = newShift
+                newShift
+            } else null
+        } catch (_: Exception) { null }
+    }
+
+    /** Tutup shift kasir dengan kas akhir aktual */
+    suspend fun closeShift(shiftId: Long, actualEndCash: Double, expectedEndCash: Double,
+                           notes: String? = null): Boolean {
+        return try {
+            val body = mutableMapOf<String, Any?>(
+                "status" to "CLOSED",
+                "actualEndCash" to actualEndCash,
+                "expectedEndCash" to expectedEndCash,
+                "cashDifference" to (actualEndCash - expectedEndCash)
+            )
+            if (notes != null) body["notes"] = notes
+            val success = api.closeCashierShift(shiftId, body).isSuccessful
+            if (success) _activeShift.value = null
+            success
+        } catch (_: Exception) { false }
+    }
+
+    /** Ambil riwayat shift kasir */
+    suspend fun listShifts(employeeId: Long? = null): List<CashierShiftData> {
+        return try {
+            val resp = api.getCashierShifts(employeeId = employeeId)
+            resp.body()?.map { it.toCashierShiftData() } ?: emptyList()
+        } catch (_: Exception) { emptyList() }
+    }
+}

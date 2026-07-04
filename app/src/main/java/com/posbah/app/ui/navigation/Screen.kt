@@ -58,4 +58,8 @@ sealed class Screen(val route: String) {
     object OutletControl : Screen("owner/outlet_control")
     object EmployeeManagement : Screen("owner/employees")
     object QrScanner : Screen("qr_scanner")
+
+    // FnB Lanjutan
+    object ShiftManagement : Screen("pos/shift")
+    object RawMaterialManagement : Screen("pos/raw-materials")
 }

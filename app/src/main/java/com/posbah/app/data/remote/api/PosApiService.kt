@@ -165,4 +165,94 @@ interface PosApiService {
     suspend fun deleteProductTarget(
         @Path("id") id: Long
     ): Response<Map<String, Any?>>
+
+    // ── Raw Materials (Stok Bahan Baku) ───────────────────────────────────────
+    @GET("api/rt/raw-materials")
+    suspend fun getRawMaterials(
+        @Query("outletId") outletId: String? = null
+    ): Response<List<Map<String, Any?>>>
+
+    @POST("api/rt/raw-materials")
+    suspend fun createRawMaterial(
+        @Body body: Map<String, Any?>
+    ): Response<Map<String, Any?>>
+
+    @PUT("api/rt/raw-materials/{id}")
+    suspend fun updateRawMaterial(
+        @Path("id") id: Long,
+        @Body body: Map<String, Any?>
+    ): Response<Map<String, Any?>>
+
+    @DELETE("api/rt/raw-materials/{id}")
+    suspend fun deleteRawMaterial(
+        @Path("id") id: Long
+    ): Response<Map<String, Any?>>
+
+    // ── Product Recipes (Resep Bahan Baku per Produk) ─────────────────────────
+    @GET("api/rt/product-recipes")
+    suspend fun getProductRecipes(
+        @Query("productId") productId: Long? = null
+    ): Response<List<Map<String, Any?>>>
+
+    @POST("api/rt/product-recipes")
+    suspend fun createProductRecipe(
+        @Body body: Map<String, Any?>
+    ): Response<Map<String, Any?>>
+
+    @PUT("api/rt/product-recipes/{id}")
+    suspend fun updateProductRecipe(
+        @Path("id") id: Long,
+        @Body body: Map<String, Any?>
+    ): Response<Map<String, Any?>>
+
+    @DELETE("api/rt/product-recipes/{id}")
+    suspend fun deleteProductRecipe(
+        @Path("id") id: Long
+    ): Response<Map<String, Any?>>
+
+    // ── Product Modifiers (Topping / Kustomisasi) ─────────────────────────────
+    @GET("api/rt/product-modifiers")
+    suspend fun getProductModifiers(
+        @Query("productId") productId: Long? = null
+    ): Response<List<Map<String, Any?>>>
+
+    @POST("api/rt/product-modifiers")
+    suspend fun createProductModifier(
+        @Body body: Map<String, Any?>
+    ): Response<Map<String, Any?>>
+
+    @PUT("api/rt/product-modifiers/{id}")
+    suspend fun updateProductModifier(
+        @Path("id") id: Long,
+        @Body body: Map<String, Any?>
+    ): Response<Map<String, Any?>>
+
+    @DELETE("api/rt/product-modifiers/{id}")
+    suspend fun deleteProductModifier(
+        @Path("id") id: Long
+    ): Response<Map<String, Any?>>
+
+    // ── Transaction Item Modifiers ────────────────────────────────────────────
+    @POST("api/rt/transaction-item-modifiers")
+    suspend fun createTransactionItemModifiers(
+        @Body items: List<Map<String, Any?>>
+    ): Response<Map<String, Any?>>
+
+    // ── Cashier Shifts (Buka/Tutup Shift) ─────────────────────────────────────
+    @GET("api/rt/cashier-shifts")
+    suspend fun getCashierShifts(
+        @Query("employeeId") employeeId: Long? = null,
+        @Query("status") status: String? = null
+    ): Response<List<Map<String, Any?>>>
+
+    @POST("api/rt/cashier-shifts")
+    suspend fun openCashierShift(
+        @Body body: Map<String, Any?>
+    ): Response<Map<String, Any?>>
+
+    @PUT("api/rt/cashier-shifts/{id}")
+    suspend fun closeCashierShift(
+        @Path("id") id: Long,
+        @Body body: Map<String, Any?>
+    ): Response<Map<String, Any?>>
 }
