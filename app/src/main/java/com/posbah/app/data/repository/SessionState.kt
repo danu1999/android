@@ -25,6 +25,7 @@ class SessionState @Inject constructor(
 ) {
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var debounceJob: Job? = null
+    private var activePingJob: Job? = null
     private val _tenantId = MutableStateFlow<String?>(securePrefs.currentTenantId)
     val tenantId: StateFlow<String?> = _tenantId.asStateFlow()
 
@@ -83,17 +84,67 @@ class SessionState @Inject constructor(
         if (online) {
             debounceJob?.cancel()
             debounceJob = null
+            activePingJob?.cancel()
+            activePingJob = null
             _isOnline.value = true
         } else {
             if (_isOnline.value && debounceJob == null) {
                 debounceJob = scope.launch {
-                    delay(3000)
+                    delay(10000) // Toleransi disconn 10 detik
                     synchronized(this@SessionState) {
                         if (debounceJob != null) {
                             _isOnline.value = false
                             debounceJob = null
+                            startActivePingLoop()
                         }
                     }
+                }
+            }
+        }
+    }
+
+    private fun startActivePingLoop() {
+        activePingJob?.cancel()
+        activePingJob = scope.launch(Dispatchers.IO) {
+            android.util.Log.d("SessionState", "Watchdog: Memulai loop pengecekan koneksi...")
+            while (!_isOnline.value) {
+                delay(10000) // Ping check setiap 10 detik
+                if (_isOnline.value) break
+                val success = executePingCheck()
+                if (success) {
+                    android.util.Log.i("SessionState", "Watchdog: Koneksi pulih otomatis!")
+                    synchronized(this@SessionState) {
+                        setOnline(true)
+                    }
+                    break
+                }
+            }
+        }
+    }
+
+    suspend fun executePingCheck(): Boolean {
+        var conn: java.net.HttpURLConnection? = null
+        return try {
+            val url = java.net.URL("https://www.zedmz.cloud/api/ping")
+            conn = url.openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "GET"
+            conn.connectTimeout = 3000
+            conn.readTimeout = 3000
+            conn.responseCode in 200..299
+        } catch (e: Exception) {
+            android.util.Log.w("SessionState", "Watchdog Ping Gagal: ${e.message}")
+            false
+        } finally {
+            conn?.disconnect()
+        }
+    }
+
+    fun triggerManualPingCheck() {
+        scope.launch(Dispatchers.IO) {
+            val success = executePingCheck()
+            synchronized(this@SessionState) {
+                if (success) {
+                    setOnline(true)
                 }
             }
         }

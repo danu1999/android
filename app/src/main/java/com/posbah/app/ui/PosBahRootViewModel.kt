@@ -109,4 +109,8 @@ class PosBahRootViewModel @Inject constructor(
         val role = securePrefs.currentRole ?: "KASIR"
         return role == "OWNER" || role == "ADMIN" || role == "SUPERVISOR"
     }
+
+    fun checkConnectionNow() {
+        sessionState.triggerManualPingCheck()
+    }
 }

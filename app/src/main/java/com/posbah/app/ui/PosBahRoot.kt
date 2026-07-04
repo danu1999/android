@@ -45,6 +45,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -483,6 +484,9 @@ fun PosBahRoot(
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
                 .height(28.dp)
+                .clickable {
+                    viewModel.checkConnectionNow()
+                }
         ) {
             Row(
                 modifier = Modifier.fillMaxSize(),
@@ -496,7 +500,7 @@ fun PosBahRoot(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Menghubungkan kembali...",
+                    text = "Menghubungkan kembali... (Sentuh untuk coba lagi)",
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
                     fontSize = 11.sp
                 )

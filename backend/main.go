@@ -97,6 +97,7 @@ func main() {
 	http.HandleFunc("/api/admin/upload-apk-chunk", handleAdminUploadApkChunk)
 	http.HandleFunc("/api/admin/diagnose", handleAdminDiagnose)
 	http.HandleFunc("/status", handleStatus)
+	http.HandleFunc("/api/ping", handlePing)
 	http.HandleFunc("/api/admin/deploy", handleAdminDeploy)
 	http.HandleFunc("/api/admin/deploy-log", handleAdminDeployLog)
 	http.HandleFunc("/api/admin/delete-user", handleAdminDeleteUser)
@@ -487,6 +488,18 @@ func handleStatus(w http.ResponseWriter, r *http.Request) {
 		"language":  "Go 1.21",
 	}
 	json.NewEncoder(w).Encode(response)
+}
+
+// Handler: GET /api/ping
+func handlePing(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	w.Write([]byte(`{"status":"ok"}`))
 }
 
 func handleAdminDeploy(w http.ResponseWriter, r *http.Request) {

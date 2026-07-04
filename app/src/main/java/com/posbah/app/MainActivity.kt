@@ -70,6 +70,18 @@ class MainActivity : FragmentActivity() {
                 super.onLost(network)
                 sessionState.setOnline(false)
             }
+
+            override fun onCapabilitiesChanged(
+                network: android.net.Network,
+                networkCapabilities: android.net.NetworkCapabilities
+            ) {
+                super.onCapabilitiesChanged(network, networkCapabilities)
+                val hasInternet = networkCapabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                val isValidated = networkCapabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                if (hasInternet && isValidated) {
+                    sessionState.setOnline(true)
+                }
+            }
         }
         networkCallback = callback
         connectivityManager.registerNetworkCallback(networkRequest, callback)

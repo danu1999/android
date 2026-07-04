@@ -77,9 +77,13 @@ class SplashViewModel @Inject constructor(
                         conn.connectTimeout = 5_000
                         conn.readTimeout = 5_000
                         val online = conn.responseCode in 200..299
-                        sessionState.setOnline(online)
+                        if (online) {
+                            sessionState.setOnline(true)
+                        } else {
+                            android.util.Log.w("SplashViewModel", "Initial ping status check returned non-2xx: ${conn.responseCode}")
+                        }
                     } catch (e: Exception) {
-                        sessionState.setOnline(false)
+                        android.util.Log.w("SplashViewModel", "Initial ping status check threw exception: ${e.message}")
                     } finally {
                         conn?.disconnect()
                     }
