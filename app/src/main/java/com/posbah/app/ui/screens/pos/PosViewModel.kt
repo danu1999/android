@@ -15,6 +15,7 @@ import com.posbah.app.data.repository.SessionState
 import com.posbah.app.data.repository.TransactionRepository
 import com.posbah.app.data.repository.PrintSettingsRepository
 import com.posbah.app.data.repository.OutletRepository
+import com.posbah.app.data.repository.BmpBahanBakuRepository
 import com.posbah.app.security.SecurePreferences
 import com.posbah.app.ui.print.PrintConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -37,6 +38,15 @@ import javax.inject.Inject
 
 @Serializable
 data class WholesaleTier(val minQty: Int, val price: Double)
+
+@Serializable
+data class RecipeIngredient(
+    val name: String,
+    val quantity: Double,
+    val unit: String = "pcs",
+    val rate: Double = 0.0,
+    val totalCost: Double = 0.0
+)
 
 @Serializable
 data class ProductVariant(val id: Long, val name: String, val price: Double?, val costPrice: Double?, val stock: Int?)
@@ -91,6 +101,7 @@ class PosViewModel @Inject constructor(
     private val outletRepository: OutletRepository,
     private val authRepository: AuthRepository,
     private val printSettingsRepository: PrintSettingsRepository,
+    private val bahanBakuRepo: BmpBahanBakuRepository,
     private val sessionState: SessionState,
     private val securePrefs: SecurePreferences
 ) : ViewModel() {
@@ -103,10 +114,14 @@ class PosViewModel @Inject constructor(
         emit(securePrefs.currentTenantName ?: "Kasir F&B")
     }.stateIn(viewModelScope, SharingStarted.Eagerly, "Kasir F&B")
 
+    private val _rawMaterialRates = MutableStateFlow<Map<String, Double>>(emptyMap())
+    val rawMaterialRates = _rawMaterialRates.asStateFlow()
+
     private val _uiState = MutableStateFlow(PosUiState())
     val uiState = _uiState.asStateFlow()
 
     init {
+        loadRawMaterials()
         viewModelScope.launch {
             printSettingsRepository.observe(tenantId, "FNB").collect { entity ->
                 _uiState.update { it.copy(printConfig = PrintConfig.fromEntity(entity)) }
@@ -591,6 +606,17 @@ class PosViewModel @Inject constructor(
     fun cancelQueue(txId: Long) {
         viewModelScope.launch {
             transactionRepository.cancelTransaction(txId, productRepository)
+        }
+    }
+
+    fun loadRawMaterials() {
+        viewModelScope.launch {
+            try {
+                val rates = bahanBakuRepo.getLatestMaterialRates(tenantId)
+                _rawMaterialRates.value = rates
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 

@@ -1224,6 +1224,8 @@ fun MarginAnalysisScreen(
                                 Text("Tidak ada produk untuk filter ini.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         } else {
+                            var expandedProductIds by remember { mutableStateOf(emptySet<Long>()) }
+
                             LazyColumn(
                                 modifier = Modifier.weight(1f).fillMaxWidth(),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -1250,11 +1252,25 @@ fun MarginAnalysisScreen(
                                         "${item.unitsSold.toInt()} ${item.product.unit}"
                                     }
 
+                                    val components = remember(item.product.costPriceBreakdown) {
+                                        parseHppBreakdown(item.product.costPriceBreakdown)
+                                    }
+                                    val isOlahan = components.isNotEmpty()
+                                    val isExpanded = expandedProductIds.contains(item.product.id)
+
                                     Surface(
                                         shape = RoundedCornerShape(12.dp),
                                         color = MaterialTheme.colorScheme.surface,
                                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
-                                        modifier = Modifier.fillMaxWidth()
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable(enabled = isOlahan) {
+                                                expandedProductIds = if (isExpanded) {
+                                                    expandedProductIds - item.product.id
+                                                } else {
+                                                    expandedProductIds + item.product.id
+                                                }
+                                            }
                                     ) {
                                         Column(modifier = Modifier.padding(12.dp)) {
                                             Row(
@@ -1284,12 +1300,66 @@ fun MarginAnalysisScreen(
                                                 Column {
                                                     Text("Terjual: $unitsSoldStr", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                                     Text("Harga Jual: ${Formatters.rupiah(item.product.price)}", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                                    Text("HPP: ${Formatters.rupiah(item.product.costPrice)}", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                    
+                                                    val suffix = if (isOlahan) {
+                                                        if (isExpanded) " (Sembunyikan Resep ▲)" else " (Lihat Resep ▼)"
+                                                    } else ""
+                                                    Text(
+                                                        text = "HPP: ${Formatters.rupiah(item.product.costPrice)}$suffix",
+                                                        fontSize = 10.sp,
+                                                        fontWeight = if (isOlahan) FontWeight.Bold else FontWeight.Normal,
+                                                        color = if (isOlahan) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
                                                 }
                                                 Column(horizontalAlignment = Alignment.End) {
                                                     Text("Omzet: ${Formatters.rupiah(item.revenue)}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                                                     Text("Profit: ${Formatters.rupiah(item.grossProfit)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
                                                     Text("Margin %: ${String.format("%.1f%%", item.marginPercent)}", fontSize = 11.sp, fontWeight = FontWeight.Black, color = Color(0xFF6A1B9A))
+                                                }
+                                            }
+
+                                            if (isExpanded && isOlahan) {
+                                                Spacer(Modifier.height(8.dp))
+                                                Surface(
+                                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Column(modifier = Modifier.padding(8.dp)) {
+                                                        Text("Resep / Komponen Bahan Baku:", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                                                        Spacer(Modifier.height(4.dp))
+                                                        components.forEachIndexed { idx, comp ->
+                                                            val costPerUnit = if (comp.yield > 0) comp.cost / comp.yield else comp.cost
+                                                            val catLabel = when (comp.category) {
+                                                                "OVERHEAD" -> "Overhead"
+                                                                "TENAGA_KERJA" -> "Jasa"
+                                                                else -> "Bahan"
+                                                            }
+                                                            Row(
+                                                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                                                horizontalArrangement = Arrangement.SpaceBetween
+                                                            ) {
+                                                                Text(
+                                                                    text = "${idx + 1}. ${comp.name} ($catLabel)",
+                                                                    fontSize = 10.sp,
+                                                                    modifier = Modifier.weight(1.5f)
+                                                                )
+                                                                Text(
+                                                                    text = "Rp ${comp.cost.toInt()} / ${comp.yield.toInt()} porsi",
+                                                                    fontSize = 10.sp,
+                                                                    modifier = Modifier.weight(1.5f),
+                                                                    textAlign = TextAlign.End
+                                                                )
+                                                                Text(
+                                                                    text = "= Rp ${costPerUnit.toInt()}",
+                                                                    fontSize = 10.sp,
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    modifier = Modifier.weight(1f),
+                                                                    textAlign = TextAlign.End
+                                                                )
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
@@ -1786,4 +1856,30 @@ fun MarginAnalysisScreen(
             }
         )
     }
+}
+
+private data class MarginHppComponent(
+    val name: String,
+    val cost: Double,
+    val yield: Double,
+    val category: String
+)
+
+private fun parseHppBreakdown(json: String?): List<MarginHppComponent> {
+    if (json.isNullOrBlank()) return emptyList()
+    val list = mutableListOf<MarginHppComponent>()
+    try {
+        val arr = org.json.JSONArray(json)
+        for (i in 0 until arr.length()) {
+            val obj = arr.getJSONObject(i)
+            val name = obj.getString("name")
+            val cost = obj.optDouble("cost", 0.0)
+            val yield = obj.optDouble("yield", 1.0)
+            val category = obj.optString("category", "BAHAN_BAKU")
+            list.add(MarginHppComponent(name, cost, yield, category))
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+    return list
 }
