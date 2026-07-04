@@ -59,10 +59,12 @@ data class TransactionData(
     val id: Long = 0,
     val tenantId: String = "",
     val outletId: Long? = null,
+    val employeeId: Long = 1L,
     val receiptNumber: String = "",
     val type: String = "SALE",
     val status: String = "COMPLETED",
     val totalAmount: Double = 0.0,
+    val subtotal: Double? = null,          // ✅ peta ke kolom "subtotal" di DB
     val paymentMethod: String = "CASH",
     val amountPaid: Double? = null,
     val change: Double? = null,
@@ -122,10 +124,13 @@ fun Map<String, Any?>.toTransactionData() = TransactionData(
     id = (get("id") as? Number)?.toLong() ?: 0,
     tenantId = get("tenantId") as? String ?: "",
     outletId = (get("outletId") as? Number)?.toLong(),
+    employeeId = (get("employeeId") as? Number)?.toLong() ?: 1L, // ✅ baca employeeId dari API
     receiptNumber = get("receiptNumber") as? String ?: "",
     type = get("type") as? String ?: "SALE",
     status = get("status") as? String ?: "COMPLETED",
-    totalAmount = (get("totalAmount") as? Number)?.toDouble() ?: 0.0,
+    totalAmount = (get("total") as? Number)?.toDouble()           // ✅ DB kolom: "total"
+        ?: (get("totalAmount") as? Number)?.toDouble() ?: 0.0,    //    fallback legacy
+    subtotal = (get("subtotal") as? Number)?.toDouble(),          // ✅ baca subtotal dari API
     paymentMethod = get("paymentMethod") as? String ?: "CASH",
     amountPaid = (get("amountPaid") as? Number)?.toDouble(),
     change = (get("change") as? Number)?.toDouble(),
@@ -724,7 +729,9 @@ class TransactionRepository @Inject constructor(
                 "receiptNumber" to receiptNum,
                 "type" to transaction.type,
                 "status" to transaction.status,
-                "totalAmount" to transaction.totalAmount,
+                "total" to transaction.totalAmount,          // ✅ nama kolom DB (bukan totalAmount)
+                "subtotal" to (transaction.subtotal ?: transaction.totalAmount), // ✅ kolom DB
+                "employeeId" to transaction.employeeId,       // ✅ NOT NULL di DB
                 "paymentMethod" to transaction.paymentMethod,
                 "amountPaid" to transaction.amountPaid,
                 "change" to transaction.change,
@@ -1001,10 +1008,12 @@ class TransactionRepository @Inject constructor(
             id = tx.id,
             tenantId = tx.tenantId,
             outletId = tx.outletId,
+            employeeId = tx.employeeId,          // ✅ teruskan employeeId
             receiptNumber = tx.receiptNumber,
             type = tx.type,
             status = tx.status,
             totalAmount = tx.total,
+            subtotal = tx.subtotal,              // ✅ teruskan subtotal
             paymentMethod = tx.paymentMethod,
             amountPaid = tx.amountPaid,
             change = tx.change,
@@ -1027,10 +1036,12 @@ class TransactionRepository @Inject constructor(
             id = transaction.id,
             tenantId = transaction.tenantId,
             outletId = transaction.outletId,
+            employeeId = transaction.employeeId,   // ✅ teruskan employeeId
             receiptNumber = transaction.receiptNumber,
             type = transaction.type,
             status = transaction.status,
             totalAmount = transaction.total,
+            subtotal = transaction.subtotal,        // ✅ teruskan subtotal
             paymentMethod = transaction.paymentMethod,
             amountPaid = transaction.amountPaid,
             change = transaction.change,

@@ -101,7 +101,6 @@ class PosViewModel @Inject constructor(
     private val outletRepository: OutletRepository,
     private val authRepository: AuthRepository,
     private val printSettingsRepository: PrintSettingsRepository,
-    private val bahanBakuRepo: BmpBahanBakuRepository,
     private val sessionState: SessionState,
     private val securePrefs: SecurePreferences
 ) : ViewModel() {
@@ -122,6 +121,19 @@ class PosViewModel @Inject constructor(
 
     init {
         loadRawMaterials()
+        // Auto-refresh suggestions bahan baku setiap kali daftar produk atau transaksi berubah
+        viewModelScope.launch {
+            var productsInitialized = false
+            productRepository.products.collect {
+                if (!productsInitialized) { productsInitialized = true; return@collect }
+                loadRawMaterials()
+            }
+        }
+        viewModelScope.launch {
+            transactionRepository.transactions.collect {
+                loadRawMaterials()
+            }
+        }
         viewModelScope.launch {
             printSettingsRepository.observe(tenantId, "FNB").collect { entity ->
                 _uiState.update { it.copy(printConfig = PrintConfig.fromEntity(entity)) }
@@ -612,7 +624,43 @@ class PosViewModel @Inject constructor(
     fun loadRawMaterials() {
         viewModelScope.launch {
             try {
-                val rates = bahanBakuRepo.getLatestMaterialRates(tenantId)
+                // Gunakan cache produk lokal; fetch dari server jika masih kosong
+                val cachedProducts = productRepository.products.value
+                val allProducts = if (cachedProducts.isNotEmpty()) cachedProducts
+                                  else productRepository.list()
+
+                // Ekstrak komponen HPP unik dari semua produk FnB
+                val rates = mutableMapOf<String, Double>()
+                allProducts.forEach { prod ->
+                    val breakdown = prod.costPriceBreakdown ?: return@forEach
+                    try {
+                        val arr = org.json.JSONArray(breakdown)
+                        for (i in 0 until arr.length()) {
+                            val obj = arr.getJSONObject(i)
+                            val name = obj.optString("name", "").trim()
+                            val cost = obj.optDouble("cost", 0.0)
+                            // Simpan nama unik; jika duplikat, cost terbaru menang
+                            if (name.isNotEmpty() && cost > 0.0) {
+                                rates[name] = cost
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+
+                // Ekstrak dari transaksi EXPENSE yang tercatat
+                try {
+                    val cachedTxs = transactionRepository.transactions.value
+                    // Urutkan berdasarkan tanggal tertua ke terbaru agar biaya terbaru menimpa yang lama
+                    val expenseTxs = cachedTxs.filter { it.type == "EXPENSE" }.sortedBy { it.date }
+                    expenseTxs.forEach { tx ->
+                        val name = tx.notes?.trim() ?: ""
+                        val cost = Math.abs(tx.totalAmount)
+                        if (name.isNotEmpty() && cost > 0.0) {
+                            rates[name] = cost
+                        }
+                    }
+                } catch (_: Exception) {}
+
                 _rawMaterialRates.value = rates
             } catch (e: Exception) {
                 e.printStackTrace()

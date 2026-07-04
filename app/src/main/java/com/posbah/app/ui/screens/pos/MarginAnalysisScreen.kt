@@ -119,6 +119,13 @@ class MarginAnalysisViewModel @Inject constructor(
                 _selectedOutletId.value = lockedOutlet
             }
         }
+        viewModelScope.launch {
+            _selectedOutletId.collect { outletId ->
+                try {
+                    transactionRepository.refresh(outletId)
+                } catch (_: Exception) {}
+            }
+        }
         refreshItems()
         // Auto-refresh when transactions update
         viewModelScope.launch {
@@ -201,10 +208,12 @@ class MarginAnalysisViewModel @Inject constructor(
                 id = tx.id,
                 tenantId = tx.tenantId,
                 outletId = tx.outletId,
+                employeeId = tx.employeeId,           // ✅ tambah employeeId
                 receiptNumber = tx.receiptNumber,
                 type = tx.type,
                 status = tx.status,
                 totalAmount = tx.total,
+                subtotal = tx.subtotal,               // ✅ tambah subtotal
                 paymentMethod = tx.paymentMethod,
                 amountPaid = tx.amountPaid,
                 change = tx.change,
@@ -392,6 +401,7 @@ fun MarginAnalysisScreen(
     var selectedTxDetails by remember { mutableStateOf<TransactionEntity?>(null) }
     var selectedTxItems by remember { mutableStateOf<List<TransactionItemEntity>>(emptyList()) }
 
+
     // Aggregate margin calculations
     val salesTx = filteredTx.filter { it.type != "EXPENSE" }
     val expenseTx = filteredTx.filter { it.type == "EXPENSE" }
@@ -400,27 +410,28 @@ fun MarginAnalysisScreen(
     val totalCogs = salesTx.sumOf { tx ->
         val txItems = transactionItems.filter { it.transactionId == tx.id }
         txItems.sumOf { item ->
+            // Fallback: jika costPrice di transaksi = 0 (produk belum punya HPP saat dijual),
+            // gunakan costPrice produk saat ini agar margin tetap bisa terhitung.
+            val prod = products.find { it.id == item.productId }
+            val effectiveCostPrice = if (item.costPrice > 0.0) item.costPrice else (prod?.costPrice ?: 0.0)
             when {
-                tx.receiptNumber.startsWith("FNB-") -> {
-                    item.quantity * item.costPrice
-                }
+                tx.receiptNumber.startsWith("FNB-") ->
+                    item.quantity * effectiveCostPrice
                 tx.receiptNumber.startsWith("RN-") -> {
                     val days = tx.queueNumber ?: 1
-                    val prod = products.find { it.id == item.productId }
                     val monthlyMaint = getMonthlyMaintenance(prod?.wholesalePrices)
-                    val dailyCogs = (if (item.costPrice > 1_000_000.0) item.costPrice / 1825.0 else item.costPrice) + (monthlyMaint / 30.0)
+                    val dailyCogs = (if (effectiveCostPrice > 1_000_000.0) effectiveCostPrice / 1825.0 else effectiveCostPrice) + (monthlyMaint / 30.0)
                     dailyCogs * days
                 }
                 tx.receiptNumber.startsWith("LD-") -> {
-                    val prod = products.find { it.id == item.productId }
                     val isKg = prod?.unit == "Kg"
                     val monthlyMaint = getMonthlyMaintenance(prod?.wholesalePrices)
                     val qty = if (isKg) item.quantity / 10.0 else item.quantity.toDouble()
-                    val baseCogs = qty * item.costPrice
+                    val baseCogs = qty * effectiveCostPrice
                     val maintShare = qty * (monthlyMaint / 300.0)
                     baseCogs + maintShare
                 }
-                else -> item.quantity * item.costPrice
+                else -> item.quantity * effectiveCostPrice
             }
         }
     }
@@ -453,21 +464,24 @@ fun MarginAnalysisScreen(
                 val tx = salesTxOnly.find { it.id == item.transactionId }
                 val isKg = tx?.receiptNumber?.startsWith("LD-") == true && prod.unit == "Kg"
                 val qty = if (isKg) item.quantity / 10.0 else item.quantity.toDouble()
+                // Fallback: jika costPrice di transaksi = 0 (produk belum punya HPP saat dijual),
+                // gunakan costPrice produk saat ini agar margin tetap bisa terhitung.
+                val effectiveCostPrice = if (item.costPrice > 0.0) item.costPrice else prod.costPrice
                 when {
-                    tx?.receiptNumber?.startsWith("FNB-") == true -> item.quantity * item.costPrice
+                    tx?.receiptNumber?.startsWith("FNB-") == true -> item.quantity * effectiveCostPrice
                     tx?.receiptNumber?.startsWith("RN-") == true -> {
                         val days = tx.queueNumber ?: 1
                         val monthlyMaint = getMonthlyMaintenance(prod.wholesalePrices)
-                        val dailyCogs = (if (item.costPrice > 1_000_000.0) item.costPrice / 1825.0 else item.costPrice) + (monthlyMaint / 30.0)
+                        val dailyCogs = (if (effectiveCostPrice > 1_000_000.0) effectiveCostPrice / 1825.0 else effectiveCostPrice) + (monthlyMaint / 30.0)
                         dailyCogs * days
                     }
                     tx?.receiptNumber?.startsWith("LD-") == true -> {
                         val monthlyMaint = getMonthlyMaintenance(prod.wholesalePrices)
-                        val baseCogs = qty * item.costPrice
+                        val baseCogs = qty * effectiveCostPrice
                         val maintShare = qty * (monthlyMaint / 300.0)
                         baseCogs + maintShare
                     }
-                    else -> item.quantity * item.costPrice
+                    else -> item.quantity * effectiveCostPrice
                 }
             }
             val grossProfit = revenue - cogs
@@ -1026,27 +1040,26 @@ fun MarginAnalysisScreen(
                                 // Calculate HPP/COGS for this transaction
                                 val txItems = transactionItems.filter { it.transactionId == tx.id }
                                 val txCogs = if (isExpense) 0.0 else txItems.sumOf { item ->
+                                    val prod = products.find { it.id == item.productId }
+                                    val effectiveCostPrice = if (item.costPrice > 0.0) item.costPrice else (prod?.costPrice ?: 0.0)
                                     when {
-                                        tx.receiptNumber.startsWith("FNB-") -> {
-                                            item.quantity * item.costPrice
-                                        }
+                                        tx.receiptNumber.startsWith("FNB-") ->
+                                            item.quantity * effectiveCostPrice
                                         tx.receiptNumber.startsWith("RN-") -> {
                                             val days = tx.queueNumber ?: 1
-                                            val prod = products.find { it.id == item.productId }
                                             val monthlyMaint = getMonthlyMaintenance(prod?.wholesalePrices)
-                                            val dailyCogs = (if (item.costPrice > 1_000_000.0) item.costPrice / 1825.0 else item.costPrice) + (monthlyMaint / 30.0)
+                                            val dailyCogs = (if (effectiveCostPrice > 1_000_000.0) effectiveCostPrice / 1825.0 else effectiveCostPrice) + (monthlyMaint / 30.0)
                                             dailyCogs * days
                                         }
                                         tx.receiptNumber.startsWith("LD-") -> {
-                                            val prod = products.find { it.id == item.productId }
                                             val isKg = prod?.unit == "Kg"
                                             val monthlyMaint = getMonthlyMaintenance(prod?.wholesalePrices)
                                             val qty = if (isKg) item.quantity / 10.0 else item.quantity.toDouble()
-                                            val baseCogs = qty * item.costPrice
+                                            val baseCogs = qty * effectiveCostPrice
                                             val maintShare = qty * (monthlyMaint / 300.0)
                                             baseCogs + maintShare
                                         }
-                                        else -> item.quantity * item.costPrice
+                                        else -> item.quantity * effectiveCostPrice
                                     }
                                 }
                                 val txMargin = if (isExpense) 0.0 else tx.total - txCogs
@@ -1538,24 +1551,23 @@ fun MarginAnalysisScreen(
                             }
 
                             // Item COGS calculation
+                            val effectiveCostPrice = if (item.costPrice > 0.0) item.costPrice else (prod?.costPrice ?: 0.0)
                             val itemCogs = when (posType) {
-                                "FnB" -> item.quantity * item.costPrice
+                                "FnB" -> item.quantity * effectiveCostPrice
                                 "Rental" -> {
                                     val days = tx.queueNumber ?: 1
-                                    val prod = products.find { it.id == item.productId }
                                     val monthlyMaint = getMonthlyMaintenance(prod?.wholesalePrices)
-                                    val dailyCogs = (if (item.costPrice > 1_000_000.0) item.costPrice / 1825.0 else item.costPrice) + (monthlyMaint / 30.0)
+                                    val dailyCogs = (if (effectiveCostPrice > 1_000_000.0) effectiveCostPrice / 1825.0 else effectiveCostPrice) + (monthlyMaint / 30.0)
                                     dailyCogs * days
                                 }
                                 "Laundry" -> {
-                                    val prod = products.find { it.id == item.productId }
                                     val monthlyMaint = getMonthlyMaintenance(prod?.wholesalePrices)
                                     val qty = if (isKg) item.quantity / 10.0 else item.quantity.toDouble()
-                                    val baseCogs = qty * item.costPrice
+                                    val baseCogs = qty * effectiveCostPrice
                                     val maintShare = qty * (monthlyMaint / 300.0)
                                     baseCogs + maintShare
                                 }
-                                else -> item.quantity * item.costPrice
+                                else -> item.quantity * effectiveCostPrice
                             }
                             val priceTimesQty = if (isKg) {
                                 (item.quantity / 10.0) * item.price

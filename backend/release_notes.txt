@@ -1,4 +1,24 @@
-POSBah v2.19.42 - Penyempurnaan Sistem Reconnect (Rejoin) Akun & Keamanan
+POSBah v2.19.48 - Sinkronisasi Biaya & Bahan Baku ke Komponen Olahan & Analisis Margin
+
+Halo Kak! POSBah v2.19.48 memperbaiki sinkronisasi biaya / bahan baku FnB:
+1. Pilihan Bahan/Komponen pada penambahan produk olahan kini menyertakan semua biaya / bahan baku yang telah dicatat sebelumnya.
+2. Analisis Margin & Keuntungan kini memproses dan menampilkan transaksi pengeluaran (biaya bahan baku) secara real-time dan akurat.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
+POSBah v2.19.47 - Fix Catat Biaya / Bahan Baku Tersimpan ke Database
+
+Halo Kak! POSBah v2.19.47 memperbaiki fitur Catat Biaya / Bahan Baku:
+1. Pengeluaran yang dicatat via menu "Catat Biaya / Bahan Baku" kini berhasil tersimpan ke database dan muncul di laporan keuangan.
+2. Perbaikan data biaya bahan baku: riwayat pengeluaran operasional kini terhitung akurat di laporan laba-rugi harian/bulanan.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
+POSBah v2.19.46 - Fix Dropdown Bahan/Komponen FnB
 
 Halo Kak! POSBah v2.19.42 menyempurnakan fitur menghubungkan kembali (rejoin) akun yang terhapus:
 1. Perlindungan Anti-Spam Email: Pengiriman email konfirmasi dibatasi maksimal 1 kali setiap 60 detik per akun.
