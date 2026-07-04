@@ -7733,6 +7733,74 @@ func handleEmployeeConfirm(w http.ResponseWriter, r *http.Request) {
 	`, email, businessName)))
 }
 
+var rejoinRateLimits sync.Map
+
+// Generate a cryptographically signed token for rejoin operations
+func generateRejoinToken(email string, expiryMinutes int) (string, error) {
+	secretKey := "PosBahSignatureSecretKey123!"
+	expiry := time.Now().Add(time.Duration(expiryMinutes) * time.Minute).Unix()
+	
+	// Create raw data string
+	rawData := fmt.Sprintf("rejoin:%s:%d", email, expiry)
+	
+	// Generate signature
+	mac := hmac.New(sha256.New, []byte(secretKey))
+	mac.Write([]byte(rawData))
+	signature := fmt.Sprintf("%x", mac.Sum(nil))
+	
+	// Combine and encode
+	tokenRaw := fmt.Sprintf("%s:%s", rawData, signature)
+	return base64.RawURLEncoding.EncodeToString([]byte(tokenRaw)), nil
+}
+
+// Validate a rejoin token and return the email if valid
+func validateRejoinToken(tokenEncoded string) (string, error) {
+	tokenEncoded = strings.TrimSpace(tokenEncoded)
+	if tokenEncoded == "" {
+		return "", fmt.Errorf("token is empty")
+	}
+
+	decodedBytes, err := base64.RawURLEncoding.DecodeString(tokenEncoded)
+	if err != nil {
+		decodedBytes, err = base64.URLEncoding.DecodeString(tokenEncoded)
+		if err != nil {
+			return "", fmt.Errorf("failed to decode token: %w", err)
+		}
+	}
+
+	tokenRaw := string(decodedBytes)
+	parts := strings.Split(tokenRaw, ":")
+	if len(parts) != 4 || parts[0] != "rejoin" {
+		return "", fmt.Errorf("invalid token format")
+	}
+
+	email := parts[1]
+	expiryStr := parts[2]
+	signature := parts[3]
+
+	// Check expiry
+	expiry, err := strconv.ParseInt(expiryStr, 10, 64)
+	if err != nil {
+		return "", fmt.Errorf("invalid expiry in token")
+	}
+	if time.Now().Unix() > expiry {
+		return "", fmt.Errorf("token expired")
+	}
+
+	// Verify signature
+	secretKey := "PosBahSignatureSecretKey123!"
+	rawData := fmt.Sprintf("rejoin:%s:%d", email, expiry)
+	mac := hmac.New(sha256.New, []byte(secretKey))
+	mac.Write([]byte(rawData))
+	expectedSignature := fmt.Sprintf("%x", mac.Sum(nil))
+
+	if signature != expectedSignature {
+		return "", fmt.Errorf("invalid signature")
+	}
+
+	return email, nil
+}
+
 func handleCheckDeleted(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -7773,6 +7841,20 @@ func handleRequestRejoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Rate Limiting: 60 seconds per email
+	now := time.Now().Unix()
+	if lastSentVal, ok := rejoinRateLimits.Load(email); ok {
+		if lastSent, ok := lastSentVal.(int64); ok {
+			if now-lastSent < 60 {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusTooManyRequests)
+				w.Write([]byte(`{"success":false,"message":"Tolong tunggu 60 detik sebelum mengirim permintaan kembali."}`))
+				return
+			}
+		}
+	}
+	rejoinRateLimits.Store(email, now)
+
 	var status string
 	err := db.QueryRow(`SELECT "status" FROM "deleted_users" WHERE TRIM(LOWER("email")) = $1`, email).Scan(&status)
 	if err == sql.ErrNoRows {
@@ -7786,6 +7868,12 @@ func handleRequestRejoin(w http.ResponseWriter, r *http.Request) {
 	_, err = db.Exec(`UPDATE "deleted_users" SET "status" = 'PENDING_USER_CONFIRM', "updatedAt" = $1 WHERE TRIM(LOWER("email")) = $2`, time.Now().UnixNano()/1e6, email)
 	if err != nil {
 		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	token, err := generateRejoinToken(email, 1440) // 24 hours
+	if err != nil {
+		http.Error(w, "Failed to generate token: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -7808,12 +7896,12 @@ func handleRequestRejoin(w http.ResponseWriter, r *http.Request) {
 		<div class="card">
 			<h2>Uji Coba POSBah</h2>
 			<p>Apakah kamu ingin mencoba menggunakan POSBah lagi?</p>
-			<a class="btn" href="https://www.zedmz.cloud/api/auth/confirm-rejoin?email=%s">Ya, Saya Ingin Mencoba Lagi</a>
+			<a class="btn" href="https://www.zedmz.cloud/api/auth/confirm-rejoin?token=%s">Ya, Saya Ingin Mencoba Lagi</a>
 			<div class="footer">Pesan ini dikirim secara otomatis oleh sistem POSBah.</div>
 		</div>
 	</body>
 	</html>
-	`, email)
+	`, token)
 
 	if err := sendEmail(email, subject, body); err != nil {
 		http.Error(w, "Failed to send email: "+err.Error(), http.StatusInternalServerError)
@@ -7829,15 +7917,46 @@ func handleConfirmRejoin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	email := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("email")))
-	if email == "" {
-		http.Error(w, "Missing email parameter", http.StatusBadRequest)
+	token := strings.TrimSpace(r.URL.Query().Get("token"))
+	email, err := validateRejoinToken(token)
+	if err != nil {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(fmt.Sprintf(`
+		<!DOCTYPE html>
+		<html>
+		<head>
+			<meta charset="utf-8">
+			<title>Akses Ditolak</title>
+			<style>
+				body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #0f172a; color: white; }
+				.card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); padding: 40px; border-radius: 16px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.3); max-width: 400px; width: 100%%; }
+				.icon { font-size: 48px; color: #ef4444; margin-bottom: 20px; }
+				h1 { font-size: 24px; font-weight: 700; margin-top: 0; }
+				p { color: #94a3b8; font-size: 16px; line-height: 1.5; }
+			</style>
+		</head>
+		<body>
+			<div class="card">
+				<div class="icon">✗</div>
+				<h1>Link Tidak Valid</h1>
+				<p>Link konfirmasi tidak valid, kadaluarsa, atau tanda tangan tidak cocok. Detail: %s</p>
+			</div>
+		</body>
+		</html>
+		`, err.Error())))
 		return
 	}
 
-	_, err := db.Exec(`UPDATE "deleted_users" SET "status" = 'PENDING_ADMIN_APPROVE', "updatedAt" = $1 WHERE TRIM(LOWER("email")) = $2`, time.Now().UnixNano()/1e6, email)
+	_, err = db.Exec(`UPDATE "deleted_users" SET "status" = 'PENDING_ADMIN_APPROVE', "updatedAt" = $1 WHERE TRIM(LOWER("email")) = $2`, time.Now().UnixNano()/1e6, email)
 	if err != nil {
 		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	adminToken, err := generateRejoinToken(email, 1440) // 24 hours
+	if err != nil {
+		http.Error(w, "Failed to generate admin token: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -7861,12 +7980,12 @@ func handleConfirmRejoin(w http.ResponseWriter, r *http.Request) {
 		<div class="card">
 			<h2>Persetujuan Rejoin POSBah</h2>
 			<p>Apakah kamu menyetujui bahwa email : <strong>%s</strong> untuk login kembali?</p>
-			<a class="btn" href="https://www.zedmz.cloud/api/auth/approve-rejoin?email=%s">Iya</a>
+			<a class="btn" href="https://www.zedmz.cloud/api/auth/approve-rejoin?token=%s">Iya</a>
 			<div class="footer">Pesan ini dikirim secara otomatis oleh sistem POSBah.</div>
 		</div>
 	</body>
 	</html>
-	`, email, email)
+	`, email, adminToken)
 
 	if err := sendEmail(adminEmail, subject, body); err != nil {
 		http.Error(w, "Failed to send email to admin: "+err.Error(), http.StatusInternalServerError)
@@ -7883,7 +8002,7 @@ func handleConfirmRejoin(w http.ResponseWriter, r *http.Request) {
 		<style>
 			body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #0f172a; color: white; }
 			.card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); padding: 40px; border-radius: 16px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.3); max-width: 400px; width: 100%%; }
-			.icon { font-size: 48px; color: #f97316; margin-bottom: 20px; }
+			.icon { font-size: 48px; color: #10b981; margin-bottom: 20px; }
 			h1 { font-size: 24px; font-weight: 700; margin-top: 0; }
 			p { color: #94a3b8; font-size: 16px; line-height: 1.5; }
 			.footer { margin-top: 30px; font-size: 12px; color: #64748b; }
@@ -7906,13 +8025,38 @@ func handleApproveRejoin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	email := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("email")))
-	if email == "" {
-		http.Error(w, "Missing email parameter", http.StatusBadRequest)
+	token := strings.TrimSpace(r.URL.Query().Get("token"))
+	email, err := validateRejoinToken(token)
+	if err != nil {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(fmt.Sprintf(`
+		<!DOCTYPE html>
+		<html>
+		<head>
+			<meta charset="utf-8">
+			<title>Akses Ditolak</title>
+			<style>
+				body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #0f172a; color: white; }
+				.card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); padding: 40px; border-radius: 16px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.3); max-width: 400px; width: 100%%; }
+				.icon { font-size: 48px; color: #ef4444; margin-bottom: 20px; }
+				h1 { font-size: 24px; font-weight: 700; margin-top: 0; }
+				p { color: #94a3b8; font-size: 16px; line-height: 1.5; }
+			</style>
+		</head>
+		<body>
+			<div class="card">
+				<div class="icon">✗</div>
+				<h1>Token Tidak Valid</h1>
+				<p>Token persetujuan admin tidak valid, kadaluarsa, atau tanda tangan tidak cocok. Detail: %s</p>
+			</div>
+		</body>
+		</html>
+		`, err.Error())))
 		return
 	}
 
-	_, err := db.Exec(`UPDATE "deleted_users" SET "status" = 'REJOINED', "updatedAt" = $1 WHERE TRIM(LOWER("email")) = $2`, time.Now().UnixNano()/1e6, email)
+	_, err = db.Exec(`UPDATE "deleted_users" SET "status" = 'REJOINED', "updatedAt" = $1 WHERE TRIM(LOWER("email")) = $2`, time.Now().UnixNano()/1e6, email)
 	if err != nil {
 		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
 		return

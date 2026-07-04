@@ -1,3 +1,14 @@
+POSBah v2.19.42 - Penyempurnaan Sistem Reconnect (Rejoin) Akun & Keamanan
+
+Halo Kak! POSBah v2.19.42 menyempurnakan fitur menghubungkan kembali (rejoin) akun yang terhapus:
+1. Perlindungan Anti-Spam Email: Pengiriman email konfirmasi dibatasi maksimal 1 kali setiap 60 detik per akun.
+2. Tanda Tangan Kriptografis URL: Link konfirmasi pengguna dan persetujuan admin kini diamankan menggunakan token bertanda tangan kriptografis sekali pakai untuk mencegah manipulasi URL.
+3. Keandalan Jaringan APK: Aplikasi Android kini memverifikasi status pemulihan akun di server dengan andal sebelum memulai sesi baru.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.41 - Sinkronisasi Tanda Tangan Real-time & Kustomisasi Cetak
 
 Halo Kak! POSBah v2.19.41 menghadirkan pembaruan sinkronisasi dan kustomisasi cetak:

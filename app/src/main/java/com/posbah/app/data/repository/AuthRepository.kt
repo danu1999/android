@@ -220,8 +220,11 @@ class AuthRepository @Inject constructor(
                 val checkObj = JSONObject(checkBody)
                 if (checkObj.optBoolean("deleted", false)) {
                     if (checkObj.optString("status") == "REJOINED") {
+                        val (postCode, postBody) = httpPost("$BASE_URL/api/auth/complete-rejoin?email=${URLEncoder.encode(cleanEmail, "UTF-8")}")
+                        if (postCode !in 200..299 || postBody.isNullOrBlank() || !JSONObject(postBody).optBoolean("success", false)) {
+                            return@withContext LoginOutcome.Error("Gagal mengaktifkan kembali akun di server. Hubungi admin.", cleanEmail)
+                        }
                         securePrefs.wipe()
-                        httpPost("$BASE_URL/api/auth/complete-rejoin?email=${URLEncoder.encode(cleanEmail, "UTF-8")}")
                     } else {
                         return@withContext LoginOutcome.Error("Gagal login karena database tidak ada. Silakan hubungi admin.", cleanEmail)
                     }
