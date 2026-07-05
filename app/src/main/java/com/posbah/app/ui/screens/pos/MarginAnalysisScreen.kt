@@ -14,6 +14,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.People
@@ -265,6 +267,7 @@ fun MarginAnalysisScreen(
     val userRole by viewModel.userRole.collectAsState()
     val configuration = LocalConfiguration.current
     val isSmallScreen = configuration.screenWidthDp < 360
+    var outletDropdownExpanded by remember { mutableStateOf(false) }
 
     if (userRole != "OWNER") {
         Box(
@@ -735,27 +738,52 @@ fun MarginAnalysisScreen(
                     Column(modifier = Modifier.padding(10.dp)) {
                         Text("Filter Outlet:", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.tertiary)
                         Spacer(Modifier.height(6.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            // "Semua Outlet" chip
-                            Surface(
+                        val selectedOutletName = if (selectedOutletId == null) "Semua Outlet" else (availableOutlets.find { it.id == selectedOutletId }?.name ?: "Semua Outlet")
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            OutlinedButton(
+                                onClick = { outletDropdownExpanded = !outletDropdownExpanded },
+                                modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(8.dp),
-                                color = if (selectedOutletId == null) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (selectedOutletId == null) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.clickable { viewModel.selectOutletFilter(null) }
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
                             ) {
-                                Text("Semua", fontWeight = FontWeight.Bold, fontSize = 10.sp,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp))
-                            }
-                            availableOutlets.forEach { outlet ->
-                                val isActive = selectedOutletId == outlet.id
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = if (isActive) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.surfaceVariant,
-                                    contentColor = if (isActive) MaterialTheme.colorScheme.onTertiary else MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.clickable { viewModel.selectOutletFilter(outlet.id) }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(outlet.name, fontWeight = FontWeight.Bold, fontSize = 10.sp,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp))
+                                    Text(
+                                        text = selectedOutletName,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Icon(
+                                        imageVector = if (outletDropdownExpanded) Icons.Filled.ArrowDropUp else Icons.Filled.ArrowDropDown,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            DropdownMenu(
+                                expanded = outletDropdownExpanded,
+                                onDismissRequest = { outletDropdownExpanded = false },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Semua Outlet", fontWeight = FontWeight.Bold) },
+                                    onClick = {
+                                        viewModel.selectOutletFilter(null)
+                                        outletDropdownExpanded = false
+                                    }
+                                )
+                                availableOutlets.forEach { outlet ->
+                                    DropdownMenuItem(
+                                        text = { Text(outlet.name) },
+                                        onClick = {
+                                            viewModel.selectOutletFilter(outlet.id)
+                                            outletDropdownExpanded = false
+                                        }
+                                    )
                                 }
                             }
                         }
@@ -995,7 +1023,8 @@ fun MarginAnalysisScreen(
                 }
             }
 
-            when (activeTab) {
+            if (!outletDropdownExpanded) {
+                when (activeTab) {
                 "HISTORY" -> {
                     // Transaction History Title
                     Row(
@@ -1588,6 +1617,7 @@ fun MarginAnalysisScreen(
                     }
                 }
             }
+        }
         }
     }
 
