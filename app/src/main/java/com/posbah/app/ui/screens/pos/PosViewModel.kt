@@ -18,6 +18,8 @@ import com.posbah.app.data.repository.OutletRepository
 import com.posbah.app.data.repository.BmpBahanBakuRepository
 import com.posbah.app.data.repository.RawMaterialRepository
 import com.posbah.app.data.repository.ProductRecipeRepository
+import com.posbah.app.data.repository.ProductModifierRepository
+import com.posbah.app.data.repository.ProductModifierData
 import com.posbah.app.security.SecurePreferences
 import com.posbah.app.ui.print.PrintConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -52,6 +54,14 @@ data class RecipeIngredient(
 
 @Serializable
 data class ProductVariant(val id: Long, val name: String, val price: Double?, val costPrice: Double?, val stock: Int?)
+
+data class ModifierDraft(
+    val name: String,
+    val price: Double,
+    val costPrice: Double,
+    val variantName: String?, // name of the variant (if specific to variant)
+    val rawMaterialId: Long?  // link to raw materials for inventory
+)
 
 data class CartItem(
     val cartKey: String, // product.id or product.id-v[variant.id]
@@ -107,7 +117,8 @@ class PosViewModel @Inject constructor(
     private val sessionState: SessionState,
     private val securePrefs: SecurePreferences,
     private val rawMaterialRepository: RawMaterialRepository,
-    private val productRecipeRepository: ProductRecipeRepository
+    private val productRecipeRepository: ProductRecipeRepository,
+    private val productModifierRepository: ProductModifierRepository
 ) : ViewModel() {
 
     private val tenantId = authRepository.activeTenantId().orEmpty()
@@ -123,6 +134,10 @@ class PosViewModel @Inject constructor(
 
     // Expose raw materials list for recipe picker
     val rawMaterials = rawMaterialRepository.rawMaterials
+
+    suspend fun loadProductModifiers(productId: Long): List<ProductModifierData> {
+        return productModifierRepository.listForProduct(productId)
+    }
 
     private val _uiState = MutableStateFlow(PosUiState())
     val uiState = _uiState.asStateFlow()
@@ -699,6 +714,7 @@ class PosViewModel @Inject constructor(
         costPriceBreakdown: String?,
         defaultDailyTarget: Int,
         recipeDrafts: List<Triple<Long, Double, String>> = emptyList(), // rawMaterialId, qty, unit
+        modifierDrafts: List<ModifierDraft> = emptyList(),
         onDone: () -> Unit
     ) {
         val role = securePrefs.currentRole ?: "KASIR"
@@ -749,6 +765,23 @@ class PosViewModel @Inject constructor(
                         try { productRecipeRepository.create(newId, rawMatId, qty) } catch (_: Exception) {}
                     }
                 }
+                // Simpan product modifiers/toppings jika ada
+                if (modifierDrafts.isNotEmpty()) {
+                    val parsedVars = if (!variants.isNullOrBlank()) parseVariants(p.copy(variants = variants)) else emptyList()
+                    modifierDrafts.forEach { draft ->
+                        val matchedVar = parsedVars.find { it.name == draft.variantName }
+                        try {
+                            productModifierRepository.create(
+                                productId = newId,
+                                name = draft.name,
+                                price = draft.price,
+                                costPrice = draft.costPrice,
+                                variantId = matchedVar?.id,
+                                rawMaterialId = draft.rawMaterialId
+                            )
+                        } catch (_: Exception) {}
+                    }
+                }
             } else {
                 android.widget.Toast.makeText(appContext, "Gagal menambah produk di server. Rollback otomatis.", android.widget.Toast.LENGTH_LONG).show()
             }
@@ -772,6 +805,7 @@ class PosViewModel @Inject constructor(
         variants: String?,
         costPriceBreakdown: String?,
         defaultDailyTarget: Int,
+        modifierDrafts: List<ModifierDraft> = emptyList(),
         onDone: () -> Unit
     ) {
         val role = securePrefs.currentRole ?: "KASIR"
@@ -814,6 +848,26 @@ class PosViewModel @Inject constructor(
             val editedId = productRepository.upsert(updated)
             if (editedId > 0L) {
                 logActivity("EDIT PRODUK", "Mengubah produk: $name (Jual: Rp $price, Beli: Rp $costPrice)")
+                // Sync modifiers/toppings: hapus lama, buat baru
+                try {
+                    val existing = productModifierRepository.listForProduct(product.id)
+                    existing.forEach { productModifierRepository.delete(it.id) }
+
+                    if (modifierDrafts.isNotEmpty()) {
+                        val parsedVars = if (!variants.isNullOrBlank()) parseVariants(updated) else emptyList()
+                        modifierDrafts.forEach { draft ->
+                            val matchedVar = parsedVars.find { it.name == draft.variantName }
+                            productModifierRepository.create(
+                                productId = product.id,
+                                name = draft.name,
+                                price = draft.price,
+                                costPrice = draft.costPrice,
+                                variantId = matchedVar?.id,
+                                rawMaterialId = draft.rawMaterialId
+                            )
+                        }
+                    }
+                } catch (_: Exception) {}
             } else {
                 android.widget.Toast.makeText(appContext, "Gagal mengupdate produk di server. Rollback otomatis.", android.widget.Toast.LENGTH_LONG).show()
             }

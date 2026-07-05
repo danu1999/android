@@ -187,6 +187,16 @@ data class EditableVariant(
     val costPrice: String = ""
 )
 
+data class EditableModifier(
+    val id: Long = 0,
+    val name: String = "",
+    val price: String = "",
+    val costPrice: String = "",
+    val variantName: String? = null,
+    val rawMaterialId: Long? = null,
+    val rawMaterialName: String? = null
+)
+
 private fun deserializeVariantsToList(variantsJson: String?): List<EditableVariant> {
     if (variantsJson.isNullOrBlank()) return emptyList()
     try {
@@ -307,6 +317,17 @@ fun PosScreen(
     var newRecipeUnit by remember { mutableStateOf("") }
     var showRecipeRawMatDropdown by remember { mutableStateOf(false) }
 
+    // ── Modifier / Topping (untuk produk baru) ──────────────────────────────
+    val newProdModifiersList = remember { mutableStateListOf<EditableModifier>() }
+    var newModName by remember { mutableStateOf("") }
+    var newModPrice by remember { mutableStateOf("") }
+    var newModCostPrice by remember { mutableStateOf("") }
+    var newModVariantName by remember { mutableStateOf<String?>(null) }
+    var newModRawMatId by remember { mutableStateOf<Long?>(null) }
+    var newModRawMatName by remember { mutableStateOf("") }
+    var showModVariantDropdown by remember { mutableStateOf(false) }
+    var showModRawMatDropdown by remember { mutableStateOf(false) }
+
     var newCustName by remember { mutableStateOf("") }
     var newCustPhone by remember { mutableStateOf("") }
     var newCustAddress by remember { mutableStateOf("") }
@@ -332,6 +353,17 @@ fun PosScreen(
     var editHppCostInput by remember { mutableStateOf("") }
     var editHppYieldInput by remember { mutableStateOf("1") }
     var editHppCategoryInput by remember { mutableStateOf("BAHAN_BAKU") }
+
+    // ── Modifier / Topping (untuk edit produk) ───────────────────────────────
+    val editProdModifiersList = remember { mutableStateListOf<EditableModifier>() }
+    var editModName by remember { mutableStateOf("") }
+    var editModPrice by remember { mutableStateOf("") }
+    var editModCostPrice by remember { mutableStateOf("") }
+    var editModVariantName by remember { mutableStateOf<String?>(null) }
+    var editModRawMatId by remember { mutableStateOf<Long?>(null) }
+    var editModRawMatName by remember { mutableStateOf("") }
+    var showEditModVariantDropdown by remember { mutableStateOf(false) }
+    var showEditModRawMatDropdown by remember { mutableStateOf(false) }
 
     var showTransactionsHistoryDialog by remember { mutableStateOf(false) }
     var showEditReceiptDialog by remember { mutableStateOf(false) }
@@ -781,6 +813,25 @@ fun PosScreen(
                                             editHppNameInput = ""
                                             editHppCostInput = ""
                                             capturedPhotoFile = null
+                                            scope.launch {
+                                                editProdModifiersList.clear()
+                                                try {
+                                                    val mods = viewModel.loadProductModifiers(p.id)
+                                                    val mapped = mods.map { m ->
+                                                        val matchedVar = des.find { it.id == m.variantId }
+                                                        EditableModifier(
+                                                            id = m.id,
+                                                            name = m.name,
+                                                            price = m.price.toString(),
+                                                            costPrice = m.costPrice.toString(),
+                                                            variantName = matchedVar?.name,
+                                                            rawMaterialId = m.rawMaterialId,
+                                                            rawMaterialName = rawMaterials.find { it.id == m.rawMaterialId }?.name
+                                                        )
+                                                    }
+                                                    editProdModifiersList.addAll(mapped)
+                                                } catch (_: Exception) {}
+                                            }
                                             showEditProductDialog = true
                                         }
                                     }
@@ -1203,7 +1254,11 @@ fun PosScreen(
         // Dialog: Tambah Produk Baru
         if (showAddProductDialog) {
             AlertDialog(
-                onDismissRequest = { showAddProductDialog = false },
+                onDismissRequest = {
+                    showAddProductDialog = false
+                    newProdRecipeDrafts.clear()
+                    newProdModifiersList.clear()
+                },
                 title = { Text("Tambah Produk Baru") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
@@ -1623,6 +1678,123 @@ fun PosScreen(
                             }
                         }
 
+                        // ── Section Modifiers/Toppings ──────────────────────────
+                        Spacer(Modifier.height(8.dp))
+                        Text("Topping & Modifikasi Porsi", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.tertiary)
+                        Text("Tambahan item dengan harga jual/modal sendiri (misal: Extra Keju).", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(4.dp))
+                        
+                        newProdModifiersList.forEachIndexed { idx, mod ->
+                            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                                val varSuffix = if (mod.variantName != null) " (${mod.variantName})" else " (Semua Varian)"
+                                val matSuffix = if (mod.rawMaterialName != null) " - 🥦 ${mod.rawMaterialName}" else ""
+                                Text(
+                                    "• ${mod.name}$varSuffix: +Rp ${mod.price} (HPP: Rp ${mod.costPrice})$matSuffix",
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(onClick = { newProdModifiersList.removeAt(idx) }, modifier = Modifier.size(24.dp)) {
+                                    Icon(Icons.Outlined.Delete, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+                        
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f))
+                                .padding(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                OutlinedTextField(
+                                    value = newModName,
+                                    onValueChange = { newModName = it },
+                                    label = { Text("Nama Topping") },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1.5f)
+                                )
+                                OutlinedTextField(
+                                    value = newModPrice,
+                                    onValueChange = { newModPrice = it.filter { c -> c.isDigit() } },
+                                    label = { Text("Jual (+Rp)") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedTextField(
+                                    value = newModCostPrice,
+                                    onValueChange = { newModCostPrice = it.filter { c -> c.isDigit() } },
+                                    label = { Text("HPP (Rp)") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(modifier = Modifier.weight(1f)) {
+                                    OutlinedTextField(
+                                        value = newModVariantName ?: "Semua Varian",
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text("Untuk Varian") },
+                                        trailingIcon = { IconButton(onClick = { showModVariantDropdown = true }) { Icon(Icons.Default.ArrowDropDown, null) } },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    DropdownMenu(expanded = showModVariantDropdown, onDismissRequest = { showModVariantDropdown = false }) {
+                                        DropdownMenuItem(text = { Text("Semua Varian") }, onClick = { newModVariantName = null; showModVariantDropdown = false })
+                                        newProdVariantsList.forEach { v ->
+                                            if (v.name.isNotBlank()) {
+                                                DropdownMenuItem(text = { Text(v.name) }, onClick = { newModVariantName = v.name; showModVariantDropdown = false })
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                Box(modifier = Modifier.weight(1.2f)) {
+                                    OutlinedTextField(
+                                        value = newModRawMatName.ifBlank { "Tanpa Bahan Baku" },
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text("Potong Stok") },
+                                        trailingIcon = { IconButton(onClick = { showModRawMatDropdown = true }) { Icon(Icons.Default.ArrowDropDown, null) } },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    DropdownMenu(expanded = showModRawMatDropdown, onDismissRequest = { showModRawMatDropdown = false }) {
+                                        DropdownMenuItem(text = { Text("Tanpa Bahan Baku") }, onClick = { newModRawMatId = null; newModRawMatName = ""; showModRawMatDropdown = false })
+                                        rawMaterials.forEach { mat ->
+                                            DropdownMenuItem(text = { Text(mat.name) }, onClick = { newModRawMatId = mat.id; newModRawMatName = mat.name; showModRawMatDropdown = false })
+                                        }
+                                    }
+                                }
+                                
+                                Button(
+                                    onClick = {
+                                        val pVal = newModPrice.toDoubleOrNull() ?: 0.0
+                                        val cVal = newModCostPrice.toDoubleOrNull() ?: 0.0
+                                        if (newModName.isNotBlank() && pVal >= 0) {
+                                            newProdModifiersList.add(
+                                                EditableModifier(
+                                                    name = newModName,
+                                                    price = newModPrice.ifBlank { "0" },
+                                                    costPrice = newModCostPrice.ifBlank { "0" },
+                                                    variantName = newModVariantName,
+                                                    rawMaterialId = newModRawMatId,
+                                                    rawMaterialName = newModRawMatName.takeIf { it.isNotBlank() }
+                                                )
+                                            )
+                                            newModName = ""; newModPrice = ""; newModCostPrice = ""; newModVariantName = null; newModRawMatId = null; newModRawMatName = ""
+                                        }
+                                    },
+                                    modifier = Modifier.height(56.dp)
+                                ) { Text("+") }
+                            }
+                        }
+
                         // Camera & Image Section
                         if (capturedPhotoFile != null) {
                             Box(
@@ -1702,10 +1874,20 @@ fun PosScreen(
                                     variants = if (newProdVariantsEnabled) convertVariantsListToJsons(newProdVariantsList) else null,
                                     costPriceBreakdown = serializeHppComponents(newProdHppComponents),
                                     defaultDailyTarget = newProdDefaultDailyTarget.toIntOrNull() ?: 0,
-                                    recipeDrafts = newProdRecipeDrafts.map { Triple(it.rawMaterialId, it.qty, it.unit) }
+                                    recipeDrafts = newProdRecipeDrafts.map { Triple(it.rawMaterialId, it.qty, it.unit) },
+                                    modifierDrafts = newProdModifiersList.map {
+                                        ModifierDraft(
+                                            name = it.name,
+                                            price = it.price.toDoubleOrNull() ?: 0.0,
+                                            costPrice = it.costPrice.toDoubleOrNull() ?: 0.0,
+                                            variantName = it.variantName,
+                                            rawMaterialId = it.rawMaterialId
+                                        )
+                                    }
                                 ) {
                                     showAddProductDialog = false
                                     newProdRecipeDrafts.clear()
+                                    newProdModifiersList.clear()
                                     Toast.makeText(context, "Produk berhasil ditambahkan!", Toast.LENGTH_SHORT).show()
                                 }
                             } else {
@@ -1716,7 +1898,13 @@ fun PosScreen(
                     ) { Text("Simpan") }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showAddProductDialog = false }) { Text("Batal") }
+                    TextButton(
+                        onClick = {
+                            showAddProductDialog = false
+                            newProdRecipeDrafts.clear()
+                            newProdModifiersList.clear()
+                        }
+                    ) { Text("Batal") }
                 }
             )
         }
@@ -1725,7 +1913,10 @@ fun PosScreen(
         if (showEditProductDialog && productToEdit != null) {
             val originalProduct = productToEdit!!
             AlertDialog(
-                onDismissRequest = { showEditProductDialog = false },
+                onDismissRequest = {
+                    showEditProductDialog = false
+                    editProdModifiersList.clear()
+                },
                 title = { Text("Edit Produk") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.verticalScroll(rememberScrollState())) {
@@ -2047,6 +2238,123 @@ fun PosScreen(
                             }
                         }
 
+                        // ── Section Modifiers/Toppings ──────────────────────────
+                        Spacer(Modifier.height(8.dp))
+                        Text("Topping & Modifikasi Porsi", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.tertiary)
+                        Text("Tambahan item dengan harga jual/modal sendiri (misal: Extra Keju).", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(4.dp))
+                        
+                        editProdModifiersList.forEachIndexed { idx, mod ->
+                            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                                val varSuffix = if (mod.variantName != null) " (${mod.variantName})" else " (Semua Varian)"
+                                val matSuffix = if (mod.rawMaterialName != null) " - 🥦 ${mod.rawMaterialName}" else ""
+                                Text(
+                                    "• ${mod.name}$varSuffix: +Rp ${mod.price} (HPP: Rp ${mod.costPrice})$matSuffix",
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(onClick = { editProdModifiersList.removeAt(idx) }, modifier = Modifier.size(24.dp)) {
+                                    Icon(Icons.Outlined.Delete, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+                        
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f))
+                                .padding(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                OutlinedTextField(
+                                    value = editModName,
+                                    onValueChange = { editModName = it },
+                                    label = { Text("Nama Topping") },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1.5f)
+                                )
+                                OutlinedTextField(
+                                    value = editModPrice,
+                                    onValueChange = { editModPrice = it.filter { c -> c.isDigit() } },
+                                    label = { Text("Jual (+Rp)") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedTextField(
+                                    value = editModCostPrice,
+                                    onValueChange = { editModCostPrice = it.filter { c -> c.isDigit() } },
+                                    label = { Text("HPP (Rp)") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(modifier = Modifier.weight(1f)) {
+                                    OutlinedTextField(
+                                        value = editModVariantName ?: "Semua Varian",
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text("Untuk Varian") },
+                                        trailingIcon = { IconButton(onClick = { showEditModVariantDropdown = true }) { Icon(Icons.Default.ArrowDropDown, null) } },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    DropdownMenu(expanded = showEditModVariantDropdown, onDismissRequest = { showEditModVariantDropdown = false }) {
+                                        DropdownMenuItem(text = { Text("Semua Varian") }, onClick = { editModVariantName = null; showEditModVariantDropdown = false })
+                                        editProdVariantsList.forEach { v ->
+                                            if (v.name.isNotBlank()) {
+                                                DropdownMenuItem(text = { Text(v.name) }, onClick = { editModVariantName = v.name; showEditModVariantDropdown = false })
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                Box(modifier = Modifier.weight(1.2f)) {
+                                    OutlinedTextField(
+                                        value = editModRawMatName.ifBlank { "Tanpa Bahan Baku" },
+                                        onValueChange = {},
+                                        readOnly = true,
+                                        label = { Text("Potong Stok") },
+                                        trailingIcon = { IconButton(onClick = { showEditModRawMatDropdown = true }) { Icon(Icons.Default.ArrowDropDown, null) } },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    DropdownMenu(expanded = showEditModRawMatDropdown, onDismissRequest = { showEditModRawMatDropdown = false }) {
+                                        DropdownMenuItem(text = { Text("Tanpa Bahan Baku") }, onClick = { editModRawMatId = null; editModRawMatName = ""; showEditModRawMatDropdown = false })
+                                        rawMaterials.forEach { mat ->
+                                            DropdownMenuItem(text = { Text(mat.name) }, onClick = { editModRawMatId = mat.id; editModRawMatName = mat.name; showEditModRawMatDropdown = false })
+                                        }
+                                    }
+                                }
+                                
+                                Button(
+                                    onClick = {
+                                        val pVal = editModPrice.toDoubleOrNull() ?: 0.0
+                                        val cVal = editModCostPrice.toDoubleOrNull() ?: 0.0
+                                        if (editModName.isNotBlank() && pVal >= 0) {
+                                            editProdModifiersList.add(
+                                                EditableModifier(
+                                                    name = editModName,
+                                                    price = editModPrice.ifBlank { "0" },
+                                                    costPrice = editModCostPrice.ifBlank { "0" },
+                                                    variantName = editModVariantName,
+                                                    rawMaterialId = editModRawMatId,
+                                                    rawMaterialName = editModRawMatName.takeIf { it.isNotBlank() }
+                                                )
+                                            )
+                                            editModName = ""; editModPrice = ""; editModCostPrice = ""; editModVariantName = null; editModRawMatId = null; editModRawMatName = ""
+                                        }
+                                    },
+                                    modifier = Modifier.height(56.dp)
+                                ) { Text("+") }
+                            }
+                        }
+
                         // Camera & Image Section
                         if (capturedPhotoFile != null) {
                             Box(
@@ -2176,9 +2484,19 @@ fun PosScreen(
                                     minWholesaleQty = editProdMinWholesaleQty.toIntOrNull() ?: 0,
                                     variants = if (editProdVariantsEnabled) convertVariantsListToJsons(editProdVariantsList) else null,
                                     costPriceBreakdown = serializeHppComponents(editProdHppComponents),
-                                    defaultDailyTarget = editProdDefaultDailyTarget.toIntOrNull() ?: 0
+                                    defaultDailyTarget = editProdDefaultDailyTarget.toIntOrNull() ?: 0,
+                                    modifierDrafts = editProdModifiersList.map {
+                                        ModifierDraft(
+                                            name = it.name,
+                                            price = it.price.toDoubleOrNull() ?: 0.0,
+                                            costPrice = it.costPrice.toDoubleOrNull() ?: 0.0,
+                                            variantName = it.variantName,
+                                            rawMaterialId = it.rawMaterialId
+                                        )
+                                    }
                                 ) {
                                     showEditProductDialog = false
+                                    editProdModifiersList.clear()
                                     Toast.makeText(context, "Produk berhasil diubah!", Toast.LENGTH_SHORT).show()
                                 }
                             } else {
@@ -2188,7 +2506,12 @@ fun PosScreen(
                     ) { Text("Simpan Perubahan") }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showEditProductDialog = false }) { Text("Batal") }
+                    TextButton(
+                        onClick = {
+                            showEditProductDialog = false
+                            editProdModifiersList.clear()
+                        }
+                    ) { Text("Batal") }
                 }
             )
         }
