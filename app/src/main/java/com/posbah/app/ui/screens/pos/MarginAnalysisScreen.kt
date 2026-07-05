@@ -977,49 +977,144 @@ fun MarginAnalysisScreen(
                 }
             }
 
-            // Tab Toggle Button Row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(if (isSmallScreen) Modifier.horizontalScroll(rememberScrollState()) else Modifier),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Button(
-                    onClick = { activeTab = "HISTORY" },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (activeTab == "HISTORY") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                        contentColor = if (activeTab == "HISTORY") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                    ),
-                    modifier = if (isSmallScreen) Modifier.wrapContentWidth() else Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-                ) {
-                    Icon(Icons.Outlined.History, null, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Riwayat", fontSize = if (isSmallScreen) 9.sp else 10.sp, fontWeight = FontWeight.Bold)
+            // Tab Toggle Selector
+            if (isSmallScreen) {
+                var activeTabDropdownExpanded by remember { mutableStateOf(false) }
+                val selectedTabLabel = when (activeTab) {
+                    "HISTORY" -> "Riwayat Transaksi"
+                    "MENU_ENGINEERING" -> "📊 Analisis Menu"
+                    else -> "👥 Buku Piutang"
                 }
-                Button(
-                    onClick = { activeTab = "MENU_ENGINEERING" },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (activeTab == "MENU_ENGINEERING") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                        contentColor = if (activeTab == "MENU_ENGINEERING") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                    ),
-                    modifier = if (isSmallScreen) Modifier.wrapContentWidth() else Modifier.weight(1.2f),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
                 ) {
-                    Text("📊 Analisis Menu", fontSize = if (isSmallScreen) 9.sp else 10.sp, fontWeight = FontWeight.Bold)
+                    OutlinedButton(
+                        onClick = { activeTabDropdownExpanded = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            contentColor = MaterialTheme.colorScheme.primary
+                        ),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                when (activeTab) {
+                                    "HISTORY" -> Icon(Icons.Outlined.History, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                    "MENU_ENGINEERING" -> Text("📊", fontSize = 14.sp)
+                                    else -> Icon(Icons.Outlined.People, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
+                                }
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = selectedTabLabel,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            Icon(
+                                imageVector = if (activeTabDropdownExpanded) Icons.Filled.ArrowDropUp else Icons.Filled.ArrowDropDown,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = activeTabDropdownExpanded,
+                        onDismissRequest = { activeTabDropdownExpanded = false },
+                        modifier = Modifier.fillMaxWidth(0.9f)
+                    ) {
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Outlined.History, null, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Riwayat Transaksi", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            },
+                            onClick = {
+                                activeTab = "HISTORY"
+                                activeTabDropdownExpanded = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("📊 Analisis Menu", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            },
+                            onClick = {
+                                activeTab = "MENU_ENGINEERING"
+                                activeTabDropdownExpanded = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Outlined.People, null, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Buku Piutang", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            },
+                            onClick = {
+                                activeTab = "AGING_AR"
+                                activeTabDropdownExpanded = false
+                            }
+                        )
+                    }
                 }
-                Button(
-                    onClick = { activeTab = "AGING_AR" },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (activeTab == "AGING_AR") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                        contentColor = if (activeTab == "AGING_AR") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                    ),
-                    modifier = if (isSmallScreen) Modifier.wrapContentWidth() else Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(Icons.Outlined.People, null, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Buku Piutang", fontSize = if (isSmallScreen) 9.sp else 10.sp, fontWeight = FontWeight.Bold)
+                    Button(
+                        onClick = { activeTab = "HISTORY" },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (activeTab == "HISTORY") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = if (activeTab == "HISTORY") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        Icon(Icons.Outlined.History, null, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Riwayat", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Button(
+                        onClick = { activeTab = "MENU_ENGINEERING" },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (activeTab == "MENU_ENGINEERING") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = if (activeTab == "MENU_ENGINEERING") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        modifier = Modifier.weight(1.2f),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        Text("📊 Analisis Menu", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Button(
+                        onClick = { activeTab = "AGING_AR" },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (activeTab == "AGING_AR") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = if (activeTab == "AGING_AR") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                    ) {
+                        Icon(Icons.Outlined.People, null, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Buku Piutang", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
 
