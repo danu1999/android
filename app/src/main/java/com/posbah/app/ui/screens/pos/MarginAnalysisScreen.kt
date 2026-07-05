@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CalendarMonth
@@ -260,6 +263,8 @@ fun MarginAnalysisScreen(
 ) {
     val context = LocalContext.current
     val userRole by viewModel.userRole.collectAsState()
+    val configuration = LocalConfiguration.current
+    val isSmallScreen = configuration.screenWidthDp < 360
 
     if (userRole != "OWNER") {
         Box(
@@ -946,7 +951,9 @@ fun MarginAnalysisScreen(
 
             // Tab Toggle Button Row
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(if (isSmallScreen) Modifier.horizontalScroll(rememberScrollState()) else Modifier),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Button(
@@ -955,12 +962,12 @@ fun MarginAnalysisScreen(
                         containerColor = if (activeTab == "HISTORY") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                         contentColor = if (activeTab == "HISTORY") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                     ),
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                    modifier = if (isSmallScreen) Modifier.wrapContentWidth() else Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                 ) {
                     Icon(Icons.Outlined.History, null, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Riwayat", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text("Riwayat", fontSize = if (isSmallScreen) 9.sp else 10.sp, fontWeight = FontWeight.Bold)
                 }
                 Button(
                     onClick = { activeTab = "MENU_ENGINEERING" },
@@ -968,10 +975,10 @@ fun MarginAnalysisScreen(
                         containerColor = if (activeTab == "MENU_ENGINEERING") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                         contentColor = if (activeTab == "MENU_ENGINEERING") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                     ),
-                    modifier = Modifier.weight(1.2f),
-                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                    modifier = if (isSmallScreen) Modifier.wrapContentWidth() else Modifier.weight(1.2f),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                 ) {
-                    Text("📊 Analisis Menu", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text("📊 Analisis Menu", fontSize = if (isSmallScreen) 9.sp else 10.sp, fontWeight = FontWeight.Bold)
                 }
                 Button(
                     onClick = { activeTab = "AGING_AR" },
@@ -979,12 +986,12 @@ fun MarginAnalysisScreen(
                         containerColor = if (activeTab == "AGING_AR") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                         contentColor = if (activeTab == "AGING_AR") MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                     ),
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
+                    modifier = if (isSmallScreen) Modifier.wrapContentWidth() else Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                 ) {
                     Icon(Icons.Outlined.People, null, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Buku Piutang", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text("Buku Piutang", fontSize = if (isSmallScreen) 9.sp else 10.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -1148,6 +1155,63 @@ fun MarginAnalysisScreen(
                     val dogCount = productAnalysisItems.count { getMenuCategory(it) == "DOG" }
 
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    if (isSmallScreen) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Surface(
+                                modifier = Modifier.width(135.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0xFFE8F5E9),
+                                border = BorderStroke(1.dp, Color(0xFF2E7D32).copy(alpha = 0.2f))
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Text("⭐ Stars", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFF1B5E20))
+                                    Text("$starCount Menu", fontWeight = FontWeight.Black, fontSize = 14.sp, color = Color(0xFF1B5E20))
+                                    Text("Laris & Margin Tinggi", fontSize = 8.sp, color = Color(0xFF2E7D32))
+                                }
+                            }
+                            Surface(
+                                modifier = Modifier.width(135.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0xFFFFF3E0),
+                                border = BorderStroke(1.dp, Color(0xFFE65100).copy(alpha = 0.2f))
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Text("↗️ Plowhorses", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFFE65100))
+                                    Text("$plowhorseCount Menu", fontWeight = FontWeight.Black, fontSize = 14.sp, color = Color(0xFFE65100))
+                                    Text("Laris tapi Margin Rendah", fontSize = 8.sp, color = Color(0xFFE65100))
+                                }
+                            }
+                            Surface(
+                                modifier = Modifier.width(135.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0xFFE8EAF6),
+                                border = BorderStroke(1.dp, Color(0xFF1A237E).copy(alpha = 0.2f))
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Text("➡️ Puzzles", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFF1A237E))
+                                    Text("$puzzleCount Menu", fontWeight = FontWeight.Black, fontSize = 14.sp, color = Color(0xFF1A237E))
+                                    Text("Sepi tapi Margin Tinggi", fontSize = 8.sp, color = Color(0xFF1A237E))
+                                }
+                            }
+                            Surface(
+                                modifier = Modifier.width(135.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0xFFFFEBEE),
+                                border = BorderStroke(1.dp, Color(0xFFC62828).copy(alpha = 0.2f))
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Text("⬇️ Dogs", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFFB71C1C))
+                                    Text("$dogCount Menu", fontWeight = FontWeight.Black, fontSize = 14.sp, color = Color(0xFFB71C1C))
+                                    Text("Sepi & Margin Rendah", fontSize = 8.sp, color = Color(0xFFC62828))
+                                }
+                            }
+                        }
+                    } else {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             Surface(
                                 modifier = Modifier.weight(1f),
@@ -1200,6 +1264,7 @@ fun MarginAnalysisScreen(
                                 }
                             }
                         }
+                    }
 
                         Spacer(Modifier.height(4.dp))
 
@@ -1308,26 +1373,33 @@ fun MarginAnalysisScreen(
                                             Spacer(Modifier.height(6.dp))
                                             Row(
                                                 modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Column {
-                                                    Text("Terjual: $unitsSoldStr", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                                    Text("Harga Jual: ${Formatters.rupiah(item.product.price)}", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                Column(modifier = if (isSmallScreen) Modifier.weight(1f) else Modifier) {
+                                                    Text("Terjual: $unitsSoldStr", fontSize = if (isSmallScreen) 10.sp else 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                    Text("Harga Jual: ${Formatters.rupiah(item.product.price)}", fontSize = if (isSmallScreen) 9.sp else 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                                     
                                                     val suffix = if (isOlahan) {
                                                         if (isExpanded) " (Sembunyikan Resep ▲)" else " (Lihat Resep ▼)"
                                                     } else ""
                                                     Text(
                                                         text = "HPP: ${Formatters.rupiah(item.product.costPrice)}$suffix",
-                                                        fontSize = 10.sp,
+                                                        fontSize = if (isSmallScreen) 9.sp else 10.sp,
                                                         fontWeight = if (isOlahan) FontWeight.Bold else FontWeight.Normal,
                                                         color = if (isOlahan) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                                     )
                                                 }
-                                                Column(horizontalAlignment = Alignment.End) {
-                                                    Text("Omzet: ${Formatters.rupiah(item.revenue)}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                                                    Text("Profit: ${Formatters.rupiah(item.grossProfit)}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
-                                                    Text("Margin %: ${String.format("%.1f%%", item.marginPercent)}", fontSize = 11.sp, fontWeight = FontWeight.Black, color = Color(0xFF6A1B9A))
+                                                if (isSmallScreen) {
+                                                    Spacer(Modifier.width(8.dp))
+                                                }
+                                                Column(
+                                                    horizontalAlignment = Alignment.End,
+                                                    modifier = if (isSmallScreen) Modifier.wrapContentWidth() else Modifier
+                                                ) {
+                                                    Text("Omzet: ${Formatters.rupiah(item.revenue)}", fontSize = if (isSmallScreen) 10.sp else 11.sp, fontWeight = FontWeight.SemiBold)
+                                                    Text("Profit: ${Formatters.rupiah(item.grossProfit)}", fontSize = if (isSmallScreen) 10.sp else 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                                                    Text("Margin %: ${String.format("%.1f%%", item.marginPercent)}", fontSize = if (isSmallScreen) 10.sp else 11.sp, fontWeight = FontWeight.Black, color = Color(0xFF6A1B9A))
                                                 }
                                             }
 
