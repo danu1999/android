@@ -67,6 +67,7 @@ data class TransactionEntity(
     val dpAmount: Double = 0.0,
     val deliveryDate: Long? = null,
     val queueNumber: Int? = null,
+    val tableNumber: Int? = null,  // Nomor Meja FnB
     val notes: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),

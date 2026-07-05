@@ -267,6 +267,7 @@ fun PosScreen(
     val queueList by viewModel.pendingQueues.collectAsState()
     val tenantName by viewModel.tenantName.collectAsState()
     val rawMaterialRates by viewModel.rawMaterialRates.collectAsState()
+    val rawMaterials by viewModel.rawMaterials.collectAsState()
 
     var activeProductForVariant by remember { mutableStateOf<ProductEntity?>(null) }
     var showBluetoothDialog by remember { mutableStateOf(false) }
@@ -295,6 +296,16 @@ fun PosScreen(
     var newHppCostInput by remember { mutableStateOf("") }
     var newHppYieldInput by remember { mutableStateOf("1") }
     var newHppCategoryInput by remember { mutableStateOf("BAHAN_BAKU") }
+
+    // ── Resep Bahan Baku (untuk produk baru OLAHAN) ──────────────────────────
+    // Data class sementara di memori sebelum produk disimpan ke DB
+    data class RecipeIngredientDraft(val rawMaterialId: Long, val name: String, val unit: String, val qty: Double)
+    val newProdRecipeDrafts = remember { mutableStateListOf<RecipeIngredientDraft>() }
+    var newRecipeRawMatId by remember { mutableStateOf(0L) }
+    var newRecipeRawMatName by remember { mutableStateOf("") }
+    var newRecipeQty by remember { mutableStateOf("") }
+    var newRecipeUnit by remember { mutableStateOf("") }
+    var showRecipeRawMatDropdown by remember { mutableStateOf(false) }
 
     var newCustName by remember { mutableStateOf("") }
     var newCustPhone by remember { mutableStateOf("") }
@@ -596,6 +607,21 @@ fun PosScreen(
                                     onClick = { onNavigate("owner/employees") }
                                 )
                             }
+                            item {
+                                FooterButton(
+                                    icon = Icons.Outlined.ShoppingCart,
+                                    label = "Stok Bahan Baku",
+                                    onClick = { onNavigate("pos/raw-materials") }
+                                )
+                            }
+                        }
+                        // Shift kasir: semua role bisa buka/tutup shift
+                        item {
+                            FooterButton(
+                                icon = Icons.Outlined.History,
+                                label = "Shift Kasir",
+                                onClick = { onNavigate("pos/shift") }
+                            )
                         }
                     }
                 }
@@ -1542,6 +1568,61 @@ fun PosScreen(
                             }
                         }
 
+                        // ── Section Resep Bahan Baku (hanya untuk OLAHAN) ──────────
+                        if (newProdType == "OLAHAN") {
+                            Spacer(Modifier.height(4.dp))
+                            Text("Resep Bahan Baku", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.tertiary)
+                            Text("Stok bahan baku otomatis terpotong saat produk terjual.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.height(4.dp))
+                            newProdRecipeDrafts.forEachIndexed { idx, draft ->
+                                Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                                    Text("• ${draft.name}: ${if (draft.qty == draft.qty.toLong().toDouble()) draft.qty.toLong().toString() else "%.2f".format(draft.qty)} ${draft.unit}", fontSize = 12.sp, modifier = Modifier.weight(1f))
+                                    IconButton(onClick = { newProdRecipeDrafts.removeAt(idx) }, modifier = Modifier.size(24.dp)) {
+                                        Icon(Icons.Outlined.Delete, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                                    }
+                                }
+                            }
+                            Row(Modifier.fillMaxWidth(), Arrangement.spacedBy(6.dp), Alignment.CenterVertically) {
+                                Box(modifier = Modifier.weight(1.5f)) {
+                                    OutlinedTextField(
+                                        value = newRecipeRawMatName,
+                                        onValueChange = { newRecipeRawMatName = it },
+                                        label = { Text("Bahan Baku") },
+                                        singleLine = true,
+                                        trailingIcon = { IconButton(onClick = { showRecipeRawMatDropdown = true }) { Icon(Icons.Default.ArrowDropDown, null) } },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    DropdownMenu(expanded = showRecipeRawMatDropdown, onDismissRequest = { showRecipeRawMatDropdown = false }) {
+                                        if (rawMaterials.isEmpty()) {
+                                            DropdownMenuItem(text = { Text("Tambah bahan baku di menu Stok Bahan Baku.") }, onClick = { showRecipeRawMatDropdown = false })
+                                        }
+                                        rawMaterials.forEach { mat ->
+                                            DropdownMenuItem(
+                                                text = { Text("${mat.name} (${mat.recipeUnit})") },
+                                                onClick = { newRecipeRawMatId = mat.id; newRecipeRawMatName = mat.name; newRecipeUnit = mat.recipeUnit; showRecipeRawMatDropdown = false }
+                                            )
+                                        }
+                                    }
+                                }
+                                OutlinedTextField(
+                                    value = newRecipeQty,
+                                    onValueChange = { newRecipeQty = it.filter { c -> c.isDigit() || c == '.' } },
+                                    label = { Text("Jml (${newRecipeUnit.ifBlank { "unit" }})") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    singleLine = true, modifier = Modifier.weight(1f)
+                                )
+                                Button(
+                                    onClick = {
+                                        val qty = newRecipeQty.toDoubleOrNull() ?: 0.0
+                                        if (newRecipeRawMatId > 0 && qty > 0) {
+                                            newProdRecipeDrafts.add(RecipeIngredientDraft(newRecipeRawMatId, newRecipeRawMatName, newRecipeUnit, qty))
+                                            newRecipeRawMatId = 0L; newRecipeRawMatName = ""; newRecipeQty = ""; newRecipeUnit = ""
+                                        }
+                                    }, modifier = Modifier.height(56.dp)
+                                ) { Text("+") }
+                            }
+                        }
+
                         // Camera & Image Section
                         if (capturedPhotoFile != null) {
                             Box(
@@ -1620,9 +1701,11 @@ fun PosScreen(
                                     minWholesaleQty = newProdMinWholesaleQty.toIntOrNull() ?: 0,
                                     variants = if (newProdVariantsEnabled) convertVariantsListToJsons(newProdVariantsList) else null,
                                     costPriceBreakdown = serializeHppComponents(newProdHppComponents),
-                                    defaultDailyTarget = newProdDefaultDailyTarget.toIntOrNull() ?: 0
+                                    defaultDailyTarget = newProdDefaultDailyTarget.toIntOrNull() ?: 0,
+                                    recipeDrafts = newProdRecipeDrafts.map { Triple(it.rawMaterialId, it.qty, it.unit) }
                                 ) {
                                     showAddProductDialog = false
+                                    newProdRecipeDrafts.clear()
                                     Toast.makeText(context, "Produk berhasil ditambahkan!", Toast.LENGTH_SHORT).show()
                                 }
                             } else {
@@ -3010,9 +3093,17 @@ private fun CartSidebarContent(
                 modifier = Modifier.weight(1f)
             )
             OutlinedTextField(
+                value = ui.tableNumber,
+                onValueChange = viewModel::updateTableNumber,
+                label = { Text("No Meja") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.weight(1f)
+            )
+            OutlinedTextField(
                 value = ui.notes,
                 onValueChange = viewModel::updateNotes,
-                label = { Text("Catatan Struk") },
+                label = { Text("Catatan") },
                 leadingIcon = { Icon(Icons.Outlined.Notes, null) },
                 singleLine = true,
                 modifier = Modifier.weight(1.8f)

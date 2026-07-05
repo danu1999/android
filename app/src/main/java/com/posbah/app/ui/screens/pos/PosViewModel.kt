@@ -16,6 +16,8 @@ import com.posbah.app.data.repository.TransactionRepository
 import com.posbah.app.data.repository.PrintSettingsRepository
 import com.posbah.app.data.repository.OutletRepository
 import com.posbah.app.data.repository.BmpBahanBakuRepository
+import com.posbah.app.data.repository.RawMaterialRepository
+import com.posbah.app.data.repository.ProductRecipeRepository
 import com.posbah.app.security.SecurePreferences
 import com.posbah.app.ui.print.PrintConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -72,6 +74,7 @@ data class PosUiState(
     val discountInput: String = "",
     val amountPaid: String = "",
     val queueNumber: String = "",
+    val tableNumber: String = "",  // Nomor Meja (FnB)
     val notes: String = "",
     val paymentMethod: String = "CASH", // CASH, QRIS, TRANSFER, HUTANG
     val debtDueDate: String = "",
@@ -102,7 +105,9 @@ class PosViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val printSettingsRepository: PrintSettingsRepository,
     private val sessionState: SessionState,
-    private val securePrefs: SecurePreferences
+    private val securePrefs: SecurePreferences,
+    private val rawMaterialRepository: RawMaterialRepository,
+    private val productRecipeRepository: ProductRecipeRepository
 ) : ViewModel() {
 
     private val tenantId = authRepository.activeTenantId().orEmpty()
@@ -116,11 +121,15 @@ class PosViewModel @Inject constructor(
     private val _rawMaterialRates = MutableStateFlow<Map<String, Double>>(emptyMap())
     val rawMaterialRates = _rawMaterialRates.asStateFlow()
 
+    // Expose raw materials list for recipe picker
+    val rawMaterials = rawMaterialRepository.rawMaterials
+
     private val _uiState = MutableStateFlow(PosUiState())
     val uiState = _uiState.asStateFlow()
 
     init {
         loadRawMaterials()
+        viewModelScope.launch { rawMaterialRepository.refresh() }
         // Auto-refresh suggestions bahan baku setiap kali daftar produk atau transaksi berubah
         viewModelScope.launch {
             var productsInitialized = false
@@ -313,6 +322,10 @@ class PosViewModel @Inject constructor(
         _uiState.update { it.copy(queueNumber = num) }
     }
 
+    fun updateTableNumber(num: String) {
+        _uiState.update { it.copy(tableNumber = num) }
+    }
+
     fun updateNotes(n: String) {
         _uiState.update { it.copy(notes = n) }
     }
@@ -404,6 +417,7 @@ class PosViewModel @Inject constructor(
                 discountInput = "",
                 amountPaid = "",
                 queueNumber = "",
+                tableNumber = "",
                 notes = "",
                 selectedTransactionDate = null
             )
@@ -494,6 +508,7 @@ class PosViewModel @Inject constructor(
             status = if (isQueue) "PENDING" else "COMPLETED",
             notes = currentUi.notes.takeIf { it.isNotBlank() },
             queueNumber = currentUi.queueNumber.toIntOrNull(),
+            tableNumber = currentUi.tableNumber.toIntOrNull(),
             deliveryDate = dueDateMs
         )
 
@@ -683,6 +698,7 @@ class PosViewModel @Inject constructor(
         variants: String?,
         costPriceBreakdown: String?,
         defaultDailyTarget: Int,
+        recipeDrafts: List<Triple<Long, Double, String>> = emptyList(), // rawMaterialId, qty, unit
         onDone: () -> Unit
     ) {
         val role = securePrefs.currentRole ?: "KASIR"
@@ -727,6 +743,12 @@ class PosViewModel @Inject constructor(
             val newId = productRepository.upsert(p)
             if (newId > 0L) {
                 logActivity("TAMBAH PRODUK", "Menambahkan produk baru: $name (Jual: Rp $price, Beli: Rp $costPrice)")
+                // Simpan resep bahan baku jika ada
+                if (recipeDrafts.isNotEmpty()) {
+                    recipeDrafts.forEach { (rawMatId, qty, _) ->
+                        try { productRecipeRepository.create(newId, rawMatId, qty) } catch (_: Exception) {}
+                    }
+                }
             } else {
                 android.widget.Toast.makeText(appContext, "Gagal menambah produk di server. Rollback otomatis.", android.widget.Toast.LENGTH_LONG).show()
             }

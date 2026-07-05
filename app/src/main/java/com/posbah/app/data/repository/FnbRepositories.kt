@@ -64,13 +64,15 @@ data class TransactionData(
     val type: String = "SALE",
     val status: String = "COMPLETED",
     val totalAmount: Double = 0.0,
-    val subtotal: Double? = null,          // ✅ peta ke kolom "subtotal" di DB
+    val subtotal: Double? = null,
     val paymentMethod: String = "CASH",
     val amountPaid: Double? = null,
     val change: Double? = null,
     val customerId: Long? = null,
     val notes: String? = null,
     val date: Long = System.currentTimeMillis(),
+    val queueNumber: Int? = null,    // ✅ No. Antrian FnB
+    val tableNumber: Int? = null,    // ✅ No. Meja FnB
     val isDeleted: Boolean = false,
     val updatedAt: Long = 0
 )
@@ -837,16 +839,18 @@ class TransactionRepository @Inject constructor(
                 "receiptNumber" to receiptNum,
                 "type" to transaction.type,
                 "status" to transaction.status,
-                "total" to transaction.totalAmount,          // ✅ nama kolom DB (bukan totalAmount)
-                "subtotal" to (transaction.subtotal ?: transaction.totalAmount), // ✅ kolom DB
-                "employeeId" to transaction.employeeId,       // ✅ NOT NULL di DB
+                "total" to transaction.totalAmount,
+                "subtotal" to (transaction.subtotal ?: transaction.totalAmount),
+                "employeeId" to transaction.employeeId,
                 "paymentMethod" to transaction.paymentMethod,
                 "amountPaid" to transaction.amountPaid,
                 "change" to transaction.change,
                 "customerId" to transaction.customerId,
                 "notes" to transaction.notes,
                 "date" to transaction.date,
-                "outletId" to transaction.outletId
+                "outletId" to transaction.outletId,
+                "queueNumber" to transaction.queueNumber,
+                "tableNumber" to transaction.tableNumber
             )
 
             val txResp = api.createTransaction(txBody)
@@ -1144,18 +1148,20 @@ class TransactionRepository @Inject constructor(
             id = transaction.id,
             tenantId = transaction.tenantId,
             outletId = transaction.outletId,
-            employeeId = transaction.employeeId,   // ✅ teruskan employeeId
+            employeeId = transaction.employeeId,
             receiptNumber = transaction.receiptNumber,
             type = transaction.type,
             status = transaction.status,
             totalAmount = transaction.total,
-            subtotal = transaction.subtotal,        // ✅ teruskan subtotal
+            subtotal = transaction.subtotal,
             paymentMethod = transaction.paymentMethod,
             amountPaid = transaction.amountPaid,
             change = transaction.change,
             customerId = transaction.customerId,
             notes = transaction.notes,
-            date = transaction.date
+            date = transaction.date,
+            queueNumber = transaction.queueNumber,
+            tableNumber = transaction.tableNumber
         )
         val itemsData = items.map { it.toTransactionItemData(productRepo) }
         val result = checkout(txData, itemsData, productRepo)
