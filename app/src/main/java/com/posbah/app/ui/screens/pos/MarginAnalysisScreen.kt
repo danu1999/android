@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -20,6 +21,7 @@ import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -53,15 +55,20 @@ import java.text.SimpleDateFormat
 import java.util.*
 import javax.inject.Inject
 
+import com.posbah.app.data.repository.CustomerRepository
+
 @HiltViewModel
 class MarginAnalysisViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val productRepository: ProductRepository,
     private val transactionRepository: TransactionRepository,
     private val outletRepository: OutletRepository,
+    private val customerRepository: CustomerRepository,
     private val sessionState: com.posbah.app.data.repository.SessionState,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context
 ) : ViewModel() {
+
+    val customers = customerRepository.customers
 
     val tenantId = authRepository.activeTenantId().orEmpty()
 
@@ -130,6 +137,11 @@ class MarginAnalysisViewModel @Inject constructor(
                     transactionRepository.refresh(outletId)
                 } catch (_: Exception) {}
             }
+        }
+        viewModelScope.launch {
+            try {
+                customerRepository.refresh()
+            } catch (_: Exception) {}
         }
         refreshItems()
         // Auto-refresh when transactions update
@@ -304,6 +316,7 @@ fun MarginAnalysisScreen(
     val transactionItems by viewModel.transactionItems.collectAsState()
     val availableOutlets by viewModel.availableOutlets.collectAsState()
     val selectedOutletId by viewModel.selectedOutletId.collectAsState()
+    val customers by viewModel.customers.collectAsState()
 
     // Filters state
     var posMode by remember { mutableStateOf("SEMUA") } // SEMUA, FNB, RENTAL, LAUNDRY
@@ -312,6 +325,7 @@ fun MarginAnalysisScreen(
     var activeTab by remember { mutableStateOf("HISTORY") } // "HISTORY", "MENU_ENGINEERING", "AGING_AR"
     var txToSettle by remember { mutableStateOf<TransactionEntity?>(null) }
     var showWastageDialog by remember { mutableStateOf(false) }
+    var showFilterDialog by remember { mutableStateOf(false) }
 
     // Date pickers state
     val calendar = Calendar.getInstance()
@@ -548,431 +562,398 @@ fun MarginAnalysisScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Row 1: Filters bar
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // POS Mode Tabs
-                Card(
-                    modifier = Modifier.weight(1.2f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
-                        Text("Modul Kasir", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.height(6.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            val modes = listOf("SEMUA", "FNB", "RENTAL", "LAUNDRY")
-                            modes.forEach { m ->
-                                val active = posMode == m
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                    contentColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clickable { posMode = m }
-                                ) {
-                                    Text(
-                                        text = m,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 10.sp,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.padding(vertical = 8.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Date Presets
-                Card(
-                    modifier = Modifier.weight(1f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
-                        Text("Rentang Waktu", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.height(6.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            val presets = listOf("HARI_INI" to "Hari Ini", "7_HARI" to "7 Hari", "30_HARI" to "30 Hari", "KUSTOM" to "Kustom")
-                            presets.forEach { (p, label) ->
-                                val active = datePreset == p
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                    contentColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clickable { datePreset = p }
-                                ) {
-                                    Text(
-                                        text = label,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 9.sp,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.padding(vertical = 8.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Custom Date Range Pickers (only visible if preset is KUSTOM)
-            if (datePreset == "KUSTOM") {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Pilih Tanggal:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-
-                        // Start Date Button
-                        val sCal = Calendar.getInstance().apply { timeInMillis = startDateMillis }
-                        val sDialog = DatePickerDialog(
-                            context,
-                            { _, y, m, d ->
-                                val cal = Calendar.getInstance().apply {
-                                    set(y, m, d, 0, 0, 0)
-                                    set(Calendar.MILLISECOND, 0)
-                                }
-                                startDateMillis = cal.timeInMillis
-                            },
-                            sCal.get(Calendar.YEAR),
-                            sCal.get(Calendar.MONTH),
-                            sCal.get(Calendar.DAY_OF_MONTH)
-                        )
-                        OutlinedButton(
-                            onClick = { sDialog.show() },
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Icon(Icons.Outlined.CalendarMonth, null, modifier = Modifier.size(14.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Mulai: ${SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(startDateMillis))}", fontSize = 11.sp)
-                        }
-
-                        // End Date Button
-                        val eCal = Calendar.getInstance().apply { timeInMillis = endDateMillis }
-                        val eDialog = DatePickerDialog(
-                            context,
-                            { _, y, m, d ->
-                                val cal = Calendar.getInstance().apply {
-                                    set(y, m, d, 23, 59, 59)
-                                    set(Calendar.MILLISECOND, 999)
-                                }
-                                endDateMillis = cal.timeInMillis
-                            },
-                            eCal.get(Calendar.YEAR),
-                            eCal.get(Calendar.MONTH),
-                            eCal.get(Calendar.DAY_OF_MONTH)
-                        )
-                        OutlinedButton(
-                            onClick = { eDialog.show() },
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Icon(Icons.Outlined.CalendarMonth, null, modifier = Modifier.size(14.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Hingga: ${SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(endDateMillis))}", fontSize = 11.sp)
-                        }
-                    }
-                }
-            }
-
-            // Customer Type Filter Row
+            // Compact Collapsible Filter Header
             Card(
-                modifier = Modifier.fillMaxWidth(),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showFilterDialog = true },
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
             ) {
                 Row(
-                    modifier = Modifier.padding(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Filter Pelanggan:", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
                     Row(
-                        modifier = Modifier.weight(1f),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
                     ) {
-                        val types = listOf("SEMUA" to "Semua Transaksi", "PELANGGAN" to "Pelanggan Terdaftar", "UMUM" to "Umum (Walk-in)")
-                        types.forEach { (t, label) ->
-                            val active = customerType == t
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (active) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                contentColor = if (active) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable { customerType = t }
-                            ) {
-                                Text(
-                                    text = label,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 10.sp,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.padding(vertical = 6.dp)
-                                )
-                            }
+                        Text("⚙️ Filter: ", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        val outletLabel = if (selectedOutletId == null) "Semua Outlet" else (availableOutlets.find { it.id == selectedOutletId }?.name ?: "Semua Outlet")
+                        val dateLabel = when (datePreset) {
+                            "HARI_INI" -> "Hari Ini"
+                            "7_HARI" -> "7 Hari"
+                            "30_HARI" -> "30 Hari"
+                            else -> "${SimpleDateFormat("dd MMM", Locale.getDefault()).format(Date(startDateMillis))} - ${SimpleDateFormat("dd MMM", Locale.getDefault()).format(Date(endDateMillis))}"
                         }
-                    }
-                }
-            }
-
-            // Outlet Filter Row (hanya tampil untuk OWNER dengan 2+ outlet, atau info outlet untuk karyawan)
-            if (userRole == "OWNER" && availableOutlets.size > 1) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
-                        Text("Filter Outlet:", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.tertiary)
-                        Spacer(Modifier.height(6.dp))
-                        val selectedOutletName = if (selectedOutletId == null) "Semua Outlet" else (availableOutlets.find { it.id == selectedOutletId }?.name ?: "Semua Outlet")
-                        Box(modifier = Modifier.fillMaxWidth()) {
-                            OutlinedButton(
-                                onClick = { outletDropdownExpanded = !outletDropdownExpanded },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(8.dp),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = selectedOutletName,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Icon(
-                                        imageVector = if (outletDropdownExpanded) Icons.Filled.ArrowDropUp else Icons.Filled.ArrowDropDown,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                            DropdownMenu(
-                                expanded = outletDropdownExpanded,
-                                onDismissRequest = { outletDropdownExpanded = false },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("Semua Outlet", fontWeight = FontWeight.Bold) },
-                                    onClick = {
-                                        viewModel.selectOutletFilter(null)
-                                        outletDropdownExpanded = false
-                                    }
-                                )
-                                availableOutlets.forEach { outlet ->
-                                    DropdownMenuItem(
-                                        text = { Text(outlet.name) },
-                                        onClick = {
-                                            viewModel.selectOutletFilter(outlet.id)
-                                            outletDropdownExpanded = false
-                                        }
-                                    )
-                                }
-                            }
+                        val customerLabel = when (customerType) {
+                            "PELANGGAN" -> "Pelanggan"
+                            "UMUM" -> "Umum"
+                            else -> "Semua"
                         }
-                    }
-                }
-            } else if (userRole != "OWNER") {
-                // Karyawan: tampilkan outlet mereka sebagai info (read-only)
-                val myOutlet = availableOutlets.firstOrNull { it.id == selectedOutletId }
-                if (myOutlet != null) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.4f)
-                    ) {
                         Text(
-                            text = "📍 Outlet: ${myOutlet.name}",
+                            text = "$posMode • $dateLabel • $customerLabel • $outletLabel",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                    Text("Ubah ⚙️", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+
+            if (showFilterDialog) {
+                AlertDialog(
+                    onDismissRequest = { showFilterDialog = false },
+                    title = { Text("Konfigurasi Filter Laporan", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+                    text = {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                        ) {
+                            // POS Mode
+                            Column {
+                                Text("Modul Kasir", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.height(4.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    val modes = listOf("SEMUA", "FNB", "RENTAL", "LAUNDRY")
+                                    modes.forEach { m ->
+                                        val active = posMode == m
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                            contentColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clickable { posMode = m }
+                                        ) {
+                                            Text(
+                                                text = m,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 9.sp,
+                                                textAlign = TextAlign.Center,
+                                                modifier = Modifier.padding(vertical = 8.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Date Preset
+                            Column {
+                                Text("Rentang Waktu", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.height(4.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    val presets = listOf("HARI_INI" to "Hari Ini", "7_HARI" to "7 Hari", "30_HARI" to "30 Hari", "KUSTOM" to "Kustom")
+                                    presets.forEach { (p, label) ->
+                                        val active = datePreset == p
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                            contentColor = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clickable { datePreset = p }
+                                        ) {
+                                            Text(
+                                                text = label,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 9.sp,
+                                                textAlign = TextAlign.Center,
+                                                modifier = Modifier.padding(vertical = 8.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Custom Date Picker (if KUSTOM is active)
+                            if (datePreset == "KUSTOM") {
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text("Kustom Tanggal", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                        // Start date
+                                        val sCal = Calendar.getInstance().apply { timeInMillis = startDateMillis }
+                                        val sDialog = DatePickerDialog(
+                                            context,
+                                            { _, y, m, d ->
+                                                val cal = Calendar.getInstance().apply {
+                                                    set(y, m, d, 0, 0, 0)
+                                                    set(Calendar.MILLISECOND, 0)
+                                                }
+                                                startDateMillis = cal.timeInMillis
+                                            },
+                                            sCal.get(Calendar.YEAR),
+                                            sCal.get(Calendar.MONTH),
+                                            sCal.get(Calendar.DAY_OF_MONTH)
+                                        )
+                                        OutlinedButton(
+                                            onClick = { sDialog.show() },
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                                        ) {
+                                            Text("Mulai: ${SimpleDateFormat("dd MMM yy", Locale.getDefault()).format(Date(startDateMillis))}", fontSize = 10.sp)
+                                        }
+
+                                        // End date
+                                        val eCal = Calendar.getInstance().apply { timeInMillis = endDateMillis }
+                                        val eDialog = DatePickerDialog(
+                                            context,
+                                            { _, y, m, d ->
+                                                val cal = Calendar.getInstance().apply {
+                                                    set(y, m, d, 23, 59, 59)
+                                                    set(Calendar.MILLISECOND, 999)
+                                                }
+                                                endDateMillis = cal.timeInMillis
+                                            },
+                                            eCal.get(Calendar.YEAR),
+                                            eCal.get(Calendar.MONTH),
+                                            eCal.get(Calendar.DAY_OF_MONTH)
+                                        )
+                                        OutlinedButton(
+                                            onClick = { eDialog.show() },
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                                        ) {
+                                            Text("Hingga: ${SimpleDateFormat("dd MMM yy", Locale.getDefault()).format(Date(endDateMillis))}", fontSize = 10.sp)
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Customer Type
+                            Column {
+                                Text("Filter Pelanggan", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                                Spacer(Modifier.height(4.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    val types = listOf("SEMUA" to "Semua", "PELANGGAN" to "Terdaftar", "UMUM" to "Walk-in")
+                                    types.forEach { (t, label) ->
+                                        val active = customerType == t
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = if (active) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                            contentColor = if (active) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .clickable { customerType = t }
+                                        ) {
+                                            Text(
+                                                text = label,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 9.sp,
+                                                textAlign = TextAlign.Center,
+                                                modifier = Modifier.padding(vertical = 8.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Outlet selection
+                            if (userRole == "OWNER" && availableOutlets.size > 1) {
+                                Column {
+                                    Text("Filter Outlet", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.tertiary)
+                                    Spacer(Modifier.height(4.dp))
+                                    val selectedOutletName = if (selectedOutletId == null) "Semua Outlet" else (availableOutlets.find { it.id == selectedOutletId }?.name ?: "Semua Outlet")
+                                    Box(modifier = Modifier.fillMaxWidth()) {
+                                        OutlinedButton(
+                                            onClick = { outletDropdownExpanded = !outletDropdownExpanded },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(8.dp),
+                                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = selectedOutletName,
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Icon(
+                                                    imageVector = if (outletDropdownExpanded) Icons.Filled.ArrowDropUp else Icons.Filled.ArrowDropDown,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                        DropdownMenu(
+                                            expanded = outletDropdownExpanded,
+                                            onDismissRequest = { outletDropdownExpanded = false },
+                                            modifier = Modifier.fillMaxWidth(0.8f)
+                                        ) {
+                                            DropdownMenuItem(
+                                                text = { Text("Semua Outlet", fontWeight = FontWeight.Bold) },
+                                                onClick = {
+                                                    viewModel.selectOutletFilter(null)
+                                                    outletDropdownExpanded = false
+                                                }
+                                            )
+                                            availableOutlets.forEach { outlet ->
+                                                DropdownMenuItem(
+                                                    text = { Text(outlet.name) },
+                                                    onClick = {
+                                                        viewModel.selectOutletFilter(outlet.id)
+                                                        outletDropdownExpanded = false
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            } else if (userRole != "OWNER") {
+                                val myOutlet = availableOutlets.firstOrNull { it.id == selectedOutletId }
+                                if (myOutlet != null) {
+                                    Text(
+                                        text = "📍 Outlet: ${myOutlet.name}",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Button(onClick = { showFilterDialog = false }) {
+                            Text("Terapkan Filter")
+                        }
+                    }
+                )
+            }
+
+            // Redesigned Unified Dashboard Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.5.dp, Color(0xFF004D40).copy(alpha = 0.2f)),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color(0xFFE0F2F1), Color.White)
+                            )
+                        )
+                        .padding(16.dp)
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("Laba Bersih Bisnis", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF00796B))
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = Formatters.rupiah(netProfit),
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color(0xFF004D40)
+                                )
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(100.dp),
+                                color = Color(0xFF00796B),
+                                modifier = Modifier.wrapContentSize()
+                            ) {
+                                Text(
+                                    text = "${String.format("%.1f%%", netMarginPercent)} M. Bersih",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
 
-            // Premium Dashboard Summary Cards (Revenue, COGS, Profit, Expenses, Net Profit, Margins)
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+            // Horizontally Scrollable Secondary Metrics Row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                // Omzet Card
+                Surface(
+                    modifier = Modifier.width(130.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFFE8F5E9),
+                    border = BorderStroke(1.dp, Color(0xFF2E7D32).copy(alpha = 0.2f))
                 ) {
-                    // Revenue Card (Green)
-                    Surface(
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(1.dp, Color(0xFF2E7D32).copy(alpha = 0.15f)),
-                        color = Color.White,
-                        shadowElevation = 1.dp
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(Color(0xFFE8F5E9), Color.White)
-                                    )
-                                )
-                                .padding(14.dp)
-                        ) {
-                            Column {
-                                Text("Pendapatan Kotor", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF2E7D32))
-                                Spacer(Modifier.height(4.dp))
-                                Text(Formatters.rupiah(totalRevenue), fontSize = 16.sp, fontWeight = FontWeight.Black, color = Color(0xFF1B5E20))
-                            }
-                        }
-                    }
-
-                    // COGS Card (Amber)
-                    Surface(
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(1.dp, Color(0xFFD84315).copy(alpha = 0.15f)),
-                        color = Color.White,
-                        shadowElevation = 1.dp
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(Color(0xFFFBE9E7), Color.White)
-                                    )
-                                )
-                                .padding(14.dp)
-                        ) {
-                            Column {
-                                Text("Total HPP (COGS)", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFD84315))
-                                Spacer(Modifier.height(4.dp))
-                                Text(Formatters.rupiah(totalCogs), fontSize = 16.sp, fontWeight = FontWeight.Black, color = Color(0xFFBF360C))
-                            }
-                        }
-                    }
-
-                    // Profit Card (Indigo)
-                    Surface(
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(1.dp, Color(0xFF283593).copy(alpha = 0.15f)),
-                        color = Color.White,
-                        shadowElevation = 1.dp
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(Color(0xFFE8EAF6), Color.White)
-                                    )
-                                )
-                                .padding(14.dp)
-                        ) {
-                            Column {
-                                Text("Laba Kotor", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF283593))
-                                Spacer(Modifier.height(4.dp))
-                                Text(Formatters.rupiah(grossProfit), fontSize = 16.sp, fontWeight = FontWeight.Black, color = Color(0xFF1A237E))
-                            }
-                        }
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text("Pendapatan Kotor", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                        Spacer(Modifier.height(2.dp))
+                        Text(Formatters.rupiah(totalRevenue), fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color(0xFF1B5E20))
                     }
                 }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                // COGS/HPP Card
+                Surface(
+                    modifier = Modifier.width(130.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFFFBE9E7),
+                    border = BorderStroke(1.dp, Color(0xFFD84315).copy(alpha = 0.2f))
                 ) {
-                    // Expenses Card (Red)
-                    Surface(
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(1.dp, Color(0xFFC62828).copy(alpha = 0.15f)),
-                        color = Color.White,
-                        shadowElevation = 1.dp
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(Color(0xFFFFEBEE), Color.White)
-                                    )
-                                )
-                                .padding(14.dp)
-                        ) {
-                            Column {
-                                Text("Biaya Usaha", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFFC62828))
-                                Spacer(Modifier.height(4.dp))
-                                Text(Formatters.rupiah(totalExpenses), fontSize = 16.sp, fontWeight = FontWeight.Black, color = Color(0xFFB71C1C))
-                            }
-                        }
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text("Total HPP (COGS)", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD84315))
+                        Spacer(Modifier.height(2.dp))
+                        Text(Formatters.rupiah(totalCogs), fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color(0xFFBF360C))
                     }
+                }
 
-                    // Net Profit Card (Teal)
-                    Surface(
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(1.dp, Color(0xFF00796B).copy(alpha = 0.15f)),
-                        color = Color.White,
-                        shadowElevation = 1.dp
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(Color(0xFFE0F2F1), Color.White)
-                                    )
-                                )
-                                .padding(14.dp)
-                        ) {
-                            Column {
-                                Text("Laba Bersih", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF00796B))
-                                Spacer(Modifier.height(4.dp))
-                                Text(Formatters.rupiah(netProfit), fontSize = 16.sp, fontWeight = FontWeight.Black, color = Color(0xFF004D40))
-                            }
-                        }
+                // Laba Kotor Card
+                Surface(
+                    modifier = Modifier.width(130.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFFE8EAF6),
+                    border = BorderStroke(1.dp, Color(0xFF283593).copy(alpha = 0.2f))
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text("Laba Kotor", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF283593))
+                        Spacer(Modifier.height(2.dp))
+                        Text(Formatters.rupiah(grossProfit), fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color(0xFF1A237E))
                     }
+                }
 
-                    // Margin Percentage Card (Purple)
-                    Surface(
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(1.dp, Color(0xFF6A1B9A).copy(alpha = 0.15f)),
-                        color = Color.White,
-                        shadowElevation = 1.dp
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .background(
-                                    Brush.verticalGradient(
-                                        colors = listOf(Color(0xFFF3E5F5), Color.White)
-                                    )
-                                )
-                                .padding(10.dp)
-                        ) {
-                            Column {
-                                Text("Analisis Laba %", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF6A1B9A))
-                                Spacer(Modifier.height(2.dp))
-                                Text("M. Kotor: ${String.format("%.1f%%", marginPercent)}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4A148C))
-                                Text("M. Bersih: ${String.format("%.1f%%", netMarginPercent)}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4A148C))
-                                Text("Markup: ${String.format("%.1f%%", markupPercent)}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF4A148C))
-                            }
-                        }
+                // Biaya Card
+                Surface(
+                    modifier = Modifier.width(130.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFFFFEBEE),
+                    border = BorderStroke(1.dp, Color(0xFFC62828).copy(alpha = 0.2f))
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text("Biaya Usaha", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC62828))
+                        Spacer(Modifier.height(2.dp))
+                        Text(Formatters.rupiah(totalExpenses), fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color(0xFFB71C1C))
+                    }
+                }
+
+                // Margins & Markup Card
+                Surface(
+                    modifier = Modifier.width(160.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFFF3E5F5),
+                    border = BorderStroke(1.dp, Color(0xFF6A1B9A).copy(alpha = 0.2f))
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text("M. Kotor & Markup", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF6A1B9A))
+                        Spacer(Modifier.height(2.dp))
+                        Text("Kotor: ${String.format("%.1f%%", marginPercent)} | Mkup: ${String.format("%.1f%%", markupPercent)}", fontSize = 11.sp, fontWeight = FontWeight.Black, color = Color(0xFF4A148C))
                     }
                 }
             }
@@ -1121,17 +1102,39 @@ fun MarginAnalysisScreen(
             if (!outletDropdownExpanded) {
                 when (activeTab) {
                 "HISTORY" -> {
-                    // Transaction History Title
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Riwayat Transaksi Terfilter (${filteredTx.size} Transaksi)",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
+                    // Transaction History Title & Metrics Summary
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text("Penjualan Terfilter", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("${filteredTx.size} Transaksi", fontSize = 14.sp, fontWeight = FontWeight.Black)
+                                }
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text("Estimasi Laba Kotor", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                                    val sumProfit = filteredTx.sumOf { tx ->
+                                        val isExp = tx.type == "EXPENSE"
+                                        if (isExp) 0.0 else {
+                                            val txItems = transactionItems.filter { it.transactionId == tx.id }
+                                            tx.total - txItems.sumOf { item ->
+                                                val prod = products.find { it.id == item.productId }
+                                                item.quantity * (if (item.costPrice > 0.0) item.costPrice else (prod?.costPrice ?: 0.0))
+                                            }
+                                        }
+                                    }
+                                    Text(Formatters.rupiah(sumProfit), fontSize = 14.sp, fontWeight = FontWeight.Black, color = Color(0xFF2E7D32))
+                                }
+                            }
+                        }
                     }
 
                     // LazyColumn of Transactions
@@ -1213,7 +1216,7 @@ fun MarginAnalysisScreen(
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Column {
+                                            Column(modifier = Modifier.weight(1.1f)) {
                                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                                     Text(tx.receiptNumber, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                                                     Spacer(Modifier.width(8.dp))
@@ -1233,9 +1236,26 @@ fun MarginAnalysisScreen(
                                                 Spacer(Modifier.height(2.dp))
                                                 Text(dateStr, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                                 Text(if (isExpense) "Keterangan: ${tx.notes ?: "-"}" else "Pelanggan: ${tx.customerName ?: "Umum"}", fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                                
+                                                if (!isExpense) {
+                                                    Spacer(Modifier.height(6.dp))
+                                                    Text(
+                                                        text = "Margin Keuntungan: ${String.format("%.1f%%", txMarginPercent)}",
+                                                        fontSize = 9.sp,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = if (txMargin >= 0) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
+                                                    )
+                                                    Spacer(Modifier.height(2.dp))
+                                                    LinearProgressIndicator(
+                                                        progress = (txMarginPercent.coerceIn(0.0, 100.0) / 100.0).toFloat(),
+                                                        modifier = Modifier.fillMaxWidth(0.85f).height(4.dp),
+                                                        color = if (txMargin >= 0) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,
+                                                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                                    )
+                                                }
                                             }
 
-                                            Column(horizontalAlignment = Alignment.End) {
+                                            Column(horizontalAlignment = Alignment.End, modifier = Modifier.weight(0.9f)) {
                                                 Text(
                                                     text = Formatters.rupiah(tx.total),
                                                     fontWeight = FontWeight.Black,
@@ -1251,7 +1271,7 @@ fun MarginAnalysisScreen(
                                                     )
                                                 } else {
                                                     Text(
-                                                        text = "Profit: ${Formatters.rupiah(txMargin)} (${String.format("%.0f%%", txMarginPercent)})",
+                                                        text = "Profit: ${Formatters.rupiah(txMargin)}",
                                                         fontSize = 10.sp,
                                                         fontWeight = FontWeight.Bold,
                                                         color = if (txMargin >= 0) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
@@ -1400,7 +1420,7 @@ fun MarginAnalysisScreen(
                             OutlinedTextField(
                                 value = menuSearchQuery,
                                 onValueChange = { menuSearchQuery = it },
-                                label = { Text("Cari menu...", fontSize = 11.sp) },
+                                placeholder = { Text("Cari menu...", fontSize = 12.sp) },
                                 modifier = Modifier.weight(1f).height(48.dp),
                                 shape = RoundedCornerShape(8.dp),
                                 singleLine = true,
@@ -1411,10 +1431,12 @@ fun MarginAnalysisScreen(
                                 onClick = { showWastageDialog = true },
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC62828)),
                                 shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.height(42.dp),
+                                modifier = Modifier.height(48.dp),
                                 contentPadding = PaddingValues(horizontal = 12.dp)
                             ) {
-                                Text("🗑️ Catat Wastage", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                Icon(Icons.Outlined.Delete, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Wastage", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
                             }
                         }
 
@@ -1534,37 +1556,55 @@ fun MarginAnalysisScreen(
                                                     shape = RoundedCornerShape(8.dp),
                                                     modifier = Modifier.fillMaxWidth()
                                                 ) {
-                                                    Column(modifier = Modifier.padding(8.dp)) {
-                                                        Text("Resep / Komponen Bahan Baku:", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
-                                                        Spacer(Modifier.height(4.dp))
+                                                    Column(modifier = Modifier.padding(10.dp)) {
+                                                        Text("Struktur Kontribusi HPP:", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                                                        Spacer(Modifier.height(6.dp))
                                                         components.forEachIndexed { idx, comp ->
                                                             val costPerUnit = if (comp.yield > 0) comp.cost / comp.yield else comp.cost
+                                                            val totalCostPrice = item.product.costPrice
+                                                            val contributionPercent = if (totalCostPrice > 0) (costPerUnit / totalCostPrice) * 100.0 else 0.0
+
                                                             val catLabel = when (comp.category) {
                                                                 "OVERHEAD" -> "Overhead"
                                                                 "TENAGA_KERJA" -> "Jasa"
                                                                 else -> "Bahan"
                                                             }
-                                                            Row(
-                                                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                                                horizontalArrangement = Arrangement.SpaceBetween
-                                                            ) {
-                                                                Text(
-                                                                    text = "${idx + 1}. ${comp.name} ($catLabel)",
-                                                                    fontSize = 10.sp,
-                                                                    modifier = Modifier.weight(1.5f)
-                                                                )
-                                                                Text(
-                                                                    text = "Rp ${comp.cost.toInt()} / ${comp.yield.toInt()} porsi",
-                                                                    fontSize = 10.sp,
-                                                                    modifier = Modifier.weight(1.5f),
-                                                                    textAlign = TextAlign.End
-                                                                )
-                                                                Text(
-                                                                    text = "= Rp ${costPerUnit.toInt()}",
-                                                                    fontSize = 10.sp,
-                                                                    fontWeight = FontWeight.Bold,
-                                                                    modifier = Modifier.weight(1f),
-                                                                    textAlign = TextAlign.End
+                                                            val barColor = when (comp.category) {
+                                                                "OVERHEAD" -> Color(0xFFE65100)
+                                                                "TENAGA_KERJA" -> Color(0xFF1A237E)
+                                                                else -> Color(0xFF2E7D32)
+                                                            }
+                                                            val matchedProd = products.find { it.name.equals(comp.name, ignoreCase = true) }
+                                                            val stockText = if (matchedProd != null) {
+                                                                " | Stok aktif: ${matchedProd.stock} ${matchedProd.unit}"
+                                                            } else ""
+
+                                                            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                                                Row(
+                                                                    modifier = Modifier.fillMaxWidth(),
+                                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                                    verticalAlignment = Alignment.CenterVertically
+                                                                ) {
+                                                                    Text(
+                                                                        text = "${idx + 1}. ${comp.name} ($catLabel)$stockText",
+                                                                        fontSize = 10.sp,
+                                                                        fontWeight = FontWeight.Medium,
+                                                                        modifier = Modifier.weight(1.8f)
+                                                                    )
+                                                                    Text(
+                                                                        text = "Rp ${costPerUnit.toInt()} (${String.format("%.0f%%", contributionPercent)})",
+                                                                        fontSize = 10.sp,
+                                                                        fontWeight = FontWeight.Bold,
+                                                                        modifier = Modifier.weight(1.2f),
+                                                                        textAlign = TextAlign.End
+                                                                    )
+                                                                }
+                                                                Spacer(Modifier.height(3.dp))
+                                                                LinearProgressIndicator(
+                                                                    progress = (contributionPercent.coerceIn(0.0, 100.0) / 100.0).toFloat(),
+                                                                    modifier = Modifier.fillMaxWidth().height(4.dp),
+                                                                    color = barColor,
+                                                                    trackColor = Color.LightGray.copy(alpha = 0.3f)
                                                                 )
                                                             }
                                                         }
@@ -1637,7 +1677,7 @@ fun MarginAnalysisScreen(
                                     "Tidak Diatur"
                                 }
 
-                                // Calculate aging category
+                                // Calculate aging category & colors (Yellow, Orange, Red)
                                 val agingCat = if (tx.deliveryDate == null) {
                                     "Belum Jatuh Tempo"
                                 } else {
@@ -1645,17 +1685,37 @@ fun MarginAnalysisScreen(
                                     val diffDays = diffMs / (24 * 60 * 60 * 1000)
                                     when {
                                         diffDays <= 0 -> "Belum Jatuh Tempo"
-                                        diffDays in 1..30 -> "Terlambat 1-30 Hari"
-                                        diffDays in 31..60 -> "Terlambat 31-60 Hari"
-                                        else -> "Terlambat > 60 Hari"
+                                        diffDays in 1..7 -> "Terlambat 1-7 Hari (Peringatan)"
+                                        diffDays in 8..30 -> "Terlambat 8-30 Hari (Jatuh Tempo)"
+                                        else -> "Terlambat > 30 Hari (Macet/Kritis)"
                                     }
                                 }
 
-                                val agingColor = when (agingCat) {
-                                    "Belum Jatuh Tempo" -> Color(0xFF2E7D32)
-                                    "Terlambat 1-30 Hari" -> Color(0xFFE65100)
-                                    "Terlambat 31-60 Hari" -> Color(0xFFD84315)
-                                    else -> Color(0xFFC62828)
+                                val agingColor = when {
+                                    agingCat == "Belum Jatuh Tempo" -> Color(0xFF2E7D32)
+                                    agingCat.contains("1-7") -> Color(0xFFFBC02D) // Kuning
+                                    agingCat.contains("8-30") -> Color(0xFFE65100) // Oranye
+                                    else -> Color(0xFFC62828) // Merah
+                                }
+
+                                val matchedCustomer = customers.find { it.id == tx.customerId }
+                                val phoneNum = matchedCustomer?.phone
+                                val intentContext = LocalContext.current
+
+                                val triggerWhatsApp: () -> Unit = {
+                                    if (!phoneNum.isNullOrBlank()) {
+                                        var formattedPhone = phoneNum.replace("+", "").replace("-", "").replace(" ", "")
+                                        if (formattedPhone.startsWith("0")) {
+                                            formattedPhone = "62" + formattedPhone.substring(1)
+                                        }
+                                        try {
+                                            val url = "https://api.whatsapp.com/send?phone=$formattedPhone&text=Halo%20Kak%20${tx.customerName ?: ""},%20mengingatkan%20terkait%20tagihan%20piutang%20struk%20${tx.receiptNumber}%20sebesar%20${Formatters.rupiah(tx.total)}.%20Terima%20kasih!"
+                                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                                            intentContext.startActivity(intent)
+                                        } catch (e: Exception) {
+                                            Toast.makeText(intentContext, "Tidak dapat membuka WhatsApp!", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
                                 }
 
                                 Surface(
@@ -1670,7 +1730,23 @@ fun MarginAnalysisScreen(
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
                                             Text(tx.receiptNumber, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                            Text("Pelanggan: ${tx.customerName ?: "Umum"}", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text("Pelanggan: ${tx.customerName ?: "Umum"}", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                                if (!phoneNum.isNullOrBlank()) {
+                                                    Spacer(Modifier.width(8.dp))
+                                                    Surface(
+                                                        shape = RoundedCornerShape(50.dp),
+                                                        color = Color(0xFFE8F5E9),
+                                                        modifier = Modifier
+                                                            .size(24.dp)
+                                                            .clickable { triggerWhatsApp() }
+                                                    ) {
+                                                        Box(contentAlignment = Alignment.Center) {
+                                                            Text("💬", fontSize = 10.sp)
+                                                        }
+                                                    }
+                                                }
+                                            }
                                             Spacer(Modifier.height(4.dp))
                                             Text("Tgl Transaksi: $txDateStr", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             Text("Tgl Jatuh Tempo: $dueDateStr", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = agingColor)
