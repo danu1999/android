@@ -65,7 +65,7 @@ class ShiftViewModel @Inject constructor(
     fun loadData() {
         viewModelScope.launch {
             _isLoading.value = true
-            val empId = securePrefs.employeeId ?: 0L
+            val empId = 1L // default employee ID — outlet kasir aktif
             _activeShift.value = shiftRepo.checkActiveShift(empId)
             _shiftHistory.value = shiftRepo.listShifts(empId)
             _isLoading.value = false
@@ -75,7 +75,7 @@ class ShiftViewModel @Inject constructor(
     fun openShift(startCash: Double, outletId: Long?) {
         viewModelScope.launch {
             _isLoading.value = true
-            val empId = securePrefs.employeeId ?: 0L
+            val empId = 1L // default employee ID
             val result = shiftRepo.openShift(empId, startCash, outletId)
             _message.value = if (result != null) {
                 _activeShift.value = result
