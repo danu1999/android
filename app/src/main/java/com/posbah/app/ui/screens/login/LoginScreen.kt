@@ -30,6 +30,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -70,6 +72,14 @@ fun LoginScreen(
 
     LaunchedEffect(ui.signedInUser) { if (ui.signedInUser != null) onLoggedIn() }
     LaunchedEffect(ui.needsTenantPicker) { if (ui.needsTenantPicker != null) onNeedTenantPick() }
+
+    // Tampilkan dialog pilih model bisnis untuk user baru Google
+    if (ui.needsBusinessModePick != null) {
+        BusinessModePicker(
+            isLoading = ui.isLoading,
+            onSelect = { viewModel.selectBusinessMode(it) }
+        )
+    }
 
     Box(
         modifier = Modifier
@@ -331,4 +341,85 @@ internal fun Context.findActivity(): FragmentActivity? = when (this) {
     is FragmentActivity -> this
     is ContextWrapper -> baseContext.findActivity()
     else -> null
+}
+
+// ── Business mode picker ──────────────────────────────────────────────────────
+
+@Composable
+private fun BusinessModePicker(
+    isLoading: Boolean,
+    onSelect: (String) -> Unit
+) {
+    data class BizMode(val code: String, val icon: String, val label: String, val desc: String)
+    val modes = listOf(
+        BizMode("FNB",     "🍽️", "Restoran / Kafe",      "POS, menu, transaksi makanan & minuman"),
+        BizMode("RENTAL",  "🏠", "Rental / Sewa",        "Kelola aset, jadwal, dan pembayaran sewa"),
+        BizMode("LAUNDRY", "👕", "Laundry",              "Order cucian, status, dan pickup delivery"),
+        BizMode("BMP",     "🏭", "Invoice & Manufaktur", "Produksi, bahan baku, HPP, dan invoice")
+    )
+
+    AlertDialog(
+        onDismissRequest = {},
+        confirmButton = {},
+        title = {
+            Column {
+                Text(
+                    "Pilih Model Bisnis",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    "Pilih jenis bisnis yang sesuai untuk akun demo Anda.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        text = {
+            if (isLoading) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    CircularProgressIndicator(strokeWidth = 2.5.dp, modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Text("Menyiapkan akun demo…", style = MaterialTheme.typography.bodyMedium)
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    modes.forEach { mode ->
+                        Card(
+                            onClick = { onSelect(mode.code) },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            ),
+                            modifier = Modifier.fillMaxWidth().testTag("biz-mode-${mode.code.lowercase()}")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(mode.icon, fontSize = 28.sp)
+                                Spacer(Modifier.width(14.dp))
+                                Column {
+                                    Text(
+                                        mode.label,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        mode.desc,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    )
 }

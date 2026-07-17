@@ -24,6 +24,8 @@ data class LoginUiState(
     val rejoinMessage: String? = null,
     val signedInUser: UserSession? = null,
     val needsTenantPicker: Pair<UserSession, List<TenantSession>>? = null,
+    /** User baru login Google — perlu pilih model bisnis sebelum registrasi demo */
+    val needsBusinessModePick: UserSession? = null,
     val locked: Boolean = false
 )
 
@@ -57,12 +59,35 @@ class LoginViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(isLoading = false, needsTenantPicker = outcome.user to outcome.tenants)
                     }
+                is AuthRepository.LoginOutcome.NeedsBusinessModePick ->
+                    _uiState.update { it.copy(isLoading = false, needsBusinessModePick = outcome.user) }
                 AuthRepository.LoginOutcome.Cancelled ->
                     _uiState.update { it.copy(isLoading = false) }
                 is AuthRepository.LoginOutcome.Error ->
                     _uiState.update { it.copy(isLoading = false, errorMessage = outcome.message, errorEmail = outcome.email) }
                 AuthRepository.LoginOutcome.Locked ->
                     _uiState.update { it.copy(isLoading = false, locked = true) }
+            }
+        }
+    }
+
+    /** Dipanggil dari BusinessModePicker setelah user memilih jenis bisnis */
+    fun selectBusinessMode(businessMode: String) {
+        val pending = _uiState.value.needsBusinessModePick ?: return
+        _uiState.update { it.copy(isLoading = true, needsBusinessModePick = null, errorMessage = null) }
+        viewModelScope.launch {
+            when (val outcome = authRepository.registerDemoWithMode(
+                googleSub    = pending.googleSub,
+                email        = pending.email,
+                displayName  = pending.displayName ?: pending.email.substringBefore("@"),
+                businessMode = businessMode
+            )) {
+                is AuthRepository.LoginOutcome.Success ->
+                    _uiState.update { it.copy(isLoading = false, signedInUser = outcome.user) }
+                is AuthRepository.LoginOutcome.Error ->
+                    _uiState.update { it.copy(isLoading = false, errorMessage = outcome.message) }
+                else ->
+                    _uiState.update { it.copy(isLoading = false) }
             }
         }
     }

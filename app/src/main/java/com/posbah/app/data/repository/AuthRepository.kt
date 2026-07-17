@@ -87,6 +87,8 @@ class AuthRepository @Inject constructor(
     sealed class LoginOutcome {
         data class Success(val user: UserSession, val tenant: TenantSession) : LoginOutcome()
         data class NeedsTenantPick(val user: UserSession, val tenants: List<TenantSession>) : LoginOutcome()
+        /** User baru login Google pertama kali — perlu pilih model bisnis demo */
+        data class NeedsBusinessModePick(val user: UserSession) : LoginOutcome()
         object Cancelled : LoginOutcome()
         data class Error(val message: String, val email: String? = null) : LoginOutcome()
         object Locked : LoginOutcome()
@@ -343,49 +345,9 @@ class AuthRepository @Inject constructor(
                 if (outletId != null) securePrefs.currentOutletId = outletId
                 return@withContext LoginOutcome.Success(user, tenant)
             } else {
-                // Auto-register as demo user — baru pertama kali login Google
-                val cleanForId = cleanEmail.replace(".", "_").replace("@", "_")
-                val demoTenantId = "demo_tenant_$cleanForId"
-                val demoMode = "FNB"
-                val nowMs = System.currentTimeMillis()
-
-                // 1. Create tenant
-                val tenantPayload = org.json.JSONObject().apply {
-                    put("id", demoTenantId)
-                    put("name", "Demo - $name")
-                    put("ownerEmail", cleanEmail)
-                    put("businessMode", demoMode)
-                    put("isActive", true)
-                    put("createdAt", nowMs)
-                    put("updatedAt", nowMs)
-                }
-                val hdrs = mapOf("x-user-email" to cleanEmail)
-                httpPostJson("$BASE_URL/api/sync/tenants", tenantPayload, hdrs)
-
-                // 2. Register user
-                val userPayload = org.json.JSONObject().apply {
-                    put("googleSub", sub)
-                    put("email", cleanEmail)
-                    put("displayName", name)
-                    put("role", "OWNER")
-                    put("tenantId", demoTenantId)
-                    put("isPremium", false)
-                    put("isActive", true)
-                    put("registeredAt", nowMs)
-                    put("updatedAt", nowMs)
-                }
-                httpPostJson("$BASE_URL/api/sync/local_users", userPayload, hdrs)
-
-                val newUser = user.copy(tenantId = demoTenantId, businessMode = demoMode)
-                val newTenant = TenantSession(demoTenantId, "Demo - $name", cleanEmail, demoMode)
-
-                securePrefs.setActiveSession(sub, cleanEmail)
-                securePrefs.currentTenantId = demoTenantId
-                securePrefs.currentBusinessMode = demoMode
-                securePrefs.currentRole = "OWNER"
-
-                android.util.Log.i("AuthRepository", "[DemoReg] Auto-registered new Google user: $cleanEmail → $demoTenantId")
-                return@withContext LoginOutcome.Success(newUser, newTenant)
+                // User baru login Google pertama kali — tampilkan pilihan model bisnis
+                android.util.Log.i("AuthRepository", "[DemoReg] New Google user, needs business mode pick: $cleanEmail")
+                return@withContext LoginOutcome.NeedsBusinessModePick(user)
             }
         } catch (e: VersionOutdatedException) {
             return@withContext LoginOutcome.Error(e.message ?: "Pembaruan aplikasi wajib dilakukan.")
@@ -394,6 +356,93 @@ class AuthRepository @Inject constructor(
             return@withContext LoginOutcome.Error("Gagal otentikasi Google: ${e.localizedMessage}")
         }
     }
+
+    /**
+     * Dipanggil setelah user memilih model bisnis di [LoginScreen].
+     * Mendaftarkan user baru ke backend dengan demo tenant sesuai mode yang dipilih,
+     * lalu mengembalikan Success agar app bisa navigasi ke dashboard.
+     *
+     * @param businessMode salah satu dari: "FNB", "RENTAL", "LAUNDRY", "BMP"
+     */
+    suspend fun registerDemoWithMode(
+        googleSub: String,
+        email: String,
+        displayName: String,
+        businessMode: String
+    ): LoginOutcome = withContext(Dispatchers.IO) {
+        return@withContext try {
+            val cleanEmail = email.lowercase().trim()
+            val cleanForId = cleanEmail.replace(".", "_").replace("@", "_")
+            val suffix = when (businessMode) {
+                "LAUNDRY" -> "_LAUNDRY"
+                "RENTAL"  -> "_RENTAL"
+                "BMP"     -> "_BMP"
+                else      -> ""
+            }
+            val demoTenantId = "demo_tenant_$cleanForId$suffix"
+            val modeName = when (businessMode) {
+                "FNB"     -> "Restoran / Kafe"
+                "RENTAL"  -> "Rental / Sewa"
+                "LAUNDRY" -> "Laundry"
+                "BMP"     -> "Invoice & Manufaktur"
+                else      -> businessMode
+            }
+            val nowMs = System.currentTimeMillis()
+            val hdrs = mapOf("x-user-email" to cleanEmail)
+
+            // 1. Buat tenant demo dengan mode yang dipilih
+            val tenantPayload = org.json.JSONObject().apply {
+                put("id", demoTenantId)
+                put("name", "Demo $modeName - $displayName")
+                put("ownerEmail", cleanEmail)
+                put("businessMode", businessMode)
+                put("isActive", true)
+                put("createdAt", nowMs)
+                put("updatedAt", nowMs)
+            }
+            httpPostJson("$BASE_URL/api/sync/tenants", tenantPayload, hdrs)
+
+            // 2. Daftarkan user
+            val userPayload = org.json.JSONObject().apply {
+                put("googleSub", googleSub)
+                put("email", cleanEmail)
+                put("displayName", displayName)
+                put("role", "OWNER")
+                put("tenantId", demoTenantId)
+                put("isPremium", false)
+                put("isActive", true)
+                put("registeredAt", nowMs)
+                put("updatedAt", nowMs)
+            }
+            httpPostJson("$BASE_URL/api/sync/local_users", userPayload, hdrs)
+
+            val user = UserSession(
+                googleSub = googleSub,
+                email = cleanEmail,
+                displayName = displayName,
+                photoUrl = null,
+                role = "OWNER",
+                tenantId = demoTenantId,
+                businessMode = businessMode,
+                isPremium = false,
+                businessModeLocked = false,
+                apkVersion = BuildConfig.VERSION_NAME
+            )
+            val tenant = TenantSession(demoTenantId, "Demo $modeName - $displayName", cleanEmail, businessMode)
+
+            sessionState.clearEmployeeLock()
+            securePrefs.setActiveSession(googleSub, cleanEmail)
+            securePrefs.currentTenantId = demoTenantId
+            securePrefs.currentBusinessMode = businessMode
+            securePrefs.currentRole = "OWNER"
+
+            android.util.Log.i("AuthRepository", "[DemoReg] Registered $cleanEmail → $demoTenantId ($businessMode)")
+            LoginOutcome.Success(user, tenant)
+        } catch (e: Exception) {
+            LoginOutcome.Error("Gagal mendaftar demo: ${e.localizedMessage}")
+        }
+    }
+
     // ── Demo User Direct Login (no Google OAuth) ──────────────────────────────
     // Bug Fix: Tombol "Masuk Demo User" sebelumnya memanggil Google Credential Manager
     // yang silent hang jika tidak ada akun Google di perangkat.
