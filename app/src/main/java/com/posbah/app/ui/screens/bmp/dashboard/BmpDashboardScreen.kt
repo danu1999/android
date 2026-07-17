@@ -248,7 +248,9 @@ fun BmpDashboardScreen(
                         CashFlowTrendChart(history = ui.cashFlowHistory)
                     }
                 }
-                if (ui.tenantId == "demo_tenant") {
+                // Bug #3 fix: demo user baru mendapat tenantId "demo_tenant_*", bukan persis "demo_tenant"
+                if (ui.tenantId == "demo_tenant" || ui.tenantId?.startsWith("demo_tenant_") == true) {
+
                     item {
                         Spacer(Modifier.height(4.dp))
                         UpgradeDemoCard(onUpgradeClick = {

@@ -1071,11 +1071,14 @@ class TransactionRepository @Inject constructor(
         _transactions.value = snapshot.map { if (it.id == tx.id) tx else it }
         try {
             val resp = api.updateTransaction(tx.id, mapOf(
-                "status" to tx.status,
+                "status"        to tx.status,
                 "paymentMethod" to tx.paymentMethod,
-                "amountPaid" to tx.amountPaid,
-                "change" to tx.change,
-                "notes" to tx.notes
+                "amountPaid"    to tx.amountPaid,
+                "change"        to tx.change,
+                "notes"         to tx.notes,
+                "date"          to tx.date,
+                "total"         to tx.totalAmount,
+                "subtotal"      to (tx.subtotal ?: tx.totalAmount)
             ))
             if (!resp.isSuccessful) {
                 _transactions.value = snapshot
@@ -1116,23 +1119,40 @@ class TransactionRepository @Inject constructor(
     }
 
     suspend fun update(tx: com.posbah.app.data.local.entities.TransactionEntity) {
-        update(TransactionData(
-            id = tx.id,
-            tenantId = tx.tenantId,
-            outletId = tx.outletId,
-            employeeId = tx.employeeId,          // ✅ teruskan employeeId
-            receiptNumber = tx.receiptNumber,
-            type = tx.type,
-            status = tx.status,
-            totalAmount = tx.total,
-            subtotal = tx.subtotal,              // ✅ teruskan subtotal
-            paymentMethod = tx.paymentMethod,
-            amountPaid = tx.amountPaid,
-            change = tx.change,
-            customerId = tx.customerId,
-            notes = tx.notes,
-            date = tx.date
-        ))
+        val snapshot = _transactions.value
+        // Update StateFlow optimistically — map Entity fields to TransactionData
+        _transactions.value = snapshot.map { existing ->
+            if (existing.id == tx.id) existing.copy(
+                status = tx.status,
+                paymentMethod = tx.paymentMethod,
+                amountPaid = tx.amountPaid,
+                change = tx.change,
+                notes = tx.notes,
+                date = tx.date,
+                totalAmount = tx.total,
+                subtotal = tx.subtotal
+            ) else existing
+        }
+        try {
+            // Send all editable fields including customerName which only exists on Entity
+            val resp = api.updateTransaction(tx.id, mapOf(
+                "status"        to tx.status,
+                "paymentMethod" to tx.paymentMethod,
+                "amountPaid"    to tx.amountPaid,
+                "change"        to tx.change,
+                "notes"         to tx.notes,
+                "customerName"  to tx.customerName,
+                "date"          to tx.date,
+                "total"         to tx.total,
+                "subtotal"      to (tx.subtotal ?: tx.total),
+                "updatedAt"     to System.currentTimeMillis()
+            ))
+            if (!resp.isSuccessful) {
+                _transactions.value = snapshot
+            }
+        } catch (_: Exception) {
+            _transactions.value = snapshot
+        }
     }
 
     /**

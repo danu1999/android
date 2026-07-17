@@ -148,6 +148,26 @@ fun LoginScreen(
                                 color = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.testTag("login-error-msg")
                             )
+                            // Bug #6 fix: Tampilkan tombol kontak jika masa demo berakhir
+                            if (err.contains("masa uji coba demo", ignoreCase = true) ||
+                                err.contains("berakhir", ignoreCase = true)) {
+                                Spacer(Modifier.height(8.dp))
+                                PrimaryButton(
+                                    label = "✉️ Hubungi Admin untuk Upgrade",
+                                    onClick = {
+                                        val intent = android.content.Intent(
+                                            android.content.Intent.ACTION_VIEW,
+                                            android.net.Uri.parse(
+                                                "mailto:muhammadmuizz8@gmail.com" +
+                                                "?subject=Upgrade%20Premium%20POSBah" +
+                                                "&body=Halo%2C%20saya%20ingin%20upgrade%20ke%20Premium%20POSBah."
+                                            )
+                                        )
+                                        context.startActivity(intent)
+                                    },
+                                    modifier = Modifier.fillMaxWidth().testTag("btn-upgrade-wa")
+                                )
+                            }
                             if (err == "Gagal login karena database tidak ada. Silakan hubungi admin.") {
                                 Spacer(Modifier.height(8.dp))
                                 PrimaryButton(
@@ -162,6 +182,8 @@ fun LoginScreen(
                             }
                         }
                     }
+
+
 
 
                 }

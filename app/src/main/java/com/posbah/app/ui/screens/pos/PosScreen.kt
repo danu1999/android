@@ -756,11 +756,24 @@ fun PosScreen(
                                     )
                                 }
                             } else {
+                                // Bug #1 fix: Demo data import is not supported in online mode.
+                                // Guide user to add their first product manually instead of showing a broken button.
                                 EmptyState(
                                     title = "Katalog Produk Kosong",
-                                    description = "Database Anda belum terisi data F&B. Klik tombol di bawah untuk memuat data demo.",
-                                    actionLabel = "Muat Data Demo Sekarang",
-                                    onAction = viewModel::importDemoData
+                                    description = "Tambahkan produk pertama Anda untuk mulai bertransaksi. Tekan tombol di bawah untuk menambahkan produk baru.",
+                                    actionLabel = "Tambah Produk Pertama",
+                                    onAction = {
+                                        newProdName = ""
+                                        newProdPrice = ""
+                                        newProdCostPrice = ""
+                                        newProdStock = "999"
+                                        newProdCategory = "Umum"
+                                        newProdBarcode = ""
+                                        newProdMinStockAlert = "0"
+                                        newProdDefaultDailyTarget = ""
+                                        capturedPhotoFile = null
+                                        showAddProductDialog = true
+                                    }
                                 )
                             }
                         } else {

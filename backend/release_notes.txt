@@ -1,4 +1,44 @@
+POSBah v2.19.57 - Perbaikan Pengalaman User Demo
+
+Halo Kak! POSBah v2.19.57 memperbaiki 6 masalah pada pengalaman user demo:
+1. [Fix] Layar POS kosong: Tombol "Muat Data Demo" diganti dengan tombol "Tambah Produk Pertama" yang langsung membuka form tambah produk.
+2. [Fix] Pesan error login demo lebih informatif: jika akun terdaftar sebagai Kasir/Admin/Owner Premium, pesan kini menyebutkan role dan cara login yang benar.
+3. [Fix] Kartu Upgrade ke Premium kini muncul untuk semua user demo baru (sebelumnya hanya muncul untuk tenant "demo_tenant" lama).
+4. [Fix] Tab Riwayat di Analisis Margin kini menampilkan panduan jelas ketika belum ada transaksi, bukan layar kosong.
+5. [Fix] Analisis Keuangan (BMP) kini menampilkan pesan informatif jika dibuka oleh user mode FnB/Rental/Laundry, bukan angka Rp 0 yang membingungkan.
+6. [Fix] Pesan lockout demo diubah dari "diblokir permanen" menjadi "masa uji coba berakhir" disertai tombol kontak admin. Email notifikasi kini memiliki tombol upgrade yang bisa diklik.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
+POSBah v2.19.56 - Perbaikan Edit Transaksi di Riwayat POS
+
+Halo Kak! POSBah v2.19.56 memperbaiki fitur Edit Transaksi di Riwayat POS:
+1. [Fix] Tombol Edit di Riwayat Transaksi POS kini berfungsi penuh: perubahan Nama Pelanggan, Metode Pembayaran, Tanggal, dan Catatan tersimpan ke server secara real-time.
+2. [Fix] Sebelumnya hanya Metode Pembayaran dan Catatan yang tersimpan; sekarang semua field termasuk Nama Pelanggan dan Tanggal ikut diperbarui di database.
+3. [Fix] Perubahan dari Riwayat POS otomatis tercermin di tab Riwayat pada halaman Analisis Margin & Keuangan tanpa perlu refresh manual (sinkronisasi via StateFlow).
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
+POSBah v2.19.55 - Redesain Riwayat Transaksi: Hybrid Timeline Ledger
+
+
+Halo Kak! POSBah v2.19.55 membawa tampilan baru yang lebih intuitif pada tab Riwayat Transaksi:
+1. [UI Baru] Tampilan Buku Kas Berseling (Hybrid Timeline Ledger): Transaksi pemasukan ditampilkan di sebelah kiri (warna hijau), sedangkan biaya/pengeluaran di sebelah kanan (warna merah), dipisahkan oleh garis timeline vertikal di tengah layar.
+2. [UI Baru] Banner Ringkasan Laba Bersih Harian: Setiap kelompok transaksi per hari menampilkan ringkasan Net Profit/Loss hari tersebut secara otomatis.
+3. [UI Baru] Quick Filter Pills: 3 tombol filter instan di atas daftar (⇅ Semua / ↗ Pemasukan / ↙ Pengeluaran) untuk mempermudah audit kas.
+4. [UI Baru] Summary Card baru menampilkan total Pemasukan, total Pengeluaran, dan Laba Bersih periode terfilter secara sekaligus.
+5. [Tanpa perubahan database atau alur API] Perubahan ini murni tampilan (UI-only) dan tidak mempengaruhi sinkronisasi data, transaksi, maupun fitur lain.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.49 - Infrastruktur FnB Lanjutan: Recipe Inventory, Modifier Topping, Nomor Meja & Shift Kasir
+
 
 Halo Kak! POSBah v2.19.49 menghadirkan fondasi backend untuk fitur-fitur FnB Lanjutan:
 1. [Backend] Pengurangan stok bahan baku otomatis berdasarkan resep produk (Recipe-Based Inventory) setiap ada penjualan COMPLETED.

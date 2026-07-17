@@ -1102,189 +1102,363 @@ fun MarginAnalysisScreen(
             if (!outletDropdownExpanded) {
                 when (activeTab) {
                 "HISTORY" -> {
-                    // Transaction History Title & Metrics Summary
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f))
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text("Penjualan Terfilter", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text("${filteredTx.size} Transaksi", fontSize = 14.sp, fontWeight = FontWeight.Black)
-                                }
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text("Estimasi Laba Kotor", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
-                                    val sumProfit = filteredTx.sumOf { tx ->
-                                        val isExp = tx.type == "EXPENSE"
-                                        if (isExp) 0.0 else {
-                                            val txItems = transactionItems.filter { it.transactionId == tx.id }
-                                            tx.total - txItems.sumOf { item ->
-                                                val prod = products.find { it.id == item.productId }
-                                                item.quantity * (if (item.costPrice > 0.0) item.costPrice else (prod?.costPrice ?: 0.0))
-                                            }
-                                        }
+                    // ── Quick Filter Pills ──────────────────────────────────
+                    var ledgerFilter by remember { mutableStateOf("SEMUA") }
+
+                    // ── Daily Summary + Filtered List ───────────────────────
+                    // Pre-compute COGS for all transactions
+                    data class TxWithMetrics(
+                        val tx: TransactionEntity,
+                        val isExpense: Boolean,
+                        val cogs: Double,
+                        val margin: Double,
+                        val marginPct: Double,
+                        val dateStr: String,
+                        val dayKey: String,
+                        val posType: String,
+                        val posColor: Pair<Color, Color>,
+                        val txItems: List<TransactionItemEntity>
+                    )
+
+                    val txWithMetricsList = remember(filteredTx, transactionItems, products) {
+                        filteredTx.map { tx ->
+                            val isExpense = tx.type == "EXPENSE"
+                            val txItems = transactionItems.filter { it.transactionId == tx.id }
+                            val cogs = if (isExpense) 0.0 else txItems.sumOf { item ->
+                                val prod = products.find { it.id == item.productId }
+                                val effectiveCostPrice = if (item.costPrice > 0.0) item.costPrice else (prod?.costPrice ?: 0.0)
+                                when {
+                                    tx.receiptNumber.startsWith("FNB-") -> item.quantity * effectiveCostPrice
+                                    tx.receiptNumber.startsWith("RN-") -> {
+                                        val days = tx.queueNumber ?: 1
+                                        val monthlyMaint = getMonthlyMaintenance(prod?.wholesalePrices)
+                                        val dailyCogs = (if (effectiveCostPrice > 1_000_000.0) effectiveCostPrice / 1825.0 else effectiveCostPrice) + (monthlyMaint / 30.0)
+                                        dailyCogs * days
                                     }
-                                    Text(Formatters.rupiah(sumProfit), fontSize = 14.sp, fontWeight = FontWeight.Black, color = Color(0xFF2E7D32))
+                                    tx.receiptNumber.startsWith("LD-") -> {
+                                        val isKg = prod?.unit == "Kg"
+                                        val monthlyMaint = getMonthlyMaintenance(prod?.wholesalePrices)
+                                        val qty = if (isKg) item.quantity / 10.0 else item.quantity.toDouble()
+                                        qty * effectiveCostPrice + qty * (monthlyMaint / 300.0)
+                                    }
+                                    else -> item.quantity * effectiveCostPrice
                                 }
+                            }
+                            val margin = if (isExpense) 0.0 else tx.total - cogs
+                            val marginPct = if (!isExpense && tx.total > 0) (margin / tx.total) * 100.0 else 0.0
+                            val posType = when {
+                                tx.receiptNumber.startsWith("FNB-") || tx.receiptNumber.startsWith("EXP-FNB-") -> "FnB"
+                                tx.receiptNumber.startsWith("RN-") || tx.receiptNumber.startsWith("EXP-RN-") -> "Rental"
+                                tx.receiptNumber.startsWith("LD-") || tx.receiptNumber.startsWith("EXP-LD-") -> "Laundry"
+                                else -> "POS"
+                            }
+                            val posColor = when (posType) {
+                                "FnB" -> Color(0xFFE8F5E9) to Color(0xFF2E7D32)
+                                "Rental" -> Color(0xFFFFF3E0) to Color(0xFFE65100)
+                                "Laundry" -> Color(0xFFE1F5FE) to Color(0xFF0288D1)
+                                else -> Color(0xFFECEFF1) to Color(0xFF37474F)
+                            }
+                            TxWithMetrics(
+                                tx = tx,
+                                isExpense = isExpense,
+                                cogs = cogs,
+                                margin = margin,
+                                marginPct = marginPct,
+                                dateStr = SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault()).format(Date(tx.date)),
+                                dayKey = SimpleDateFormat("EEEE, dd MMM yyyy", Locale("id")).format(Date(tx.date)),
+                                posType = posType,
+                                posColor = posColor,
+                                txItems = txItems
+                            )
+                        }
+                    }
+
+                    val ledgerFiltered = remember(txWithMetricsList, ledgerFilter) {
+                        when (ledgerFilter) {
+                            "PEMASUKAN" -> txWithMetricsList.filter { !it.isExpense }
+                            "PENGELUARAN" -> txWithMetricsList.filter { it.isExpense }
+                            else -> txWithMetricsList
+                        }
+                    }
+
+                    // Group by day for daily banners
+                    val groupedByDay = remember(ledgerFiltered) {
+                        ledgerFiltered.groupBy { it.dayKey }
+                    }
+
+                    // ── Summary Card ──────────────────────────────────────────
+                    val totalIncome = remember(txWithMetricsList) { txWithMetricsList.filter { !it.isExpense }.sumOf { it.tx.total } }
+                    val totalExpense = remember(txWithMetricsList) { txWithMetricsList.filter { it.isExpense }.sumOf { it.tx.total } }
+                    val netProfit = remember(txWithMetricsList) { txWithMetricsList.filter { !it.isExpense }.sumOf { it.margin } }
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("Pemasukan", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
+                                Text(Formatters.rupiah(totalIncome), fontSize = 13.sp, fontWeight = FontWeight.Black, color = Color(0xFF2E7D32))
+                                Spacer(Modifier.height(2.dp))
+                                Text("Pengeluaran", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC62828))
+                                Text(Formatters.rupiah(totalExpense), fontSize = 13.sp, fontWeight = FontWeight.Black, color = Color(0xFFC62828))
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("Laba Bersih", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    Formatters.rupiah(netProfit),
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = if (netProfit >= 0) Color(0xFF1B5E20) else Color(0xFFC62828)
+                                )
+                                Text("${filteredTx.size} Transaksi", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
 
-                    // LazyColumn of Transactions
-                    if (filteredTx.isEmpty()) {
+                    // ── Quick Filter Pills ────────────────────────────────────
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf("SEMUA", "PEMASUKAN", "PENGELUARAN").forEach { filter ->
+                            val isSelected = ledgerFilter == filter
+                            Surface(
+                                shape = RoundedCornerShape(20.dp),
+                                color = when {
+                                    isSelected && filter == "PEMASUKAN" -> Color(0xFF2E7D32)
+                                    isSelected && filter == "PENGELUARAN" -> Color(0xFFC62828)
+                                    isSelected -> MaterialTheme.colorScheme.primary
+                                    else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                                },
+                                modifier = Modifier.clickable { ledgerFilter = filter }
+                            ) {
+                                Text(
+                                    text = when(filter) {
+                                        "PEMASUKAN" -> "↗ Pemasukan"
+                                        "PENGELUARAN" -> "↙ Pengeluaran"
+                                        else -> "⇅ Semua"
+                                    },
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // ── Timeline Ledger List ──────────────────────────────────
+                    if (ledgerFiltered.isEmpty()) {
                         Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth(),
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("Tidak ada data transaksi untuk filter ini.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.padding(24.dp)
+                            ) {
+                                Text(
+                                    text = if (filteredTx.isEmpty()) "📋 Belum Ada Transaksi" else "Tidak ada data untuk filter ini",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = if (filteredTx.isEmpty())
+                                        "Lakukan transaksi pertama Anda di layar POS untuk melihat analisis riwayat di sini."
+                                    else
+                                        "Coba ubah rentang waktu atau filter yang digunakan.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         }
+
                     } else {
                         LazyColumn(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            modifier = Modifier.weight(1f).fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(0.dp)
                         ) {
-                            items(filteredTx, key = { it.id }) { tx ->
-                                val dateStr = SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault()).format(Date(tx.date))
-                                val posType = when {
-                                    tx.receiptNumber.startsWith("FNB-") || tx.receiptNumber.startsWith("EXP-FNB-") -> "FnB"
-                                    tx.receiptNumber.startsWith("RN-") || tx.receiptNumber.startsWith("EXP-RN-") -> "Rental"
-                                    tx.receiptNumber.startsWith("LD-") || tx.receiptNumber.startsWith("EXP-LD-") -> "Laundry"
-                                    else -> "POS"
-                                }
-                                val posColor = when (posType) {
-                                    "FnB" -> Color(0xFFE8F5E9) to Color(0xFF2E7D32)
-                                    "Rental" -> Color(0xFFFFF3E0) to Color(0xFFE65100)
-                                    "Laundry" -> Color(0xFFE1F5FE) to Color(0xFF0288D1)
-                                    else -> Color(0xFFECEFF1) to Color(0xFF37474F)
-                                }
+                            groupedByDay.forEach { (dayLabel, dayItems) ->
+                                // ── Daily Summary Banner ─────────────────────
+                                val dayIncome = dayItems.filter { !it.isExpense }.sumOf { it.tx.total }
+                                val dayExpense = dayItems.filter { it.isExpense }.sumOf { it.tx.total }
+                                val dayNet = dayItems.filter { !it.isExpense }.sumOf { it.margin } - dayExpense
 
-                                val isExpense = tx.type == "EXPENSE"
-
-                                // Calculate HPP/COGS for this transaction
-                                val txItems = transactionItems.filter { it.transactionId == tx.id }
-                                val txCogs = if (isExpense) 0.0 else txItems.sumOf { item ->
-                                    val prod = products.find { it.id == item.productId }
-                                    val effectiveCostPrice = if (item.costPrice > 0.0) item.costPrice else (prod?.costPrice ?: 0.0)
-                                    when {
-                                        tx.receiptNumber.startsWith("FNB-") ->
-                                            item.quantity * effectiveCostPrice
-                                        tx.receiptNumber.startsWith("RN-") -> {
-                                            val days = tx.queueNumber ?: 1
-                                            val monthlyMaint = getMonthlyMaintenance(prod?.wholesalePrices)
-                                            val dailyCogs = (if (effectiveCostPrice > 1_000_000.0) effectiveCostPrice / 1825.0 else effectiveCostPrice) + (monthlyMaint / 30.0)
-                                            dailyCogs * days
-                                        }
-                                        tx.receiptNumber.startsWith("LD-") -> {
-                                            val isKg = prod?.unit == "Kg"
-                                            val monthlyMaint = getMonthlyMaintenance(prod?.wholesalePrices)
-                                            val qty = if (isKg) item.quantity / 10.0 else item.quantity.toDouble()
-                                            val baseCogs = qty * effectiveCostPrice
-                                            val maintShare = qty * (monthlyMaint / 300.0)
-                                            baseCogs + maintShare
-                                        }
-                                        else -> item.quantity * effectiveCostPrice
-                                    }
-                                }
-                                val txMargin = if (isExpense) 0.0 else tx.total - txCogs
-                                val txMarginPercent = if (!isExpense && tx.total > 0) (txMargin / tx.total) * 100.0 else 0.0
-
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.surface,
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            selectedTxDetails = tx
-                                            selectedTxItems = txItems
-                                        }
-                                ) {
-                                    Column(modifier = Modifier.padding(14.dp)) {
+                                item(key = "header_$dayLabel") {
+                                    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                                         Row(
-                                            modifier = Modifier.fillMaxWidth(),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(
+                                                    if (dayNet >= 0) Color(0xFFE8F5E9) else Color(0xFFFFEBEE),
+                                                    RoundedCornerShape(8.dp)
+                                                )
+                                                .padding(horizontal = 12.dp, vertical = 6.dp),
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Column(modifier = Modifier.weight(1.1f)) {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Text(tx.receiptNumber, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                                    Spacer(Modifier.width(8.dp))
-                                                    Surface(
-                                                        shape = RoundedCornerShape(4.dp),
-                                                        color = posColor.first,
-                                                        contentColor = posColor.second
+                                            Text(
+                                                dayLabel,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = "Net: ${if (dayNet >= 0) "+" else ""}${Formatters.rupiah(dayNet)}",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Black,
+                                                color = if (dayNet >= 0) Color(0xFF2E7D32) else Color(0xFFC62828)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // ── Transaction Cards with Timeline ──────────
+                                items(dayItems, key = { it.tx.id }) { item ->
+                                    val isExpense = item.isExpense
+                                    val cardAlignment = if (isExpense) Alignment.End else Alignment.Start
+                                    val anchorColor = if (isExpense) Color(0xFFC62828) else Color(0xFF2E7D32)
+                                    val bgColor = if (isExpense) Color(0xFFFFEBEE) else MaterialTheme.colorScheme.surface
+                                    val borderColor = if (isExpense) Color(0xFFC62828).copy(alpha = 0.25f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp)
+                                    ) {
+                                        // ── Centre timeline line ──────────────
+                                        Box(
+                                            modifier = Modifier
+                                                .width(2.dp)
+                                                .height(100.dp)
+                                                .align(Alignment.Center)
+                                                .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                                        )
+                                        // ── Anchor dot on timeline ────────────
+                                        Box(
+                                            modifier = Modifier
+                                                .size(10.dp)
+                                                .align(Alignment.Center)
+                                                .background(anchorColor, shape = RoundedCornerShape(50))
+                                        )
+
+                                        // ── Transaction Card (left or right) ─
+                                        Box(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            contentAlignment = if (isExpense) Alignment.CenterEnd else Alignment.CenterStart
+                                        ) {
+                                            Surface(
+                                                shape = RoundedCornerShape(
+                                                    topStart = if (isExpense) 12.dp else 2.dp,
+                                                    topEnd = if (isExpense) 2.dp else 12.dp,
+                                                    bottomStart = 12.dp,
+                                                    bottomEnd = 12.dp
+                                                ),
+                                                color = bgColor,
+                                                border = BorderStroke(1.dp, borderColor),
+                                                modifier = Modifier
+                                                    .fillMaxWidth(0.82f)
+                                                    .clickable {
+                                                        selectedTxDetails = item.tx
+                                                        selectedTxItems = item.txItems
+                                                    }
+                                            ) {
+                                                Column(modifier = Modifier.padding(10.dp)) {
+                                                    // Header row: receipt number + type badge
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        modifier = Modifier.fillMaxWidth()
                                                     ) {
                                                         Text(
-                                                            text = if (isExpense) "$posType (Biaya)" else posType,
-                                                            fontSize = 9.sp,
+                                                            if (isExpense) "↙ ${item.tx.receiptNumber}" else "↗ ${item.tx.receiptNumber}",
                                                             fontWeight = FontWeight.Bold,
-                                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                            fontSize = 11.sp,
+                                                            color = anchorColor,
+                                                            modifier = Modifier.weight(1f)
+                                                        )
+                                                        Surface(
+                                                            shape = RoundedCornerShape(4.dp),
+                                                            color = item.posColor.first,
+                                                            contentColor = item.posColor.second
+                                                        ) {
+                                                            Text(
+                                                                text = if (isExpense) "${item.posType} (Biaya)" else item.posType,
+                                                                fontSize = 8.sp,
+                                                                fontWeight = FontWeight.Bold,
+                                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                    Spacer(Modifier.height(2.dp))
+                                                    Text(item.dateStr, fontSize = 9.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                    Text(
+                                                        if (isExpense) "Keterangan: ${item.tx.notes ?: "-"}" else "Pelanggan: ${item.tx.customerName ?: "Umum"}",
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Medium
+                                                    )
+                                                    Spacer(Modifier.height(6.dp))
+                                                    // Amount + margin/label
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.Bottom
+                                                    ) {
+                                                        if (isExpense) {
+                                                            Text(
+                                                                "Biaya Usaha",
+                                                                fontSize = 9.sp,
+                                                                fontWeight = FontWeight.SemiBold,
+                                                                color = Color(0xFFC62828)
+                                                            )
+                                                        } else {
+                                                            Column {
+                                                                Text(
+                                                                    "Laba: ${Formatters.rupiah(item.margin)} (${String.format("%.1f%%", item.marginPct)})",
+                                                                    fontSize = 9.sp,
+                                                                    fontWeight = FontWeight.SemiBold,
+                                                                    color = if (item.margin >= 0) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
+                                                                )
+                                                                Spacer(Modifier.height(2.dp))
+                                                                LinearProgressIndicator(
+                                                                    progress = (item.marginPct.coerceIn(0.0, 100.0) / 100.0).toFloat(),
+                                                                    modifier = Modifier.fillMaxWidth(0.7f).height(3.dp),
+                                                                    color = if (item.margin >= 0) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,
+                                                                    trackColor = MaterialTheme.colorScheme.surfaceVariant
+                                                                )
+                                                            }
+                                                        }
+                                                        Text(
+                                                            text = Formatters.rupiah(item.tx.total),
+                                                            fontWeight = FontWeight.Black,
+                                                            color = if (isExpense) Color(0xFFC62828) else MaterialTheme.colorScheme.primary,
+                                                            fontSize = 13.sp
                                                         )
                                                     }
-                                                }
-                                                Spacer(Modifier.height(2.dp))
-                                                Text(dateStr, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                                Text(if (isExpense) "Keterangan: ${tx.notes ?: "-"}" else "Pelanggan: ${tx.customerName ?: "Umum"}", fontSize = 11.sp, fontWeight = FontWeight.Medium)
-                                                
-                                                if (!isExpense) {
-                                                    Spacer(Modifier.height(6.dp))
-                                                    Text(
-                                                        text = "Margin Keuntungan: ${String.format("%.1f%%", txMarginPercent)}",
-                                                        fontSize = 9.sp,
-                                                        fontWeight = FontWeight.SemiBold,
-                                                        color = if (txMargin >= 0) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
-                                                    )
-                                                    Spacer(Modifier.height(2.dp))
-                                                    LinearProgressIndicator(
-                                                        progress = (txMarginPercent.coerceIn(0.0, 100.0) / 100.0).toFloat(),
-                                                        modifier = Modifier.fillMaxWidth(0.85f).height(4.dp),
-                                                        color = if (txMargin >= 0) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error,
-                                                        trackColor = MaterialTheme.colorScheme.surfaceVariant
-                                                    )
-                                                }
-                                            }
-
-                                            Column(horizontalAlignment = Alignment.End, modifier = Modifier.weight(0.9f)) {
-                                                Text(
-                                                    text = Formatters.rupiah(tx.total),
-                                                    fontWeight = FontWeight.Black,
-                                                    color = if (isExpense) Color(0xFFC62828) else MaterialTheme.colorScheme.primary,
-                                                    fontSize = 13.sp
-                                                )
-                                                if (isExpense) {
-                                                    Text(
-                                                        text = "Biaya Usaha",
-                                                        fontSize = 10.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = Color(0xFFC62828)
-                                                    )
-                                                } else {
-                                                    Text(
-                                                        text = "Profit: ${Formatters.rupiah(txMargin)}",
-                                                        fontSize = 10.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = if (txMargin >= 0) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
-                                                    )
                                                 }
                                             }
                                         }
                                     }
+                                }
+
+                                // Spacer after each day
+                                item(key = "footer_$dayLabel") {
+                                    Spacer(Modifier.height(4.dp))
                                 }
                             }
                         }
                     }
                 }
+
                 "MENU_ENGINEERING" -> {
                     var menuSearchQuery by remember { mutableStateOf("") }
                     val filteredProductsForAnalysis = remember(productAnalysisItems, menuSearchQuery) {

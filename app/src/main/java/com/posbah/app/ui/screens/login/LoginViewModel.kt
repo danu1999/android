@@ -67,6 +67,21 @@ class LoginViewModel @Inject constructor(
         }
     }
 
+    // Bug Fix: "Masuk Demo User" sebelumnya memanggil Google Credential Manager
+    // yang silent hang. Sekarang langsung login sebagai demo@posbah.com.
+    fun loginAsDemo() {
+        _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+        viewModelScope.launch {
+            when (val outcome = authRepository.loginAsDemoUser()) {
+                is AuthRepository.LoginOutcome.Success ->
+                    _uiState.update { it.copy(isLoading = false, signedInUser = outcome.user) }
+                is AuthRepository.LoginOutcome.Error ->
+                    _uiState.update { it.copy(isLoading = false, errorMessage = outcome.message) }
+                else ->
+                    _uiState.update { it.copy(isLoading = false) }
+            }
+        }
+    }
 
 
     fun signInWithPassword() {

@@ -84,6 +84,9 @@ class FinancialAnalysisViewModel @Inject constructor(
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
 
+    // Bug #5 fix: expose businessMode so screen can guard access for non-BMP users
+    val businessMode: String get() = authRepository.activeBusinessMode() ?: "FNB"
+
     private val _uiState = MutableStateFlow(FinancialReportUiState())
     val uiState = _uiState.asStateFlow()
 
@@ -252,6 +255,33 @@ fun FinancialAnalysisScreen(
     viewModel: FinancialAnalysisViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
+    // Bug #5 fix: guard non-BMP users from accessing this screen
+    val businessMode = viewModel.businessMode
+    if (businessMode != "BMP") {
+        Box(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "📊 Analisis Keuangan",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Fitur ini hanya tersedia untuk mode Invoice & Manufaktur (BMP).\nAkun Anda saat ini menggunakan mode ${businessMode}.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+                Button(onClick = onBack) { Text("Kembali") }
+            }
+        }
+        return
+    }
 
     var showDepreciationDialog by remember { mutableStateOf(false) }
     var editDepreciationValue by remember { mutableStateOf("") }

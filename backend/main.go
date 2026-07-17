@@ -352,7 +352,8 @@ func checkAndLockoutDemoUsers() error {
 				<p>Untuk menghindari kehilangan data, akun dan seluruh data transaksi Anda akan dihapus secara permanen dalam waktu <strong>3 hari</strong> (total 5 hari sejak pendaftaran).</p>
 				<p>Silakan lakukan pembayaran dan upgrade ke Premium sekarang juga agar data Anda tidak terhapus.</p>
 				<div style="text-align: center; margin: 24px 0;">
-					<span style="display: inline-block; background-color: #2563eb; color: #ffffff; padding: 14px 28px; font-weight: 600; font-size: 15px; border-radius: 10px; text-decoration: none;">Hubungi Admin untuk Upgrade</span>
+					<!-- Bug #6 fix: gunakan <a href> agar tombol bisa diklik dari email -->
+					<a href="mailto:muhammadmuizz8@gmail.com?subject=Upgrade%20Premium%20POSBah&body=Halo%2C%20saya%20ingin%20upgrade%20ke%20Premium%20POSBah." style="display: inline-block; background-color: #2563eb; color: #ffffff; padding: 14px 28px; font-weight: 600; font-size: 15px; border-radius: 10px; text-decoration: none;">Hubungi Admin untuk Upgrade &#8594;</a>
 				</div>
 				<p style="font-size: 13px; color: #64748b; line-height: 1.5;">Catatan: Data yang telah dihapus tidak dapat dipulihkan kembali. Terima kasih atas pengertiannya.</p>
 			</div>

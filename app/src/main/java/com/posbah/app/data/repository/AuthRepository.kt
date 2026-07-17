@@ -149,6 +149,34 @@ class AuthRepository @Inject constructor(
         return result
     }
 
+    /** POST with JSON body + custom headers. Returns (httpCode, responseBody). */
+    private fun httpPostJson(
+        url: String,
+        body: org.json.JSONObject,
+        headers: Map<String, String> = emptyMap()
+    ): Pair<Int, String?> {
+        var conn: HttpURLConnection? = null
+        return try {
+            conn = URL(url).openConnection() as HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.doOutput = true
+            conn.connectTimeout = CONNECT_TIMEOUT
+            conn.readTimeout = READ_TIMEOUT
+            conn.setRequestProperty("Content-Type", "application/json")
+            conn.setRequestProperty("x-client-version", BuildConfig.VERSION_NAME)
+            headers.forEach { (k, v) -> conn.setRequestProperty(k, v) }
+            val bytes = body.toString().toByteArray(Charsets.UTF_8)
+            conn.outputStream.use { it.write(bytes) }
+            val code = conn.responseCode
+            val responseBody = if (code in 200..299)
+                conn.inputStream.bufferedReader().use { it.readText() }
+            else
+                conn.errorStream?.bufferedReader()?.use { it.readText() }
+            Pair(code, responseBody)
+        } catch (e: Exception) { Pair(-1, null) }
+        finally { conn?.disconnect() }
+    }
+
     // ── Fetch user profile from VPS (new local_users endpoint) ───────────────
 
     private fun fetchUserFromVps(email: String): JSONObject? {
@@ -240,7 +268,10 @@ class AuthRepository @Inject constructor(
             val tenantIdFromServer = vpsUser?.optString("tenantId")?.takeIf { it.isNotBlank() }
 
             if (!isActiveFromServer) {
-                return@withContext LoginOutcome.Error("Akun Anda diblokir secara permanen. Hubungi muhammadmuizz8@gmail.com.")
+                // Bug #6 fix: pesan lebih jelas — ini bukan 'diblokir permanen', tapi masa demo berakhir
+                return@withContext LoginOutcome.Error(
+                    "Masa uji coba demo Anda telah berakhir (2 hari). Silakan hubungi kami untuk upgrade ke Premium.\n\nWA: +62 812-XXXX-XXXX atau email: muhammadmuizz8@gmail.com"
+                )
             }
 
             // Check if employee
@@ -254,7 +285,22 @@ class AuthRepository @Inject constructor(
 
             val isPremiumFinal = isPremiumUser || isEmployee || isPremiumFromServer
             if (isPremiumFinal) {
-                return@withContext LoginOutcome.Error("Email Anda terdaftar sebagai akun Premium. Silakan masuk melalui tab Premium (Email) menggunakan Email dan Password/PIN.")
+                // Bug #2 fix: pesan error lebih informatif — sebutkan role dan cara login yang benar
+                val roleLabel = when {
+                    isEmployee -> {
+                        val role = vpsEmployee?.optString("role", "KASIR") ?: "KASIR"
+                        when (role) {
+                            "KASIR" -> "Kasir"
+                            "ADMIN" -> "Admin"
+                            "SUPERVISOR" -> "Supervisor"
+                            else -> role
+                        }
+                    }
+                    else -> "Owner"
+                }
+                return@withContext LoginOutcome.Error(
+                    "Akun Google Anda sudah terdaftar sebagai $roleLabel di sistem Premium.\n\nGunakan tab \"Premium (Email)\" lalu masukkan Email dan PIN/Password Anda untuk masuk."
+                )
             }
 
             val targetTenantId = if (vpsEmployee != null) {
@@ -297,16 +343,102 @@ class AuthRepository @Inject constructor(
                 if (outletId != null) securePrefs.currentOutletId = outletId
                 return@withContext LoginOutcome.Success(user, tenant)
             } else {
-                val dummyTenant = TenantSession("dummy_tenant", "Needs Selection", cleanEmail, "FNB")
+                // Auto-register as demo user — baru pertama kali login Google
+                val cleanForId = cleanEmail.replace(".", "_").replace("@", "_")
+                val demoTenantId = "demo_tenant_$cleanForId"
+                val demoMode = "FNB"
+                val nowMs = System.currentTimeMillis()
+
+                // 1. Create tenant
+                val tenantPayload = org.json.JSONObject().apply {
+                    put("id", demoTenantId)
+                    put("name", "Demo - $name")
+                    put("ownerEmail", cleanEmail)
+                    put("businessMode", demoMode)
+                    put("isActive", true)
+                    put("createdAt", nowMs)
+                    put("updatedAt", nowMs)
+                }
+                val hdrs = mapOf("x-user-email" to cleanEmail)
+                httpPostJson("$BASE_URL/api/sync/tenants", tenantPayload, hdrs)
+
+                // 2. Register user
+                val userPayload = org.json.JSONObject().apply {
+                    put("googleSub", sub)
+                    put("email", cleanEmail)
+                    put("displayName", name)
+                    put("role", "OWNER")
+                    put("tenantId", demoTenantId)
+                    put("isPremium", false)
+                    put("isActive", true)
+                    put("registeredAt", nowMs)
+                    put("updatedAt", nowMs)
+                }
+                httpPostJson("$BASE_URL/api/sync/local_users", userPayload, hdrs)
+
+                val newUser = user.copy(tenantId = demoTenantId, businessMode = demoMode)
+                val newTenant = TenantSession(demoTenantId, "Demo - $name", cleanEmail, demoMode)
+
                 securePrefs.setActiveSession(sub, cleanEmail)
-                securePrefs.currentTenantId = null
-                return@withContext LoginOutcome.Success(user, dummyTenant)
+                securePrefs.currentTenantId = demoTenantId
+                securePrefs.currentBusinessMode = demoMode
+                securePrefs.currentRole = "OWNER"
+
+                android.util.Log.i("AuthRepository", "[DemoReg] Auto-registered new Google user: $cleanEmail → $demoTenantId")
+                return@withContext LoginOutcome.Success(newUser, newTenant)
             }
         } catch (e: VersionOutdatedException) {
             return@withContext LoginOutcome.Error(e.message ?: "Pembaruan aplikasi wajib dilakukan.")
         } catch (e: Exception) {
             android.util.Log.e("AuthRepository", "Error in loginWithGoogle", e)
             return@withContext LoginOutcome.Error("Gagal otentikasi Google: ${e.localizedMessage}")
+        }
+    }
+    // ── Demo User Direct Login (no Google OAuth) ──────────────────────────────
+    // Bug Fix: Tombol "Masuk Demo User" sebelumnya memanggil Google Credential Manager
+    // yang silent hang jika tidak ada akun Google di perangkat.
+
+    suspend fun loginAsDemoUser(): LoginOutcome = withContext(Dispatchers.IO) {
+        val demoEmail = "demo@posbah.com"
+        val demoTenantId = "demo_tenant_demo_posbah_com"
+
+        return@withContext try {
+            // Cek apakah akun demo masih aktif dari server
+            val vpsUser = try { fetchUserFromVps(demoEmail) } catch (e: Exception) { null }
+            val isActiveFromServer = vpsUser?.optBoolean("isActive", true) ?: true
+            if (!isActiveFromServer) {
+                return@withContext LoginOutcome.Error(
+                    "Masa uji coba demo telah berakhir. Silakan hubungi kami untuk upgrade ke Premium.\n\nEmail: muhammadmuizz8@gmail.com"
+                )
+            }
+
+            val tenantObj = try { fetchTenantFromVps(demoTenantId) } catch (e: Exception) { null }
+            val tenantMode = tenantObj?.optString("businessMode") ?: "FNB"
+            val tenantName = tenantObj?.optString("name") ?: "User Demo (Trial)"
+
+            val user = UserSession(
+                googleSub = demoEmail,
+                email = demoEmail,
+                displayName = "User Demo",
+                photoUrl = null,
+                role = "OWNER",
+                tenantId = demoTenantId,
+                businessMode = tenantMode,
+                isPremium = false,
+                businessModeLocked = false,
+                apkVersion = BuildConfig.VERSION_NAME
+            )
+            val tenant = TenantSession(demoTenantId, tenantName, demoEmail, tenantMode)
+
+            sessionState.clearEmployeeLock()
+            securePrefs.setActiveSession(demoEmail, demoEmail)
+            securePrefs.currentTenantId = demoTenantId
+            securePrefs.currentBusinessMode = tenantMode
+            securePrefs.currentRole = "OWNER"
+
+            LoginOutcome.Success(user, tenant)
+        } catch (e: Exception) {
+            LoginOutcome.Error("Gagal masuk demo: ${e.localizedMessage}")
         }
     }
 
