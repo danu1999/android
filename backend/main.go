@@ -41,8 +41,8 @@ var (
 	adminAuthToken    string
 	adminSessions     = make(map[string]string) // sessionToken -> adminEmail
 	adminSessionsMu   sync.Mutex
-	// paymentTokens: one-time tokens for confirm-payment-action links in admin emails
-	// key = token (UUID), value = "action:sub:email" validated once then deleted
+	// paymentTokens: DEPRECATED in-memory map, dipertahankan untuk backward-compat
+	// Token sekarang disimpan di tabel payment_tokens di DB agar tahan restart.
 	paymentTokens   = make(map[string]string)
 	paymentTokensMu sync.Mutex
 )
@@ -69,6 +69,8 @@ func main() {
 	if err := initDatabase(dbURL); err != nil {
 		log.Printf("Warning: local database initialization failed: %v", err)
 	}
+	// Inisialisasi tabel payment_tokens (token approval upgrade premium)
+	initPaymentTokensTable()
 	// Backup raw materials and relations for safety
 	backupBahanBakuAndRelations()
 
@@ -5987,6 +5989,85 @@ func sendEmail(to string, subject string, body string) error {
 	return nil
 }
 
+// initPaymentTokensTable membuat tabel payment_tokens jika belum ada.
+// Tabel ini menggantikan in-memory paymentTokens map agar token survive backend restart.
+func initPaymentTokensTable() {
+	if db == nil {
+		return
+	}
+	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS payment_tokens (
+			token      TEXT PRIMARY KEY,
+			payload    TEXT NOT NULL,
+			created_at BIGINT NOT NULL,
+			used_at    BIGINT
+		)
+	`)
+	if err != nil {
+		log.Printf("[PayToken] Failed to create payment_tokens table: %v", err)
+		return
+	}
+	// Hapus token yang sudah dipakai atau lebih dari 72 jam (3 hari)
+	cutoff := time.Now().UnixMilli() - (72 * 60 * 60 * 1000)
+	_, _ = db.Exec(`DELETE FROM payment_tokens WHERE used_at IS NOT NULL OR created_at < $1`, cutoff)
+	log.Printf("[PayToken] payment_tokens table ready.")
+}
+
+// savePaymentToken menyimpan token ke DB (tahan restart) DAN ke in-memory map.
+func savePaymentToken(token, payload string) {
+	paymentTokensMu.Lock()
+	paymentTokens[token] = payload
+	paymentTokensMu.Unlock()
+	if db != nil {
+		_, err := db.Exec(
+			`INSERT INTO payment_tokens (token, payload, created_at) VALUES ($1, $2, $3) ON CONFLICT (token) DO NOTHING`,
+			token, payload, time.Now().UnixMilli(),
+		)
+		if err != nil {
+			log.Printf("[PayToken] Failed to persist token %s: %v", token[:8], err)
+		}
+	}
+}
+
+// lookupAndConsumeToken mencari token di in-memory map dulu, lalu fallback ke DB.
+// Token dikonsumsi (satu kali pakai) dan ditandai used_at di DB.
+func lookupAndConsumeToken(token string) (payload string, found bool) {
+	// 1. Cek in-memory
+	paymentTokensMu.Lock()
+	payload, found = paymentTokens[token]
+	if found {
+		delete(paymentTokens, token)
+	}
+	paymentTokensMu.Unlock()
+
+	if found {
+		// Tandai sudah dipakai di DB
+		if db != nil {
+			_, _ = db.Exec(`UPDATE payment_tokens SET used_at = $1 WHERE token = $2`, time.Now().UnixMilli(), token)
+		}
+		return payload, true
+	}
+
+	// 2. Fallback ke DB (token ada tapi in-memory hilang karena restart)
+	if db == nil {
+		return "", false
+	}
+	cutoff := time.Now().UnixMilli() - (72 * 60 * 60 * 1000) // 72 jam
+	var dbPayload string
+	var usedAt sql.NullInt64
+	err := db.QueryRow(
+		`SELECT payload, used_at FROM payment_tokens WHERE token = $1 AND created_at > $2`,
+		token, cutoff,
+	).Scan(&dbPayload, &usedAt)
+	if err != nil || usedAt.Valid {
+		// Tidak ditemukan atau sudah dipakai
+		return "", false
+	}
+	// Consume di DB
+	_, _ = db.Exec(`UPDATE payment_tokens SET used_at = $1 WHERE token = $2`, time.Now().UnixMilli(), token)
+	return dbPayload, true
+}
+
 func checkAndNotifyAdminOfNewDemoUsers() {
 	if db == nil {
 		return
@@ -6014,13 +6095,11 @@ func checkAndNotifyAdminOfNewDemoUsers() {
 	for _, d := range newDemos {
 		subject := fmt.Sprintf("pendaftaran demouser - %s", d.Email)
 
-		// Generate one-time security tokens for approve/reject links (valid 48 hours)
+		// Generate one-time security tokens for approve/reject links (valid 72 hours)
 		approveToken := fmt.Sprintf("%s-%d", generateUUID(), time.Now().UnixMilli())
 		rejectToken := fmt.Sprintf("%s-%d", generateUUID(), time.Now().UnixMilli()+1)
-		paymentTokensMu.Lock()
-		paymentTokens[approveToken] = fmt.Sprintf("approve:%s:%s:%s", d.GoogleSub, d.Email, d.DisplayName)
-		paymentTokens[rejectToken] = fmt.Sprintf("reject:%s:%s:%s", d.GoogleSub, d.Email, d.DisplayName)
-		paymentTokensMu.Unlock()
+		savePaymentToken(approveToken, fmt.Sprintf("approve:%s:%s:%s", d.GoogleSub, d.Email, d.DisplayName))
+		savePaymentToken(rejectToken, fmt.Sprintf("reject:%s:%s:%s", d.GoogleSub, d.Email, d.DisplayName))
 
 		payUrl := fmt.Sprintf("https://zedmz.cloud/api/admin/confirm-payment-action?token=%s", url.QueryEscape(approveToken))
 		noPayUrl := fmt.Sprintf("https://zedmz.cloud/api/admin/confirm-payment-action?token=%s", url.QueryEscape(rejectToken))
@@ -6404,13 +6483,8 @@ func handleConfirmPaymentAction(w http.ResponseWriter, r *http.Request) {
 	// Security: verify one-time token OR admin session
 	token := r.URL.Query().Get("token")
 	if token != "" {
-		// One-time token path (from email link)
-		paymentTokensMu.Lock()
-		payload, exists := paymentTokens[token]
-		if exists {
-			delete(paymentTokens, token) // consume token (one-time use)
-		}
-		paymentTokensMu.Unlock()
+		// One-time token path (from email link) — DB-backed, tahan restart
+		payload, exists := lookupAndConsumeToken(token)
 
 		if !exists {
 			w.Header().Set("Content-Type", "text/html")
