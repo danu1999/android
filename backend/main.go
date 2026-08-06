@@ -6406,10 +6406,18 @@ func upgradeUserToPremium(googleSub, email, displayName, customPinHash string) (
 		return "", fmt.Errorf("Failed to create owner employee: %w", err)
 	}
 
-	_, err = tx.Exec(`UPDATE "local_users" SET "isPremium" = TRUE, "tenantId" = $1, "businessModeLocked" = FALSE, "isActive" = TRUE, "updatedAt" = $2 WHERE "googleSub" = $3 OR TRIM(LOWER("email")) = $4`,
-		premiumTenantId, nowMillis, googleSub, strings.TrimSpace(strings.ToLower(email)))
+	// UPSERT: works whether user exists (demo→premium) OR is brand new (direct premium registration)
+	_, err = tx.Exec(`INSERT INTO "local_users" ("googleSub", "email", "displayName", "tenantId", "isPremium", "businessModeLocked", "isActive", "role", "registeredAt", "updatedAt")
+		VALUES ($3, $4, $5, $1, TRUE, FALSE, TRUE, 'OWNER', $2, $2)
+		ON CONFLICT ("googleSub") DO UPDATE SET
+			"isPremium" = TRUE,
+			"tenantId" = EXCLUDED."tenantId",
+			"businessModeLocked" = FALSE,
+			"isActive" = TRUE,
+			"updatedAt" = EXCLUDED."updatedAt"`,
+		premiumTenantId, nowMillis, googleSub, strings.TrimSpace(strings.ToLower(email)), displayName)
 	if err != nil {
-		return "", fmt.Errorf("Failed to update local user: %w", err)
+		return "", fmt.Errorf("Failed to upsert local user: %w", err)
 	}
  
 	if err := tx.Commit(); err != nil {
