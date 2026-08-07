@@ -1956,9 +1956,9 @@ func handleDownloadApk(w http.ResponseWriter, r *http.Request) {
 	if direct {
 		var apkPath string
 		pathsToCheck := []string{
-			"/var/www/html/app-release.apk",                                              // v2.19.26+: primary location
-			filepath.Join("/home/muizz9900", fmt.Sprintf("posbah-v%s.apk", version)),
+			filepath.Join("/home/muizz9900", fmt.Sprintf("posbah-v%s.apk", version)),         // v2.19.60+ primary
 			filepath.Join("/home/muizz9900", fmt.Sprintf("posbah-v%s-debug.apk", version)),
+			"/var/www/html/app-release.apk",                                                   // fallback
 			fmt.Sprintf("./posbah-v%s.apk", version),
 			fmt.Sprintf("./posbah-v%s-debug.apk", version),
 		}
@@ -7274,6 +7274,20 @@ func autoDetectApkVersion() {
 			latestVersion, description, time.Now().UnixNano()/int64(time.Millisecond))
 		if err == nil {
 			log.Printf("[AutoUpdate] Detected and updated new APK version: %s", latestVersion)
+
+			// Sync /var/www/html/app-release.apk agar download link selalu serve versi terbaru
+			newApkPath := filepath.Join("/home/muizz9900", fmt.Sprintf("posbah-v%s.apk", latestVersion))
+			if _, statErr := os.Stat(newApkPath); statErr == nil {
+				if srcFile, srcErr := os.Open(newApkPath); srcErr == nil {
+					if dstFile, dstErr := os.OpenFile("/var/www/html/app-release.apk", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644); dstErr == nil {
+						_, _ = io.Copy(dstFile, srcFile)
+						dstFile.Close()
+						log.Printf("[AutoUpdate] Synced /var/www/html/app-release.apk -> v%s", latestVersion)
+					}
+					srcFile.Close()
+				}
+			}
+
 			// Broadcast update notification
 			wsMsg := map[string]interface{}{
 				"type":        "apk_update",
