@@ -39,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -145,12 +146,18 @@ class CashFlowViewModel @Inject constructor(
         }
     }
 
-    fun insert(type: String, desc: String, amount: Double, costType: String = "OPERATING_EXPENSE") = viewModelScope.launch {
+    fun insert(
+        type: String,
+        desc: String,
+        amount: Double,
+        costType: String = "OPERATING_EXPENSE",
+        transactionDate: Long = System.currentTimeMillis()
+    ) = viewModelScope.launch {
         if (desc.isBlank() || amount <= 0) return@launch
         repo.insert(
             BmpCashFlowEntity(
                 tenantId = tenantId,
-                transactionDate = System.currentTimeMillis(),
+                transactionDate = transactionDate,
                 transactionType = type,
                 description = desc,
                 amount = amount,
@@ -210,6 +217,8 @@ fun CashFlowScreen(
     var formDesc by remember { mutableStateOf("") }
     var formAmt by remember { mutableStateOf("") }
     var formCostType by remember { mutableStateOf("OPERATING_EXPENSE") }
+    var formDate by remember { mutableStateOf(System.currentTimeMillis()) }
+    var showDatePicker by remember { mutableStateOf(false) }
     var dropdownExpanded by remember { mutableStateOf(false) }
     var showPostOverheadDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -229,7 +238,9 @@ fun CashFlowScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = {
-                    showForm = true; formType = "MASUK"; formDesc = ""; formAmt = ""; formCostType = "OPERATING_EXPENSE"
+                    showForm = true
+                    formType = "MASUK"; formDesc = ""; formAmt = ""; formCostType = "OPERATING_EXPENSE"
+                    formDate = System.currentTimeMillis()
                 },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -372,6 +383,28 @@ fun CashFlowScreen(
                             }
                         }
                     }
+                    // ── Tanggal Transaksi ────────────────────────────────────────
+                    val dateDisplayStr = remember(formDate) {
+                        java.text.SimpleDateFormat("dd MMMM yyyy", java.util.Locale.forLanguageTag("id-ID"))
+                            .format(java.util.Date(formDate))
+                    }
+                    Box {
+                        OutlinedTextField(
+                            value = dateDisplayStr,
+                            onValueChange = {},
+                            label = { Text("Tanggal Transaksi") },
+                            readOnly = true,
+                            trailingIcon = {
+                                TextButton(onClick = { showDatePicker = true }) {
+                                    Text("Ubah", style = MaterialTheme.typography.labelSmall)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().testTag("cf-date")
+                        )
+                        // Overlay transparan untuk menangkap klik & mencegah keyboard muncul
+                        Box(Modifier.matchParentSize().clickable { showDatePicker = true })
+                    }
+                    Spacer(Modifier.padding(top = 8.dp))
                     OutlinedTextField(
                         value = formDesc,
                         onValueChange = { formDesc = it },
@@ -417,7 +450,13 @@ fun CashFlowScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.insert(formType, formDesc, formAmt.replace(",", ".").toDoubleOrNull() ?: 0.0, formCostType)
+                        viewModel.insert(
+                            formType,
+                            formDesc,
+                            formAmt.replace(",", ".").toDoubleOrNull() ?: 0.0,
+                            formCostType,
+                            formDate
+                        )
                         showForm = false
                     },
                     modifier = Modifier.testTag("btn-save-cf")
@@ -425,6 +464,32 @@ fun CashFlowScreen(
             },
             dismissButton = { TextButton(onClick = { showForm = false }) { Text("Batal") } }
         )
+    }
+
+    // ── Date Picker Dialog (android.app.DatePickerDialog via DisposableEffect) ──
+    if (showDatePicker) {
+        val pickerCalendar = remember(formDate) {
+            java.util.Calendar.getInstance().also { it.timeInMillis = formDate }
+        }
+        DisposableEffect(Unit) {
+            val dialog = android.app.DatePickerDialog(
+                context,
+                { _, year, month, dayOfMonth ->
+                    val cal = java.util.Calendar.getInstance()
+                    cal.set(year, month, dayOfMonth, 0, 0, 0)
+                    cal.set(java.util.Calendar.MILLISECOND, 0)
+                    formDate = cal.timeInMillis
+                    showDatePicker = false
+                },
+                pickerCalendar.get(java.util.Calendar.YEAR),
+                pickerCalendar.get(java.util.Calendar.MONTH),
+                pickerCalendar.get(java.util.Calendar.DAY_OF_MONTH)
+            )
+            dialog.datePicker.maxDate = System.currentTimeMillis()  // tidak bisa pilih tanggal masa depan
+            dialog.setOnDismissListener { showDatePicker = false }
+            dialog.show()
+            onDispose { if (dialog.isShowing) dialog.dismiss() }
+        }
     }
 
     val settingsState by viewModel.settings.collectAsState()
