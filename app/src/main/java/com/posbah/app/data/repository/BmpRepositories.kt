@@ -175,6 +175,7 @@ data class BmpBahanBakuData(
     val noTagihan: String = "",
     val tanggal: Long = System.currentTimeMillis(),
     val supplier: String? = null,
+    val category: String = "BAHAN_BAKU",
     val totalHarga: Double = 0.0,
     val nominal: Double = 0.0,
     val notes: String? = null,
@@ -412,6 +413,7 @@ fun Map<String, Any?>.toBmpBahanBakuData() = BmpBahanBakuData(
     noTagihan = getCaseInsensitive("noTagihan") as? String ?: "",
     tanggal = (getCaseInsensitive("tanggal") as? Number)?.toLong() ?: System.currentTimeMillis(),
     supplier = getCaseInsensitive("supplier") as? String,
+    category = getCaseInsensitive("category") as? String ?: "BAHAN_BAKU",
     totalHarga = (getCaseInsensitive("totalHarga") as? Number)?.toDouble() ?: 0.0,
     nominal = (getCaseInsensitive("nominal") as? Number)?.toDouble() ?: 0.0,
     notes = getCaseInsensitive("notes") as? String,
@@ -1756,6 +1758,7 @@ class BmpBahanBakuRepository @Inject constructor(
             noTagihan = data.noTagihan,
             tanggal = data.tanggal,
             supplier = data.supplier,
+            category = data.category,
             totalHarga = data.totalHarga,
             nominal = data.nominal,
             notes = data.notes,
@@ -1771,7 +1774,7 @@ class BmpBahanBakuRepository @Inject constructor(
         } catch (_: Exception) { null } ?: return null
         return com.posbah.app.data.local.entities.BmpBahanBakuEntity(
             id = data.id, tenantId = data.tenantId, noTagihan = data.noTagihan,
-            tanggal = data.tanggal, supplier = data.supplier, totalHarga = data.totalHarga, nominal = data.nominal, notes = data.notes,
+            tanggal = data.tanggal, supplier = data.supplier, category = data.category, totalHarga = data.totalHarga, nominal = data.nominal, notes = data.notes,
             notaFotoPath = data.notaFotoPath,
             notaFotoUrl = data.notaFotoUrl
         )
@@ -1798,7 +1801,7 @@ class BmpBahanBakuRepository @Inject constructor(
     suspend fun updateHeaderOnly(entity: com.posbah.app.data.local.entities.BmpBahanBakuEntity): OnlineWriteResult {
         return update(BmpBahanBakuData(
             id = entity.id, tenantId = entity.tenantId, noTagihan = entity.noTagihan,
-            tanggal = entity.tanggal, supplier = entity.supplier, totalHarga = entity.totalHarga,
+            tanggal = entity.tanggal, supplier = entity.supplier, category = entity.category, totalHarga = entity.totalHarga,
             nominal = entity.nominal, notes = entity.notes,
             notaFotoPath = entity.notaFotoPath, notaFotoUrl = entity.notaFotoUrl
         ))
@@ -1811,7 +1814,7 @@ class BmpBahanBakuRepository @Inject constructor(
     ): OnlineWriteResult {
         val data = BmpBahanBakuData(
             id = entity.id, tenantId = entity.tenantId, noTagihan = entity.noTagihan,
-            tanggal = entity.tanggal, supplier = entity.supplier, totalHarga = entity.totalHarga,
+            tanggal = entity.tanggal, supplier = entity.supplier, category = entity.category, totalHarga = entity.totalHarga,
             nominal = entity.nominal, notes = entity.notes,
             notaFotoPath = entity.notaFotoPath, notaFotoUrl = entity.notaFotoUrl
         )
@@ -1938,6 +1941,7 @@ class BmpBahanBakuRepository @Inject constructor(
                     noTagihan = d.noTagihan,
                     tanggal = d.tanggal,
                     supplier = d.supplier,
+                    category = d.category,
                     totalHarga = d.totalHarga,
                     nominal = d.nominal,
                     notes = d.notes,

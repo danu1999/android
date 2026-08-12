@@ -196,6 +196,33 @@ fun BahanBakuFormScreen(
                         )
                         Spacer(Modifier.height(10.dp))
 
+                        Text("Kategori Pembelian:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf(
+                                "BAHAN_BAKU" to "Bahan Baku",
+                                "PIGMEN" to "Pigmen / Warna",
+                                "PERLENGKAPAN" to "Perlengkapan & APD"
+                            ).forEach { (catKey, catLabel) ->
+                                val isSelected = header.category == catKey
+                                androidx.compose.material3.OutlinedButton(
+                                    onClick = { viewModel.updateHeader { h -> h.copy(category = catKey) } },
+                                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                                        containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
+                                        contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                    ),
+                                    modifier = Modifier.weight(1f),
+                                    contentPadding = PaddingValues(horizontal = 2.dp, vertical = 2.dp)
+                                ) {
+                                    Text(catLabel, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(10.dp))
+
                         val formattedDate = remember(header.tanggal) {
                             Formatters.dateLong(header.tanggal)
                         }

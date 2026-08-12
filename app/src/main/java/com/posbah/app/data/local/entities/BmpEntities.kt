@@ -167,6 +167,7 @@ data class BmpBahanBakuEntity(
     val tanggal: Long = System.currentTimeMillis(),
     val noTagihan: String,
     val supplier: String? = null,
+    val category: String = "BAHAN_BAKU",
     val totalHarga: Double = 0.0,
     val nominal: Double = 0.0,
     val notes: String? = null,

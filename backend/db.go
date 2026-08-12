@@ -639,6 +639,7 @@ func initSchema() error {
 		`ALTER TABLE "bmp_payrolls" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT FALSE;`,
 		`ALTER TABLE "bmp_payrolls" ALTER COLUMN "id" TYPE VARCHAR(100);`,
 		`ALTER TABLE "bmp_bahan_baku" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT FALSE;`,
+		`ALTER TABLE "bmp_bahan_baku" ADD COLUMN IF NOT EXISTS "category" VARCHAR(50) DEFAULT 'BAHAN_BAKU';`,
 		`ALTER TABLE "bmp_bahan_baku_item" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN NOT NULL DEFAULT FALSE;`,
 
 		// Drop single PKs and create composite PKs (id, tenantId) for multi-tenant tables

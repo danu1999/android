@@ -107,12 +107,16 @@ class BahanBakuListViewModel @Inject constructor(
         }
         if (params.category != "ALL") {
             list = list.filter { entry ->
-                val text = "${entry.supplier} ${entry.notes} ${entry.noTagihan}".lowercase()
-                when (params.category) {
-                    "BAHAN_BAKU" -> text.contains("biji") || text.contains("plastik") || text.contains("pp") || text.contains("pe") || text.contains("hd") || text.contains("abs") || text.contains("recycle") || text.contains("baku") || text.contains("giling") || (!text.contains("oli") && !text.contains("selang") && !text.contains("pigmen") && !text.contains("warna") && !text.contains("karung") && !text.contains("safety"))
-                    "PIGMEN" -> text.contains("pigmen") || text.contains("warna") || text.contains("color") || text.contains("masterbatch") || text.contains("pewarna")
-                    "PERLENGKAPAN" -> text.contains("oli") || text.contains("selang") || text.contains("safety") || text.contains("apd") || text.contains("karung") || text.contains("packing") || text.contains("kemasan") || text.contains("sparepart") || text.contains("perlengkapan") || text.contains("alat")
-                    else -> true
+                if (entry.category.equals(params.category, ignoreCase = true)) {
+                    true
+                } else {
+                    val text = "${entry.supplier} ${entry.notes} ${entry.noTagihan}".lowercase()
+                    when (params.category) {
+                        "BAHAN_BAKU" -> text.contains("biji") || text.contains("plastik") || text.contains("pp") || text.contains("pe") || text.contains("hd") || text.contains("abs") || text.contains("recycle") || text.contains("baku") || text.contains("giling")
+                        "PIGMEN" -> text.contains("pigmen") || text.contains("warna") || text.contains("color") || text.contains("masterbatch") || text.contains("pewarna")
+                        "PERLENGKAPAN" -> text.contains("oli") || text.contains("selang") || text.contains("safety") || text.contains("apd") || text.contains("karung") || text.contains("packing") || text.contains("kemasan") || text.contains("sparepart") || text.contains("perlengkapan") || text.contains("alat")
+                        else -> true
+                    }
                 }
             }
         }
