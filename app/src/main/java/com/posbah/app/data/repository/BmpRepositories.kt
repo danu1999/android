@@ -140,19 +140,6 @@ data class BmpMoldData(
     val updatedAt: Long = 0
 )
 
-data class BmpCashflowData(
-    val id: Long = 0,
-    val tenantId: String = "",
-    val transactionDate: Long = System.currentTimeMillis(),
-    val transactionType: String = "MASUK",
-    val description: String = "",
-    val amount: Double = 0.0,
-    val costType: String = "OPERATING_EXPENSE",
-    val paymentRefId: Long? = null,
-    val payrollRefId: String? = null,
-    val isDeleted: Boolean = false,
-    val updatedAt: Long = 0
-)
 
 data class BmpPaymentData(
     val id: Long = 0,
@@ -181,16 +168,6 @@ data class BmpEmployeeData(
     val updatedAt: Long = 0
 )
 
-data class BmpPayrollData(
-    val id: String = "",
-    val tenantId: String = "",
-    val employeeId: Long = 0,
-    val employeeName: String = "",
-    val paymentDate: Long = System.currentTimeMillis(),
-    val amount: Double = 0.0,
-    val notes: String? = null,
-    val updatedAt: Long = 0
-)
 
 data class BmpBahanBakuData(
     val id: Long = 0,
@@ -406,19 +383,6 @@ fun Map<String, Any?>.toBmpMoldData() = BmpMoldData(
     updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0
 )
 
-fun Map<String, Any?>.toBmpCashflowData() = BmpCashflowData(
-    id = (getCaseInsensitive("id") as? Number)?.toLong() ?: 0,
-    tenantId = getCaseInsensitive("tenantId") as? String ?: "",
-    transactionDate = (getCaseInsensitive("transactionDate") as? Number)?.toLong() ?: System.currentTimeMillis(),
-    transactionType = getCaseInsensitive("transactionType") as? String ?: "MASUK",
-    description = getCaseInsensitive("description") as? String ?: "",
-    amount = (getCaseInsensitive("amount") as? Number)?.toDouble() ?: 0.0,
-    costType = getCaseInsensitive("costType") as? String ?: "OPERATING_EXPENSE",
-    paymentRefId = (getCaseInsensitive("paymentRefId") as? Number)?.toLong(),
-    payrollRefId = getCaseInsensitive("payrollRefId") as? String,
-    isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false,
-    updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0
-)
 
 fun Map<String, Any?>.toBmpPaymentData() = BmpPaymentData(
     id = (getCaseInsensitive("id") as? Number)?.toLong() ?: 0,
@@ -565,17 +529,6 @@ class BmpClientRepository @Inject constructor(
         return upsert(entity.toData())
     }
 
-    suspend fun delete(id: Long, cashflowRepo: BmpCashFlowRepository): OnlineWriteResult {
-        val snapshot = _clients.value
-        _clients.value = snapshot.filter { it.id != id }  // optimistic: hapus dulu
-        return try {
-            api.deleteClient(id)
-            OnlineWriteResult.Success
-        } catch (e: Exception) {
-            _clients.value = snapshot  // rollback jika gagal
-            OnlineWriteResult.Error(e.message ?: "Gagal hapus klien")
-        }
-    }
 
     suspend fun delete(context: android.content.Context, tenantId: String, id: Long): OnlineWriteResult {
         val snapshot = _clients.value
@@ -596,7 +549,6 @@ class BmpClientRepository @Inject constructor(
 class BmpInvoiceRepository @Inject constructor(
     private val api: BmpApiService,
     private val securePrefs: SecurePreferences,
-    private val cashflowRepo: BmpCashFlowRepository,
     private val stockRepo: BmpStockRepository
 ) {
     private val _invoices = MutableStateFlow<List<BmpInvoiceData>>(emptyList())
@@ -687,15 +639,6 @@ class BmpInvoiceRepository @Inject constructor(
                 api.updateClient(clientId, mapOf("saldoTitipan" to newSaldo))
             }
         }
-
-        // Catat cashflow masuk
-        cashflowRepo.createEntry(BmpCashflowData(
-            tenantId = tenantId,
-            transactionType = "MASUK",
-            description = notes ?: "Pembayaran borongan klien",
-            amount = nominal,
-            transactionDate = System.currentTimeMillis()
-        ))
     }
 
     suspend fun refresh() {
@@ -741,7 +684,6 @@ class BmpInvoiceRepository @Inject constructor(
     suspend fun createInvoice(
         invoice: BmpInvoiceData,
         products: List<BmpProductItemData>,
-        cashflowRepo: BmpCashFlowRepository,
         stockRepo: BmpStockRepository
     ): Pair<Long, OnlineWriteResult> {
         val snapshot = _invoices.value
@@ -809,37 +751,6 @@ class BmpInvoiceRepository @Inject constructor(
                 }
             }
 
-            // 4. ── Business logic: Uang muka → cashflow MASUK ────────────────
-            if (invoice.paidAmount > 0) {
-                val payResp = api.createPayment(mapOf(
-                    "invoiceId" to newId,
-                    "paymentDate" to System.currentTimeMillis(),
-                    "paymentAmount" to invoice.paidAmount,
-                    "paymentMethod" to "CASH",
-                    "notes" to "Uang muka saat pembuatan Invoice"
-                ))
-                val payId = (payResp.body()?.get("id") as? Number)?.toLong()
-                cashflowRepo.createEntry(BmpCashflowData(
-                    transactionType = "MASUK",
-                    description = "Pembayaran Invoice ${invoice.number}",
-                    amount = invoice.paidAmount,
-                    paymentRefId = payId,
-                    transactionDate = System.currentTimeMillis()
-                ))
-            }
-
-            // 5. ── Business logic: isKhusus item → cashflow KELUAR ────────────
-            for (prod in products) {
-                if (prod.isKhusus && prod.hargaBeli > 0) {
-                    cashflowRepo.createEntry(BmpCashflowData(
-                        transactionType = "KELUAR",
-                        description = "Pembelian barang khusus untuk Faktur ${invoice.number}",
-                        amount = prod.hargaBeli,
-                        transactionDate = System.currentTimeMillis()
-                    ))
-                }
-            }
-
             // Replace temp invoice dengan saved invoice
             val savedInvoice = tempInvoice.copy(id = newId)
             _invoices.value = snapshot + savedInvoice
@@ -858,7 +769,6 @@ class BmpInvoiceRepository @Inject constructor(
     suspend fun updateInvoice(
         invoice: BmpInvoiceData,
         products: List<BmpProductItemData>,
-        cashflowRepo: BmpCashFlowRepository,
         stockRepo: BmpStockRepository
     ): OnlineWriteResult {
         val snapshot = _invoices.value
@@ -933,18 +843,6 @@ class BmpInvoiceRepository @Inject constructor(
                 }
             }
 
-            // 4. Re-create cashflow KELUAR untuk isKhusus baru
-            for (prod in products) {
-                if (prod.isKhusus && prod.hargaBeli > 0) {
-                    cashflowRepo.createEntry(BmpCashflowData(
-                        transactionType = "KELUAR",
-                        description = "Pembelian barang khusus untuk Faktur ${invoice.number}",
-                        amount = prod.hargaBeli,
-                        transactionDate = System.currentTimeMillis()
-                    ))
-                }
-            }
-
             OnlineWriteResult.Success
         } catch (e: Exception) {
             _invoices.value = snapshot // rollback
@@ -954,7 +852,6 @@ class BmpInvoiceRepository @Inject constructor(
 
     suspend fun deleteInvoice(
         id: Long,
-        cashflowRepo: BmpCashFlowRepository,
         stockRepo: BmpStockRepository
     ): OnlineWriteResult {
         val snapshot = _invoices.value
@@ -1011,8 +908,7 @@ class BmpInvoiceRepository @Inject constructor(
         invoiceNumber: String,
         amount: Double,
         method: String,
-        notes: String?,
-        cashflowRepo: BmpCashFlowRepository
+        notes: String?
     ): OnlineWriteResult {
         val snapshot = _payments.value
         val invSnapshot = _invoices.value
@@ -1056,16 +952,6 @@ class BmpInvoiceRepository @Inject constructor(
                     "paidAmount" to totalPaid
                 ))
             }
-
-            // Business logic: payment → cashflow MASUK
-            cashflowRepo.createEntry(BmpCashflowData(
-                transactionType = "MASUK",
-                description = "Pembayaran Invoice $invoiceNumber",
-                amount = amount,
-                paymentRefId = payId,
-                transactionDate = System.currentTimeMillis()
-            ))
-            cashflowRepo.refreshEntries()
 
             refreshPayments()
             refresh()
@@ -1190,7 +1076,7 @@ class BmpInvoiceRepository @Inject constructor(
         tenantId: String,
         id: Long
     ): OnlineWriteResult {
-        return deleteInvoice(id, cashflowRepo, stockRepo)
+        return deleteInvoice(id, stockRepo)
     }
 
     fun observeProducts(invoiceId: Long): Flow<List<com.posbah.app.data.local.entities.BmpProductEntity>> =
@@ -1309,7 +1195,7 @@ class BmpInvoiceRepository @Inject constructor(
                 isKhusus = it.isKhusus
             )
         }
-        return createInvoice(invoiceData, productDataList, cashflowRepo, stockRepo)
+        return createInvoice(invoiceData, productDataList, stockRepo)
     }
 
     suspend fun updateInvoice(
@@ -1346,7 +1232,7 @@ class BmpInvoiceRepository @Inject constructor(
                 isKhusus = it.isKhusus
             )
         }
-        return updateInvoice(invoiceData, productDataList, cashflowRepo, stockRepo)
+        return updateInvoice(invoiceData, productDataList, stockRepo)
     }
 
     private fun BmpPaymentData.toEntity() = BmpInvoicePaymentEntity(
@@ -1380,8 +1266,7 @@ class BmpInvoiceRepository @Inject constructor(
             invoiceNumber = inv.number,
             amount = amount,
             method = method,
-            notes = notes,
-            cashflowRepo = cashflowRepo
+            notes = notes
         )
     }
 }
@@ -1510,142 +1395,13 @@ class BmpMasterProductRepository @Inject constructor(
         }
 }
 
-// ── BmpCashFlowRepository ─────────────────────────────────────────────────────
-
-@Singleton
-class BmpCashFlowRepository @Inject constructor(
-    private val api: BmpApiService,
-    private val securePrefs: SecurePreferences
-) {
-    private val _entries = MutableStateFlow<List<BmpCashflowData>>(emptyList())
-    val entries = _entries.asStateFlow()
-
-    suspend fun refresh() {
-        try {
-            val resp = api.getCashflow()
-            if (resp.isSuccessful) {
-                _entries.value = resp.body()?.map { it.toBmpCashflowData() } ?: emptyList()
-            }
-        } catch (_: Exception) {}
-    }
-
-    suspend fun refreshEntries() = refresh()
-
-    suspend fun fetchCashFlowFromNetwork() = refresh()
-
-    suspend fun list(): List<BmpCashflowData> = try {
-        api.getCashflow().body()?.map { it.toBmpCashflowData() } ?: emptyList()
-    } catch (_: Exception) { emptyList() }
-
-    suspend fun createEntry(entry: BmpCashflowData): Long {
-        val snapshot = _entries.value
-        val tempId = -System.currentTimeMillis()
-        val tempEntry = entry.copy(id = tempId, tenantId = securePrefs.currentTenantId ?: "")
-        _entries.value = snapshot + tempEntry
-        return try {
-            val resp = api.createCashflow(mapOf(
-                "transactionDate" to entry.transactionDate,
-                "transactionType" to entry.transactionType,
-                "description" to entry.description,
-                "amount" to entry.amount,
-                "costType" to entry.costType,
-                "paymentRefId" to entry.paymentRefId,
-                "payrollRefId" to entry.payrollRefId
-            ))
-            val newId = (resp.body()?.get("id") as? Number)?.toLong() ?: 0L
-            if (newId > 0) {
-                _entries.value = _entries.value.map { if (it.id == tempId) it.copy(id = newId) else it }
-                newId
-            } else {
-                _entries.value = snapshot
-                0L
-            }
-        } catch (_: Exception) {
-            _entries.value = snapshot
-            0L
-        }
-    }
-
-    suspend fun update(entry: BmpCashflowData): OnlineWriteResult {
-        val snapshot = _entries.value
-        _entries.value = snapshot.map { if (it.id == entry.id) entry else it }  // optimistic update
-        return try {
-            api.updateCashflow(entry.id, mapOf(
-                "transactionDate" to entry.transactionDate,
-                "transactionType" to entry.transactionType,
-                "description" to entry.description,
-                "amount" to entry.amount,
-                "costType" to entry.costType
-            ))
-            OnlineWriteResult.Success
-        } catch (e: Exception) {
-            _entries.value = snapshot  // rollback jika gagal
-            OnlineWriteResult.Error(e.message ?: "Gagal update cashflow")
-        }
-    }
-
-    suspend fun delete(id: Long): OnlineWriteResult {
-        val snapshot = _entries.value
-        _entries.value = snapshot.filter { it.id != id }  // optimistic: hapus dulu
-        return try {
-            api.deleteCashflow(id)
-            OnlineWriteResult.Success
-        } catch (e: Exception) {
-            _entries.value = snapshot  // rollback jika gagal
-            OnlineWriteResult.Error(e.message ?: "Gagal hapus cashflow")
-        }
-    }
-
-    fun saldo(): Double = _entries.value.sumOf {
-        if (it.transactionType == "MASUK") it.amount else -it.amount
-    }
-
-    /** Observe cashflow sebagai Flow<List<BmpCashFlowEntity>> — backward compat */
-    fun observe(tenantId: String): kotlinx.coroutines.flow.Flow<List<com.posbah.app.data.local.entities.BmpCashFlowEntity>> {
-        return _entries.map { list ->
-            list.map { d ->
-                com.posbah.app.data.local.entities.BmpCashFlowEntity(
-                    id = d.id,
-                    tenantId = d.tenantId,
-                    transactionType = d.transactionType,
-                    description = d.description,
-                    amount = d.amount,
-                    costType = d.costType,
-                    transactionDate = d.transactionDate,
-                    paymentRefId = d.paymentRefId,
-                    isSynced = true
-                )
-            }
-        }
-    }
-
-    fun totalIn(tenantId: String): kotlinx.coroutines.flow.Flow<Double> =
-        _entries.map { list -> list.filter { it.transactionType == "MASUK" }.sumOf { it.amount } }
-
-    fun totalOut(tenantId: String): kotlinx.coroutines.flow.Flow<Double> =
-        _entries.map { list -> list.filter { it.transactionType == "KELUAR" }.sumOf { it.amount } }
-
-    /** Insert via entity — backward compat untuk CashFlowScreen */
-    suspend fun insert(entity: com.posbah.app.data.local.entities.BmpCashFlowEntity) {
-        createEntry(BmpCashflowData(
-            tenantId = entity.tenantId,
-            transactionType = entity.transactionType,
-            description = entity.description,
-            amount = entity.amount,
-            costType = entity.costType,
-            transactionDate = entity.transactionDate
-        ))
-    }
-}
-
 
 // ── BmpEmployeeRepository ─────────────────────────────────────────────────────
 
 @Singleton
 class BmpEmployeeRepository @Inject constructor(
     private val api: BmpApiService,
-    private val securePrefs: SecurePreferences,
-    private val payrollRepo: BmpPayrollRepository
+    private val securePrefs: SecurePreferences
 ) {
     private val _employees = MutableStateFlow<List<BmpEmployeeData>>(emptyList())
     val employees = _employees.asStateFlow()
@@ -1754,196 +1510,29 @@ class BmpEmployeeRepository @Inject constructor(
             }
         }
 
-    fun observePayrolls(tenantId: String): Flow<List<com.posbah.app.data.local.entities.BmpPayrollEntity>> =
-        payrollRepo.payrolls.map { list ->
-            list.map {
-                com.posbah.app.data.local.entities.BmpPayrollEntity(
-                    id = it.id,
-                    tenantId = it.tenantId,
-                    employeeId = it.employeeId,
-                    paymentDate = it.paymentDate,
-                    amount = it.amount,
-                    attendanceCount = 0,
-                    dailyRate = 0.0,
-                    description = it.notes ?: ""
-                )
-            }
-        }
+    /** Konversi BmpEmployeeEntity ke BmpEmployeeData lalu upsert */
+    suspend fun upsert(entity: com.posbah.app.data.local.entities.BmpEmployeeEntity): OnlineWriteResult =
+        upsert(BmpEmployeeData(
+            id = entity.id,
+            tenantId = entity.tenantId,
+            name = entity.name,
+            role = entity.position ?: "KARYAWAN",
+            salary = entity.salaryAmount,
+            employeeType = entity.employeeType,
+            isActive = entity.isActive,
+            employeeId = entity.employeeId,
+            fingerprintPIN = entity.fingerprintPIN,
+            updatedAt = entity.updatedAt
+        ))
 
-    suspend fun upsert(e: com.posbah.app.data.local.entities.BmpEmployeeEntity): OnlineWriteResult {
-        val data = BmpEmployeeData(
-            id = e.id,
-            tenantId = e.tenantId,
-            name = e.name,
-            role = e.position ?: "KARYAWAN",
-            salary = e.salaryAmount,
-            employeeType = e.employeeType,
-            phone = null,
-            email = null,
-            isActive = e.isActive,
-            employeeId = e.employeeId,
-            fingerprintPIN = e.fingerprintPIN,
-            updatedAt = System.currentTimeMillis()
-        )
-        return upsert(data)
-    }
-
+    /** Soft-delete: set isActive=false tanpa hapus data historis */
     suspend fun softDelete(id: Long) {
-        delete(id)
-    }
-
-    suspend fun insertPayroll(payroll: com.posbah.app.data.local.entities.BmpPayrollEntity): Long {
-        val empName = _employees.value.find { it.id == payroll.employeeId }?.name.orEmpty()
-        val data = BmpPayrollData(
-            id = payroll.id,
-            tenantId = payroll.tenantId,
-            employeeId = payroll.employeeId,
-            employeeName = empName,
-            paymentDate = payroll.paymentDate,
-            amount = payroll.amount,
-            notes = payroll.description,
-            updatedAt = System.currentTimeMillis()
-        )
-        payrollRepo.createPayroll(data)
-        return payroll.employeeId
-    }
-
-    suspend fun refreshPayrolls() {
-        payrollRepo.refresh()
-    }
-
-    suspend fun updatePayroll(payroll: com.posbah.app.data.local.entities.BmpPayrollEntity): OnlineWriteResult {
-        val empName = _employees.value.find { it.id == payroll.employeeId }?.name.orEmpty()
-        val data = BmpPayrollData(
-            id = payroll.id,
-            tenantId = payroll.tenantId,
-            employeeId = payroll.employeeId,
-            employeeName = empName,
-            paymentDate = payroll.paymentDate,
-            amount = payroll.amount,
-            notes = payroll.description,
-            updatedAt = System.currentTimeMillis()
-        )
-        return payrollRepo.updatePayroll(data)
-    }
-
-    suspend fun deletePayroll(id: String): OnlineWriteResult {
-        return payrollRepo.deletePayroll(id)
-    }
-}
-
-// ── BmpPayrollRepository ──────────────────────────────────────────────────────
-
-@Singleton
-class BmpPayrollRepository @Inject constructor(
-    private val api: BmpApiService,
-    private val cashflowRepo: BmpCashFlowRepository,
-    private val securePrefs: SecurePreferences
-) {
-    private val _payrolls = MutableStateFlow<List<BmpPayrollData>>(emptyList())
-    val payrolls = _payrolls.asStateFlow()
-
-    suspend fun refresh() {
         try {
-            val resp = api.getPayrolls()
-            if (resp.isSuccessful) {
-                _payrolls.value = resp.body()?.map {
-                    BmpPayrollData(
-                        id = it["id"] as? String ?: "",
-                        tenantId = it["tenantId"] as? String ?: "",
-                        employeeId = (it["employeeId"] as? Number)?.toLong() ?: 0,
-                        employeeName = it["employeeName"] as? String ?: "",
-                        paymentDate = (it["paymentDate"] as? Number)?.toLong() ?: System.currentTimeMillis(),
-                        amount = (it["amount"] as? Number)?.toDouble() ?: 0.0,
-                        notes = it["notes"] as? String,
-                        updatedAt = (it["updatedAt"] as? Number)?.toLong() ?: 0
-                    )
-                } ?: emptyList()
+            api.updateBmpEmployee(id, mapOf("isActive" to false))
+            _employees.value = _employees.value.map {
+                if (it.id == id) it.copy(isActive = false) else it
             }
         } catch (_: Exception) {}
-    }
-
-    suspend fun list(): List<BmpPayrollData> = _payrolls.value.ifEmpty {
-        try {
-            api.getPayrolls().body()?.map {
-                BmpPayrollData(
-                    id = it["id"] as? String ?: "",
-                    tenantId = it["tenantId"] as? String ?: "",
-                    employeeId = (it["employeeId"] as? Number)?.toLong() ?: 0,
-                    employeeName = it["employeeName"] as? String ?: "",
-                    paymentDate = (it["paymentDate"] as? Number)?.toLong() ?: System.currentTimeMillis(),
-                    amount = (it["amount"] as? Number)?.toDouble() ?: 0.0,
-                    notes = it["notes"] as? String,
-                    updatedAt = (it["updatedAt"] as? Number)?.toLong() ?: 0
-                )
-            } ?: emptyList()
-        } catch (_: Exception) { emptyList() }
-    }
-
-    /**
-     * Bayar gaji → POST payroll + business logic: cashflow KELUAR otomatis.
-     */
-    suspend fun createPayroll(payroll: BmpPayrollData): OnlineWriteResult {
-        val snapshot = _payrolls.value
-        _payrolls.value = snapshot + payroll.copy(id = "temp-${System.currentTimeMillis()}") // optimistic
-        return try {
-            api.createPayroll(mapOf(
-                "id" to payroll.id,
-                "employeeId" to payroll.employeeId,
-                "employeeName" to payroll.employeeName,
-                "paymentDate" to payroll.paymentDate,
-                "amount" to payroll.amount,
-                "notes" to payroll.notes
-            ))
-            // Business logic: gaji dibayar → kas berkurang
-            cashflowRepo.createEntry(BmpCashflowData(
-                transactionType = "KELUAR",
-                description = "Gaji Karyawan: ${payroll.employeeName}",
-                amount = payroll.amount,
-                transactionDate = payroll.paymentDate,
-                payrollRefId = payroll.id, // Link to the payroll record UUID string
-                costType = "DIRECT_LABOR"  // Set cost type to DIRECT_LABOR
-            ))
-            refresh()
-            OnlineWriteResult.Success
-        } catch (e: Exception) {
-            _payrolls.value = snapshot // rollback
-            OnlineWriteResult.Error(e.message ?: "Gagal bayar gaji")
-        }
-    }
-
-    suspend fun updatePayroll(payroll: BmpPayrollData): OnlineWriteResult {
-        val snapshot = _payrolls.value
-        _payrolls.value = snapshot.map { if (it.id == payroll.id) payroll else it }
-        return try {
-            api.updatePayroll(payroll.id, mapOf(
-                "employeeId" to payroll.employeeId,
-                "employeeName" to payroll.employeeName,
-                "paymentDate" to payroll.paymentDate,
-                "amount" to payroll.amount,
-                "notes" to payroll.notes
-            ))
-            refresh()
-            cashflowRepo.refresh()
-            OnlineWriteResult.Success
-        } catch (e: Exception) {
-            _payrolls.value = snapshot // rollback
-            OnlineWriteResult.Error(e.message ?: "Gagal ubah gaji")
-        }
-    }
-
-    suspend fun deletePayroll(id: String): OnlineWriteResult {
-        val snapshot = _payrolls.value
-        _payrolls.value = snapshot.filter { it.id != id }
-        return try {
-            api.deletePayroll(id)
-            refresh()
-            cashflowRepo.refresh()
-            OnlineWriteResult.Success
-        } catch (e: Exception) {
-            _payrolls.value = snapshot // rollback
-            OnlineWriteResult.Error(e.message ?: "Gagal hapus gaji")
-        }
     }
 }
 
@@ -1952,7 +1541,6 @@ class BmpPayrollRepository @Inject constructor(
 @Singleton
 class BmpBahanBakuRepository @Inject constructor(
     private val api: BmpApiService,
-    private val cashflowRepo: BmpCashFlowRepository,
     private val securePrefs: SecurePreferences
 ) {
     private val _bahanBaku = MutableStateFlow<List<BmpBahanBakuData>>(emptyList())
@@ -2047,17 +1635,6 @@ class BmpBahanBakuRepository @Inject constructor(
               }
               api.createBahanBakuItems(itemBodies)
 
-              // ── Business logic: input bahan baku → potong cashflow ──────────
-              // Untuk bahan baku daur ulang/afval, nominal=0 (tidak ada hutang),
-              // sehingga cashflow menggunakan totalHarga (nilai riil aset yang masuk).
-              val cashflowAmount = if (bahanBaku.nominal > 0) bahanBaku.nominal else bahanBaku.totalHarga
-              cashflowRepo.createEntry(BmpCashflowData(
-                  transactionType = "KELUAR",
-                  description = "Pembelian Bahan Baku: ${bahanBaku.noTagihan}",
-                  amount = cashflowAmount,
-                  transactionDate = bahanBaku.tanggal
-              ))
-
               val savedBahanBaku = tempBahanBaku.copy(id = newId)
               _bahanBaku.value = snapshot + savedBahanBaku
 
@@ -2073,9 +1650,6 @@ class BmpBahanBakuRepository @Inject constructor(
           _bahanBaku.value = snapshot.map { if (it.id == bahanBaku.id) bahanBaku else it }
 
           try {
-              val oldBahanBaku = snapshot.find { it.id == bahanBaku.id }
-              val oldNoTagihan = oldBahanBaku?.noTagihan ?: bahanBaku.noTagihan
-
               api.updateBahanBaku(bahanBaku.id, mapOf(
                   "noTagihan" to bahanBaku.noTagihan,
                   "tanggal" to bahanBaku.tanggal,
@@ -2086,36 +1660,6 @@ class BmpBahanBakuRepository @Inject constructor(
                   "notaFotoUrl" to bahanBaku.notaFotoUrl,
                   "notes" to bahanBaku.notes
               ))
-
-              // ── Business logic: update cashflow entry ──────────────────────
-              val cfList = cashflowRepo.list()
-              val match = cfList.find { it.description == "Pembelian Bahan Baku: $oldNoTagihan" }
-              if (match != null) {
-                  cashflowRepo.update(match.copy(
-                      description = "Pembelian Bahan Baku: ${bahanBaku.noTagihan}",
-                      amount = bahanBaku.nominal,
-                      transactionDate = bahanBaku.tanggal
-                  ))
-              } else {
-                  cashflowRepo.createEntry(BmpCashflowData(
-                      transactionType = "KELUAR",
-                      description = "Pembelian Bahan Baku: ${bahanBaku.noTagihan}",
-                      amount = bahanBaku.nominal,
-                      transactionDate = bahanBaku.tanggal
-                  ))
-              }
-
-              // Also check and update any "Pembayaran Hutang Bahan Baku: $oldNoTagihan" cashflows!
-              if (oldNoTagihan != bahanBaku.noTagihan) {
-                  val debtMatches = cfList.filter { it.description == "Pembayaran Hutang Bahan Baku: $oldNoTagihan" }
-                  debtMatches.forEach { debtCf ->
-                      cashflowRepo.update(debtCf.copy(
-                          description = "Pembayaran Hutang Bahan Baku: ${bahanBaku.noTagihan}"
-                      ))
-                  }
-              }
-
-              cashflowRepo.refreshEntries()
 
               OnlineWriteResult.Success
           } catch (e: Exception) {
@@ -2132,9 +1676,6 @@ class BmpBahanBakuRepository @Inject constructor(
           _bahanBaku.value = snapshot.map { if (it.id == bahanBaku.id) bahanBaku else it }
 
           try {
-              val oldBahanBaku = snapshot.find { it.id == bahanBaku.id }
-              val oldNoTagihan = oldBahanBaku?.noTagihan ?: bahanBaku.noTagihan
-
               // 1. Update header
               api.updateBahanBaku(bahanBaku.id, mapOf(
                   "noTagihan" to bahanBaku.noTagihan,
@@ -2158,41 +1699,12 @@ class BmpBahanBakuRepository @Inject constructor(
                           "jenisBahan" to it.jenisBahan,
                           "kuantitas" to it.kuantitas,
                           "unit" to it.unit,
-                          "rate" to it.rate
+                          "rate" to it.rate,
+                          "color_mixture" to it.colorMixture
                       )
                   }
                   api.createBahanBakuItems(itemBodies)
               }
-
-              // 4. Update cashflow entry
-              val cfList = cashflowRepo.list()
-              val match = cfList.find { it.description == "Pembelian Bahan Baku: $oldNoTagihan" }
-              if (match != null) {
-                  cashflowRepo.update(match.copy(
-                      description = "Pembelian Bahan Baku: ${bahanBaku.noTagihan}",
-                      amount = bahanBaku.nominal,
-                      transactionDate = bahanBaku.tanggal
-                  ))
-              } else {
-                  cashflowRepo.createEntry(BmpCashflowData(
-                      transactionType = "KELUAR",
-                      description = "Pembelian Bahan Baku: ${bahanBaku.noTagihan}",
-                      amount = bahanBaku.nominal,
-                      transactionDate = bahanBaku.tanggal
-                  ))
-              }
-
-              // Also check and update any "Pembayaran Hutang Bahan Baku: $oldNoTagihan" cashflows!
-              if (oldNoTagihan != bahanBaku.noTagihan) {
-                  val debtMatches = cfList.filter { it.description == "Pembayaran Hutang Bahan Baku: $oldNoTagihan" }
-                  debtMatches.forEach { debtCf ->
-                      cashflowRepo.update(debtCf.copy(
-                          description = "Pembayaran Hutang Bahan Baku: ${bahanBaku.noTagihan}"
-                      ))
-                  }
-              }
-
-              cashflowRepo.refreshEntries()
 
               OnlineWriteResult.Success
           } catch (e: Exception) {
@@ -2207,24 +1719,6 @@ class BmpBahanBakuRepository @Inject constructor(
         _bahanBaku.value = snapshot.filter { it.id != id }  // optimistic: hapus dulu
         try {
             api.deleteBahanBaku(id)
-
-            // ── Business logic: delete cashflow entry ──────────────────────
-            if (target != null) {
-                val cfList = cashflowRepo.list()
-                val match = cfList.find { it.description == "Pembelian Bahan Baku: ${target.noTagihan}" }
-                if (match != null) {
-                    cashflowRepo.delete(match.id)
-                }
-
-                // Also delete payments of debt for this tagihan!
-                val debtMatches = cfList.filter { it.description == "Pembayaran Hutang Bahan Baku: ${target.noTagihan}" }
-                debtMatches.forEach { debtCf ->
-                    cashflowRepo.delete(debtCf.id)
-                }
-            }
-
-            cashflowRepo.refreshEntries()
-
             OnlineWriteResult.Success
         } catch (e: Exception) {
             _bahanBaku.value = snapshot  // rollback jika gagal
@@ -2244,15 +1738,6 @@ class BmpBahanBakuRepository @Inject constructor(
         _bahanBaku.value = snapshot.map { if (it.id == id) it.copy(nominal = amount) else it }
         try {
             api.updateBahanBaku(id, mapOf("nominal" to amount))
-            if (paymentAmount > 0.0 && target != null) {
-                cashflowRepo.createEntry(BmpCashflowData(
-                    transactionType = "KELUAR",
-                    description = "Pembayaran Hutang Bahan Baku: ${target.noTagihan}",
-                    amount = paymentAmount,
-                    transactionDate = System.currentTimeMillis()
-                ))
-                cashflowRepo.refreshEntries()
-            }
             OnlineWriteResult.Success
         } catch (e: Exception) {
             _bahanBaku.value = snapshot
@@ -2417,45 +1902,6 @@ class BmpBahanBakuRepository @Inject constructor(
                 }
                 api.createBahanBakuItems(itemBodies)
             }
-
-            // 4. Update cashflow entry
-            val cfList = cashflowRepo.list()
-            val match = cfList.find { it.description == "Pembelian Bahan Baku: $oldNoTagihan" }
-            
-            // Perhitungan nominal cashflow pembelian yang benar:
-            // nominal pembelian = (nominal baru) - (semua pembayaran hutang yang tercatat di cashflow)
-            val debtMatches = cfList.filter { it.description == "Pembayaran Hutang Bahan Baku: $oldNoTagihan" }
-            val totalPaidDebt = debtMatches.sumOf { it.amount }
-            
-            // Nominal awal pembelian yang baru = nominal baru di form - total cicilan hutang yang sudah dibayar
-            // Ini mencegah double counting karena cicilan hutang tetap tercatat di cashflow tersendiri.
-            val newInitialNominal = (entity.nominal - totalPaidDebt).coerceAtLeast(0.0)
-
-            if (match != null) {
-                cashflowRepo.update(match.copy(
-                    description = "Pembelian Bahan Baku: ${entity.noTagihan}",
-                    amount = newInitialNominal,
-                    transactionDate = entity.tanggal
-                ))
-            } else {
-                cashflowRepo.createEntry(BmpCashflowData(
-                    transactionType = "KELUAR",
-                    description = "Pembelian Bahan Baku: ${entity.noTagihan}",
-                    amount = newInitialNominal,
-                    transactionDate = entity.tanggal
-                ))
-            }
-
-            // Update nama tagihan di pembayaran hutang jika berubah
-            if (oldNoTagihan != entity.noTagihan) {
-                debtMatches.forEach { debtCf ->
-                    cashflowRepo.update(debtCf.copy(
-                        description = "Pembayaran Hutang Bahan Baku: ${entity.noTagihan}"
-                    ))
-                }
-            }
-
-            cashflowRepo.refreshEntries()
             OnlineWriteResult.Success
         } catch (e: Exception) {
             _bahanBaku.value = snapshot // rollback

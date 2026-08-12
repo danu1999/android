@@ -52,11 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.posbah.app.data.local.entities.BmpCashFlowEntity
 import com.posbah.app.data.repository.AuthRepository
-import com.posbah.app.data.repository.BmpCashFlowRepository
-import com.posbah.app.data.repository.toBmpCashflowData
-import com.posbah.app.data.repository.toBmpPaymentData
 import com.posbah.app.data.remote.api.BmpApiService
 import com.posbah.app.ui.components.PosBahTopBar
 import com.posbah.app.ui.components.StatChip
@@ -71,20 +67,31 @@ import kotlinx.coroutines.launch
 
 import android.content.Context
 
+// ── Data class pengganti BmpCashFlowEntity (Jalur 2 dihapus) ─────────────────
+data class CashFlowEntry(
+    val id: Long = 0L,
+    val tenantId: String = "",
+    val transactionType: String = "",
+    val description: String = "",
+    val amount: Double = 0.0,
+    val costType: String = "",
+    val transactionDate: Long = 0L,
+    val paymentRefId: Long? = null
+)
+
 @HiltViewModel
 class CashFlowViewModel @Inject constructor(
-    private val repo: BmpCashFlowRepository,
     private val authRepository: AuthRepository,
     private val api: BmpApiService,
     private val settingsRepo: com.posbah.app.data.repository.BmpSettingsRepository,
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
-    
+
     val currentMonth = java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.getDefault()).format(java.util.Date())
     val selectedMonth = MutableStateFlow(currentMonth)
 
-    private val _flows = MutableStateFlow<List<BmpCashFlowEntity>>(emptyList())
+    private val _flows = MutableStateFlow<List<CashFlowEntry>>(emptyList())
     val flows = _flows.asStateFlow()
 
     private val _totalIn = MutableStateFlow(0.0)
@@ -109,24 +116,6 @@ class CashFlowViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            kotlinx.coroutines.flow.combine(repo.observe(tenantId), selectedMonth) { cashflows, month ->
-                Pair(cashflows, month)
-            }.collect { (cashflows, month) ->
-                val sdf = java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.getDefault())
-                val filtered = cashflows.filter {
-                    try {
-                        sdf.format(java.util.Date(it.transactionDate)) == month
-                    } catch (_: Exception) {
-                        false
-                    }
-                }
-                _flows.value = filtered
-                _totalIn.value = filtered.filter { it.transactionType == "MASUK" }.sumOf { it.amount }
-                _totalOut.value = filtered.filter { it.transactionType == "KELUAR" }.sumOf { it.amount }
-            }
-        }
-
-        viewModelScope.launch {
             selectedMonth.collect { month ->
                 refreshCashFlow(month)
             }
@@ -135,11 +124,15 @@ class CashFlowViewModel @Inject constructor(
 
     fun refreshCashFlow(month: String) = viewModelScope.launch {
         try {
-            repo.refresh()
+            // Cashflow modul Jalur 2 telah dihapus — data payment masih bisa dimuat
             val paymentsResp = api.getPayments()
             if (paymentsResp.isSuccessful) {
-                val paymentList = paymentsResp.body()?.map { it.toBmpPaymentData() } ?: emptyList()
-                _paymentToInvoice.value = paymentList.associate { it.id to it.invoiceId }
+                val paymentList = paymentsResp.body() ?: emptyList()
+                _paymentToInvoice.value = paymentList.mapNotNull { p ->
+                    val paymentId = (p["id"] as? Number)?.toLong() ?: return@mapNotNull null
+                    val invoiceId = (p["invoiceId"] as? Number)?.toLong() ?: return@mapNotNull null
+                    paymentId to invoiceId
+                }.toMap()
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -154,49 +147,26 @@ class CashFlowViewModel @Inject constructor(
         transactionDate: Long = System.currentTimeMillis()
     ) = viewModelScope.launch {
         if (desc.isBlank() || amount <= 0) return@launch
-        repo.insert(
-            BmpCashFlowEntity(
-                tenantId = tenantId,
-                transactionDate = transactionDate,
-                transactionType = type,
-                description = desc,
-                amount = amount,
-                costType = if (type == "MASUK") "OPERATING_EXPENSE" else costType
-            )
+        val entry = CashFlowEntry(
+            id = -System.currentTimeMillis(),
+            tenantId = tenantId,
+            transactionDate = transactionDate,
+            transactionType = type,
+            description = desc,
+            amount = amount,
+            costType = if (type == "MASUK") "OPERATING_EXPENSE" else costType
         )
+        _flows.value = _flows.value + entry
+        _totalIn.value = _flows.value.filter { it.transactionType == "MASUK" }.sumOf { it.amount }
+        _totalOut.value = _flows.value.filter { it.transactionType == "KELUAR" }.sumOf { it.amount }
     }
 
     fun postMonthlyOverhead() = viewModelScope.launch {
         val s = _settings.value ?: return@launch
         val totalGaji = s.jumlahKaryawan * s.gajiHarian * s.hariKerjaSebulan
-        
-        // 1. Post Gaji Karyawan
-        if (totalGaji > 0) {
-            repo.insert(
-                BmpCashFlowEntity(
-                    tenantId = tenantId,
-                    transactionDate = System.currentTimeMillis(),
-                    transactionType = "KELUAR",
-                    description = "Gaji Karyawan Bulanan (Rutin)",
-                    amount = totalGaji,
-                    costType = "DIRECT_LABOR"
-                )
-            )
-        }
-        // 2. Post Listrik Bulanan
-        if (s.listrikBulanan > 0) {
-            repo.insert(
-                BmpCashFlowEntity(
-                    tenantId = tenantId,
-                    transactionDate = System.currentTimeMillis(),
-                    transactionType = "KELUAR",
-                    description = "Listrik Bulanan (Rutin)",
-                    amount = s.listrikBulanan,
-                    costType = "FACTORY_OVERHEAD"
-                )
-            )
-        }
-        refreshCashFlow(selectedMonth.value)
+
+        if (totalGaji > 0) insert("KELUAR", "Gaji Karyawan Bulanan (Rutin)", totalGaji, "DIRECT_LABOR")
+        if (s.listrikBulanan > 0) insert("KELUAR", "Listrik Bulanan (Rutin)", s.listrikBulanan, "FACTORY_OVERHEAD")
     }
 }
 

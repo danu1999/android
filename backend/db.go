@@ -791,6 +791,12 @@ func initSchema() error {
 		`ALTER TABLE "bmp_settings" ADD COLUMN IF NOT EXISTS "attendanceMode" VARCHAR(50) DEFAULT 'SUPERVISOR';`,
 		`ALTER TABLE "bmp_settings" ADD COLUMN IF NOT EXISTS "fingerprintIp" VARCHAR(50) DEFAULT '';`,
 		`ALTER TABLE "bmp_settings" ADD COLUMN IF NOT EXISTS "fingerprintPort" VARCHAR(10) DEFAULT '4370';`,
+
+		// Jalur 2 cleanup: Hapus tabel cashflow, payroll, depreciation, dan assets yang tidak lagi digunakan
+		`DROP TABLE IF EXISTS "bmp_cashflow";`,
+		`DROP TABLE IF EXISTS "bmp_payrolls";`,
+		`DROP TABLE IF EXISTS "bmp_monthly_depreciation";`,
+		`DROP TABLE IF EXISTS "bmp_assets";`,
 	}
 
 	for _, q := range migrationQueries {

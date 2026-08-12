@@ -14,7 +14,6 @@ import com.posbah.app.data.local.entities.BmpSettingsEntity
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpClientRepository
 import com.posbah.app.data.repository.BmpInvoiceRepository
-import com.posbah.app.data.repository.BmpCashFlowRepository
 import com.posbah.app.data.repository.BmpMachineRepository
 import com.posbah.app.data.repository.BmpMasterProductRepository
 import com.posbah.app.data.repository.BmpSettingsRepository
@@ -198,7 +197,6 @@ class InvoiceDetailViewModel @Inject constructor(
     private val settingsRepo: BmpSettingsRepository,
     private val printSettingsRepo: PrintSettingsRepository,
     private val authRepository: AuthRepository,
-    private val cashflowRepo: BmpCashFlowRepository,
     // v2.19.30: untuk telemetri sisa RAM perangkat
     private val priceTrackingRepo: com.posbah.app.data.repository.BmpPriceTrackingRepository,
     savedState: SavedStateHandle
@@ -305,12 +303,6 @@ class InvoiceDetailViewModel @Inject constructor(
             } else if (result is com.posbah.app.data.repository.OnlineWriteResult.NoConnection) {
                 _ui.update { it.copy(pollingError = "Tidak ada koneksi internet.") }
                 return@launch
-            }
-            // Eksekusi pemanggilan fungsi fetch ulang untuk CashFlow secara paralel
-            launch {
-                try {
-                    cashflowRepo.fetchCashFlowFromNetwork()
-                } catch (_: Exception) {}
             }
             val inv = invoiceRepo.getById(invoiceId)
             _ui.update { it.copy(invoice = inv, showAddPayment = false, newPaymentAmount = "") }

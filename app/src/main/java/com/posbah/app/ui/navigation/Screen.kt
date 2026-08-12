@@ -35,12 +35,10 @@ sealed class Screen(val route: String) {
         fun build(id: Long? = null) = "bmp/products/edit?id=${id ?: -1}"
     }
     object BmpPayments : Screen("bmp/payments")
-    object BmpCashFlow : Screen("bmp/cashflow")
     object BmpEmployees : Screen("bmp/employees")
     object BmpEmployeeEdit : Screen("bmp/employees/edit?id={id}") {
         fun build(id: Long? = null) = "bmp/employees/edit?id=${id ?: -1}"
     }
-    object BmpPayroll : Screen("bmp/payroll")
     object BmpSettings : Screen("bmp/settings")
     object PrintSettings : Screen("print/settings/{moduleKey}") {
         fun build(moduleKey: String) = "print/settings/$moduleKey"

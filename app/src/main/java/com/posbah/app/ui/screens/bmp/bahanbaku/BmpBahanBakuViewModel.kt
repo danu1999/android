@@ -7,8 +7,6 @@ import com.posbah.app.data.local.entities.BmpBahanBakuEntity
 import com.posbah.app.data.local.entities.BmpBahanBakuItemEntity
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpBahanBakuRepository
-import com.posbah.app.data.repository.BmpCashFlowRepository
-import com.posbah.app.data.repository.BmpCashflowData
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,8 +24,7 @@ import kotlinx.coroutines.launch
 class BahanBakuListViewModel @Inject constructor(
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     private val repo: BmpBahanBakuRepository,
-    private val authRepo: AuthRepository,
-    private val cashFlowRepo: BmpCashFlowRepository
+    private val authRepo: AuthRepository
 ) : ViewModel() {
     private val tenantId = authRepo.activeTenantId().orEmpty()
 

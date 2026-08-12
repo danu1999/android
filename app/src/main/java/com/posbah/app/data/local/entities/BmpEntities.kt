@@ -117,20 +117,6 @@ data class BmpInvoicePaymentEntity(
     val createdAt: Long = System.currentTimeMillis()
 )
 
-data class BmpCashFlowEntity(
-    val id: Long = 0,
-    val tenantId: String,
-    val outletId: Long? = null,
-    val transactionDate: Long,
-    val transactionType: String,
-    val description: String,
-    val amount: Double = 0.0,
-    val costType: String = "OPERATING_EXPENSE",
-    val paymentRefId: Long? = null,
-    val isSynced: Boolean = false,
-    val isDeleted: Boolean = false,
-    val createdAt: Long = System.currentTimeMillis()
-)
 
 data class BmpSettingsEntity(
     val id: Long = 0,
@@ -173,19 +159,6 @@ data class BmpEmployeeEntity(
     val isSynced: Boolean = false
 )
 
-data class BmpPayrollEntity(
-    val id: String = java.util.UUID.randomUUID().toString(),
-    val tenantId: String,
-    val outletId: Long? = null,
-    val employeeId: Long,
-    val paymentDate: Long,
-    val amount: Double,
-    val attendanceCount: Int = 0,
-    val dailyRate: Double,
-    val description: String? = null,
-    val isSynced: Boolean = false,
-    val createdAt: Long = System.currentTimeMillis()
-)
 
 data class BmpBahanBakuEntity(
     val id: Long = 0,

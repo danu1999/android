@@ -620,7 +620,6 @@ class CustomerRepository @Inject constructor(
 class TransactionRepository @Inject constructor(
     private val api: PosApiService,
     private val securePrefs: SecurePreferences,
-    private val cashflowRepo: BmpCashFlowRepository,
     private val targetRepo: ProductDailyTargetRepository
 ) {
     private val tenantId get() = securePrefs.currentTenantId ?: ""
@@ -924,20 +923,6 @@ class TransactionRepository @Inject constructor(
                         }
                     }
                 }
-
-                // Sync to Cashflow
-                val isExpense = transaction.type == "EXPENSE"
-                val cfType = if (isExpense) "KELUAR" else "MASUK"
-                val cfDesc = if (isExpense) "Pengeluaran: $receiptNum" else "Penjualan: $receiptNum"
-                val cfAmount = if (isExpense) Math.abs(transaction.totalAmount) else transaction.totalAmount
-                cashflowRepo.createEntry(
-                    BmpCashflowData(
-                        transactionType = cfType,
-                        description = cfDesc,
-                        amount = cfAmount,
-                        transactionDate = transaction.date
-                    )
-                )
             }
 
             val savedTx = tempTx.copy(id = newId)
@@ -973,20 +958,6 @@ class TransactionRepository @Inject constructor(
                 _transactions.value = snapshot
                 return@withContext
             }
-
-            // Sync to Cashflow
-            val isExpense = updatedTx.type == "EXPENSE"
-            val cfType = if (isExpense) "KELUAR" else "MASUK"
-            val cfDesc = if (isExpense) "Pengeluaran: ${updatedTx.receiptNumber}" else "Penjualan: ${updatedTx.receiptNumber}"
-            val cfAmount = if (isExpense) Math.abs(updatedTx.totalAmount) else updatedTx.totalAmount
-            cashflowRepo.createEntry(
-                BmpCashflowData(
-                    transactionType = cfType,
-                    description = cfDesc,
-                    amount = cfAmount,
-                    transactionDate = updatedTx.date
-                )
-            )
         } catch (_: Exception) {
             _transactions.value = snapshot
         }
@@ -1005,13 +976,6 @@ class TransactionRepository @Inject constructor(
             if (!resp.isSuccessful) {
                 _transactions.value = snapshot
                 return@withContext
-            }
-
-            // Sync to Cashflow: delete matching entry
-            val cfList = cashflowRepo.list()
-            val match = cfList.find { it.description.contains(tx.receiptNumber) }
-            if (match != null) {
-                cashflowRepo.delete(match.id)
             }
 
             if (tx.status == "COMPLETED") {
@@ -1038,13 +1002,6 @@ class TransactionRepository @Inject constructor(
 
         val productSnapshot = productRepo.products.value
         try {
-            // Sync to Cashflow: delete matching entry
-            val cfList = cashflowRepo.list()
-            val match = cfList.find { it.description.contains(tx.receiptNumber) }
-            if (match != null) {
-                cashflowRepo.delete(match.id)
-            }
-
             if (tx.status == "COMPLETED" && tx.type != "EXPENSE") {
                 val items = listItemsForTransaction(id)
                 items.forEach { item ->
@@ -1083,35 +1040,6 @@ class TransactionRepository @Inject constructor(
             if (!resp.isSuccessful) {
                 _transactions.value = snapshot
                 return@withContext
-            }
-
-            // Sync to Cashflow: update or delete or create matching entry
-            val cfList = cashflowRepo.list()
-            val match = cfList.find { it.description.contains(tx.receiptNumber) }
-            if (match != null) {
-                if (tx.status == "COMPLETED") {
-                    val isExpense = tx.type == "EXPENSE"
-                    val cfAmount = if (isExpense) Math.abs(tx.totalAmount) else tx.totalAmount
-                    cashflowRepo.update(match.copy(
-                        amount = cfAmount,
-                        transactionDate = tx.date
-                    ))
-                } else {
-                    cashflowRepo.delete(match.id)
-                }
-            } else if (tx.status == "COMPLETED") {
-                val isExpense = tx.type == "EXPENSE"
-                val cfType = if (isExpense) "KELUAR" else "MASUK"
-                val cfDesc = if (isExpense) "Pengeluaran: ${tx.receiptNumber}" else "Penjualan: ${tx.receiptNumber}"
-                val cfAmount = if (isExpense) Math.abs(tx.totalAmount) else tx.totalAmount
-                cashflowRepo.createEntry(
-                    BmpCashflowData(
-                        transactionType = cfType,
-                        description = cfDesc,
-                        amount = cfAmount,
-                        transactionDate = tx.date
-                    )
-                )
             }
         } catch (_: Exception) {
             _transactions.value = snapshot

@@ -90,24 +90,6 @@ interface BmpApiService {
     @DELETE("api/rt/bmp/molds/{id}")
     suspend fun deleteMold(@Path("id") id: Long): Response<Map<String, Any?>>
 
-    // ── Cashflow ──────────────────────────────────────────────────────────────
-    @GET("api/rt/bmp/cashflow")
-    suspend fun getCashflow(): Response<List<Map<String, Any?>>>
-
-    @GET("api/rt/bmp/cashflow")
-    suspend fun getCashFlow(
-        @Query("tenantId") tenantId: String,
-        @Query("month") month: String
-    ): Response<List<Map<String, Any?>>>
-
-    @POST("api/rt/bmp/cashflow")
-    suspend fun createCashflow(@Body body: Map<String, Any?>): Response<Map<String, Any?>>
-
-    @PUT("api/rt/bmp/cashflow/{id}")
-    suspend fun updateCashflow(@Path("id") id: Long, @Body body: Map<String, Any?>): Response<Map<String, Any?>>
-
-    @DELETE("api/rt/bmp/cashflow/{id}")
-    suspend fun deleteCashflow(@Path("id") id: Long): Response<Map<String, Any?>>
 
     // ── Payments (Invoice Payments) ───────────────────────────────────────────
     @GET("api/rt/bmp/payments")
@@ -135,18 +117,6 @@ interface BmpApiService {
     @DELETE("api/rt/bmp/employees/{id}")
     suspend fun deleteBmpEmployee(@Path("id") id: Long): Response<Map<String, Any?>>
 
-    // ── Payrolls ──────────────────────────────────────────────────────────────
-    @GET("api/rt/bmp/payrolls")
-    suspend fun getPayrolls(): Response<List<Map<String, Any?>>>
-
-    @POST("api/rt/bmp/payrolls")
-    suspend fun createPayroll(@Body body: Map<String, Any?>): Response<Map<String, Any?>>
-
-    @PUT("api/rt/bmp/payrolls/{id}")
-    suspend fun updatePayroll(@Path("id") id: String, @Body body: Map<String, Any?>): Response<Map<String, Any?>>
-
-    @DELETE("api/rt/bmp/payrolls/{id}")
-    suspend fun deletePayroll(@Path("id") id: String): Response<Map<String, Any?>>
 
     // ── Bahan Baku (Raw Materials) ────────────────────────────────────────────
     @GET("api/rt/bmp/bahan-baku")
@@ -218,16 +188,6 @@ interface BmpApiService {
         @Query("periodType") periodType: String,
         @Query("date") date: String
     ): Response<okhttp3.ResponseBody>
-
-    @GET("api/rt/bmp/reports/depreciation")
-    suspend fun getDepreciation(
-        @Query("period") period: String
-    ): Response<Map<String, Any?>>
-
-    @POST("api/rt/bmp/reports/depreciation")
-    suspend fun saveDepreciation(
-        @Body body: Map<String, Any?>
-    ): Response<Map<String, Any?>>
 
     // ── Price Tracking (v2.19.26) ─────────────────────────────────────────────
     @GET("api/rt/bmp/client-prices")

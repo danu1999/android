@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpBahanBakuRepository
-import com.posbah.app.data.repository.BmpCashFlowRepository
 import com.posbah.app.data.repository.BmpClientRepository
 import com.posbah.app.data.repository.BmpInvoiceRepository
 import com.posbah.app.data.repository.BmpMasterProductRepository
@@ -34,11 +33,6 @@ data class DashboardKpiData(
     val productionThisMonth: Int
 )
 
-data class BmpCashFlowDataPoint(
-    val dateLabel: String,
-    val inAmount: Double,
-    val outAmount: Double
-)
 
 data class BmpDashboardUiState(
     val tenantId: String? = null,
@@ -49,13 +43,6 @@ data class BmpDashboardUiState(
     val invoiceCount: Int = 0,
     val totalAmount: Double = 0.0,
     val totalOutstanding: Double = 0.0,
-    val totalIn: Double = 0.0,
-    val totalOut: Double = 0.0,
-    val nonoTotalHarga: Double = 0.0,    // Total nilai bahan baku masuk (termasuk hutang)
-    val nonoTotalNominal: Double = 0.0,  // Total kas yang dibayarkan ke supplier
-    val saldoKasRiil: Double = 0.0,      // totalIn - totalOut - nonoTotalNominal
-    val simulasiSaldo: Double = 0.0,     // totalAmount - nonoTotalHarga - totalOut
-    val cashFlowHistory: List<BmpCashFlowDataPoint> = emptyList(),
     val kpiState: UiState<DashboardKpiData> = UiState.Loading,
     val isLoading: Boolean = true
 )
@@ -65,7 +52,6 @@ class BmpDashboardViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val clientRepo: BmpClientRepository,
     private val invoiceRepo: BmpInvoiceRepository,
-    private val cashFlowRepo: BmpCashFlowRepository,
     private val bahanBakuRepo: BmpBahanBakuRepository,
     private val productRepo: BmpMasterProductRepository,
     private val stockRepo: BmpStockRepository,
@@ -201,7 +187,7 @@ class BmpDashboardViewModel @Inject constructor(
             // Sync data utama dengan notifikasi progress ala WhatsApp migration
             viewModelScope.launch {
                 try {
-                    val totalSteps = 4
+                    val totalSteps = 3
                     DataSyncForegroundService.startSync(
                         context,
                         initialTitle = "POSBah — Memperbarui Data",
@@ -229,22 +215,12 @@ class BmpDashboardViewModel @Inject constructor(
                     clientRepo.refresh()
                     delay(400)
 
-                    // Step 3: Arus Kas
+                    // Step 3: Bahan Baku
                     DataSyncForegroundService.updateProgress(
                         context,
                         title = "POSBah — Memperbarui Data",
-                        message = "Mengunduh Arus Kas... (3/$totalSteps)",
+                        message = "Mengunduh Bahan Baku... (3/$totalSteps)",
                         progress = 3, maxProgress = totalSteps
-                    )
-                    cashFlowRepo.refresh()
-                    delay(400)
-
-                    // Step 4: Bahan Baku
-                    DataSyncForegroundService.updateProgress(
-                        context,
-                        title = "POSBah — Memperbarui Data",
-                        message = "Mengunduh Bahan Baku... (4/$totalSteps)",
-                        progress = 4, maxProgress = totalSteps
                     )
                     bahanBakuRepo.refresh()
                     delay(400)
@@ -285,69 +261,11 @@ class BmpDashboardViewModel @Inject constructor(
                         totalAmount = totals.first,
                         totalOutstanding = totals.second
                     )
-                    recalcSaldo()
-                }
-            }
-            viewModelScope.launch {
-                cashFlowRepo.observe(tenantId).collect { cashflows ->
-                    val totalIn = cashflows.filter { it.transactionType == "MASUK" }.sumOf { it.amount }
-                    val totalOut = if (userEmail == "bahteramulyap@gmail.com") {
-                        cashflows.filter { 
-                            it.transactionType == "KELUAR" && 
-                            !it.description.contains("Nono", ignoreCase = true) 
-                        }.sumOf { it.amount }
-                    } else {
-                        cashflows.filter { it.transactionType == "KELUAR" }.sumOf { it.amount }
-                    }
-                    _ui.value = _ui.value.copy(totalIn = totalIn, totalOut = totalOut)
-                    recalcSaldo()
-                }
-            }
-            viewModelScope.launch {
-                combine(
-                    bahanBakuRepo.totalHarga(tenantId),
-                    bahanBakuRepo.totalNominal(tenantId)
-                ) { h, n -> h to n }.collect { (h, n) ->
-                    _ui.value = _ui.value.copy(nonoTotalHarga = h, nonoTotalNominal = n)
-                    recalcSaldo()
-                }
-            }
-            viewModelScope.launch {
-                cashFlowRepo.observe(tenantId).collect { cashflows ->
-                    val sdfKey = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
-                    val sdfLabel = java.text.SimpleDateFormat("dd/MM", java.util.Locale.getDefault())
-                    val last7Days = (0..6).map { offset ->
-                        val cal = java.util.Calendar.getInstance()
-                        cal.add(java.util.Calendar.DAY_OF_YEAR, -offset)
-                        cal.time
-                    }.reversed()
-                    
-                    val grouped = cashflows.groupBy { sdfKey.format(java.util.Date(it.transactionDate)) }
-                    val points = last7Days.map { date ->
-                        val key = sdfKey.format(date)
-                        val label = sdfLabel.format(date)
-                        val entries = grouped[key] ?: emptyList()
-                        val inAmt = entries.filter { it.transactionType == "MASUK" }.sumOf { it.amount }
-                        val outAmt = entries.filter { it.transactionType == "KELUAR" }.sumOf { it.amount }
-                        BmpCashFlowDataPoint(
-                            dateLabel = label,
-                            inAmount = inAmt,
-                            outAmount = outAmt
-                        )
-                    }
-                    _ui.value = _ui.value.copy(cashFlowHistory = points)
                 }
             }
         }
     }
 
-    private fun recalcSaldo() {
-        val s = _ui.value
-        _ui.value = s.copy(
-            saldoKasRiil = s.totalIn - s.totalOut - s.nonoTotalNominal,
-            simulasiSaldo = s.totalAmount - s.nonoTotalHarga - s.totalOut
-        )
-    }
 
     fun logout(onDone: () -> Unit) {
         viewModelScope.launch {

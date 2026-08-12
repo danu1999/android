@@ -60,17 +60,10 @@ data class FinancialReportUiState(
     val omzet: Double = 0.0,
     val cogs: Double = 0.0,
     val labaKotor: Double = 0.0,
-    val opex: Double = 0.0,
-    val labaBersih: Double = 0.0,
-    val bep: Double = 0.0,
     val cogsPercentage: Double = 0.0,
     val marginPercentage: Double = 0.0,
     val topProducts: List<TopProductReport> = emptyList(),
     val directMaterials: Double = 0.0,
-    val directLabor: Double = 0.0,
-    val foh: Double = 0.0,
-    val cogm: Double = 0.0,
-    val depreciation: Double = 0.0,
     val isLoading: Boolean = false,
     val error: String? = null,
     val warnings: List<String> = emptyList()
@@ -173,17 +166,10 @@ class FinancialAnalysisViewModel @Inject constructor(
                         omzet = (body["omzet"] as? Number)?.toDouble() ?: 0.0,
                         cogs = (body["cogs"] as? Number)?.toDouble() ?: 0.0,
                         labaKotor = (body["labaKotor"] as? Number)?.toDouble() ?: 0.0,
-                        opex = (body["opex"] as? Number)?.toDouble() ?: 0.0,
-                        labaBersih = (body["labaBersih"] as? Number)?.toDouble() ?: 0.0,
-                        bep = (body["bep"] as? Number)?.toDouble() ?: 0.0,
                         cogsPercentage = (body["cogsPercentage"] as? Number)?.toDouble() ?: 0.0,
                         marginPercentage = (body["marginPercentage"] as? Number)?.toDouble() ?: 0.0,
                         topProducts = topProductsList,
                         directMaterials = (body["directMaterials"] as? Number)?.toDouble() ?: 0.0,
-                        directLabor = (body["directLabor"] as? Number)?.toDouble() ?: 0.0,
-                        foh = (body["foh"] as? Number)?.toDouble() ?: 0.0,
-                        cogm = (body["cogm"] as? Number)?.toDouble() ?: 0.0,
-                        depreciation = (body["depreciation"] as? Number)?.toDouble() ?: 0.0,
                         isLoading = false,
                         warnings = warningsList
                     )
@@ -197,17 +183,7 @@ class FinancialAnalysisViewModel @Inject constructor(
         }
     }
 
-    fun saveDepreciation(amount: Double) = viewModelScope.launch {
-        try {
-            val period = _uiState.value.date
-            val resp = api.saveDepreciation(mapOf("period" to period, "amount" to amount))
-            if (resp.isSuccessful) {
-                fetchReport()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
+
 
     fun exportExcel() = viewModelScope.launch {
         val state = _uiState.value
@@ -283,8 +259,7 @@ fun FinancialAnalysisScreen(
         return
     }
 
-    var showDepreciationDialog by remember { mutableStateOf(false) }
-    var editDepreciationValue by remember { mutableStateOf("") }
+
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -414,35 +389,15 @@ fun FinancialAnalysisScreen(
                 // Summary Metric Cards
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Box(modifier = Modifier.weight(1f)) {
-                                FinancialStatCard(
-                                    title = "Omzet (Kotor)",
-                                    value = Formatters.rupiah(state.omzet),
-                                    icon = Icons.Outlined.TrendingUp,
-                                    color = Color(0xFF10B981)
-                                )
-                            }
-                            Box(modifier = Modifier.weight(1f)) {
-                                FinancialStatCard(
-                                    title = "Laba Bersih",
-                                    value = Formatters.rupiah(state.labaBersih),
-                                    icon = if (state.labaBersih >= 0) Icons.Outlined.MonetizationOn else Icons.Outlined.TrendingDown,
-                                    color = if (state.labaBersih >= 0) Color(0xFF3B82F6) else MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
                         FinancialStatCard(
-                            title = "Break-Even Point (BEP)",
-                            value = Formatters.rupiah(state.bep),
-                            icon = Icons.Outlined.Shield,
-                            color = Color(0xFFF59E0B),
+                            title = "Omzet (Kotor)",
+                            value = Formatters.rupiah(state.omzet),
+                            icon = Icons.Outlined.TrendingUp,
+                            color = Color(0xFF10B981),
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
                 }
-
-                // Cost Breakdown Visual representation
                 item {
                     Card(
                         shape = RoundedCornerShape(16.dp),
@@ -456,12 +411,10 @@ fun FinancialAnalysisScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(Modifier.height(16.dp))
-                            
-                            // Visual horizontal progress representation
+
                             val total = state.omzet
                             val cogsRatio = if (total > 0) (state.cogs / total).toFloat() else 0f
-                            val opexRatio = if (total > 0) (state.opex / total).toFloat() else 0f
-                            
+
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -482,15 +435,7 @@ fun FinancialAnalysisScreen(
                                             )
                                     )
                                 }
-                                if (opexRatio > 0) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxHeight()
-                                            .fillMaxWidth(opexRatio)
-                                            .background(color = Color(0xFFF59E0B))
-                                    )
-                                }
-                                if (total > 0 && state.labaBersih > 0) {
+                                if (total > 0 && state.labaKotor > 0) {
                                     Box(
                                         modifier = Modifier
                                             .fillMaxHeight()
@@ -503,17 +448,14 @@ fun FinancialAnalysisScreen(
                                 }
                             }
                             Spacer(Modifier.height(16.dp))
-                            // Legend
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 LegendItem(color = Color(0xFFEF4444), label = "HPP / COGS", value = "${String.format("%.1f", state.cogsPercentage)}%")
-                                LegendItem(color = Color(0xFFF59E0B), label = "Beban Usaha / OPEX", value = "${String.format("%.1f", if (total > 0) (state.opex/total)*100 else 0.0)}%")
-                                LegendItem(color = Color(0xFF10B981), label = "Margin Bersih", value = "${String.format("%.1f", if (total > 0) (state.labaBersih/total)*100 else 0.0)}%")
+                                LegendItem(color = Color(0xFF10B981), label = "Laba Kotor", value = "${String.format("%.1f", state.marginPercentage)}%")
                             }
                         }
                     }
                 }
 
-                // Financial statement P&L table
                 item {
                     Card(
                         shape = RoundedCornerShape(16.dp),
@@ -527,89 +469,21 @@ fun FinancialAnalysisScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(Modifier.height(12.dp))
-                            
+
                             ReportLine("OMZET PENJUALAN", Formatters.rupiah(state.omzet), isHeader = true)
                             ReportLine("Harga Pokok Penjualan (COGS)", "- ${Formatters.rupiah(state.cogs)}")
                             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                            ReportLine("LABA KOTOR (Gross Profit)", Formatters.rupiah(state.labaKotor), isBold = true)
-                            ReportLine("Beban Operasional (OPEX)", "- ${Formatters.rupiah(state.opex)}")
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                             ReportLine(
-                                label = "LABA BERSIH (Net Profit)", 
-                                value = Formatters.rupiah(state.labaBersih), 
+                                label = "LABA KOTOR (Gross Profit)",
+                                value = Formatters.rupiah(state.labaKotor),
                                 isHeader = true,
-                                valueColor = if (state.labaBersih >= 0) Color(0xFF10B981) else Color(0xFFEF4444)
+                                valueColor = if (state.labaKotor >= 0) Color(0xFF10B981) else Color(0xFFEF4444)
                             )
                         }
                     }
                 }
 
-                // Harga Pokok Produksi (COGM) card
-                item {
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = "Harga Pokok Produksi (COGM)",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(Modifier.height(12.dp))
-                            
-                            ReportLine("Bahan Baku Langsung Terpakai", Formatters.rupiah(state.directMaterials))
-                            ReportLine("Tenaga Kerja Langsung", Formatters.rupiah(state.directLabor))
-                            
-                            val overheadKas = state.foh - state.depreciation
-                            ReportLine("Overhead Kas (Listrik/Oli dll)", Formatters.rupiah(overheadKas))
-                            
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Penyusutan Mesin (Manual)",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = Formatters.rupiah(state.depreciation),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Normal,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        text = "Ubah",
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier
-                                            .clickable {
-                                                editDepreciationValue = if (state.depreciation <= 0.0) "" else state.depreciation.toLong().toString()
-                                                showDepreciationDialog = true
-                                            }
-                                            .padding(horizontal = 4.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
-                            
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                            ReportLine(
-                                label = "TOTAL HARGA POKOK PRODUKSI", 
-                                value = Formatters.rupiah(state.cogm), 
-                                isHeader = true,
-                                valueColor = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                }
+
 
                 // Top Selling products rank
                 if (state.topProducts.isNotEmpty()) {
@@ -658,39 +532,7 @@ fun FinancialAnalysisScreen(
         }
     }
 
-    if (showDepreciationDialog) {
-        AlertDialog(
-            onDismissRequest = { showDepreciationDialog = false },
-            title = { Text("Ubah Penyusutan Mesin") },
-            text = {
-                Column {
-                    Text("Masukkan total nilai penyusutan mesin untuk periode ${state.periodLabel}.", style = MaterialTheme.typography.bodySmall)
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = editDepreciationValue,
-                        onValueChange = { editDepreciationValue = it },
-                        label = { Text("Penyusutan (Rp)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth().testTag("input-depreciation-amount")
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val value = editDepreciationValue.replace(",", ".").toDoubleOrNull() ?: 0.0
-                        viewModel.saveDepreciation(value)
-                        showDepreciationDialog = false
-                    },
-                    modifier = Modifier.testTag("btn-confirm-depreciation")
-                ) { Text("Simpan", fontWeight = FontWeight.Bold) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDepreciationDialog = false }) { Text("Batal") }
-            }
-        )
-    }
+
 }
 
 @Composable

@@ -11,12 +11,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 )
+
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -492,7 +492,6 @@ func handleMigrationVerifyTable(w http.ResponseWriter, r *http.Request) {
 		"bmp_clients": true, "bmp_master_products": true, "bmp_settings": true,
 		"bmp_employees": true, "print_settings": true,
 		"transactions": true, "bmp_invoices": true, "bmp_bahan_baku": true,
-		"bmp_cashflow": true, "bmp_payrolls": true,
 		"transaction_items": true, "bmp_products": true, "bmp_invoice_payments": true,
 		"bmp_bahan_baku_item": true, "bmp_product_stocks": true,
 		"bmp_stock_ledger": true, "bmp_production_logs": true, "activity_logs": true,
@@ -1025,41 +1024,7 @@ func handleRtBmpMasterProductsById(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func handleRtBmpCashflow(w http.ResponseWriter, r *http.Request) {
-	tenantId, ok := extractTenantId(r)
-	if !ok { jsonErr(w, 401, "unauthorized"); return }
-	switch r.Method {
-	case http.MethodGet:
-		rows, _ := db.Query(`SELECT * FROM bmp_cashflow WHERE "tenantId"=$1 AND "isDeleted"=FALSE ORDER BY "transactionDate" DESC`, tenantId)
-		defer rows.Close(); jsonOK(w, rowsToJSON(rows))
-	case http.MethodPost:
-		var body map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&body); body["tenantId"] = tenantId
-		id, err := insertRow("bmp_cashflow", body)
-		if err != nil { jsonErr(w, 500, err.Error()); return }
-		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
-	default:
-		jsonErr(w, 405, "method not allowed")
-	}
-}
-
-func handleRtBmpCashflowById(w http.ResponseWriter, r *http.Request) {
-	tenantId, ok := extractTenantId(r)
-	if !ok { jsonErr(w, 401, "unauthorized"); return }
-	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/bmp/cashflow/")
-	id, _ := strconv.ParseInt(idStr, 10, 64)
-	switch r.Method {
-	case http.MethodPut:
-		var body map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&body)
-		updateRow("bmp_cashflow", id, tenantId, body); jsonOK(w, map[string]interface{}{"ok": true})
-	case http.MethodDelete:
-		db.Exec(`UPDATE bmp_cashflow SET "isDeleted"=TRUE WHERE id=$1 AND "tenantId"=$2`, id, tenantId)
-		jsonOK(w, map[string]interface{}{"ok": true})
-	default:
-		jsonErr(w, 405, "method not allowed")
-	}
-}
+// handleRtBmpCashflow dan handleRtBmpCashflowById dihapus (Jalur 2 removed — v2.20.0)
 
 func handleRtBmpPayments(w http.ResponseWriter, r *http.Request) {
 	tenantId, ok := extractTenantId(r)
@@ -1073,44 +1038,6 @@ func handleRtBmpPayments(w http.ResponseWriter, r *http.Request) {
 		json.NewDecoder(r.Body).Decode(&body); body["tenantId"] = tenantId
 		id, err := insertRow("bmp_invoice_payments", body)
 		if err != nil { jsonErr(w, 500, err.Error()); return }
-
-		// Otomatis catat kas masuk ke bmp_cashflow
-		invoiceIdVal := body["invoiceId"]
-		var invoiceNum string
-		if invoiceIdVal != nil {
-			_ = db.QueryRow(`SELECT "number" FROM bmp_invoices WHERE id=$1 AND "tenantId"=$2`, invoiceIdVal, tenantId).Scan(&invoiceNum)
-		}
-		desc := "Penerimaan Pembayaran Invoice"
-		if invoiceNum != "" {
-			desc = "Penerimaan Pembayaran Invoice #" + invoiceNum
-		}
-
-		txDate := nowMillis()
-		if pDate, ok := body["paymentDate"].(float64); ok {
-			txDate = int64(pDate)
-		}
-		amountVal := 0.0
-		if pAmount, ok := body["paymentAmount"].(float64); ok {
-			amountVal = pAmount
-		}
-
-		cfBody := map[string]interface{}{
-			"tenantId":           tenantId,
-			"transactionDate":    txDate,
-			"transactionType":    "MASUK",
-			"description":        desc,
-			"amount":             amountVal,
-			"costType":           "OPERATING_EXPENSE",
-			"paymentRefId":       id,
-			"invoice_payment_id": id,
-			"cost_center":        "OPERATIONAL_OPEX",
-			"createdAt":          nowMillis(),
-			"isDeleted":          false,
-		}
-		_, errCf := insertRow("bmp_cashflow", cfBody)
-		if errCf != nil {
-			log.Printf("[Warning] Gagal mencatat arus kas otomatis: %v", errCf)
-		}
 
 		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
 	default:
@@ -1128,11 +1055,6 @@ func handleRtBmpPaymentsById(w http.ResponseWriter, r *http.Request) {
 		_, err := db.Exec(`UPDATE bmp_invoice_payments SET "isDeleted"=TRUE WHERE id=$1 AND "tenantId"=$2`, id, tenantId)
 		if err != nil { jsonErr(w, 500, err.Error()); return }
 
-		// Otomatis hapus arus kas terkait
-		_, errCf := db.Exec(`UPDATE bmp_cashflow SET "isDeleted"=TRUE WHERE ("paymentRefId"=$1 OR "invoice_payment_id"=$1) AND "tenantId"=$2`, id, tenantId)
-		if errCf != nil {
-			log.Printf("[Warning] Gagal menghapus arus kas otomatis: %v", errCf)
-		}
 
 		jsonOK(w, map[string]interface{}{"ok": true})
 	default:
@@ -1180,131 +1102,7 @@ func handleRtBmpEmployeesById(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func handleRtBmpPayrolls(w http.ResponseWriter, r *http.Request) {
-	tenantId, ok := extractTenantId(r)
-	if !ok { jsonErr(w, 401, "unauthorized"); return }
-	if !checkOwnerOnly(w, r) { return }
-	switch r.Method {
-	case http.MethodGet:
-		rows, _ := db.Query(`SELECT * FROM bmp_payrolls WHERE "tenantId"=$1 ORDER BY "paymentDate" DESC`, tenantId)
-		defer rows.Close(); jsonOK(w, rowsToJSON(rows))
-	case http.MethodPost:
-		var body map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			jsonErr(w, 400, "invalid JSON")
-			return
-		}
-		
-		pid, _ := body["id"].(string)
-		if pid == "" {
-			pid = generateUUID()
-		}
-		employeeId, _ := body["employeeId"].(float64)
-		paymentDate, _ := body["paymentDate"].(float64)
-		amount, _ := body["amount"].(float64)
-		attendanceCount, _ := body["attendanceCount"].(float64)
-		dailyRate, _ := body["dailyRate"].(float64)
-		desc, _ := body["notes"].(string)
-		if desc == "" {
-			desc, _ = body["description"].(string)
-		}
-		
-		_, err := db.Exec(`
-			INSERT INTO "bmp_payrolls" (
-				"id", "tenantId", "employeeId", "paymentDate", "amount", 
-				"attendanceCount", "dailyRate", "description", "createdAt"
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		`, pid, tenantId, int(employeeId), int64(paymentDate), amount, int(attendanceCount), dailyRate, desc, nowMillis())
-		
-		if err != nil {
-			jsonErr(w, 500, "failed to insert payroll: " + err.Error())
-			return
-		}
-		jsonOK(w, map[string]interface{}{"id": pid, "ok": true})
-	default:
-		jsonErr(w, 405, "method not allowed")
-	}
-}
-
-func handleRtBmpPayrollsById(w http.ResponseWriter, r *http.Request) {
-	tenantId, ok := extractTenantId(r)
-	if !ok { jsonErr(w, 401, "unauthorized"); return }
-	if !checkOwnerOnly(w, r) { return }
-	
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 6 {
-		jsonErr(w, 400, "invalid id path")
-		return
-	}
-	payrollId := parts[5]
-	if payrollId == "" {
-		jsonErr(w, 400, "missing payroll id")
-		return
-	}
-
-	switch r.Method {
-	case http.MethodPut:
-		var body map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			jsonErr(w, 400, "invalid JSON")
-			return
-		}
-		
-		amount, _ := body["amount"].(float64)
-		attendanceCount, _ := body["attendanceCount"].(float64)
-		dailyRate, _ := body["dailyRate"].(float64)
-		desc, _ := body["notes"].(string)
-		if desc == "" {
-			desc, _ = body["description"].(string)
-		}
-		
-		_, err := db.Exec(`
-			UPDATE "bmp_payrolls"
-			SET "amount"=$1, "attendanceCount"=$2, "dailyRate"=$3, "description"=$4
-			WHERE "id"=$5 AND "tenantId"=$6
-		`, amount, int(attendanceCount), dailyRate, desc, payrollId, tenantId)
-		
-		if err != nil {
-			jsonErr(w, 500, "failed to update payroll: " + err.Error())
-			return
-		}
-		
-		employeeName, _ := body["employeeName"].(string)
-		cfDesc := "Gaji Karyawan"
-		if employeeName != "" {
-			cfDesc = "Gaji Karyawan: " + employeeName
-		}
-		
-		_, err = db.Exec(`
-			UPDATE "bmp_cashflow"
-			SET "amount"=$1, "description"=$2
-			WHERE "payrollRefId"=$3 AND "tenantId"=$4
-		`, amount, cfDesc, payrollId, tenantId)
-		if err != nil {
-			log.Printf("[Warning] Failed to update linked cashflow for payroll %s: %v", payrollId, err)
-		}
-		
-		jsonOK(w, map[string]interface{}{"ok": true})
-
-	case http.MethodDelete:
-		_, err := db.Exec(`DELETE FROM "bmp_payrolls" WHERE "id"=$1 AND "tenantId"=$2`, payrollId, tenantId)
-		if err != nil {
-			jsonErr(w, 500, "failed to delete payroll: " + err.Error())
-			return
-		}
-		
-		_, err = db.Exec(`UPDATE "bmp_cashflow" SET "isDeleted"=TRUE WHERE "payrollRefId"=$1 AND "tenantId"=$2`, payrollId, tenantId)
-		if err != nil {
-			log.Printf("[Warning] Failed to delete linked cashflow for payroll %s: %v", payrollId, err)
-		}
-		
-		jsonOK(w, map[string]interface{}{"ok": true})
-		
-	default:
-		jsonErr(w, 405, "method not allowed")
-	}
-}
-
+// handleRtBmpPayrolls dan handleRtBmpPayrollsById dihapus (Jalur 2 removed — v2.20.0)
 
 
 
@@ -1323,44 +1121,13 @@ func handleRtBmpBahanBaku(w http.ResponseWriter, r *http.Request) {
 		id, err := insertRow("bmp_bahan_baku", body)
 		if err != nil { jsonErr(w, 500, err.Error()); return }
 
-		// Otomatis catat kas keluar ke bmp_cashflow jika ada nominal yang dibayarkan
-		nominalVal := 0.0
-		if nom, ok := body["nominal"].(float64); ok {
-			nominalVal = nom
+		// Trigger HPP recalculation for the period
+		txDateBb := nowMillis()
+		if tgl, ok := body["tanggal"].(float64); ok {
+			txDateBb = int64(tgl)
 		}
-		if nominalVal > 0 {
-			noTagihan, _ := body["noTagihan"].(string)
-			desc := "Pembelian Bahan Baku"
-			if noTagihan != "" {
-				desc = "Pembelian Bahan Baku No. Faktur " + noTagihan
-			}
-
-			txDate := nowMillis()
-			if tgl, ok := body["tanggal"].(float64); ok {
-				txDate = int64(tgl)
-			}
-
-			cfBody := map[string]interface{}{
-				"tenantId":        tenantId,
-				"transactionDate": txDate,
-				"transactionType": "KELUAR",
-				"description":     desc,
-				"amount":          nominalVal,
-				"costType":        "FACTORY_OVERHEAD",
-				"bahanBakuRefId":  id,
-				"bahan_baku_id":   id,
-				"cost_center":     "PRODUCTION_BOP",
-				"createdAt":       nowMillis(),
-				"isDeleted":       false,
-			}
-			_, errCf := insertRow("bmp_cashflow", cfBody)
-			if errCf != nil {
-				log.Printf("[Warning] Gagal mencatat arus kas keluar otomatis: %v", errCf)
-			}
-			// Trigger HPP recalculation for the period
-			startMs, endMs, dateStr := getPeriodRangeFromMs(txDate)
-			_, _ = updateAndCalculateCOGS(tenantId, startMs, endMs, dateStr, "MONTHLY")
-		}
+		startMsBb, endMsBb, dateStrBb := getPeriodRangeFromMs(txDateBb)
+		_, _ = updateAndCalculateCOGS(tenantId, startMsBb, endMsBb, dateStrBb, "MONTHLY")
 
 		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
 	default:
@@ -1380,66 +1147,6 @@ func handleRtBmpBahanBakuById(w http.ResponseWriter, r *http.Request) {
 		err := updateRow("bmp_bahan_baku", id, tenantId, body)
 		if err != nil { jsonErr(w, 500, err.Error()); return }
 
-		// Sync ke cashflow: cek apakah record cashflow untuk bahanBakuRefId ini sudah ada
-		var exists bool
-		_ = db.QueryRow(`SELECT EXISTS(SELECT 1 FROM bmp_cashflow WHERE ("bahanBakuRefId"=$1 OR "bahan_baku_id"=$1) AND "tenantId"=$2)`, id, tenantId).Scan(&exists)
-
-		nominalVal := 0.0
-		if nom, ok := body["nominal"].(float64); ok {
-			nominalVal = nom
-		}
-
-		if exists {
-			if nominalVal <= 0 {
-				// Nominal diubah menjadi <= 0, hapus record cashflow
-				_, _ = db.Exec(`UPDATE bmp_cashflow SET "isDeleted"=TRUE WHERE ("bahanBakuRefId"=$1 OR "bahan_baku_id"=$1) AND "tenantId"=$2`, id, tenantId)
-			} else {
-				// Update record cashflow yang ada
-				noTagihan, _ := body["noTagihan"].(string)
-				desc := "Pembelian Bahan Baku"
-				if noTagihan != "" {
-					desc = "Pembelian Bahan Baku No. Faktur " + noTagihan
-				}
-				txDate := nowMillis()
-				if tgl, ok := body["tanggal"].(float64); ok {
-					txDate = int64(tgl)
-				}
-				_, errCf := db.Exec(`UPDATE bmp_cashflow SET "transactionDate"=$1, "amount"=$2, "description"=$3, "isDeleted"=FALSE WHERE ("bahanBakuRefId"=$4 OR "bahan_baku_id"=$4) AND "tenantId"=$5`,
-					txDate, nominalVal, desc, id, tenantId)
-				if errCf != nil {
-					log.Printf("[Warning] Gagal memperbarui arus kas otomatis: %v", errCf)
-				}
-			}
-		} else if nominalVal > 0 {
-			// Belum ada record kas sebelumnya, buat baru
-			noTagihan, _ := body["noTagihan"].(string)
-			desc := "Pembelian Bahan Baku"
-			if noTagihan != "" {
-				desc = "Pembelian Bahan Baku No. Faktur " + noTagihan
-			}
-			txDate := nowMillis()
-			if tgl, ok := body["tanggal"].(float64); ok {
-				txDate = int64(tgl)
-			}
-			cfBody := map[string]interface{}{
-				"tenantId":        tenantId,
-				"transactionDate": txDate,
-				"transactionType": "KELUAR",
-				"description":     desc,
-				"amount":          nominalVal,
-				"costType":        "FACTORY_OVERHEAD",
-				"bahanBakuRefId":  id,
-				"bahan_baku_id":   id,
-				"cost_center":     "PRODUCTION_BOP",
-				"createdAt":       nowMillis(),
-				"isDeleted":       false,
-			}
-			_, errCf := insertRow("bmp_cashflow", cfBody)
-			if errCf != nil {
-				log.Printf("[Warning] Gagal mencatat arus kas otomatis pasca-update: %v", errCf)
-			}
-		}
-
 		// Trigger HPP recalculation for the period
 		txDate := nowMillis()
 		if tgl, ok := body["tanggal"].(float64); ok {
@@ -1452,12 +1159,6 @@ func handleRtBmpBahanBakuById(w http.ResponseWriter, r *http.Request) {
 	case http.MethodDelete:
 		_, err := db.Exec(`UPDATE bmp_bahan_baku SET "isDeleted"=TRUE,"updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, nowMillis(), id, tenantId)
 		if err != nil { jsonErr(w, 500, err.Error()); return }
-
-		// Otomatis hapus arus kas terkait
-		_, errCf := db.Exec(`UPDATE bmp_cashflow SET "isDeleted"=TRUE WHERE ("bahanBakuRefId"=$1 OR "bahan_baku_id"=$1) AND "tenantId"=$2`, id, tenantId)
-		if errCf != nil {
-			log.Printf("[Warning] Gagal menghapus arus kas otomatis: %v", errCf)
-		}
 
 		jsonOK(w, map[string]interface{}{"ok": true})
 	default:
@@ -1806,11 +1507,12 @@ func handleRtProductTargetsById(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleRtBmpFinancialReport — v2.20.0: Jalur 1 Only (HPP dari master_products × qty terjual)
 func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
 	tenantId, ok := extractTenantId(r)
 	if !ok { jsonErr(w, 401, "unauthorized"); return }
 	if !checkOwnerOnly(w, r) { return }
-	
+
 	if r.Method != http.MethodGet {
 		jsonErr(w, 405, "method not allowed")
 		return
@@ -1863,130 +1565,20 @@ func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Query Omzet
+	// 1. Omzet dari invoices
 	var omzet float64
 	err := db.QueryRow(`
-		SELECT COALESCE(SUM("totalAmount"), 0) 
-		FROM bmp_invoices 
+		SELECT COALESCE(SUM("totalAmount"), 0)
+		FROM bmp_invoices
 		WHERE "tenantId"=$1 AND "createdAt" >= $2 AND "createdAt" < $3 AND "isDeleted"=FALSE
 	`, tenantId, startMs, endMs).Scan(&omzet)
 	if err != nil { jsonErr(w, 500, err.Error()); return }
 
-	// 2. Query COGS (HPP Terjual)
+	// 2. COGS = HPP/unit (dari bmp_master_products.hppTotalPcs, dihitung app via Jalur 1) × qty terjual
 	cogs, err := updateAndCalculateCOGS(tenantId, startMs, endMs, dateStr, periodType)
 	if err != nil { jsonErr(w, 500, err.Error()); return }
 
-	// 3. Query Direct Materials Cost (Actual Consumption from detail table)
-	var directMaterials float64
-	err = db.QueryRow(`
-		SELECT COALESCE(SUM(pm."quantityUsed" * COALESCE(rates.avg_rate, 0.0)), 0.0)
-		FROM bmp_production_materials pm
-		JOIN bmp_production_logs pl ON pm."productionLogId" = pl.id AND pm."tenantId" = pl."tenantId"
-		LEFT JOIN (
-			SELECT bbi."jenisBahan", AVG(bbi.rate) as avg_rate
-			FROM bmp_bahan_baku_item bbi
-			JOIN bmp_bahan_baku bb ON bbi."bahanBakuId" = bb.id AND bbi."tenantId" = bb."tenantId"
-			WHERE bb."tenantId" = $1 AND bb."isDeleted" = FALSE AND bbi."isDeleted" = FALSE
-			GROUP BY bbi."jenisBahan"
-		) rates ON pm."jenisBahan" = rates."jenisBahan"
-		WHERE pl."tenantId" = $1 AND pl."productionDate" >= $2 AND pl."productionDate" < $3 AND pl."isDeleted" = FALSE AND pm."isDeleted" = FALSE
-	`, tenantId, startMs, endMs).Scan(&directMaterials)
-	if err != nil { jsonErr(w, 500, err.Error()); return }
-
-	// 4. Query Direct Labor Cost
-	var directLabor float64
-	err = db.QueryRow(`
-		SELECT COALESCE(
-			(SELECT SUM(bp.amount)
-			 FROM bmp_payrolls bp
-			 JOIN bmp_employees be ON bp."employeeId" = be.id AND bp."tenantId" = be."tenantId"
-			 WHERE bp."tenantId" = $1 AND bp."paymentDate" >= $2 AND bp."paymentDate" < $3
-			   AND be."employeeType" = 'DIRECT_LABOR'), 0)
-		+ COALESCE(
-			(SELECT SUM(amount)
-			 FROM bmp_cashflow
-			 WHERE "tenantId" = $1 AND "transactionType" = 'KELUAR'
-			   AND "transactionDate" >= $2 AND "transactionDate" < $3 AND "isDeleted" = FALSE
-			   AND "costType" = 'DIRECT_LABOR'), 0)
-	`, tenantId, startMs, endMs).Scan(&directLabor)
-	if err != nil { jsonErr(w, 500, err.Error()); return }
-
-	// 5. Query Factory Overhead (FOH)
-	var foh float64
-	err = db.QueryRow(`
-		SELECT COALESCE(
-			(SELECT SUM(amount)
-			 FROM bmp_cashflow
-			 WHERE "tenantId" = $1 AND "transactionType" = 'KELUAR'
-			   AND "transactionDate" >= $2 AND "transactionDate" < $3 AND "isDeleted" = FALSE
-			   AND "costType" = 'FACTORY_OVERHEAD'), 0)
-		+ COALESCE(
-			(SELECT SUM(bp.amount)
-			 FROM bmp_payrolls bp
-			 JOIN bmp_employees be ON bp."employeeId" = be.id AND bp."tenantId" = be."tenantId"
-			 WHERE bp."tenantId" = $1 AND bp."paymentDate" >= $2 AND bp."paymentDate" < $3
-			   AND be."employeeType" = 'INDIRECT_LABOR'), 0)
-	`, tenantId, startMs, endMs).Scan(&foh)
-	if err != nil { jsonErr(w, 500, err.Error()); return }
-
-	// 6. Query OPEX (Operating Expenses)
-	var opex float64
-	err = db.QueryRow(`
-		SELECT COALESCE(
-			(SELECT SUM(amount)
-			 FROM bmp_cashflow
-			 WHERE "tenantId" = $1 AND "transactionType" = 'KELUAR'
-			   AND "transactionDate" >= $2 AND "transactionDate" < $3 AND "isDeleted" = FALSE
-			   AND COALESCE("costType", 'OPERATING_EXPENSE') NOT IN ('FACTORY_OVERHEAD', 'DIRECT_LABOR')), 0)
-		+ COALESCE(
-			(SELECT SUM(bp.amount)
-			 FROM bmp_payrolls bp
-			 JOIN bmp_employees be ON bp."employeeId" = be.id AND bp."tenantId" = be."tenantId"
-			 WHERE bp."tenantId" = $1 AND bp."paymentDate" >= $2 AND bp."paymentDate" < $3
-			   AND COALESCE(be."employeeType", 'OPERATING_EXPENSE') NOT IN ('DIRECT_LABOR', 'INDIRECT_LABOR')), 0)
-	`, tenantId, startMs, endMs).Scan(&opex)
-	if err != nil { jsonErr(w, 500, err.Error()); return }
-
-	var depreciation float64
-	if periodType == "MONTHLY" {
-		_ = db.QueryRow(`
-			SELECT COALESCE(SUM(amount), 0.0) 
-			FROM bmp_monthly_depreciation 
-			WHERE "tenantId"=$1 AND period=$2
-		`, tenantId, dateStr).Scan(&depreciation)
-	} else if periodType == "QUARTERLY" {
-		parts := strings.Split(dateStr, "-Q")
-		year := parts[0]
-		quarter, _ := strconv.Atoi(parts[1])
-		var months []string
-		for m := (quarter-1)*3 + 1; m <= quarter*3; m++ {
-			months = append(months, fmt.Sprintf("'%s-%02d'", year, m))
-		}
-		qStr := fmt.Sprintf(`
-			SELECT COALESCE(SUM(amount), 0.0) 
-			FROM bmp_monthly_depreciation 
-			WHERE "tenantId"=$1 AND period IN (%s)
-		`, strings.Join(months, ","))
-		_ = db.QueryRow(qStr, tenantId).Scan(&depreciation)
-	} else { // ANNUALLY
-		_ = db.QueryRow(`
-			SELECT COALESCE(SUM(amount), 0.0) 
-			FROM bmp_monthly_depreciation 
-			WHERE "tenantId"=$1 AND period LIKE $2
-		`, tenantId, dateStr+"-%").Scan(&depreciation)
-	}
-
-	foh = foh + depreciation
-	cogm := directMaterials + directLabor + foh
 	labaKotor := omzet - cogs
-	labaBersih := labaKotor - opex
-
-	// 7. Calculate BEP
-	var bep float64
-	if omzet > 0 && (omzet-cogs) > 0 {
-		marginRatio := (omzet - cogs) / omzet
-		bep = opex / marginRatio
-	}
 
 	cogsPercentage := 0.0
 	marginPercentage := 0.0
@@ -1995,11 +1587,11 @@ func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
 		marginPercentage = (labaKotor / omzet) * 100.0
 	}
 
-	// 5. Query Top Products
+	// 3. Top Products
 	type TopProduct struct {
-		Name     string  `json:"name"`
-		QtySold  float64 `json:"qtySold"`
-		Revenue  float64 `json:"revenue"`
+		Name    string  `json:"name"`
+		QtySold float64 `json:"qtySold"`
+		Revenue float64 `json:"revenue"`
 	}
 	topProducts := []TopProduct{}
 	rows, err := db.Query(`
@@ -2007,7 +1599,7 @@ func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
 		FROM bmp_products bp
 		JOIN bmp_invoices bi ON bp."invoiceId" = bi.id
 		LEFT JOIN bmp_master_products mp ON bp."masterItemID" = mp.id
-		WHERE bi."tenantId"=$1 AND bi."createdAt" >= $2 AND bi."createdAt" < $3 
+		WHERE bi."tenantId"=$1 AND bi."createdAt" >= $2 AND bi."createdAt" < $3
 		  AND bi."isDeleted"=FALSE AND bp."isDeleted"=FALSE
 		GROUP BY COALESCE(mp.title, bp.title)
 		ORDER BY qty DESC
@@ -2023,47 +1615,31 @@ func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// 4. Warnings
 	warnings := []string{}
-	if directLabor == 0 {
-		warnings = append(warnings, "Gaji karyawan (direct labor) belum dilengkapi untuk periode ini.")
-	}
-	if depreciation == 0 {
-		warnings = append(warnings, "Biaya penyusutan aset belum dilengkapi untuk periode ini.")
-	}
-
 	var missingBomCount int
 	_ = db.QueryRow(`
 		SELECT COUNT(DISTINCT bp."masterItemID")
 		FROM bmp_products bp
 		JOIN bmp_invoices bi ON bp."invoiceId" = bi.id
 		LEFT JOIN bmp_product_ingredients pin ON bp."masterItemID" = pin."productId" AND bp."tenantId" = pin."tenantId"
-		WHERE bi."tenantId"=$1 AND bi."createdAt" >= $2 AND bi."createdAt" < $3 
+		WHERE bi."tenantId"=$1 AND bi."createdAt" >= $2 AND bi."createdAt" < $3
 		  AND bi."isDeleted"=FALSE AND bp."isDeleted"=FALSE AND pin.id IS NULL
 	`, tenantId, startMs, endMs).Scan(&missingBomCount)
 	if missingBomCount > 0 {
 		warnings = append(warnings, "Resep / BOM belum dilengkapi untuk sebagian produk yang terjual.")
 	}
 
-	response := map[string]interface{}{
+	jsonOK(w, map[string]interface{}{
 		"period":           dateStr,
 		"omzet":            omzet,
 		"cogs":             cogs,
 		"labaKotor":        labaKotor,
-		"opex":             opex,
-		"labaBersih":       labaBersih,
-		"bep":              bep,
 		"cogsPercentage":   cogsPercentage,
 		"marginPercentage": marginPercentage,
 		"topProducts":      topProducts,
-		"directMaterials":  directMaterials,
-		"directLabor":      directLabor,
-		"foh":              foh,
-		"cogm":             cogm,
-		"depreciation":     depreciation,
 		"warnings":         warnings,
-	}
-
-	jsonOK(w, response)
+	})
 }
 
 func handleRtBmpExportReport(w http.ResponseWriter, r *http.Request) {
@@ -2104,7 +1680,7 @@ func handleRtBmpExportReport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch Summary Metrics
-	var omzet, cogs, opex float64
+	var omzet, cogs float64
 	_ = db.QueryRow(`
 		SELECT COALESCE(SUM("totalAmount"), 0) FROM bmp_invoices 
 		WHERE "tenantId"=$1 AND "createdAt" >= $2 AND "createdAt" < $3 AND "isDeleted"=FALSE
@@ -2112,14 +1688,7 @@ func handleRtBmpExportReport(w http.ResponseWriter, r *http.Request) {
 
 	cogs, _ = updateAndCalculateCOGS(tenantId, startMs, endMs, dateStr, periodType)
 
-	_ = db.QueryRow(`
-		SELECT COALESCE(SUM("amount"), 0) FROM bmp_cashflow 
-		WHERE "tenantId"=$1 AND "transactionType"='KELUAR' 
-		  AND "transactionDate" >= $2 AND "transactionDate" < $3 AND "isDeleted"=FALSE
-	`, tenantId, startMs, endMs).Scan(&opex)
-
 	labaKotor := omzet - cogs
-	labaBersih := labaKotor - opex
 
 	// Set CSV Headers
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
@@ -2143,8 +1712,6 @@ func handleRtBmpExportReport(w http.ResponseWriter, r *http.Request) {
 	_ = writer.Write([]string{"OMZET (Pendapatan Kotor)", fmt.Sprintf("%.2f", omzet)})
 	_ = writer.Write([]string{"HARGA POKOK PENJUALAN (COGS / HPP)", fmt.Sprintf("%.2f", cogs)})
 	_ = writer.Write([]string{"LABA KOTOR", fmt.Sprintf("%.2f", labaKotor)})
-	_ = writer.Write([]string{"BEBAN OPERASIONAL (OPEX)", fmt.Sprintf("%.2f", opex)})
-	_ = writer.Write([]string{"LABA BERSIH", fmt.Sprintf("%.2f", labaBersih)})
 	_ = writer.Write([]string{""})
 	_ = writer.Write([]string{""})
 
@@ -2187,37 +1754,6 @@ func handleRtBmpExportReport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	_ = writer.Write([]string{""})
-	_ = writer.Write([]string{""})
-
-	// 3. Buku Kas Keluar
-	_ = writer.Write([]string{"DETAIL PENGELUARAN OPERASIONAL (CASHFLOW KELUAR)"})
-	_ = writer.Write([]string{"ID", "Tanggal Transaksi", "Deskripsi Pengeluaran", "Jumlah (Rupiah)"})
-
-	rowsCF, errCF := db.Query(`
-		SELECT id, "transactionDate", description, amount
-		FROM bmp_cashflow
-		WHERE "tenantId"=$1 AND "transactionType"='KELUAR' AND "transactionDate" >= $2 AND "transactionDate" < $3 AND "isDeleted"=FALSE
-		ORDER BY id ASC
-	`, tenantId, startMs, endMs)
-	
-	if errCF == nil {
-		defer rowsCF.Close()
-		for rowsCF.Next() {
-			var id int64
-			var transDate int64
-			var desc string
-			var amount float64
-			if errS := rowsCF.Scan(&id, &transDate, &desc, &amount); errS == nil {
-				dateStrFormatted := time.Unix(transDate/1000, 0).In(loc).Format("2006-01-02 15:04")
-				_ = writer.Write([]string{
-					strconv.FormatInt(id, 10),
-					dateStrFormatted,
-					desc,
-					fmt.Sprintf("%.2f", amount),
-				})
-			}
-		}
-	}
 
 	writer.Flush()
 }
@@ -2248,171 +1784,10 @@ func handleRtBmpSuppliers(w http.ResponseWriter, r *http.Request) {
 	jsonOK(w, list)
 }
 
-func isPeriodWithinAssetLife(purchaseDateMs int64, usefulLifeMonths int, targetPeriod string) bool {
-	t, err := time.Parse("2006-01", targetPeriod)
-	if err != nil {
-		return false
-	}
-	targetYear, targetMonth, _ := t.Date()
+// isPeriodWithinAssetLife, autoCalculateDepreciation, handleRtBmpDepreciation,
+// handleRtBmpAssets, handleRtBmpAssetsById dihapus (Jalur 2 removed — v2.20.0)
 
-	pTime := time.Unix(purchaseDateMs/1000, 0).UTC()
-	pYear, pMonth, _ := pTime.Date()
 
-	diffMonths := (targetYear-pYear)*12 + int(targetMonth-pMonth)
-	return diffMonths >= 0 && diffMonths < usefulLifeMonths
-}
-
-func autoCalculateDepreciation(tenantId string, targetPeriod string) error {
-	rows, err := db.Query(`SELECT id, "purchaseDate", "purchasePrice", "usefulLifeMonths", "residualValue" FROM bmp_assets WHERE "tenantId"=$1 AND "isDeleted"=FALSE`, tenantId)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var id int64
-		var purchaseDate int64
-		var purchasePrice float64
-		var usefulLifeMonths int
-		var residualValue float64
-		if errS := rows.Scan(&id, &purchaseDate, &purchasePrice, &usefulLifeMonths, &residualValue); errS == nil {
-			if isPeriodWithinAssetLife(purchaseDate, usefulLifeMonths, targetPeriod) {
-				monthlyAmt := (purchasePrice - residualValue) / float64(usefulLifeMonths)
-				monthlyAmt = math.Round(monthlyAmt*100) / 100
-				
-				_, _ = db.Exec(`
-					INSERT INTO bmp_monthly_depreciation ("tenantId", "assetId", "period", "amount", "updatedAt")
-					VALUES ($1, $2, $3, $4, $5)
-					ON CONFLICT ("tenantId", "assetId", "period") 
-					DO UPDATE SET "amount"=$4, "updatedAt"=$5
-				`, tenantId, id, targetPeriod, monthlyAmt, nowMillis())
-			} else {
-				// Nilai penyusutan adalah 0 jika di luar masa manfaat
-				_, _ = db.Exec(`
-					INSERT INTO bmp_monthly_depreciation ("tenantId", "assetId", "period", "amount", "updatedAt")
-					VALUES ($1, $2, $3, 0.0, $4)
-					ON CONFLICT ("tenantId", "assetId", "period") 
-					DO UPDATE SET "amount"=0.0, "updatedAt"=$4
-				`, tenantId, id, targetPeriod, nowMillis())
-			}
-		}
-	}
-	return nil
-}
-
-func handleRtBmpDepreciation(w http.ResponseWriter, r *http.Request) {
-	tenantId, ok := extractTenantId(r)
-	if !ok { jsonErr(w, 401, "unauthorized"); return }
-
-	if r.Method == http.MethodGet {
-		period := r.URL.Query().Get("period")
-		if period == "" {
-			jsonErr(w, 400, "period is required")
-			return
-		}
-
-		// Jalankan perhitungan penyusutan otomatis terlebih dahulu
-		_ = autoCalculateDepreciation(tenantId, period)
-
-		// Jumlahkan seluruh entri penyusutan (aset + penyesuaian manual)
-		var amount float64
-		err := db.QueryRow(`
-			SELECT COALESCE(SUM(amount), 0.0) 
-			FROM bmp_monthly_depreciation 
-			WHERE "tenantId"=$1 AND period=$2
-		`, tenantId, period).Scan(&amount)
-		if err != nil {
-			jsonOK(w, map[string]interface{}{"amount": 0.0})
-			return
-		}
-		jsonOK(w, map[string]interface{}{"amount": amount})
-		return
-	}
-
-	if r.Method == http.MethodPost {
-		var body map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			jsonErr(w, 400, "invalid body")
-			return
-		}
-		period, _ := body["period"].(string)
-		amountVal, _ := body["amount"].(float64)
-		if period == "" {
-			jsonErr(w, 400, "period is required")
-			return
-		}
-
-		// Simpan penyesuaian manual menggunakan assetId = 0
-		_, err := db.Exec(`
-			INSERT INTO bmp_monthly_depreciation ("tenantId", "assetId", "period", "amount", "updatedAt")
-			VALUES ($1, 0, $2, $3, $4)
-			ON CONFLICT ("tenantId", "assetId", "period") 
-			DO UPDATE SET "amount"=$3, "updatedAt"=$4
-		`, tenantId, period, amountVal, nowMillis())
-		if err != nil {
-			jsonErr(w, 500, err.Error())
-			return
-		}
-		jsonOK(w, map[string]interface{}{"success": true})
-		return
-	}
-
-	jsonErr(w, 405, "method not allowed")
-}
-
-func handleRtBmpAssets(w http.ResponseWriter, r *http.Request) {
-	tenantId, ok := extractTenantId(r)
-	if !ok { jsonErr(w, 401, "unauthorized"); return }
-	switch r.Method {
-	case http.MethodGet:
-		rows, err := db.Query(`SELECT * FROM bmp_assets WHERE "tenantId"=$1 AND "isDeleted"=FALSE ORDER BY "purchaseDate" DESC`, tenantId)
-		if err != nil { jsonErr(w, 500, err.Error()); return }
-		defer rows.Close(); jsonOK(w, rowsToJSON(rows))
-	case http.MethodPost:
-		var body map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			jsonErr(w, 400, "invalid body")
-			return
-		}
-		body["tenantId"] = tenantId
-		body["createdAt"] = nowMillis()
-		body["updatedAt"] = nowMillis()
-		body["isDeleted"] = false
-		id, err := insertRow("bmp_assets", body)
-		if err != nil { jsonErr(w, 500, err.Error()); return }
-		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
-	default:
-		jsonErr(w, 405, "method not allowed")
-	}
-}
-
-func handleRtBmpAssetsById(w http.ResponseWriter, r *http.Request) {
-	tenantId, ok := extractTenantId(r)
-	if !ok { jsonErr(w, 401, "unauthorized"); return }
-	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/bmp/assets/")
-	id, _ := strconv.ParseInt(idStr, 10, 64)
-	switch r.Method {
-	case http.MethodPut:
-		var body map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			jsonErr(w, 400, "invalid body")
-			return
-		}
-		body["updatedAt"] = nowMillis()
-		err := updateRow("bmp_assets", id, tenantId, body)
-		if err != nil { jsonErr(w, 500, err.Error()); return }
-		jsonOK(w, map[string]interface{}{"ok": true})
-	case http.MethodDelete:
-		_, err := db.Exec(`UPDATE bmp_assets SET "isDeleted"=TRUE, "updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, nowMillis(), id, tenantId)
-		if err != nil { jsonErr(w, 500, err.Error()); return }
-		
-		// Hapus juga record penyusutan bulanan terkait
-		_, _ = db.Exec(`DELETE FROM bmp_monthly_depreciation WHERE "assetId"=$1 AND "tenantId"=$2`, id, tenantId)
-		jsonOK(w, map[string]interface{}{"ok": true})
-	default:
-		jsonErr(w, 405, "method not allowed")
-	}
-}
 
 func handleRtBmpIngredients(w http.ResponseWriter, r *http.Request) {
 	tenantId, ok := extractTenantId(r)
@@ -2722,385 +2097,27 @@ func triggerProductionLogCompletion(tenantId string, logId int64) error {
 }
 
 
+// updateAndCalculateCOGS — v2.20.0: Jalur 1 Only
+// COGS = SUM(qty_terjual × hppTotalPcs dari bmp_master_products)
+// HPP per unit sudah dihitung di sisi app via bmp_settings dan disimpan ke bmp_master_products.
 func updateAndCalculateCOGS(tenantId string, startMs int64, endMs int64, dateStr string, periodType string) (float64, error) {
-	// 1. Get total produced in the period
-	var totalProduced float64
+	var totalCogs float64
 	err := db.QueryRow(`
-		SELECT COALESCE(SUM("quantityProduced"), 0.0)
-		FROM bmp_production_logs
-		WHERE "tenantId"=$1 AND "productionDate" >= $2 AND "productionDate" < $3 AND "isDeleted"=FALSE
-	`, tenantId, startMs, endMs).Scan(&totalProduced)
-	if err != nil {
-		return 0, err
-	}
-
-	// 2. Get total direct labor in the period
-	var directLabor float64
-	err = db.QueryRow(`
-		SELECT COALESCE(
-			(SELECT SUM(bp.amount)
-			 FROM bmp_payrolls bp
-			 JOIN bmp_employees be ON bp."employeeId" = be.id AND bp."tenantId" = be."tenantId"
-			 WHERE bp."tenantId" = $1 AND bp."paymentDate" >= $2 AND bp."paymentDate" < $3
-			   AND be."employeeType" = 'DIRECT_LABOR'), 0)
-		+ COALESCE(
-			(SELECT SUM(amount)
-			 FROM bmp_cashflow
-			 WHERE "tenantId" = $1 AND "transactionType" = 'KELUAR'
-			   AND "transactionDate" >= $2 AND "transactionDate" < $3 AND "isDeleted" = FALSE
-			   AND "costType" = 'DIRECT_LABOR'), 0)
-	`, tenantId, startMs, endMs).Scan(&directLabor)
-	if err != nil {
-		return 0, err
-	}
-
-	// 3. Get total overhead in the period (FOH cashflow + indirect labor + depreciation)
-	var foh float64
-	err = db.QueryRow(`
-		SELECT COALESCE(
-			(SELECT SUM(amount)
-			 FROM bmp_cashflow
-			 WHERE "tenantId" = $1 AND "transactionType" = 'KELUAR'
-			   AND "transactionDate" >= $2 AND "transactionDate" < $3 AND "isDeleted" = FALSE
-			   AND "costType" = 'FACTORY_OVERHEAD'), 0)
-		+ COALESCE(
-			(SELECT SUM(bp.amount)
-			 FROM bmp_payrolls bp
-			 JOIN bmp_employees be ON bp."employeeId" = be.id AND bp."tenantId" = be."tenantId"
-			 WHERE bp."tenantId" = $1 AND bp."paymentDate" >= $2 AND bp."paymentDate" < $3
-			   AND be."employeeType" = 'INDIRECT_LABOR'), 0)
-	`, tenantId, startMs, endMs).Scan(&foh)
-	if err != nil {
-		return 0, err
-	}
-
-	// Add depreciation to overhead
-	var depreciation float64
-	if periodType == "MONTHLY" {
-		_ = db.QueryRow(`
-			SELECT COALESCE(SUM(amount), 0.0) 
-			FROM bmp_monthly_depreciation 
-			WHERE "tenantId"=$1 AND period=$2
-		`, tenantId, dateStr).Scan(&depreciation)
-	} else if periodType == "QUARTERLY" {
-		parts := strings.Split(dateStr, "-Q")
-		year := parts[0]
-		quarter, _ := strconv.Atoi(parts[1])
-		var months []string
-		for m := (quarter-1)*3 + 1; m <= quarter*3; m++ {
-			months = append(months, fmt.Sprintf("'%s-%02d'", year, m))
-		}
-		qStr := fmt.Sprintf(`
-			SELECT COALESCE(SUM(amount), 0.0) 
-			FROM bmp_monthly_depreciation 
-			WHERE "tenantId"=$1 AND period IN (%s)
-		`, strings.Join(months, ","))
-		_ = db.QueryRow(qStr, tenantId).Scan(&depreciation)
-	} else { // ANNUALLY
-		_ = db.QueryRow(`
-			SELECT COALESCE(SUM(amount), 0.0) 
-			FROM bmp_monthly_depreciation 
-			WHERE "tenantId"=$1 AND period LIKE $2
-		`, tenantId, dateStr+"-%").Scan(&depreciation)
-	}
-	foh = foh + depreciation
-
-	var laborAllocationPerUnit float64 = 0.0
-	var overheadAllocationPerUnit float64 = 0.0
-	if totalProduced > 0 {
-		laborAllocationPerUnit = directLabor / totalProduced
-		overheadAllocationPerUnit = foh / totalProduced
-	}
-
-	// === v2.19.25: Pre-compute ACTUAL electricity cost per machine from production logs ===
-	// Ganti sumber electricity dari field statis mesin → SUM aktual dari log produksi per shift
-	machineActualElecCost := make(map[int64]float64) // machineId → total electricity cost in period
-	{
-		elecRows, errE := db.Query(`
-			SELECT machine_id, COALESCE(SUM(electricity_cost_actual), 0.0)
-			FROM bmp_production_logs
-			WHERE "tenantId"=$1 AND "productionDate">=$2 AND "productionDate"<$3
-			  AND "isDeleted"=FALSE AND machine_id IS NOT NULL AND electricity_cost_actual > 0
-			GROUP BY machine_id
-		`, tenantId, startMs, endMs)
-		if errE == nil {
-			defer elecRows.Close()
-			for elecRows.Next() {
-				var machId int64
-				var totalElec float64
-				if elecRows.Scan(&machId, &totalElec) == nil && machId > 0 {
-					machineActualElecCost[machId] = totalElec
-				}
-			}
-		}
-		log.Printf("[HPP] Electricity actual pre-computed for %d machines in period %s", len(machineActualElecCost), dateStr)
-	}
-
-	// === v2.19.21: Pre-compute actual operator labor cost per machine from attendance ===
-	type MachineActualLabor struct {
-		TotalLaborCost  float64 // total salary of operators allocated to this machine
-		TotalSecsWorked float64 // total seconds of actual attendance at this machine
-	}
-	machineActualLabor := make(map[int64]MachineActualLabor)
-
-	// 1. Read production logs with workers_attendance in period
-	type logAttEntry struct {
-		MachineId  int64
-		EmployeeId int64
-		Hours      float64
-	}
-	var allLogAtts []logAttEntry
-	laRows, errLA := db.Query(`
-		SELECT COALESCE(machine_id, 0), COALESCE(workers_attendance, '')
-		FROM bmp_production_logs
-		WHERE "tenantId"=$1 AND "productionDate">=$2 AND "productionDate"<$3
-		  AND "isDeleted"=FALSE AND machine_id IS NOT NULL AND workers_attendance IS NOT NULL
-	`, tenantId, startMs, endMs)
-	if errLA == nil {
-		defer laRows.Close()
-		for laRows.Next() {
-			var machineId int64
-			var attJSON string
-			laRows.Scan(&machineId, &attJSON)
-			if machineId == 0 || attJSON == "" {
-				continue
-			}
-			var attendees []struct {
-				EmployeeId int64  `json:"employeeId"`
-				CheckIn    string `json:"checkIn"`
-				CheckOut   string `json:"checkOut"`
-			}
-			if json.Unmarshal([]byte(attJSON), &attendees) != nil {
-				continue
-			}
-			for _, a := range attendees {
-				hours := calcHoursWorked(a.CheckIn, a.CheckOut)
-				if hours > 0 {
-					allLogAtts = append(allLogAtts, logAttEntry{MachineId: machineId, EmployeeId: a.EmployeeId, Hours: hours})
-				}
-			}
-		}
-	}
-
-	// 2. Group by (machine, employee) to sum hours
-	type empMachineKey struct{ Machine, Emp int64 }
-	empMachineHoursMap := make(map[empMachineKey]float64)
-	machineEmpSet := make(map[int64]map[int64]bool)
-	for _, la := range allLogAtts {
-		k := empMachineKey{la.MachineId, la.EmployeeId}
-		empMachineHoursMap[k] += la.Hours
-		if machineEmpSet[la.MachineId] == nil {
-			machineEmpSet[la.MachineId] = make(map[int64]bool)
-		}
-		machineEmpSet[la.MachineId][la.EmployeeId] = true
-	}
-
-	// 3. Total hours per employee across all machines (for proportional allocation)
-	empTotalHoursMap := make(map[int64]float64)
-	for k, h := range empMachineHoursMap {
-		empTotalHoursMap[k.Emp] += h
-	}
-
-	// 4. For each machine, compute total labor cost allocated
-	for machineId, empSet := range machineEmpSet {
-		var machineTotalLaborCost float64
-		var machineTotalSecsWorked float64
-		for empId := range empSet {
-			k := empMachineKey{machineId, empId}
-			hoursAtMachine := empMachineHoursMap[k]
-			totalEmpHours := empTotalHoursMap[empId]
-			if totalEmpHours <= 0 {
-				continue
-			}
-			var empPayroll float64
-			db.QueryRow(`
-				SELECT COALESCE(SUM(amount), 0)
-				FROM bmp_payrolls
-				WHERE "tenantId"=$1 AND "employeeId"=$2
-				  AND "paymentDate">=$3 AND "paymentDate"<$4
-			`, tenantId, empId, startMs, endMs).Scan(&empPayroll)
-			machineTotalLaborCost += empPayroll * (hoursAtMachine / totalEmpHours)
-			machineTotalSecsWorked += hoursAtMachine * 3600
-		}
-		machineActualLabor[machineId] = MachineActualLabor{
-			TotalLaborCost:  machineTotalLaborCost,
-			TotalSecsWorked: machineTotalSecsWorked,
-		}
-	}
-	// === END v2.19.21 pre-compute ===
-
-	// 4. Query all sold products in the period (v2.19.21: include machine_id + mold data)
-	workDaysInPeriod := float64(endMs-startMs) / float64(24*3600*1000)
-	rows, err := db.Query(`
-		SELECT 
-			bp."masterItemID", 
-			SUM(bp.quantity), 
-			COALESCE(MAX(mp."hppTotalPcs"), 0.0),
-			COALESCE(bool_and(COALESCE(m."is_active", TRUE)), TRUE),
-			COALESCE(MAX(mp."cycleTime"), 0.0),
-			COALESCE(MAX(m."hours_capacity_monthly"), 624.0),
-			COALESCE(MAX(m."depreciation_monthly"), 0.0),
-			COALESCE(MAX(m."electricity_cost_daily"), 0.0),
-			COALESCE(MAX(m."operator_salary_monthly"), 0.0),
-			COALESCE(MAX(m."overhead_allocated_monthly"), 0.0),
-			CASE WHEN MAX(mp."machine_id") IS NOT NULL THEN TRUE ELSE FALSE END,
-			COALESCE(MAX(m.id), 0),
-			COALESCE(MAX(mo.purchase_price), 0.0),
-			COALESCE(MAX(mo.expected_shots_lifetime), 0)
+		SELECT COALESCE(SUM(bp.quantity * COALESCE(mp."hppTotalPcs", 0.0)), 0.0)
 		FROM bmp_products bp
 		JOIN bmp_invoices bi ON bp."invoiceId" = bi.id
 		LEFT JOIN bmp_master_products mp ON bp."masterItemID" = mp.id
-		LEFT JOIN bmp_machines m ON mp."machine_id" = m.id AND m."tenantId" = $1
-		LEFT JOIN bmp_molds mo ON m.mold_id = mo.id AND mo."isDeleted" = FALSE
-		WHERE bi."tenantId"=$1 AND bi."createdAt" >= $2 AND bi."createdAt" < $3 
+		WHERE bi."tenantId"=$1 AND bi."createdAt" >= $2 AND bi."createdAt" < $3
 		  AND bi."isDeleted"=FALSE AND bp."isDeleted"=FALSE
-		GROUP BY bp."masterItemID"
-	`, tenantId, startMs, endMs)
+	`, tenantId, startMs, endMs).Scan(&totalCogs)
 	if err != nil {
 		return 0, err
 	}
-	defer rows.Close()
-
-	type SoldItem struct {
-		MasterItemID         int64
-		Qty                  float64
-		HppOld               float64
-		MachineIsActive      bool
-		CycleTime            float64
-		HoursCapacity        float64
-		DeprecMonthly        float64
-		ElecCostDaily        float64
-		OpSalaryMonthly      float64 // deprecated — fallback only if no attendance data
-		OvhdAllocMonthly     float64
-		HasMachine           bool
-		MachineId            int64   // v2.19.21
-		MoldPurchasePrice    float64 // v2.19.21
-		MoldExpectedLifetime int64   // v2.19.21
-	}
-	var soldItems []SoldItem
-	for rows.Next() {
-		var item SoldItem
-		if errS := rows.Scan(
-			&item.MasterItemID, &item.Qty, &item.HppOld,
-			&item.MachineIsActive, &item.CycleTime, &item.HoursCapacity,
-			&item.DeprecMonthly, &item.ElecCostDaily, &item.OpSalaryMonthly,
-			&item.OvhdAllocMonthly, &item.HasMachine,
-			&item.MachineId, &item.MoldPurchasePrice, &item.MoldExpectedLifetime,
-		); errS == nil {
-			soldItems = append(soldItems, item)
-		}
-	}
-
-	var totalCogs float64 = 0.0
-	for _, item := range soldItems {
-		// v2.19.21: Use actual operator labor from attendance, fall back to deprecated OpSalaryMonthly
-		var machineOverheadPerUnit float64 = 0.0
-		var machineLaborPerUnit float64 = 0.0
-		var moldDepreciationPerUnit float64 = 0.0
-
-		if item.HasMachine && item.MachineIsActive && item.CycleTime > 0 {
-			// --- Machine overhead (electricity + machine depreciation + fixed overhead) ---
-			// v2.19.25: Pakai listrik aktual dari log produksi per shift; fallback ke statis jika belum ada log
-			elecCostForPeriod := machineActualElecCost[item.MachineId]
-			if elecCostForPeriod == 0 {
-				elecCostForPeriod = item.ElecCostDaily * workDaysInPeriod // fallback statis
-			}
-			machineFixedOverhead := item.DeprecMonthly + item.OvhdAllocMonthly + elecCostForPeriod
-
-			// --- Actual operator labor from attendance ---
-			if actualLabor, ok := machineActualLabor[item.MachineId]; ok && actualLabor.TotalSecsWorked > 0 {
-				// Actual: allocate based on real cycle time vs real seconds worked
-				machineLaborPerUnit = (item.CycleTime / actualLabor.TotalSecsWorked) * actualLabor.TotalLaborCost
-				machineOverheadPerUnit = (item.CycleTime / actualLabor.TotalSecsWorked) * machineFixedOverhead
-			} else {
-				// Fallback: use theoretical capacity (deprecated OpSalaryMonthly)
-				machineSecsCap := item.HoursCapacity * 3600.0
-				if machineSecsCap > 0 {
-					machineLaborPerUnit = (item.CycleTime / machineSecsCap) * item.OpSalaryMonthly
-					machineOverheadPerUnit = (item.CycleTime / machineSecsCap) * machineFixedOverhead
-				}
-			}
-
-			// --- v2.19.21: Mold depreciation per pcs ---
-			if item.MoldPurchasePrice > 0 && item.MoldExpectedLifetime > 0 {
-				moldDepreciationPerUnit = item.MoldPurchasePrice / float64(item.MoldExpectedLifetime)
-			}
-		}
-
-		// Calculate Material cost from BOM
-		var materialCost float64
-		errM := db.QueryRow(`
-			SELECT COALESCE(SUM(pin.quantity * COALESCE(rates.avg_rate, 0.0)), 0.0)
-			FROM bmp_product_ingredients pin
-			LEFT JOIN (
-				SELECT bbi."jenisBahan", AVG(bbi.rate) as avg_rate
-				FROM bmp_bahan_baku_item bbi
-				JOIN bmp_bahan_baku bb ON bbi."bahanBakuId" = bb.id AND bbi."tenantId" = bb."tenantId"
-				WHERE bb."tenantId" = $1 AND bb."isDeleted" = FALSE AND bbi."isDeleted" = FALSE
-				GROUP BY bbi."jenisBahan"
-			) rates ON pin."jenisBahan" = rates."jenisBahan"
-			WHERE pin."productId" = $2 AND pin."tenantId" = $1
-		`, tenantId, item.MasterItemID).Scan(&materialCost)
-
-		// v2.19.21 HPP = Material + GlobalNonDirectLabor + MachineOverhead + ActualMachineLaborCost + MoldDepreciation
-		var computedHpp float64
-		if errM == nil && materialCost > 0 {
-			if item.HasMachine {
-				computedHpp = materialCost + laborAllocationPerUnit + machineOverheadPerUnit +
-					machineLaborPerUnit + moldDepreciationPerUnit
-			} else {
-				computedHpp = materialCost + laborAllocationPerUnit + overheadAllocationPerUnit
-			}
-		} else {
-			computedHpp = item.HppOld
-			if computedHpp == 0 {
-				if item.HasMachine {
-					computedHpp = laborAllocationPerUnit + machineOverheadPerUnit +
-						machineLaborPerUnit + moldDepreciationPerUnit
-				} else {
-					computedHpp = laborAllocationPerUnit + overheadAllocationPerUnit
-				}
-			}
-		}
-
-		// Round to 2 decimal places
-		computedHpp = math.Round(computedHpp*100) / 100
-
-		// Update hppTotalPcs in bmp_master_products
-		if computedHpp > 0 {
-			_, _ = db.Exec(`
-				UPDATE bmp_master_products 
-				SET "hppTotalPcs" = $1 
-				WHERE id = $2 AND "tenantId" = $3
-			`, computedHpp, item.MasterItemID, tenantId)
-		}
-
-		totalCogs += computedHpp * item.Qty
-	}
-
 	return totalCogs, nil
 }
 
-// calcHoursWorked menghitung selisih jam kerja dari string "HH:mm".
-// Mendukung shift malam (checkOut < checkIn = tambah 24 jam).
-func calcHoursWorked(checkIn, checkOut string) float64 {
-	parseMinutes := func(s string) int {
-		parts := strings.Split(s, ":")
-		if len(parts) != 2 { return 0 }
-		h, err1 := strconv.Atoi(parts[0])
-		m, err2 := strconv.Atoi(parts[1])
-		if err1 != nil || err2 != nil { return 0 }
-		return h*60 + m
-	}
-	inMin := parseMinutes(checkIn)
-	outMin := parseMinutes(checkOut)
-	if outMin <= inMin {
-		outMin += 24 * 60 // overnight shift
-	}
-	return float64(outMin-inMin) / 60.0
-}
-
 // ── BMP — machines ─────────────────────────────────────────────────────────────
+
 
 func handleRtBmpMachines(w http.ResponseWriter, r *http.Request) {
 	tenantId, ok := extractTenantId(r)

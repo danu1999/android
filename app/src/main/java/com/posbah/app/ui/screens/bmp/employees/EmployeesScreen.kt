@@ -56,7 +56,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.posbah.app.data.local.entities.BmpEmployeeEntity
-import com.posbah.app.data.local.entities.BmpPayrollEntity
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpEmployeeRepository
 import com.posbah.app.data.repository.BmpSettingsRepository
@@ -101,7 +100,6 @@ class EmployeesViewModel @Inject constructor(
 ) : ViewModel() {
     val tenantId = authRepository.activeTenantId().orEmpty()
     val employees = repo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<BmpEmployeeEntity>())
-    val payrolls = repo.observePayrolls(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<BmpPayrollEntity>())
     val outlets = outletRepo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<OutletData>())
     val posEmployees = posEmployeeRepo.observeForTenant(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<EmployeeData>())
     val settings = settingsRepo.settings.stateIn(viewModelScope, SharingStarted.Eagerly, null)
@@ -109,7 +107,6 @@ class EmployeesViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             try { repo.refresh() } catch (_: Exception) {}
-            try { repo.refreshPayrolls() } catch (_: Exception) {}
             try { posEmployeeRepo.refresh() } catch (_: Exception) {}
             try { settingsRepo.refresh() } catch (_: Exception) {}
         }
@@ -246,27 +243,7 @@ class EmployeesViewModel @Inject constructor(
         repo.softDelete(id)
     }
 
-    fun payEmployee(emp: BmpEmployeeEntity, amount: Double, attendance: Int) = viewModelScope.launch(Dispatchers.IO) {
-        if (amount <= 0) return@launch
-        val generatedPayrollId = repo.insertPayroll(
-            BmpPayrollEntity(
-                tenantId = tenantId,
-                employeeId = emp.id,
-                paymentDate = System.currentTimeMillis(),
-                amount = amount,
-                attendanceCount = attendance,
-                dailyRate = if (attendance > 0) amount / attendance else 0.0
-            )
-        )
-    }
 
-    fun editPayroll(payroll: BmpPayrollEntity) = viewModelScope.launch(Dispatchers.IO) {
-        repo.updatePayroll(payroll)
-    }
-
-    fun deletePayroll(id: String) = viewModelScope.launch(Dispatchers.IO) {
-        repo.deletePayroll(id)
-    }
 
     /**
      * Hitung kehadiran operator dari log produksi bulan ini.
@@ -336,7 +313,6 @@ fun EmployeesScreen(
     val list by viewModel.employees.collectAsState()
     val outlets by viewModel.outlets.collectAsState()
     var formEdit by remember { mutableStateOf<BmpEmployeeEntity?>(null) }
-    var payTarget by remember { mutableStateOf<BmpEmployeeEntity?>(null) }
     var showClearAllConfirmDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
@@ -526,9 +502,6 @@ fun EmployeesScreen(
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                }
-                                TextButton(onClick = { payTarget = e }, modifier = Modifier.testTag("pay-${e.id}")) {
-                                    Text("Bayar Gaji")
                                 }
                             }
                         }
@@ -759,94 +732,7 @@ fun EmployeesScreen(
         )
     }
 
-    payTarget?.let { target ->
-        val activeSettings by viewModel.settings.collectAsState()
-        val currentMode = activeSettings?.attendanceMode ?: "SUPERVISOR"
-        val ip = activeSettings?.fingerprintIp.orEmpty()
-        val port = activeSettings?.fingerprintPort ?: "4370"
 
-        var amt by remember { mutableStateOf(target.salaryAmount.toLong().toString()) }
-        var att by remember { mutableStateOf("26") }
-        val autoAttendance by viewModel.autoAttendance.collectAsState()
-
-        // Auto-fill attendance when value comes in
-        LaunchedEffect(autoAttendance) {
-            autoAttendance?.let {
-                att = it.toString()
-                viewModel.clearAutoAttendance()
-            }
-        }
-
-        AlertDialog(
-            onDismissRequest = { payTarget = null },
-            title = { Text("Bayar Gaji: ${target.name}") },
-            text = {
-                Column {
-                    OutlinedTextField(
-                        value = amt, onValueChange = { amt = it },
-                        label = { Text("Jumlah (Rp)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth().testTag("pay-amount")
-                    )
-                    Spacer(Modifier.size(8.dp))
-                    OutlinedTextField(
-                        value = att, onValueChange = { att = it.filter { c -> c.isDigit() } },
-                        label = { Text("Hari kehadiran") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth().testTag("pay-att")
-                    )
-                    Spacer(Modifier.size(6.dp))
-                    if (currentMode == "FINGERPRINT") {
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(10.dp)) {
-                                Text("Mode Absensi: Mesin Fingerprint", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
-                                Spacer(Modifier.height(2.dp))
-                                Text("Data kehadiran ditarik otomatis dari mesin fingerprint terhubung ($ip:$port). Pastikan mesin aktif.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    } else {
-                        // Tombol Isi Otomatis dari Absensi Produksi
-                        androidx.compose.material3.OutlinedButton(
-                            onClick = { viewModel.fetchAttendanceFromProduction(target.id) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            androidx.compose.material.icons.Icons.Outlined.let {}
-                            Text("📋 Isi Otomatis dari Absensi Produksi",
-                                style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                    if (att.toIntOrNull() != null && att.toInt() > 0) {
-                        Spacer(Modifier.size(4.dp))
-                        val dailyRate = (amt.replace(",", "").toDoubleOrNull() ?: 0.0) / (att.toIntOrNull() ?: 1)
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                "Rp ${Formatters.rupiah(dailyRate)} / shift",
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.payEmployee(target, amt.replace(",", "").toDoubleOrNull() ?: 0.0, att.toIntOrNull() ?: 0)
-                    payTarget = null
-                }, modifier = Modifier.testTag("btn-confirm-pay")) { Text("Bayar") }
-            },
-            dismissButton = { TextButton(onClick = { payTarget = null }) { Text("Batal") } }
-        )
-    }
 
     // Dialog Konfirmasi Bersihkan Semua Data Karyawan Manufaktur
     if (showClearAllConfirmDialog) {
@@ -870,124 +756,6 @@ fun EmployeesScreen(
             dismissButton = {
                 TextButton(onClick = { showClearAllConfirmDialog = false }) {
                     Text("Batal")
-                }
-            }
-        )
-    }
-}
-
-
-@Composable
-fun PayrollScreen(
-    onBack: () -> Unit,
-    viewModel: EmployeesViewModel = hiltViewModel()
-) {
-    val payrolls by viewModel.payrolls.collectAsState()
-    val emps by viewModel.employees.collectAsState()
-    var editTarget by remember { mutableStateOf<BmpPayrollEntity?>(null) }
-
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = { PosBahTopBar(title = "Penggajian", subtitle = "${payrolls.size} pencatatan", onBack = onBack) }
-    ) { padding ->
-        if (payrolls.isEmpty()) {
-            Box(modifier = Modifier.padding(padding).fillMaxSize()) {
-                EmptyState("Belum ada catatan gaji", "Bayar gaji dari menu Karyawan")
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.padding(padding).fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(payrolls, key = { it.id }) { p ->
-                    val emp = emps.firstOrNull { it.id == p.employeeId }
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("payroll-${p.id}")
-                            .clickable { editTarget = p }
-                    ) {
-                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(emp?.name ?: "Karyawan #${p.employeeId}", style = MaterialTheme.typography.titleSmall)
-                                Text(
-                                    "${Formatters.dateLong(p.paymentDate)} • ${p.attendanceCount} hari",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Text(
-                                Formatters.rupiah(p.amount),
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    if (editTarget != null) {
-        val p = editTarget!!
-        val empName = emps.find { it.id == p.employeeId }?.name ?: "Karyawan"
-        var daysText by remember { mutableStateOf(p.attendanceCount.toString()) }
-        var amountText by remember { mutableStateOf(p.amount.toInt().toString()) }
-
-        AlertDialog(
-            onDismissRequest = { editTarget = null },
-            title = { Text("Koreksi Gaji: $empName") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = daysText,
-                        onValueChange = { daysText = it },
-                        label = { Text("Hari Kerja (Absensi)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = amountText,
-                        onValueChange = { amountText = it },
-                        label = { Text("Total Nominal Gaji (Rp)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val days = daysText.toIntOrNull() ?: 0
-                        val amt = amountText.toDoubleOrNull() ?: 0.0
-                        if (amt > 0) {
-                            val rate = if (days > 0) amt / days else 0.0
-                            viewModel.editPayroll(
-                                p.copy(
-                                    attendanceCount = days,
-                                    amount = amt,
-                                    dailyRate = rate
-                                )
-                            )
-                        }
-                        editTarget = null
-                    }
-                ) { Text("Simpan") }
-            },
-            dismissButton = {
-                Row {
-                    TextButton(
-                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                        onClick = {
-                            viewModel.deletePayroll(p.id)
-                            editTarget = null
-                        }
-                    ) { Text("Hapus") }
-                    Spacer(Modifier.width(8.dp))
-                    TextButton(onClick = { editTarget = null }) { Text("Batal") }
                 }
             }
         )

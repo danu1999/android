@@ -120,10 +120,8 @@ fun BmpDashboardScreen(
             BmpMenuItem("Produksi", "Catatan produksi harian", Icons.Outlined.PrecisionManufacturing, "bmp/production", "menu-production"),
             BmpMenuItem("Mesin & Matras", "Kelola mesin & cetakan", Icons.Outlined.Settings, "bmp/machines", "menu-machines"),
             BmpMenuItem("Pembayaran", "Catat & lihat penerimaan", Icons.Outlined.Payments, "bmp/payments", "menu-payments"),
-            BmpMenuItem("Arus Kas", "Cashflow masuk/keluar", Icons.Outlined.AccountBalance, "bmp/cashflow", "menu-cashflow"),
             BmpMenuItem("Analisis Keuangan", "Laba rugi & ekspor Excel", Icons.Outlined.Analytics, "bmp/reports/financial", "menu-financial-report"),
             BmpMenuItem("Karyawan", "Data & kontrol staf", Icons.Outlined.Badge, "bmp/employees", "menu-employees"),
-            BmpMenuItem("Penggajian", "Payroll & rekap", Icons.Outlined.PriceChange, "bmp/payroll", "menu-payroll"),
             BmpMenuItem("Pengaturan", "Profil perusahaan & sistem", Icons.Outlined.Settings, "bmp/settings", "menu-settings"),
         ).filter { item ->
             val isOwner = ui.role == "OWNER"
@@ -134,12 +132,10 @@ fun BmpDashboardScreen(
                 if (isManager) {
                     item.testTag != "menu-financial-report" &&
                     item.testTag != "menu-employees" &&
-                    item.testTag != "menu-payroll" &&
                     item.testTag != "menu-payments" &&
                     item.testTag != "menu-settings" &&
                     item.testTag != "menu-invoices" &&
-                    item.testTag != "menu-clients" &&
-                    item.testTag != "menu-cashflow"
+                    item.testTag != "menu-clients"
                 } else {
                     item.testTag == "menu-machines" || item.testTag == "menu-production"
                 }
@@ -242,12 +238,6 @@ fun BmpDashboardScreen(
                         WelcomeCard(role = ui.role)
                     }
                 }
-                if (isOwner) {
-                    item {
-                        Spacer(Modifier.height(4.dp))
-                        CashFlowTrendChart(history = ui.cashFlowHistory)
-                    }
-                }
                 // Bug #3 fix: demo user baru mendapat tenantId "demo_tenant_*", bukan persis "demo_tenant"
                 if (ui.tenantId == "demo_tenant" || ui.tenantId?.startsWith("demo_tenant_") == true) {
 
@@ -289,52 +279,7 @@ fun BmpDashboardScreen(
                             }
                         }
                     }
-                    item {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Box(Modifier.weight(1f)) {
-                                StatChip(
-                                    label = "Cashflow Masuk",
-                                    value = Formatters.rupiah(ui.totalIn),
-                                    accent = androidx.compose.ui.graphics.Color(0xFF22C57E)
-                                )
-                            }
-                            Box(Modifier.weight(1f)) {
-                                StatChip(
-                                    label = "Cashflow Keluar",
-                                    value = Formatters.rupiah(ui.totalOut),
-                                    accent = MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
-                    }
-                    item {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Box(Modifier.weight(1f)) {
-                                StatChip(
-                                    label = "Saldo Kas Riil",
-                                    value = Formatters.rupiah(ui.saldoKasRiil),
-                                    accent = if (ui.saldoKasRiil >= 0)
-                                        androidx.compose.ui.graphics.Color(0xFF3B82F6)
-                                    else MaterialTheme.colorScheme.error
-                                )
-                            }
-                            Box(Modifier.weight(1f)) {
-                                StatChip(
-                                    label = "Simulasi Saldo",
-                                    value = Formatters.rupiah(ui.simulasiSaldo),
-                                    accent = if (ui.simulasiSaldo >= 0)
-                                        MaterialTheme.colorScheme.tertiary
-                                    else MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
-                    }
+
                 }
 
                 if (kpiState is UiState.Success) {
@@ -646,259 +591,6 @@ private fun MenuCard(item: BmpMenuItem, onClick: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        }
-    }
-}
-
-@Composable
-fun CashFlowTrendChart(
-    history: List<BmpCashFlowDataPoint>,
-    modifier: Modifier = Modifier
-) {
-    if (history.isEmpty()) return
-    
-    val maxAmount = remember(history) {
-        val maxVal = history.flatMap { listOf(it.inAmount, it.outAmount) }.maxOrNull() ?: 0.0
-        if (maxVal == 0.0) 10000.0 else maxVal * 1.15 // 15% padding at top
-    }
-    
-    val primaryColor = androidx.compose.ui.graphics.Color(0xFF22C57E) // Masuk (Green)
-    val errorColor = androidx.compose.ui.graphics.Color(0xFFEF4444)   // Keluar (Red)
-    val gridColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
-    
-    val textPaint = remember {
-        android.graphics.Paint().apply {
-            color = android.graphics.Color.GRAY
-            textSize = 28f
-            textAlign = android.graphics.Paint.Align.CENTER
-            isAntiAlias = true
-        }
-    }
-    
-    androidx.compose.material3.Card(
-        colors = androidx.compose.material3.CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = androidx.compose.material3.CardDefaults.cardElevation(defaultElevation = 2.dp),
-        modifier = modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Text(
-                        text = "Tren Arus Kas (7 Hari Terakhir)",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "Perbandingan kas masuk vs kas keluar harian",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Canvas Chart
-            androidx.compose.foundation.Canvas(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(180.dp)
-            ) {
-                val width = size.width
-                val height = size.height
-                
-                val paddingLeft = 50f
-                val paddingRight = 50f
-                val paddingTop = 20f
-                val paddingBottom = 50f
-                
-                val chartWidth = width - paddingLeft - paddingRight
-                val chartHeight = height - paddingTop - paddingBottom
-                
-                // Draw horizontal grid lines (3 lines)
-                val gridLines = 3
-                for (i in 0..gridLines) {
-                    val y = paddingTop + (chartHeight / gridLines) * i
-                    drawLine(
-                        color = gridColor,
-                        start = androidx.compose.ui.geometry.Offset(paddingLeft, y),
-                        end = androidx.compose.ui.geometry.Offset(width - paddingRight, y),
-                        strokeWidth = 1.dp.toPx()
-                    )
-                }
-                
-                val stepX = if (history.size > 1) chartWidth / (history.size - 1) else chartWidth
-                
-                // Prepare paths for line and shadow
-                val inPath = androidx.compose.ui.graphics.Path()
-                val outPath = androidx.compose.ui.graphics.Path()
-                val inShadowPath = androidx.compose.ui.graphics.Path()
-                val outShadowPath = androidx.compose.ui.graphics.Path()
-                
-                val pointsIn = ArrayList<androidx.compose.ui.geometry.Offset>()
-                val pointsOut = ArrayList<androidx.compose.ui.geometry.Offset>()
-                
-                history.forEachIndexed { index, dp ->
-                    val x = paddingLeft + index * stepX
-                    
-                    // Inflow Y
-                    val yIn = paddingTop + chartHeight - ((dp.inAmount / maxAmount) * chartHeight).toFloat()
-                    // Outflow Y
-                    val yOut = paddingTop + chartHeight - ((dp.outAmount / maxAmount) * chartHeight).toFloat()
-                    
-                    val pIn = androidx.compose.ui.geometry.Offset(x, yIn)
-                    val pOut = androidx.compose.ui.geometry.Offset(x, yOut)
-                    
-                    pointsIn.add(pIn)
-                    pointsOut.add(pOut)
-                    
-                    if (index == 0) {
-                        inPath.moveTo(x, yIn)
-                        outPath.moveTo(x, yOut)
-                        inShadowPath.moveTo(x, paddingTop + chartHeight)
-                        inShadowPath.lineTo(x, yIn)
-                        outShadowPath.moveTo(x, paddingTop + chartHeight)
-                        outShadowPath.lineTo(x, yOut)
-                    } else {
-                        inPath.lineTo(x, yIn)
-                        outPath.lineTo(x, yOut)
-                        inShadowPath.lineTo(x, yIn)
-                        outShadowPath.lineTo(x, yOut)
-                    }
-                    
-                    if (index == history.lastIndex) {
-                        inShadowPath.lineTo(x, paddingTop + chartHeight)
-                        inShadowPath.close()
-                        outShadowPath.lineTo(x, paddingTop + chartHeight)
-                        outShadowPath.close()
-                    }
-                    
-                    // Draw date labels on bottom
-                    drawContext.canvas.nativeCanvas.drawText(
-                        dp.dateLabel,
-                        x,
-                        height - 10f,
-                        textPaint
-                    )
-                }
-                
-                // Draw Inflow Shadow (Green gradient)
-                drawPath(
-                    path = inShadowPath,
-                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                        colors = listOf(
-                            primaryColor.copy(alpha = 0.2f),
-                            primaryColor.copy(alpha = 0.0f)
-                        ),
-                        startY = paddingTop,
-                        endY = paddingTop + chartHeight
-                    )
-                )
-                
-                // Draw Outflow Shadow (Red gradient)
-                drawPath(
-                    path = outShadowPath,
-                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(
-                        colors = listOf(
-                            errorColor.copy(alpha = 0.15f),
-                            errorColor.copy(alpha = 0.0f)
-                        ),
-                        startY = paddingTop,
-                        endY = paddingTop + chartHeight
-                    )
-                )
-                
-                // Draw Lines
-                drawPath(
-                    path = inPath,
-                    color = primaryColor,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = 3.dp.toPx(),
-                        cap = androidx.compose.ui.graphics.StrokeCap.Round
-                    )
-                )
-                
-                drawPath(
-                    path = outPath,
-                    color = errorColor,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(
-                        width = 3.dp.toPx(),
-                        cap = androidx.compose.ui.graphics.StrokeCap.Round
-                    )
-                )
-                
-                // Draw dot points
-                pointsIn.forEach { pt ->
-                    drawCircle(
-                        color = primaryColor,
-                        radius = 4.dp.toPx(),
-                        center = pt
-                    )
-                    drawCircle(
-                        color = androidx.compose.ui.graphics.Color.White,
-                        radius = 2.dp.toPx(),
-                        center = pt
-                    )
-                }
-                
-                pointsOut.forEach { pt ->
-                    drawCircle(
-                        color = errorColor,
-                        radius = 4.dp.toPx(),
-                        center = pt
-                    )
-                    drawCircle(
-                        color = androidx.compose.ui.graphics.Color.White,
-                        radius = 2.dp.toPx(),
-                        center = pt
-                    )
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            // Legends
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .background(primaryColor, RoundedCornerShape(50))
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Kas Masuk",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                
-                Spacer(modifier = Modifier.width(24.dp))
-                
-                Box(
-                    modifier = Modifier
-                        .size(10.dp)
-                        .background(errorColor, RoundedCornerShape(50))
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Kas Keluar",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
         }
     }
 }

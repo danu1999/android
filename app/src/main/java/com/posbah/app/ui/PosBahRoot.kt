@@ -11,12 +11,10 @@ import androidx.navigation.navArgument
 import com.posbah.app.ui.navigation.Screen
 import com.posbah.app.ui.screens.bmp.bahanbaku.BahanBakuFormScreen
 import com.posbah.app.ui.screens.bmp.bahanbaku.BahanBakuListScreen
-import com.posbah.app.ui.screens.bmp.cashflow.CashFlowScreen
 import com.posbah.app.ui.screens.bmp.clients.ClientEditScreen
 import com.posbah.app.ui.screens.bmp.clients.ClientsScreen
 import com.posbah.app.ui.screens.bmp.dashboard.BmpDashboardScreen
 import com.posbah.app.ui.screens.bmp.employees.EmployeesScreen
-import com.posbah.app.ui.screens.bmp.employees.PayrollScreen
 import com.posbah.app.ui.screens.bmp.invoices.InvoiceDetailScreen
 import com.posbah.app.ui.screens.bmp.invoices.InvoiceFormScreen
 import com.posbah.app.ui.screens.bmp.invoices.InvoicesListScreen
@@ -371,22 +369,7 @@ fun PosBahRoot(
             }
         }
 
-        composable(Screen.BmpCashFlow.route) {
-            if (!viewModel.isOwner()) {
-                androidx.compose.runtime.LaunchedEffect(Unit) {
-                    nav.navigate(Screen.BmpDashboard.route) {
-                        popUpTo(Screen.BmpDashboard.route) { inclusive = true }
-                    }
-                }
-            } else {
-                CashFlowScreen(
-                    onBack = { nav.popBackStack() },
-                    onNavigateToInvoiceDetail = { id ->
-                        nav.navigate(Screen.BmpInvoiceDetail.build(id))
-                    }
-                )
-            }
-        }
+
 
         composable(Screen.BmpEmployees.route) {
             if (!viewModel.isOwner()) {
@@ -400,17 +383,7 @@ fun PosBahRoot(
             }
         }
 
-        composable(Screen.BmpPayroll.route) {
-            if (!viewModel.isOwner()) {
-                androidx.compose.runtime.LaunchedEffect(Unit) {
-                    nav.navigate(Screen.BmpDashboard.route) {
-                        popUpTo(Screen.BmpDashboard.route) { inclusive = true }
-                    }
-                }
-            } else {
-                PayrollScreen(onBack = { nav.popBackStack() })
-            }
-        }
+
 
         composable(Screen.BmpSettings.route) {
             if (!viewModel.isOwner()) {

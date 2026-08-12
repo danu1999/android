@@ -584,8 +584,6 @@ fun SettingsScreen(
                                     "customers" to "Pelanggan POS",
                                     "bmp_clients" to "Klien B2B",
                                     "bmp_employees" to "Karyawan BMP",
-                                    "bmp_payrolls" to "Gaji / Payroll",
-                                    "bmp_cashflow" to "Arus Kas (Bmp)",
                                     "bmp_settings" to "Profil Perusahaan",
                                     "outlets" to "Cabang / Outlet",
                                     "bmp_master_products" to "Master Produk (Bmp)"
