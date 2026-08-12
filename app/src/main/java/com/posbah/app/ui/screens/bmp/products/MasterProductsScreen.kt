@@ -97,6 +97,7 @@ class MasterProductsViewModel @Inject constructor(
     private val machineRepo: com.posbah.app.data.repository.BmpMachineRepository,
     private val moldRepo: com.posbah.app.data.repository.BmpMoldRepository,
     private val priceTrackingRepo: com.posbah.app.data.repository.BmpPriceTrackingRepository,
+    private val employeeRepo: com.posbah.app.data.repository.BmpEmployeeRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
@@ -104,6 +105,7 @@ class MasterProductsViewModel @Inject constructor(
     val settings = settingsRepo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, null)
     val machines = machineRepo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val molds = moldRepo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val employees = employeeRepo.observe(tenantId).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _latestRates = MutableStateFlow<Map<String, Double>>(emptyMap())
     val latestRates = _latestRates.asStateFlow()
@@ -509,8 +511,9 @@ fun MasterProductsScreen(
         val latestRates by viewModel.latestRates.collectAsState()
         val machinesState by viewModel.machines.collectAsState()
         val moldsState by viewModel.molds.collectAsState()
+        val employeesState by viewModel.employees.collectAsState()
 
-        val hppRes = remember(e, settings, latestRates, machinesState, moldsState) {
+        val hppRes = remember(e, settings, latestRates, machinesState, moldsState, employeesState) {
             settings?.let { s ->
                 val colorantMaterialRaw = e.colorantMaterial ?: ""
                 val colorantName = colorantMaterialRaw.substringBefore(":")
@@ -549,9 +552,16 @@ fun MasterProductsScreen(
                         e.cycleTime * biayaPerDetik
                     }
                 } else {
-                    val totalGaji = s.jumlahKaryawan * s.gajiHarian * s.hariKerjaSebulan
-                    val overheadBulanan = s.listrikBulanan + totalGaji
-                    val totalDetikSebulan = s.jumlahMesin * s.hariKerjaSebulan * s.hoursPerDay * 3600.0
+                    val activeEmpCount = employeesState.count { it.isActive }
+                    val effectiveEmpCount = if (activeEmpCount > 0) activeEmpCount else s.jumlahKaryawan
+                    val activeMachineCount = machinesState.size
+                    val effectiveMachineCount = if (activeMachineCount > 0) activeMachineCount else s.jumlahMesin
+                    val activeListrikCost = machinesState.sumOf { it.electricityCostDaily * s.hariKerjaSebulan }
+                    val effectiveListrikBulanan = if (activeListrikCost > 0.0) activeListrikCost else s.listrikBulanan
+
+                    val totalGaji = effectiveEmpCount * s.gajiHarian * s.hariKerjaSebulan
+                    val overheadBulanan = effectiveListrikBulanan + totalGaji
+                    val totalDetikSebulan = effectiveMachineCount * s.hariKerjaSebulan * s.hoursPerDay * 3600.0
                     val biayaPerDetik = if (totalDetikSebulan > 0) overheadBulanan / totalDetikSebulan else 0.0
                     e.cycleTime * biayaPerDetik
                 }

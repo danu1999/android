@@ -24,6 +24,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Apartment
 import androidx.compose.material.icons.outlined.Storefront
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import com.posbah.app.util.Formatters
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -83,6 +86,7 @@ class SettingsViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val employeeRepo: EmployeeRepository,
     private val bmpEmployeeRepo: BmpEmployeeRepository,
+    private val machineRepo: com.posbah.app.data.repository.BmpMachineRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val tenantId = authRepository.activeTenantId().orEmpty()
@@ -92,6 +96,7 @@ class SettingsViewModel @Inject constructor(
             try { settingsRepo.refresh() } catch (_: Exception) {}
             try { employeeRepo.refresh() } catch (_: Exception) {}
             try { bmpEmployeeRepo.refresh() } catch (_: Exception) {}
+            try { machineRepo.refresh() } catch (_: Exception) {}
         }
     }
 
@@ -108,6 +113,12 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<OutletData>())
 
     val posEmployees = employeeRepo.observeForTenant(tenantId)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val bmpEmployees = bmpEmployeeRepo.observe(tenantId)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val machines = machineRepo.observe(tenantId)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     init {
@@ -279,6 +290,8 @@ fun SettingsScreen(
     var outletPhone by remember { mutableStateOf("") }
     val context = androidx.compose.ui.platform.LocalContext.current
     val posEmployees by viewModel.posEmployees.collectAsState()
+    val bmpEmployees by viewModel.bmpEmployees.collectAsState()
+    val machines by viewModel.machines.collectAsState()
     var selectedEmployeeId by remember { mutableStateOf<Long?>(null) }
     var selectedEmployeeName by remember { mutableStateOf("") }
     var employeeDropdownExpanded by remember { mutableStateOf(false) }
@@ -424,42 +437,45 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             item {
-                OutlinedTextField(
-                    value = if (d.listrikBulanan == 0.0) "" else d.listrikBulanan.toLong().toString(),
-                    onValueChange = { v ->
-                        val n = v.replace(",", "").toDoubleOrNull() ?: 0.0
-                        viewModel.update { it.copy(listrikBulanan = n) }
-                    },
-                    label = { Text("Listrik Bulanan (Rp)") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth().testTag("settings-listrik")
-                )
-            }
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = if (d.jumlahMesin == 0) "" else d.jumlahMesin.toString(),
-                        onValueChange = { v ->
-                            val n = v.toIntOrNull() ?: 0
-                            viewModel.update { it.copy(jumlahMesin = n) }
-                        },
-                        label = { Text("Jumlah Mesin (Unit)") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f).testTag("settings-mesin")
-                    )
-                    OutlinedTextField(
-                        value = if (d.jumlahKaryawan == 0) "" else d.jumlahKaryawan.toString(),
-                        onValueChange = { v ->
-                            val n = v.toIntOrNull() ?: 0
-                            viewModel.update { it.copy(jumlahKaryawan = n) }
-                        },
-                        label = { Text("Jumlah Karyawan") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f).testTag("settings-karyawan")
-                    )
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                    ),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "ℹ️ Dihitung Otomatis dari Sistem:",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        val activeEmpCount = bmpEmployees.count { it.isActive }
+                        val activeMachineCount = machines.size
+                        val totalListrikEst = machines.sumOf {
+                            it.electricityCostDaily * (if (d.hariKerjaSebulan > 0) d.hariKerjaSebulan else 25)
+                        }
+
+                        Text(
+                            text = "• Jumlah Karyawan: $activeEmpCount Orang (otomatis dari menu Karyawan)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Text(
+                            text = "• Jumlah Mesin: $activeMachineCount Unit (otomatis dari menu Mesin & Matras)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Text(
+                            text = "• Estimasi Listrik Bulanan: ${Formatters.rupiah(totalListrikEst)} (dihitung dari Biaya Listrik Harian Mesin)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
                 }
             }
             item {

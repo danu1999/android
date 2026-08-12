@@ -36,6 +36,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -81,9 +84,10 @@ fun BahanBakuListScreen(
     onEdit: (Long) -> Unit,
     viewModel: BahanBakuListViewModel = hiltViewModel()
 ) {
-    val list by viewModel.filteredList.collectAsState()
+    val list: List<com.posbah.app.data.local.entities.BmpBahanBakuEntity> by viewModel.filteredList.collectAsState()
     val totalHarga by viewModel.totalHarga.collectAsState()
     val totalNominal by viewModel.totalNominal.collectAsState()
+    val selectedCategory by viewModel.selectedCategory.collectAsState()
 
     val filteredTotalHarga = remember(list) { list.sumOf { it.totalHarga } }
     val filteredTotalNominal = remember(list) { list.sumOf { it.nominal } }
@@ -200,6 +204,31 @@ fun BahanBakuListScreen(
                     Icon(imageVector = Icons.Outlined.Science, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
                     Text("Catat Giling Afval (Daur Ulang)", fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.height(8.dp))
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    val categories = listOf(
+                        "ALL" to "Semua",
+                        "BAHAN_BAKU" to "Bahan Baku",
+                        "PIGMEN" to "Pigmen / Warna",
+                        "PERLENGKAPAN" to "Perlengkapan & APD"
+                    )
+                    items(categories.size) { idx ->
+                        val (catKey, catLabel) = categories[idx]
+                        val isSelected = selectedCategory == catKey
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { viewModel.setSelectedCategory(catKey) },
+                            label = { Text(catLabel, style = MaterialTheme.typography.bodySmall) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                            )
+                        )
+                    }
                 }
             }
 

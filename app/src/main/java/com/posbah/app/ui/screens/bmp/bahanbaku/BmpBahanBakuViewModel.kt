@@ -67,28 +67,61 @@ class BahanBakuListViewModel @Inject constructor(
     private val _filterDibayar = MutableStateFlow(false)
     val filterDibayar = _filterDibayar.asStateFlow()
 
-    val filteredList = kotlinx.coroutines.flow.combine(
-        repo.observe(tenantId),
+    private val _selectedCategory = MutableStateFlow("ALL")
+    val selectedCategory = _selectedCategory.asStateFlow()
+
+    private data class BmpFilterParams(
+        val start: Long?,
+        val end: Long?,
+        val showHutang: Boolean,
+        val showPaid: Boolean,
+        val category: String
+    )
+
+    private val filterParams = kotlinx.coroutines.flow.combine(
         _filterStartDate,
         _filterEndDate,
         _filterHutang,
-        _filterDibayar
-    ) { rawList, start, end, showHutang, showPaid ->
+        _filterDibayar,
+        _selectedCategory
+    ) { start, end, showHutang, showPaid, cat ->
+        BmpFilterParams(start, end, showHutang, showPaid, cat)
+    }
+
+    val filteredList = kotlinx.coroutines.flow.combine(
+        repo.observe(tenantId),
+        filterParams
+    ) { rawList, params ->
         var list = rawList
-        if (start != null) {
-            list = list.filter { it.tanggal >= start }
+        if (params.start != null) {
+            list = list.filter { it.tanggal >= params.start }
         }
-        if (end != null) {
-            list = list.filter { it.tanggal <= end + 24 * 60 * 60 * 1000L - 1 }
+        if (params.end != null) {
+            list = list.filter { it.tanggal <= params.end + 24 * 60 * 60 * 1000L - 1 }
         }
-        if (showHutang && !showPaid) {
+        if (params.showHutang && !params.showPaid) {
             list = list.filter { it.totalHarga - it.nominal > 0 }
         }
-        if (showPaid && !showHutang) {
+        if (params.showPaid && !params.showHutang) {
             list = list.filter { it.totalHarga - it.nominal <= 0 }
+        }
+        if (params.category != "ALL") {
+            list = list.filter { entry ->
+                val text = "${entry.supplier} ${entry.notes} ${entry.noTagihan}".lowercase()
+                when (params.category) {
+                    "BAHAN_BAKU" -> text.contains("biji") || text.contains("plastik") || text.contains("pp") || text.contains("pe") || text.contains("hd") || text.contains("abs") || text.contains("recycle") || text.contains("baku") || text.contains("giling") || (!text.contains("oli") && !text.contains("selang") && !text.contains("pigmen") && !text.contains("warna") && !text.contains("karung") && !text.contains("safety"))
+                    "PIGMEN" -> text.contains("pigmen") || text.contains("warna") || text.contains("color") || text.contains("masterbatch") || text.contains("pewarna")
+                    "PERLENGKAPAN" -> text.contains("oli") || text.contains("selang") || text.contains("safety") || text.contains("apd") || text.contains("karung") || text.contains("packing") || text.contains("kemasan") || text.contains("sparepart") || text.contains("perlengkapan") || text.contains("alat")
+                    else -> true
+                }
+            }
         }
         list
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<BmpBahanBakuEntity>())
+
+    fun setSelectedCategory(category: String) {
+        _selectedCategory.value = category
+    }
 
     fun setDateRange(start: Long?, end: Long?) {
         _filterStartDate.value = start
@@ -102,6 +135,7 @@ class BahanBakuListViewModel @Inject constructor(
     fun toggleFilterDibayar(enabled: Boolean) {
         _filterDibayar.value = enabled
     }
+
 
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()
