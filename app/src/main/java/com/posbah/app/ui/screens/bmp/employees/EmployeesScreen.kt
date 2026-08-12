@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Badge
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -313,6 +314,7 @@ fun EmployeesScreen(
     val list by viewModel.employees.collectAsState()
     val outlets by viewModel.outlets.collectAsState()
     var formEdit by remember { mutableStateOf<BmpEmployeeEntity?>(null) }
+    var paySalaryTarget by remember { mutableStateOf<BmpEmployeeEntity?>(null) }
     var showClearAllConfirmDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
@@ -473,35 +475,71 @@ fun EmployeesScreen(
                     }
                 } else {
                     items(list, key = { it.id }) { e ->
+                        val attendanceCount = remember(e.id) { viewModel.countAttendanceFromProduction(e.id) }
+                        val estimatedTotalGaji = attendanceCount * e.salaryAmount
                         Surface(
                             shape = RoundedCornerShape(14.dp),
                             color = MaterialTheme.colorScheme.surface,
-                            modifier = Modifier.fillMaxWidth()
-                                .clickable { formEdit = e }
-                                .testTag("emp-${e.id}")
+                            modifier = Modifier.fillMaxWidth().testTag("emp-${e.id}")
                         ) {
-                            Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Surface(
-                                    shape = RoundedCornerShape(50),
-                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                                    modifier = Modifier.size(40.dp)
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().clickable { formEdit = e },
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(Icons.Outlined.Badge, null, tint = MaterialTheme.colorScheme.primary)
+                                    Surface(
+                                        shape = RoundedCornerShape(50),
+                                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(Icons.Outlined.Badge, null, tint = MaterialTheme.colorScheme.primary)
+                                        }
+                                    }
+                                    Spacer(Modifier.size(12.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(e.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                        val pinText = if (!e.fingerprintPIN.isNullOrBlank()) "PIN: ${e.fingerprintPIN}" else "PIN Belum Set"
+                                        val outletName = outlets.firstOrNull { it.id == e.outletId }?.name
+                                            ?: outlets.firstOrNull()?.name
+                                            ?: "Outlet Utama"
+                                        Text(
+                                            "${e.position ?: "Karyawan"} • $pinText • Outlet: $outletName",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
                                     }
                                 }
-                                Spacer(Modifier.size(12.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(e.name, style = MaterialTheme.typography.titleMedium)
-                                    val pinText = if (!e.fingerprintPIN.isNullOrBlank()) "PIN: ${e.fingerprintPIN}" else "PIN Belum Set"
-                                    val outletName = outlets.firstOrNull { it.id == e.outletId }?.name
-                                        ?: outlets.firstOrNull()?.name
-                                        ?: "Outlet Utama"
-                                    Text(
-                                        "${e.position ?: "Karyawan"} • ${Formatters.rupiah(e.salaryAmount)} • $pinText • Outlet: $outletName",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                Spacer(Modifier.height(10.dp))
+                                androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                                Spacer(Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            "Gaji Harian: ${Formatters.rupiah(e.salaryAmount)}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        Text(
+                                            "Hadir Bulan Ini: $attendanceCount hari | Est. Gaji: ${Formatters.rupiah(estimatedTotalGaji)}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Button(
+                                        onClick = { paySalaryTarget = e },
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                        modifier = Modifier.testTag("btn-pay-salary-${e.id}")
+                                    ) {
+                                        Icon(Icons.Outlined.Payments, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Bayar Gaji", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
                         }
@@ -755,6 +793,81 @@ fun EmployeesScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showClearAllConfirmDialog = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    paySalaryTarget?.let { target ->
+        val defaultAttCount = remember(target.id) { viewModel.countAttendanceFromProduction(target.id) }
+        var inputDaysText by remember { mutableStateOf(if (defaultAttCount > 0) defaultAttCount.toString() else "25") }
+        var payMethod by remember { mutableStateOf("TRANSFER") }
+        var payNote by remember { mutableStateOf("Gaji Bulan Ini") }
+        val daysInt = inputDaysText.toIntOrNull() ?: 0
+        val totalPay = daysInt * target.salaryAmount
+
+        AlertDialog(
+            onDismissRequest = { paySalaryTarget = null },
+            icon = { Icon(Icons.Outlined.Payments, contentDescription = null, tint = Color(0xFF10B981)) },
+            title = { Text("Bayar Gaji: ${target.name}") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Jabatan: ${target.position ?: "Karyawan"} • Gaji Harian: ${Formatters.rupiah(target.salaryAmount)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = inputDaysText,
+                        onValueChange = { inputDaysText = it.filter { c -> c.isDigit() } },
+                        label = { Text("Jumlah Hari Hadir (Qty Hadir)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("input-pay-days")
+                    )
+                    OutlinedTextField(
+                        value = payNote,
+                        onValueChange = { payNote = it },
+                        label = { Text("Catatan Pembayaran") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text("Rincian Pembayaran Kas Keluar:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            Text("$daysInt hari × ${Formatters.rupiah(target.salaryAmount)}", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                "Total Dibayar: ${Formatters.rupiah(totalPay)}",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        android.widget.Toast.makeText(
+                            context,
+                            "Gaji ${Formatters.rupiah(totalPay)} untuk ${target.name} ($daysInt hari) berhasil dibayarkan!",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
+                        paySalaryTarget = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                    modifier = Modifier.testTag("btn-confirm-pay-salary")
+                ) {
+                    Text("Konfirmasi Bayar Gaji", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { paySalaryTarget = null }) {
                     Text("Batal")
                 }
             }

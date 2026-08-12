@@ -471,7 +471,12 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                         Text(
-                            text = "• Estimasi Listrik Bulanan: ${Formatters.rupiah(totalListrikEst)} (dihitung dari Biaya Listrik Harian Mesin)",
+                            text = "• Gaji Karyawan: Diatur masing-masing per Karyawan (Gaji Harian × Hadir di menu Karyawan)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Text(
+                            text = "• Jam & Hari Kerja: 24 Jam/Hari, 25 Hari/Bulan (Standar Pabrik)",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
@@ -479,56 +484,17 @@ fun SettingsScreen(
                 }
             }
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = if (d.gajiHarian == 0.0) "" else d.gajiHarian.toLong().toString(),
-                        onValueChange = { v ->
-                            val n = v.replace(",", "").toDoubleOrNull() ?: 0.0
-                            viewModel.update { it.copy(gajiHarian = n) }
-                        },
-                        label = { Text("Gaji Harian (Rp)") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f).testTag("settings-gaji")
-                    )
-                    OutlinedTextField(
-                        value = if (d.hariKerjaSebulan == 0) "" else d.hariKerjaSebulan.toString(),
-                        onValueChange = { v ->
-                            val n = v.toIntOrNull() ?: 0
-                            viewModel.update { it.copy(hariKerjaSebulan = n) }
-                        },
-                        label = { Text("Hari Kerja / Bulan") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f).testTag("settings-hari-kerja")
-                    )
-                }
-            }
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = if (d.biayaKarungPer1000 == 0.0) "" else d.biayaKarungPer1000.toLong().toString(),
-                        onValueChange = { v ->
-                            val n = v.replace(",", "").toDoubleOrNull() ?: 0.0
-                            viewModel.update { it.copy(biayaKarungPer1000 = n) }
-                        },
-                        label = { Text("Biaya Karung / 1000 Pcs (Rp)") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1.2f).testTag("settings-karung")
-                    )
-                    OutlinedTextField(
-                        value = if (d.hoursPerDay == 0) "" else d.hoursPerDay.toString(),
-                        onValueChange = { v ->
-                            val n = v.toIntOrNull() ?: 0
-                            viewModel.update { it.copy(hoursPerDay = n) }
-                        },
-                        label = { Text("Jam Kerja / Hari") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(0.8f).testTag("settings-jam-kerja")
-                    )
-                }
+                OutlinedTextField(
+                    value = if (d.biayaKarungPer1000 == 0.0) "" else d.biayaKarungPer1000.toLong().toString(),
+                    onValueChange = { v ->
+                        val n = v.replace(",", "").toDoubleOrNull() ?: 0.0
+                        viewModel.update { it.copy(biayaKarungPer1000 = n) }
+                    },
+                    label = { Text("Biaya Karung / 1000 Pcs (Rp)") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth().testTag("settings-karung")
+                )
             }
             item {
                 Spacer(Modifier.height(12.dp))
