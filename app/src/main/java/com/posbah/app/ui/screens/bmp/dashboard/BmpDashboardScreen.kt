@@ -166,6 +166,17 @@ fun BmpDashboardScreen(
                         expanded = fabMenuExpanded,
                         onDismissRequest = { fabMenuExpanded = false }
                     ) {
+                        DropdownMenuItem(
+                            text = { Text("Catat Hasil Shift (Produksi)") },
+                            onClick = {
+                                fabMenuExpanded = false
+                                onNavigate(Screen.BmpProductionLog.route)
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Outlined.PrecisionManufacturing, contentDescription = null)
+                            },
+                            modifier = Modifier.testTag("menu-item-catat-hasil-shift")
+                        )
                         if (ui.role == "OWNER") {
                             DropdownMenuItem(
                                 text = { Text("Buat Invoice Baru") },
@@ -236,6 +247,54 @@ fun BmpDashboardScreen(
                         HeroCard(ui = ui)
                     } else {
                         WelcomeCard(role = ui.role)
+                    }
+                }
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.fillMaxWidth().clickable {
+                            onNavigate(Screen.BmpProductionLog.route)
+                        }.testTag("btn-quick-catat-shift")
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(44.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            Icons.Outlined.PrecisionManufacturing,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onPrimary
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        "⚡ Catat Hasil Shift (Produksi)",
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Text(
+                                        "Input cepat hasil produksi mesin & operator shift ini",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                    )
+                                }
+                            }
+                            Text("➡️", fontSize = 18.sp)
+                        }
                     }
                 }
                 // Bug #3 fix: demo user baru mendapat tenantId "demo_tenant_*", bukan persis "demo_tenant"
