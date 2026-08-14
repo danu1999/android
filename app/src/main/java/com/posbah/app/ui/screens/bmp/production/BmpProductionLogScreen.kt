@@ -42,6 +42,7 @@ import com.posbah.app.data.repository.BmpEmployeeData
 import com.posbah.app.data.repository.BmpEmployeeRepository
 import com.posbah.app.data.repository.BmpMachineRepository
 import com.posbah.app.data.repository.BmpMasterProductRepository
+import com.posbah.app.data.repository.BmpMoldRepository
 import com.posbah.app.data.repository.BmpProductionLogRepository
 import com.posbah.app.data.repository.BmpStockRepository
 import com.posbah.app.data.repository.OnlineWriteResult
@@ -133,6 +134,7 @@ class BmpProductionLogViewModel @Inject constructor(
     private val stockRepo: BmpStockRepository,
     private val bahanBakuRepo: BmpBahanBakuRepository,
     private val machineRepo: BmpMachineRepository,
+    private val moldRepo: BmpMoldRepository,
     private val employeeRepo: BmpEmployeeRepository,
     private val authRepository: AuthRepository,
     @ApplicationContext private val context: Context
@@ -341,6 +343,16 @@ class BmpProductionLogViewModel @Inject constructor(
             if (result is OnlineWriteResult.Success) {
                 savedCount++
                 stockRepo.adjustStock(productId = product.id, quantity = qtyProd, reason = "PRODUKSI")
+                
+                // v2.19.66: Auto-increment hitungan pukulan matras (usage_count)
+                val targetMoldId: Long? = product.moldId?.toLong() ?: entry.machine.moldId
+                if (targetMoldId != null && targetMoldId > 0L) {
+                    val cavity = if (product.cavity > 0) product.cavity else 1
+                    val shotsAdded = kotlin.math.ceil(qtyProd / cavity.toDouble()).toInt()
+                    if (shotsAdded > 0) {
+                        moldRepo.incrementUsageCount(targetMoldId, shotsAdded)
+                    }
+                }
                 if (entry.isCampuranBahan) {
                     val totalRasio = entry.campuranBahan.sumOf { it.rasio.toDoubleOrNull() ?: 0.0 }
                     if (totalRasio > 0) {

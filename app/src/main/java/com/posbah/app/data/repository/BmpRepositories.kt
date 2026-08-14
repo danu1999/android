@@ -2741,6 +2741,23 @@ class BmpMoldRepository @Inject constructor(
         }
     }
 
+    /** Auto-increment usage_count matras (pukulan shot) dari log produksi */
+    suspend fun incrementUsageCount(moldId: Long, additionalShots: Int): OnlineWriteResult {
+        if (moldId <= 0 || additionalShots <= 0) return OnlineWriteResult.Success
+        val snapshot = _items.value
+        val existing = snapshot.find { it.id == moldId } ?: return OnlineWriteResult.Success
+        val newUsage = existing.usageCount + additionalShots
+        _items.value = snapshot.map { if (it.id == moldId) it.copy(usageCount = newUsage) else it }
+        return try {
+            api.updateMold(moldId, mapOf("usage_count" to newUsage))
+            refresh()
+            OnlineWriteResult.Success
+        } catch (e: Exception) {
+            _items.value = snapshot
+            OnlineWriteResult.Error(e.message ?: "Gagal update pemakaian matras")
+        }
+    }
+
     fun observe(tenantId: String): Flow<List<com.posbah.app.data.local.entities.BmpMoldEntity>> =
         _items.map { list ->
             list.map {

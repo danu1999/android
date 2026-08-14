@@ -80,8 +80,16 @@ import com.posbah.app.util.CameraUtils
 import com.posbah.app.util.Formatters
 import java.io.File
 
-private val JENIS_BAHAN_OPTIONS = listOf(
-    "PP Original", "PP Peletan", "PP Gilingan", "PE", "HDPE", "LDPE", "PVC", "ABS", "PS", "Lainnya"
+private val BAHAN_BAKU_OPTIONS = listOf(
+    "PP Original", "PP Peletan", "PP Gilingan", "PE", "HDPE", "LDPE", "PVC", "ABS", "PS", "Recycle/Afval", "Lainnya"
+)
+
+private val PIGMEN_OPTIONS = listOf(
+    "Pigmen Merah", "Pigmen Kuning", "Pigmen Biru", "Pigmen Hijau", "Masterbatch Hitam", "Masterbatch Putih", "Masterbatch Silver", "Pewarna Custom"
+)
+
+private val PERLENGKAPAN_OPTIONS = listOf(
+    "Oli Mesin Tellus 68", "Oli Hidrolik", "Selang Hidrolik High Pressure", "Sarung Tangan Safety (APD)", "Masker & Kacamata APD", "Karung Plastik Woven", "Lakban & Packing", "Sparepart & Accessories", "Perlengkapan Pabrik"
 )
 
 internal val WARNA_OPTIONS = listOf(
@@ -343,13 +351,23 @@ fun BahanBakuFormScreen(
 
             // ─── Items Section Header ───
             item {
+                val sectionTitle = when (header.category) {
+                    "PIGMEN" -> "DETAIL PIGMEN & WARNA"
+                    "PERLENGKAPAN" -> "DETAIL PERLENGKAPAN & APD"
+                    else -> "DETAIL BAHAN BAKU"
+                }
+                val btnAddTitle = when (header.category) {
+                    "PIGMEN" -> " Tambah Pigmen"
+                    "PERLENGKAPAN" -> " Tambah Barang/APD"
+                    else -> " Tambah Bahan"
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(
-                            "DETAIL BAHAN BAKU",
+                            sectionTitle,
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -364,7 +382,7 @@ fun BahanBakuFormScreen(
                         modifier = Modifier.testTag("btn-add-bb-item")
                     ) {
                         Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Text(" Tambah Bahan")
+                        Text(btnAddTitle)
                     }
                 }
             }
@@ -375,6 +393,7 @@ fun BahanBakuFormScreen(
                     item = item,
                     index = index,
                     canDelete = ui.items.size > 1,
+                    category = header.category,
                     onUpdate = { viewModel.updateItem(index, it) },
                     onRemove = { viewModel.removeItem(index) }
                 )
@@ -602,11 +621,38 @@ private fun BahanBakuItemRow(
     item: BahanBakuItemDraft,
     index: Int,
     canDelete: Boolean,
+    category: String = "BAHAN_BAKU",
     onUpdate: ((BahanBakuItemDraft) -> BahanBakuItemDraft) -> Unit,
     onRemove: () -> Unit
 ) {
     var jenisExpanded by remember { mutableStateOf(false) }
-    var warnaExpanded by remember { mutableStateOf<Int?>(null) } // index of open warna dropdown
+
+    val options = when (category) {
+        "PIGMEN" -> PIGMEN_OPTIONS
+        "PERLENGKAPAN" -> PERLENGKAPAN_OPTIONS
+        else -> BAHAN_BAKU_OPTIONS
+    }
+
+    val jenisLabel = when (category) {
+        "PIGMEN" -> "Nama Pigmen / Pewarna"
+        "PERLENGKAPAN" -> "Nama Barang / APD / Perlengkapan"
+        else -> "Jenis Bahan Baku"
+    }
+
+    val qtyLabel = when (category) {
+        "PERLENGKAPAN" -> "Jumlah (Qty)"
+        else -> "Kuantitas / Berat"
+    }
+
+    val unitLabel = when (category) {
+        "PERLENGKAPAN" -> "Satuan (Pcs/Liter/Set)"
+        else -> "Satuan (Unit)"
+    }
+
+    val rateLabel = when (category) {
+        "PERLENGKAPAN" -> "Harga per Satuan (Rp)"
+        else -> "Harga per Kg (Rp)"
+    }
 
     Card(
         shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
@@ -648,7 +694,7 @@ private fun BahanBakuItemRow(
             }
             Spacer(Modifier.height(8.dp))
 
-            // ── Jenis Bahan dropdown ──────────────────────────────────────────
+            // ── Jenis Bahan / Nama Barang dropdown ──────────────────────────────
             ExposedDropdownMenuBox(
                 expanded = jenisExpanded,
                 onExpandedChange = { jenisExpanded = !jenisExpanded }
@@ -656,13 +702,13 @@ private fun BahanBakuItemRow(
                 OutlinedTextField(
                     value = item.jenisBahan,
                     onValueChange = { onUpdate { d -> d.copy(jenisBahan = it) } },
-                    label = { Text("Jenis Bahan") },
+                    label = { Text(jenisLabel) },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = jenisExpanded) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().menuAnchor().testTag("bb-jenis-$index")
                 )
                 ExposedDropdownMenu(expanded = jenisExpanded, onDismissRequest = { jenisExpanded = false }) {
-                    JENIS_BAHAN_OPTIONS.forEach { opt ->
+                    options.forEach { opt ->
                         DropdownMenuItem(
                             text = { Text(opt) },
                             onClick = {
@@ -680,7 +726,7 @@ private fun BahanBakuItemRow(
                 OutlinedTextField(
                     value = item.kuantitas,
                     onValueChange = { onUpdate { d -> d.copy(kuantitas = it) } },
-                    label = { Text("Kuantitas") },
+                    label = { Text(qtyLabel) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.weight(1.2f).testTag("bb-kuantitas-$index")
@@ -688,7 +734,7 @@ private fun BahanBakuItemRow(
                 OutlinedTextField(
                     value = item.unit,
                     onValueChange = { onUpdate { d -> d.copy(unit = it) } },
-                    label = { Text("Unit") },
+                    label = { Text(unitLabel) },
                     singleLine = true,
                     modifier = Modifier.weight(0.8f).testTag("bb-unit-$index")
                 )
@@ -698,7 +744,7 @@ private fun BahanBakuItemRow(
             OutlinedTextField(
                 value = item.rate,
                 onValueChange = { onUpdate { d -> d.copy(rate = it) } },
-                label = { Text("Rate (Rp/Kg)") },
+                label = { Text(rateLabel) },
                 supportingText = if (item.subtotal > 0) {
                     { Text("Subtotal: ${Formatters.rupiah(item.subtotal)}") }
                 } else null,
@@ -707,7 +753,8 @@ private fun BahanBakuItemRow(
                 modifier = Modifier.fillMaxWidth().testTag("bb-rate-$index")
             )
 
-            // ── Warna / Campuran Section ──────────────────────────────────────
+            // ── Warna / Campuran Section (Hanya untuk Bahan Baku) ─────────────
+            if (category == "BAHAN_BAKU") {
             Spacer(Modifier.height(12.dp))
             androidx.compose.material3.HorizontalDivider()
             Spacer(Modifier.height(8.dp))
@@ -860,6 +907,7 @@ private fun BahanBakuItemRow(
                     Spacer(Modifier.width(4.dp))
                     Text("Tambah Warna Lain", style = MaterialTheme.typography.bodySmall)
                 }
+            }
             }
         }
     }
