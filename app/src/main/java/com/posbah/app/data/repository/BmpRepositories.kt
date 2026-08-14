@@ -1124,7 +1124,8 @@ class BmpInvoiceRepository @Inject constructor(
                 _invoices.value = invoicesList
                 val inv = invoicesList.find { it.id == invoiceId }
                 if (inv != null && !inv.receiverSignatureUrl.isNullOrEmpty()) {
-                    RemoteSignatureResult.Success(inv.receiverSignatureUrl, inv.receiverNameActual ?: "")
+                    val cleanSigUrl = inv.receiverSignatureUrl.replace(" ", "").replace("\n", "").trim()
+                    RemoteSignatureResult.Success(cleanSigUrl, inv.receiverNameActual ?: "")
                 } else {
                     RemoteSignatureResult.Pending
                 }

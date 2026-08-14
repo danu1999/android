@@ -434,7 +434,8 @@ class InvoiceDetailViewModel @Inject constructor(
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             var conn: java.net.HttpURLConnection? = null
             try {
-                val url = java.net.URL(urlStr)
+                val cleanUrlStr = urlStr.replace(" ", "").replace("\n", "").trim()
+                val url = java.net.URL(cleanUrlStr)
                 conn = url.openConnection() as java.net.HttpURLConnection
                 conn.connectTimeout = 10000
                 conn.readTimeout = 10000
