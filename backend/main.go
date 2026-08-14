@@ -8765,6 +8765,8 @@ func versionCheckMiddleware(next http.Handler) http.Handler {
 				path == "/api/apk-version" ||
 				strings.HasPrefix(path, "/api/store/") ||
 				strings.HasPrefix(path, "/api/sign/") ||
+				strings.HasPrefix(path, "/api/invoice/signature") ||
+				strings.HasPrefix(path, "/api/signatures/") ||
 				strings.HasPrefix(path, "/api/auth/qr-") ||
 				path == "/api/auth/pin-login" ||
 				path == "/api/auth/bmp/pin-login"

@@ -35,7 +35,7 @@ object SignatureLinkGenerator {
             Base64.NO_WRAP or Base64.URL_SAFE or Base64.NO_PADDING
         )
         
-        return "$BASE_URL$tokenEncoded"
+        return "$BASE_URL$tokenEncoded".replace(" ", "").trim()
     }
 
     /**

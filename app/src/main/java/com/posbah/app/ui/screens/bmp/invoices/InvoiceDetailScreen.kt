@@ -531,9 +531,10 @@ fun InvoiceDetailScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
+                        val cleanUrl = shareUrl.trim().replace(" ", "")
                         val intent = Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, "Silakan tanda tangani tanda terima faktur ${inv.number} Anda di sini: $shareUrl")
+                            putExtra(Intent.EXTRA_TEXT, "Silakan tanda tangani tanda terima faktur ${inv.number} Anda di sini:\n$cleanUrl")
                         }
                         context.startActivity(Intent.createChooser(intent, "Bagikan Link Tanda Tangan"))
                     },
