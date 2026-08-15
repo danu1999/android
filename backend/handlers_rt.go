@@ -1716,14 +1716,16 @@ func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. Omzet dari invoices
-	var omzet float64
+	// 1. Omzet & Kas Masuk dari invoices
+	var omzet, totalPaid float64
 	err := db.QueryRow(`
-		SELECT COALESCE(SUM("totalAmount"), 0)
+		SELECT COALESCE(SUM("totalAmount"), 0), COALESCE(SUM("paidAmount"), 0)
 		FROM bmp_invoices
 		WHERE "tenantId"=$1 AND "createdAt" >= $2 AND "createdAt" < $3 AND "isDeleted"=FALSE
-	`, tenantId, startMs, endMs).Scan(&omzet)
+	`, tenantId, startMs, endMs).Scan(&omzet, &totalPaid)
 	if err != nil { jsonErr(w, 500, err.Error()); return }
+	totalUnpaid := omzet - totalPaid
+	if totalUnpaid < 0 { totalUnpaid = 0 }
 
 	// 2. COGS = HPP/unit (dari bmp_master_products.hppTotalPcs, dihitung app via Jalur 1) × qty terjual
 	cogs, err := updateAndCalculateCOGS(tenantId, startMs, endMs, dateStr, periodType)
@@ -1731,14 +1733,50 @@ func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
 
 	labaKotor := omzet - cogs
 
+	// 3. Beban Operasional (OPEX)
+	// a. Beban Gaji Karyawan (bmp_payrolls)
+	var gajiKaryawan float64
+	_ = db.QueryRow(`
+		SELECT COALESCE(SUM(amount), 0)
+		FROM bmp_payrolls
+		WHERE "tenantId"=$1 AND "paymentDate" >= $2 AND "paymentDate" < $3
+	`, tenantId, startMs, endMs).Scan(&gajiKaryawan)
+
+	// b. Biaya Pemeliharaan Mesin & Matras (bmp_maintenance_logs)
+	var biayaMaintenance float64
+	_ = db.QueryRow(`
+		SELECT COALESCE(SUM(cost), 0)
+		FROM bmp_maintenance_logs
+		WHERE "tenantId"=$1 AND "maintenanceDate" >= $2 AND "maintenanceDate" < $3 AND "isDeleted"=FALSE
+	`, tenantId, startMs, endMs).Scan(&biayaMaintenance)
+
+	// c. Beban Operasional Lainnya (bmp_cashflow)
+	var biayaOperasionalLain float64
+	_ = db.QueryRow(`
+		SELECT COALESCE(SUM(amount), 0)
+		FROM bmp_cashflow
+		WHERE "tenantId"=$1 AND "transactionDate" >= $2 AND "transactionDate" < $3 
+		  AND ("transactionType"='EXPENSE' OR "transactionType"='OUT') AND "isDeleted"=FALSE AND "paymentRefId" IS NULL
+	`, tenantId, startMs, endMs).Scan(&biayaOperasionalLain)
+
+	totalBebanOperasional := gajiKaryawan + biayaMaintenance + biayaOperasionalLain
+	labaBersih := labaKotor - totalBebanOperasional
+
 	cogsPercentage := 0.0
 	marginPercentage := 0.0
+	netMarginPercentage := 0.0
 	if omzet > 0 {
 		cogsPercentage = (cogs / omzet) * 100.0
 		marginPercentage = (labaKotor / omzet) * 100.0
+		netMarginPercentage = (labaBersih / omzet) * 100.0
 	}
 
-	// 3. Top Products
+	bepNominal := 0.0
+	if marginPercentage > 0 {
+		bepNominal = totalBebanOperasional / (marginPercentage / 100.0)
+	}
+
+	// 4. Top Products
 	type TopProduct struct {
 		Name    string  `json:"name"`
 		QtySold float64 `json:"qtySold"`
@@ -1766,7 +1804,7 @@ func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 4. Warnings
+	// 5. Warnings
 	warnings := []string{}
 	var missingBomCount int
 	_ = db.QueryRow(`
@@ -1782,14 +1820,23 @@ func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	jsonOK(w, map[string]interface{}{
-		"period":           dateStr,
-		"omzet":            omzet,
-		"cogs":             cogs,
-		"labaKotor":        labaKotor,
-		"cogsPercentage":   cogsPercentage,
-		"marginPercentage": marginPercentage,
-		"topProducts":      topProducts,
-		"warnings":         warnings,
+		"period":                dateStr,
+		"omzet":                 omzet,
+		"totalPaid":             totalPaid,
+		"totalUnpaid":           totalUnpaid,
+		"cogs":                  cogs,
+		"labaKotor":             labaKotor,
+		"gajiKaryawan":          gajiKaryawan,
+		"biayaMaintenance":      biayaMaintenance,
+		"biayaOperasionalLain":  biayaOperasionalLain,
+		"totalBebanOperasional": totalBebanOperasional,
+		"labaBersih":            labaBersih,
+		"cogsPercentage":        cogsPercentage,
+		"marginPercentage":      marginPercentage,
+		"netMarginPercentage":   netMarginPercentage,
+		"bepNominal":            bepNominal,
+		"topProducts":           topProducts,
+		"warnings":              warnings,
 	})
 }
 
@@ -1831,19 +1878,37 @@ func handleRtBmpExportReport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch Summary Metrics
-	var omzet, cogs float64
+	var omzet, totalPaid float64
 	_ = db.QueryRow(`
-		SELECT COALESCE(SUM("totalAmount"), 0) FROM bmp_invoices 
+		SELECT COALESCE(SUM("totalAmount"), 0), COALESCE(SUM("paidAmount"), 0) FROM bmp_invoices 
 		WHERE "tenantId"=$1 AND "createdAt" >= $2 AND "createdAt" < $3 AND "isDeleted"=FALSE
-	`, tenantId, startMs, endMs).Scan(&omzet)
+	`, tenantId, startMs, endMs).Scan(&omzet, &totalPaid)
+	totalUnpaid := omzet - totalPaid
+	if totalUnpaid < 0 { totalUnpaid = 0 }
 
-	cogs, _ = updateAndCalculateCOGS(tenantId, startMs, endMs, dateStr, periodType)
-
+	cogs, _ := updateAndCalculateCOGS(tenantId, startMs, endMs, dateStr, periodType)
 	labaKotor := omzet - cogs
+
+	var gajiKaryawan float64
+	_ = db.QueryRow(`SELECT COALESCE(SUM(amount), 0) FROM bmp_payrolls WHERE "tenantId"=$1 AND "paymentDate" >= $2 AND "paymentDate" < $3`, tenantId, startMs, endMs).Scan(&gajiKaryawan)
+
+	var biayaMaintenance float64
+	_ = db.QueryRow(`SELECT COALESCE(SUM(cost), 0) FROM bmp_maintenance_logs WHERE "tenantId"=$1 AND "maintenanceDate" >= $2 AND "maintenanceDate" < $3 AND "isDeleted"=FALSE`, tenantId, startMs, endMs).Scan(&biayaMaintenance)
+
+	var biayaOperasionalLain float64
+	_ = db.QueryRow(`SELECT COALESCE(SUM(amount), 0) FROM bmp_cashflow WHERE "tenantId"=$1 AND "transactionDate" >= $2 AND "transactionDate" < $3 AND ("transactionType"='EXPENSE' OR "transactionType"='OUT') AND "isDeleted"=FALSE AND "paymentRefId" IS NULL`, tenantId, startMs, endMs).Scan(&biayaOperasionalLain)
+
+	totalBebanOperasional := gajiKaryawan + biayaMaintenance + biayaOperasionalLain
+	labaBersih := labaKotor - totalBebanOperasional
+
+	// Ambil Nama Perusahaan
+	var companyName string
+	_ = db.QueryRow(`SELECT COALESCE("clientName", 'POSBah Manufaktur') FROM bmp_settings WHERE "tenantId"=$1 LIMIT 1`, tenantId).Scan(&companyName)
+	if companyName == "" { companyName = "POSBah Invoice & Manufaktur" }
 
 	// Set CSV Headers
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
-	filename := fmt.Sprintf("Laporan_Keuangan_POSBah_%s.csv", dateStr)
+	filename := fmt.Sprintf("Laporan_Keuangan_%s_%s.csv", strings.ReplaceAll(companyName, " ", "_"), dateStr)
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 
 	writer := csv.NewWriter(w)
@@ -1853,22 +1918,34 @@ func handleRtBmpExportReport(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte{0xEF, 0xBB, 0xBF})
 
 	// 1. Header Ringkasan Keuangan
-	_ = writer.Write([]string{"LAPORAN KEUANGAN POSBAH (MANUFAKTUR)"})
+	_ = writer.Write([]string{"LAPORAN KEUANGAN & LABA RUGI KOMPREHENSIF"})
+	_ = writer.Write([]string{"Perusahaan", companyName})
 	_ = writer.Write([]string{"Periode", dateStr})
 	_ = writer.Write([]string{"Tipe Laporan", periodType})
+	_ = writer.Write([]string{"Tanggal Cetak", time.Now().In(loc).Format("2006-01-02 15:04:05")})
 	_ = writer.Write([]string{""})
 
 	_ = writer.Write([]string{"IKHTISAR LABA RUGI"})
-	_ = writer.Write([]string{"Pos Keuangan", "Nominal (Rupiah)"})
-	_ = writer.Write([]string{"OMZET (Pendapatan Kotor)", fmt.Sprintf("%.2f", omzet)})
-	_ = writer.Write([]string{"HARGA POKOK PENJUALAN (COGS / HPP)", fmt.Sprintf("%.2f", cogs)})
-	_ = writer.Write([]string{"LABA KOTOR", fmt.Sprintf("%.2f", labaKotor)})
+	_ = writer.Write([]string{"Pos Keuangan", "Nominal (Rupiah)", "Keterangan"})
+	_ = writer.Write([]string{"OMZET PENJUALAN (Faktur Diterbitkan)", fmt.Sprintf("%.2f", omzet), "Total seluruh tagihan penjualan"})
+	_ = writer.Write([]string{"- Kas Riil Diterima (Cash In)", fmt.Sprintf("%.2f", totalPaid), "Telah cair ke rekening / kas"})
+	_ = writer.Write([]string{"- Sisa Piutang Usaha (AR)", fmt.Sprintf("%.2f", totalUnpaid), "Tagihan belum lunas"})
+	_ = writer.Write([]string{"HARGA POKOK PENJUALAN (COGS / HPP)", fmt.Sprintf("%.2f", cogs), "Biaya bahan baku langsung"})
+	_ = writer.Write([]string{"LABA KOTOR (Gross Profit)", fmt.Sprintf("%.2f", labaKotor), "Omzet - HPP"})
+	_ = writer.Write([]string{""})
+	_ = writer.Write([]string{"BEBAN OPERASIONAL (OPEX)"})
+	_ = writer.Write([]string{"- Beban Gaji Karyawan", fmt.Sprintf("%.2f", gajiKaryawan), "Total payroll karyawan"})
+	_ = writer.Write([]string{"- Beban Pemeliharaan Mesin & Matras", fmt.Sprintf("%.2f", biayaMaintenance), "Biaya servis & perbaikan aset"})
+	_ = writer.Write([]string{"- Beban Operasional Lainnya", fmt.Sprintf("%.2f", biayaOperasionalLain), "Biaya operasional pabrik"})
+	_ = writer.Write([]string{"TOTAL BEBAN OPERASIONAL", fmt.Sprintf("%.2f", totalBebanOperasional), "Total beban operasional"})
+	_ = writer.Write([]string{""})
+	_ = writer.Write([]string{"LABA BERSIH (NET PROFIT)", fmt.Sprintf("%.2f", labaBersih), "Laba Kotor - Beban Operasional"})
 	_ = writer.Write([]string{""})
 	_ = writer.Write([]string{""})
 
 	// 2. Jurnal Penjualan
 	_ = writer.Write([]string{"DETAIL JURNAL PENJUALAN (INVOICES)"})
-	_ = writer.Write([]string{"ID", "Nomor Invoice", "Nama Pelanggan", "Tanggal Faktur", "Jatuh Tempo", "Total Tagihan", "Telah Dibayar", "Status"})
+	_ = writer.Write([]string{"ID", "Nomor Invoice", "Nama Pelanggan", "Tanggal Faktur", "Jatuh Tempo", "Total Tagihan", "Telah Dibayar", "Sisa Piutang", "Status"})
 	
 	rowsInv, errInv := db.Query(`
 		SELECT bi.id, bi.number, COALESCE(bc."clientName", '-'), bi."createdAt", bi."dueDate", bi."totalAmount", bi."paidAmount", bi.status
@@ -1891,6 +1968,8 @@ func handleRtBmpExportReport(w http.ResponseWriter, r *http.Request) {
 				if dueDate > 0 {
 					dueDateStr = time.Unix(dueDate/1000, 0).In(loc).Format("2006-01-02")
 				}
+				sisa := totalAmt - paidAmt
+				if sisa < 0 { sisa = 0 }
 				_ = writer.Write([]string{
 					strconv.FormatInt(id, 10),
 					number,
@@ -1899,12 +1978,71 @@ func handleRtBmpExportReport(w http.ResponseWriter, r *http.Request) {
 					dueDateStr,
 					fmt.Sprintf("%.2f", totalAmt),
 					fmt.Sprintf("%.2f", paidAmt),
+					fmt.Sprintf("%.2f", sisa),
 					status,
 				})
 			}
 		}
 	}
 	_ = writer.Write([]string{""})
+	_ = writer.Write([]string{""})
+
+	// 3. Detail Pembayaran Gaji Karyawan
+	_ = writer.Write([]string{"DETAIL RIWAYAT PENGGAJIAN KARYAWAN (PAYROLLS)"})
+	_ = writer.Write([]string{"ID Payroll", "Nama Karyawan", "Tanggal Bayar", "Jumlah Gaji", "Keterangan"})
+	rowsPay, errPay := db.Query(`
+		SELECT bp.id, COALESCE(be.name, 'Karyawan #' || bp."employeeId"), bp."paymentDate", bp.amount, COALESCE(bp.description, '-')
+		FROM bmp_payrolls bp
+		LEFT JOIN bmp_employees be ON bp."employeeId" = be.id AND bp."tenantId" = be."tenantId"
+		WHERE bp."tenantId"=$1 AND bp."paymentDate" >= $2 AND bp."paymentDate" < $3
+		ORDER BY bp."paymentDate" ASC
+	`, tenantId, startMs, endMs)
+	if errPay == nil {
+		defer rowsPay.Close()
+		for rowsPay.Next() {
+			var pid, empName, desc string
+			var pDate int64
+			var amt float64
+			if errS := rowsPay.Scan(&pid, &empName, &pDate, &amt, &desc); errS == nil {
+				dateFormatted := time.Unix(pDate/1000, 0).In(loc).Format("2006-01-02 15:04")
+				_ = writer.Write([]string{pid, empName, dateFormatted, fmt.Sprintf("%.2f", amt), desc})
+			}
+		}
+	}
+	_ = writer.Write([]string{""})
+	_ = writer.Write([]string{""})
+
+	// 4. Detail Log Pemeliharaan Mesin & Matras
+	_ = writer.Write([]string{"DETAIL LOG PEMELIHARAAN MESIN & MATRAS (MAINTENANCE)"})
+	_ = writer.Write([]string{"ID Log", "Jenis Aset", "Nama Aset", "Tanggal Servis", "Jenis Servis", "Biaya Servis", "Teknisi", "Catatan"})
+	rowsMaint, errMaint := db.Query(`
+		SELECT id, "assetType", COALESCE("assetName", '-'), "maintenanceDate", "serviceType", cost, COALESCE("technicianName", '-'), COALESCE(notes, '-')
+		FROM bmp_maintenance_logs
+		WHERE "tenantId"=$1 AND "maintenanceDate" >= $2 AND "maintenanceDate" < $3 AND "isDeleted"=FALSE
+		ORDER BY "maintenanceDate" ASC
+	`, tenantId, startMs, endMs)
+	if errMaint == nil {
+		defer rowsMaint.Close()
+		for rowsMaint.Next() {
+			var mid int64
+			var aType, aName, sType, tech, notes string
+			var mDate int64
+			var cost float64
+			if errS := rowsMaint.Scan(&mid, &aType, &aName, &mDate, &sType, &cost, &tech, &notes); errS == nil {
+				dateFormatted := time.Unix(mDate/1000, 0).In(loc).Format("2006-01-02")
+				_ = writer.Write([]string{
+					strconv.FormatInt(mid, 10),
+					aType,
+					aName,
+					dateFormatted,
+					sType,
+					fmt.Sprintf("%.2f", cost),
+					tech,
+					notes,
+				})
+			}
+		}
+	}
 
 	writer.Flush()
 }
