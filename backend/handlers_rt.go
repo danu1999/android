@@ -1662,7 +1662,6 @@ func handleRtProductTargetsById(w http.ResponseWriter, r *http.Request) {
 func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
 	tenantId, ok := extractTenantId(r)
 	if !ok { jsonErr(w, 401, "unauthorized"); return }
-	if !checkOwnerOnly(w, r) { return }
 
 	if r.Method != http.MethodGet {
 		jsonErr(w, 405, "method not allowed")
@@ -1670,7 +1669,7 @@ func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	periodType := r.URL.Query().Get("periodType") // MONTHLY, QUARTERLY, ANNUALLY
-	dateStr := r.URL.Query().Get("date")          // "2026-06", "2026-Q1", "2026"
+	dateStr := strings.TrimSpace(r.URL.Query().Get("date")) // "2026-06", "2026-Q1", "2026"
 	if dateStr == "" {
 		jsonErr(w, 400, "date is required")
 		return
@@ -1784,13 +1783,13 @@ func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
 	}
 	topProducts := []TopProduct{}
 	rows, err := db.Query(`
-		SELECT COALESCE(mp.title, bp.title), SUM(bp.quantity) as qty, SUM(bp.quantity * bp.price) as rev
+		SELECT COALESCE(mp.title, bp.title, '-'), SUM(COALESCE(bp.quantity, 0)) as qty, SUM(COALESCE(bp.quantity, 0) * COALESCE(bp.price, 0)) as rev
 		FROM bmp_products bp
 		JOIN bmp_invoices bi ON bp."invoiceId" = bi.id
 		LEFT JOIN bmp_master_products mp ON bp."masterItemID" = mp.id
 		WHERE bi."tenantId"=$1 AND bi."createdAt" >= $2 AND bi."createdAt" < $3
 		  AND bi."isDeleted"=FALSE AND bp."isDeleted"=FALSE
-		GROUP BY COALESCE(mp.title, bp.title)
+		GROUP BY COALESCE(mp.title, bp.title, '-')
 		ORDER BY qty DESC
 		LIMIT 5
 	`, tenantId, startMs, endMs)
@@ -2428,7 +2427,7 @@ func triggerProductionLogCompletion(tenantId string, logId int64) error {
 func updateAndCalculateCOGS(tenantId string, startMs int64, endMs int64, dateStr string, periodType string) (float64, error) {
 	var totalCogs float64
 	err := db.QueryRow(`
-		SELECT COALESCE(SUM(bp.quantity * COALESCE(mp."hppTotalPcs", 0.0)), 0.0)
+		SELECT COALESCE(SUM(COALESCE(bp.quantity, 0.0) * COALESCE(mp."hppTotalPcs", 0.0)), 0.0)
 		FROM bmp_products bp
 		JOIN bmp_invoices bi ON bp."invoiceId" = bi.id
 		LEFT JOIN bmp_master_products mp ON bp."masterItemID" = mp.id

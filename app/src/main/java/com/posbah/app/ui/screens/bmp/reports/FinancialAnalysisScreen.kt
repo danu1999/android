@@ -100,7 +100,7 @@ class FinancialAnalysisViewModel @Inject constructor(
     val uiState = _uiState.asStateFlow()
 
     init {
-        val sdf = SimpleDateFormat("yyyy-MM", Locale.getDefault())
+        val sdf = SimpleDateFormat("yyyy-MM", Locale.US)
         val defaultDate = sdf.format(Date())
         _uiState.update { it.copy(date = defaultDate, periodType = "MONTHLY") }
         fetchReport()
@@ -113,13 +113,13 @@ class FinancialAnalysisViewModel @Inject constructor(
     fun setPeriodType(type: String) {
         val currentDate = Date()
         val date = when (type) {
-            "MONTHLY" -> SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(currentDate)
+            "MONTHLY" -> SimpleDateFormat("yyyy-MM", Locale.US).format(currentDate)
             "QUARTERLY" -> {
                 val cal = Calendar.getInstance()
                 val q = (cal.get(Calendar.MONTH) / 3) + 1
                 "${cal.get(Calendar.YEAR)}-Q$q"
             }
-            else -> SimpleDateFormat("yyyy", Locale.getDefault()).format(currentDate)
+            else -> SimpleDateFormat("yyyy", Locale.US).format(currentDate)
         }
         _uiState.update { it.copy(periodType = type, date = date) }
         fetchReport()
@@ -130,7 +130,7 @@ class FinancialAnalysisViewModel @Inject constructor(
         val state = _uiState.value
         try {
             if (state.periodType == "MONTHLY") {
-                val sdf = SimpleDateFormat("yyyy-MM", Locale.getDefault())
+                val sdf = SimpleDateFormat("yyyy-MM", Locale.US)
                 val d = sdf.parse(state.date) ?: return
                 cal.time = d
                 cal.add(Calendar.MONTH, offset)
@@ -203,7 +203,8 @@ class FinancialAnalysisViewModel @Inject constructor(
                     )
                 }
             } else {
-                _uiState.update { it.copy(isLoading = false, error = "Gagal memuat data dari server.") }
+                val errBody = resp.errorBody()?.string()?.takeIf { it.isNotBlank() } ?: "Gagal memuat data dari server (HTTP ${resp.code()})"
+                _uiState.update { it.copy(isLoading = false, error = errBody) }
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -222,7 +223,8 @@ class FinancialAnalysisViewModel @Inject constructor(
                     onFileReady(file)
                 }
             } else {
-                Toast.makeText(context, "Gagal mengunduh file Excel.", Toast.LENGTH_LONG).show()
+                val errBody = resp.errorBody()?.string()?.takeIf { it.isNotBlank() } ?: "HTTP ${resp.code()}"
+                Toast.makeText(context, "Gagal mengunduh file Excel: $errBody", Toast.LENGTH_LONG).show()
             }
         } catch (e: Exception) {
             e.printStackTrace()
