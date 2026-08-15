@@ -30,8 +30,10 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.BorderStroke
+import kotlinx.coroutines.withContext
 
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -92,6 +94,7 @@ import androidx.compose.runtime.LaunchedEffect
 @HiltViewModel
 class EmployeesViewModel @Inject constructor(
     private val repo: BmpEmployeeRepository,
+    private val payrollRepo: com.posbah.app.data.repository.BmpPayrollRepository,
     private val posEmployeeRepo: EmployeeRepository,
     private val outletRepo: OutletRepository,
     private val authRepository: AuthRepository,
@@ -108,6 +111,7 @@ class EmployeesViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             try { repo.refresh() } catch (_: Exception) {}
+            try { payrollRepo.refresh() } catch (_: Exception) {}
             try { posEmployeeRepo.refresh() } catch (_: Exception) {}
             try { settingsRepo.refresh() } catch (_: Exception) {}
         }
@@ -297,6 +301,33 @@ class EmployeesViewModel @Inject constructor(
             _autoAttendance.value = count
         } catch (_: Exception) {
             _autoAttendance.value = 0
+        }
+    }
+
+    fun paySalary(
+        target: BmpEmployeeEntity,
+        daysCount: Int,
+        totalAmount: Double,
+        note: String,
+        paymentMethod: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) = viewModelScope.launch(Dispatchers.IO) {
+        val res = payrollRepo.paySalary(
+            employeeId = target.id,
+            employeeName = target.name,
+            amount = totalAmount,
+            attendanceCount = daysCount,
+            dailyRate = target.salaryAmount,
+            description = note,
+            paymentMethod = paymentMethod
+        )
+        withContext(Dispatchers.Main) {
+            if (res is com.posbah.app.data.repository.OnlineWriteResult.Success) {
+                onSuccess()
+            } else if (res is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+                onError(res.message)
+            }
         }
     }
 
@@ -529,6 +560,14 @@ fun EmployeesScreen(
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.primary
                                         )
+                                        if (e.lastPaidAt != null && e.lastPaidAt > 0) {
+                                            Text(
+                                                "Terakhir Dibayar: ${Formatters.dateShort(e.lastPaidAt)}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = Color(0xFF10B981),
+                                                fontWeight = FontWeight.SemiBold
+                                            )
+                                        }
                                     }
                                     Button(
                                         onClick = { paySalaryTarget = e },
@@ -806,9 +845,10 @@ fun EmployeesScreen(
         var payNote by remember { mutableStateOf("Gaji Bulan Ini") }
         val daysInt = inputDaysText.toIntOrNull() ?: 0
         val totalPay = daysInt * target.salaryAmount
+        var isSubmitting by remember { mutableStateOf(false) }
 
         AlertDialog(
-            onDismissRequest = { paySalaryTarget = null },
+            onDismissRequest = { if (!isSubmitting) paySalaryTarget = null },
             icon = { Icon(Icons.Outlined.Payments, contentDescription = null, tint = Color(0xFF10B981)) },
             title = { Text("Bayar Gaji: ${target.name}") },
             text = {
@@ -853,21 +893,46 @@ fun EmployeesScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        android.widget.Toast.makeText(
-                            context,
-                            "Gaji ${Formatters.rupiah(totalPay)} untuk ${target.name} ($daysInt hari) berhasil dibayarkan!",
-                            android.widget.Toast.LENGTH_LONG
-                        ).show()
-                        paySalaryTarget = null
+                        if (isSubmitting) return@Button
+                        isSubmitting = true
+                        viewModel.paySalary(
+                            target = target,
+                            daysCount = daysInt,
+                            totalAmount = totalPay,
+                            note = payNote,
+                            paymentMethod = payMethod,
+                            onSuccess = {
+                                isSubmitting = false
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Gaji ${Formatters.rupiah(totalPay)} untuk ${target.name} ($daysInt hari) berhasil dibayarkan dan dicatat ke Arus Kas!",
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
+                                paySalaryTarget = null
+                            },
+                            onError = { errMsg ->
+                                isSubmitting = false
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Gagal membayar gaji: $errMsg",
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        )
                     },
+                    enabled = !isSubmitting,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
                     modifier = Modifier.testTag("btn-confirm-pay-salary")
                 ) {
+                    if (isSubmitting) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                        Spacer(Modifier.width(6.dp))
+                    }
                     Text("Konfirmasi Bayar Gaji", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { paySalaryTarget = null }) {
+                TextButton(onClick = { if (!isSubmitting) paySalaryTarget = null }) {
                     Text("Batal")
                 }
             }

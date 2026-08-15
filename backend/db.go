@@ -793,9 +793,7 @@ func initSchema() error {
 		`ALTER TABLE "bmp_settings" ADD COLUMN IF NOT EXISTS "fingerprintIp" VARCHAR(50) DEFAULT '';`,
 		`ALTER TABLE "bmp_settings" ADD COLUMN IF NOT EXISTS "fingerprintPort" VARCHAR(10) DEFAULT '4370';`,
 
-		// Jalur 2 cleanup: Hapus tabel cashflow, payroll, depreciation, dan assets yang tidak lagi digunakan
-		`DROP TABLE IF EXISTS "bmp_cashflow";`,
-		`DROP TABLE IF EXISTS "bmp_payrolls";`,
+		// Jalur 2 cleanup: Hapus tabel depreciation dan assets yang tidak lagi digunakan
 		`DROP TABLE IF EXISTS "bmp_monthly_depreciation";`,
 		`DROP TABLE IF EXISTS "bmp_assets";`,
 	}
@@ -1326,6 +1324,119 @@ func initSchema() error {
 		}
 	}
 
+	// v2.19.57: Migrasi Karyawan Supervisor & Integrasi Arus Kas Gaji (bmp_employees & bmp_payrolls)
+	bmpEmployeeAndPayrollMigrations := []string{
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "phone" VARCHAR(50);`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "email" VARCHAR(255);`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "lastPaidAt" BIGINT;`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "outletId" INT;`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "role" VARCHAR(50) DEFAULT 'KARYAWAN';`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "position" VARCHAR(100);`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "salaryAmount" DOUBLE PRECISION DEFAULT 0;`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "employeeType" VARCHAR(50) DEFAULT 'OPERATING_EXPENSE';`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "fingerprintPIN" VARCHAR(50);`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "employeeId" INT;`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN DEFAULT TRUE;`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "isDeleted" BOOLEAN DEFAULT FALSE;`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN DEFAULT TRUE;`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "createdAt" BIGINT;`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "updatedAt" BIGINT;`,
+		`CREATE SEQUENCE IF NOT EXISTS "bmp_employees_id_seq" START 1;`,
+		`ALTER TABLE "bmp_employees" ALTER COLUMN id SET DEFAULT nextval('"bmp_employees_id_seq"');`,
+		`CREATE TABLE IF NOT EXISTS "bmp_payrolls" (
+			"id" BIGSERIAL PRIMARY KEY,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"employeeId" BIGINT NOT NULL,
+			"employeeName" VARCHAR(255),
+			"paymentDate" BIGINT NOT NULL,
+			"amount" DOUBLE PRECISION NOT NULL,
+			"attendanceCount" INT DEFAULT 0,
+			"dailyRate" DOUBLE PRECISION NOT NULL,
+			"description" TEXT,
+			"paymentMethod" VARCHAR(50) DEFAULT 'TRANSFER',
+			"isDeleted" BOOLEAN DEFAULT FALSE,
+			"isSynced" BOOLEAN DEFAULT TRUE,
+			"createdAt" BIGINT,
+			"updatedAt" BIGINT
+		);`,
+		`ALTER TABLE "bmp_payrolls" ADD COLUMN IF NOT EXISTS "employeeName" VARCHAR(255);`,
+		`ALTER TABLE "bmp_payrolls" ADD COLUMN IF NOT EXISTS "paymentMethod" VARCHAR(50) DEFAULT 'TRANSFER';`,
+		`ALTER TABLE "bmp_payrolls" ADD COLUMN IF NOT EXISTS "isDeleted" BOOLEAN DEFAULT FALSE;`,
+		`ALTER TABLE "bmp_payrolls" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN DEFAULT TRUE;`,
+		`ALTER TABLE "bmp_payrolls" ADD COLUMN IF NOT EXISTS "createdAt" BIGINT;`,
+		`ALTER TABLE "bmp_payrolls" ADD COLUMN IF NOT EXISTS "updatedAt" BIGINT;`,
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_payrolls_tenant_date" ON "bmp_payrolls" ("tenantId", "paymentDate" DESC);`,
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_payrolls_tenant_emp" ON "bmp_payrolls" ("tenantId", "employeeId");`,
+	}
+	for _, q := range bmpEmployeeAndPayrollMigrations {
+		if _, err := db.Exec(q); err != nil {
+			log.Printf("[migration] bmp employees/payrolls warning: %v", err)
+		}
+	}
+
+	// v2.19.58: Penyempurnaan Manufaktur (SPK / Work Orders, Preventive Maintenance & Mold Alerts)
+	bmpManufakturPerfectionMigrations := []string{
+		// 1. Tabel SPK (Surat Perintah Kerja / Work Orders)
+		`CREATE TABLE IF NOT EXISTS "bmp_work_orders" (
+			"id" BIGSERIAL,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"spkNumber" VARCHAR(100) NOT NULL,
+			"invoiceId" BIGINT,
+			"masterProductId" BIGINT NOT NULL,
+			"targetQuantity" DOUBLE PRECISION NOT NULL,
+			"completedQuantity" DOUBLE PRECISION DEFAULT 0.0,
+			"rejectedQuantity" DOUBLE PRECISION DEFAULT 0.0,
+			"machineId" INT,
+			"moldId" INT,
+			"startDate" BIGINT NOT NULL,
+			"targetCompletionDate" BIGINT,
+			"actualCompletionDate" BIGINT,
+			"status" VARCHAR(50) DEFAULT 'PENDING',
+			"priority" VARCHAR(50) DEFAULT 'NORMAL',
+			"notes" TEXT,
+			"isDeleted" BOOLEAN DEFAULT FALSE,
+			"isSynced" BOOLEAN DEFAULT TRUE,
+			"createdAt" BIGINT,
+			"updatedAt" BIGINT,
+			PRIMARY KEY ("id", "tenantId")
+		);`,
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_wo_tenant_status" ON "bmp_work_orders" ("tenantId", "status") WHERE "isDeleted" = FALSE;`,
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_wo_tenant_invoice" ON "bmp_work_orders" ("tenantId", "invoiceId");`,
+		`ALTER TABLE "bmp_production_logs" ADD COLUMN IF NOT EXISTS "workOrderId" BIGINT;`,
+
+		// 2. Pemeliharaan Mesin & Matras (Preventive Maintenance)
+		`ALTER TABLE "bmp_molds" ADD COLUMN IF NOT EXISTS "maintenance_interval_shots" INT DEFAULT 50000;`,
+		`ALTER TABLE "bmp_molds" ADD COLUMN IF NOT EXISTS "last_maintenance_shots" INT DEFAULT 0;`,
+		`ALTER TABLE "bmp_machines" ADD COLUMN IF NOT EXISTS "maintenance_interval_hours" INT DEFAULT 500;`,
+		`ALTER TABLE "bmp_machines" ADD COLUMN IF NOT EXISTS "last_maintenance_hours" DOUBLE PRECISION DEFAULT 0.0;`,
+		`ALTER TABLE "bmp_machines" ADD COLUMN IF NOT EXISTS "total_operating_hours" DOUBLE PRECISION DEFAULT 0.0;`,
+
+		`CREATE TABLE IF NOT EXISTS "bmp_maintenance_logs" (
+			"id" BIGSERIAL,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"assetType" VARCHAR(50) NOT NULL,
+			"assetId" BIGINT NOT NULL,
+			"assetName" VARCHAR(255),
+			"maintenanceDate" BIGINT NOT NULL,
+			"serviceType" VARCHAR(100) NOT NULL,
+			"cost" DOUBLE PRECISION DEFAULT 0.0,
+			"technicianName" VARCHAR(255),
+			"notes" TEXT,
+			"recordedToCashflow" BOOLEAN DEFAULT TRUE,
+			"isDeleted" BOOLEAN DEFAULT FALSE,
+			"createdAt" BIGINT,
+			"updatedAt" BIGINT,
+			PRIMARY KEY ("id", "tenantId")
+		);`,
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_maint_tenant_date" ON "bmp_maintenance_logs" ("tenantId", "maintenanceDate" DESC);`,
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_maint_tenant_asset" ON "bmp_maintenance_logs" ("tenantId", "assetType", "assetId");`,
+	}
+	for _, q := range bmpManufakturPerfectionMigrations {
+		if _, err := db.Exec(q); err != nil {
+			log.Printf("[migration] bmp manufaktur perfection warning: %v", err)
+		}
+	}
+
 	log.Println("Database schemas verified / migrated successfully.")
 	return nil
 }
@@ -1336,7 +1447,7 @@ func hasTenantIdColumn(tableName string) bool {
 		"bmp_master_products", "bmp_invoice_payments", "bmp_cashflow", "bmp_settings",
 		"bmp_employees", "bmp_payrolls", "bmp_bahan_baku", "bmp_bahan_baku_item",
 		"products", "customers", "transactions", "bmp_product_stocks", "bmp_stock_ledger",
-		"bmp_production_logs", "bmp_machines", "bmp_molds":
+		"bmp_production_logs", "bmp_machines", "bmp_molds", "bmp_work_orders", "bmp_maintenance_logs":
 		return true
 	}
 	return false

@@ -117,6 +117,16 @@ interface BmpApiService {
     @DELETE("api/rt/bmp/employees/{id}")
     suspend fun deleteBmpEmployee(@Path("id") id: Long): Response<Map<String, Any?>>
 
+    // ── BMP Payrolls (Gaji Karyawan & Arus Kas) ───────────────────────────────
+    @GET("api/rt/bmp/payrolls")
+    suspend fun getPayrolls(): Response<List<Map<String, Any?>>>
+
+    @POST("api/rt/bmp/payrolls")
+    suspend fun createPayroll(@Body body: Map<String, Any?>): Response<Map<String, Any?>>
+
+    @DELETE("api/rt/bmp/payrolls/{id}")
+    suspend fun deletePayroll(@Path("id") id: Long): Response<Map<String, Any?>>
+
 
     // ── Bahan Baku (Raw Materials) ────────────────────────────────────────────
     @GET("api/rt/bmp/bahan-baku")
@@ -207,5 +217,32 @@ interface BmpApiService {
     // ─── Clear All Employees (v2.19.33) ───────────────────────────────────────
     @DELETE("api/rt/bmp/employees/clear-all")
     suspend fun clearAllBmpEmployees(): Response<Map<String, Any?>>
+
+    // ── Work Orders / SPK (v2.19.58) ──────────────────────────────────────────
+    @GET("api/rt/bmp/work-orders")
+    suspend fun getWorkOrders(): Response<List<Map<String, Any?>>>
+
+    @POST("api/rt/bmp/work-orders")
+    suspend fun createWorkOrder(@Body body: Map<String, Any?>): Response<Map<String, Any?>>
+
+    @PUT("api/rt/bmp/work-orders/{id}")
+    suspend fun updateWorkOrder(@Path("id") id: Long, @Body body: Map<String, Any?>): Response<Map<String, Any?>>
+
+    @DELETE("api/rt/bmp/work-orders/{id}")
+    suspend fun deleteWorkOrder(@Path("id") id: Long): Response<Map<String, Any?>>
+
+    // ── Preventive Maintenance Logs (v2.19.58) ────────────────────────────────
+    @GET("api/rt/bmp/maintenance-logs")
+    suspend fun getMaintenanceLogs(): Response<List<Map<String, Any?>>>
+
+    @POST("api/rt/bmp/maintenance-logs")
+    suspend fun createMaintenanceLog(@Body body: Map<String, Any?>): Response<Map<String, Any?>>
+
+    @DELETE("api/rt/bmp/maintenance-logs/{id}")
+    suspend fun deleteMaintenanceLog(@Path("id") id: Long): Response<Map<String, Any?>>
+
+    // ── AR Aging Report (v2.19.58) ────────────────────────────────────────────
+    @GET("api/rt/bmp/reports/ar-aging")
+    suspend fun getArAgingReport(): Response<Map<String, Any?>>
 }
 

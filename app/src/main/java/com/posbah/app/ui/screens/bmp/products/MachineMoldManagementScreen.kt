@@ -55,6 +55,7 @@ class MachineMoldViewModel @Inject constructor(
     private val machineRepo: BmpMachineRepository,
     private val moldRepo: BmpMoldRepository,
     private val productRepo: BmpMasterProductRepository,
+    private val maintenanceRepo: BmpMaintenanceRepository,
     private val authRepo: AuthRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
@@ -76,9 +77,41 @@ class MachineMoldViewModel @Inject constructor(
                 machineRepo.refresh()
                 moldRepo.refresh()
                 productRepo.refresh()
+                maintenanceRepo.refresh()
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+        }
+    }
+
+    fun recordService(
+        assetType: String,
+        assetId: Long,
+        assetName: String,
+        serviceType: String,
+        cost: Double,
+        technician: String?,
+        notes: String?,
+        onDone: () -> Unit
+    ) = viewModelScope.launch {
+        val item = BmpMaintenanceLogData(
+            assetType = assetType,
+            assetId = assetId,
+            assetName = assetName,
+            serviceType = serviceType,
+            cost = cost,
+            technicianName = technician,
+            notes = notes,
+            recordedToCashflow = true
+        )
+        val res = maintenanceRepo.recordMaintenance(item)
+        if (res is OnlineWriteResult.Error) {
+            _error.value = res.message
+        } else {
+            machineRepo.refresh()
+            moldRepo.refresh()
+            Toast.makeText(context, "✅ Servis berhasil dicatat & masuk ke pengeluaran kas!", Toast.LENGTH_SHORT).show()
+            onDone()
         }
     }
 
@@ -242,6 +275,7 @@ fun MachineMoldManagementScreen(
 
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Daftar Mesin", "Daftar Matras/Cetakan")
+    var serviceTarget by remember { mutableStateOf<Triple<String, Long, String>?>(null) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -306,6 +340,7 @@ fun MachineMoldManagementScreen(
                                 onEdit = { viewModel.openMachineEdit(machine) },
                                 onDelete = { viewModel.deleteMachine(machine.id) },
                                 onToggleActive = { viewModel.toggleMachineActive(machine) },
+                                onService = { serviceTarget = Triple("MACHINE", machine.id, machine.name) },
                                 isOwner = viewModel.isOwner()
                             )
                         }
@@ -333,6 +368,7 @@ fun MachineMoldManagementScreen(
                                 onEdit = { viewModel.openMoldEdit(mold) },
                                 onDelete = { viewModel.deleteMold(mold.id) },
                                 onResetUsage = { viewModel.resetMoldUsage(mold.id) },
+                                onService = { serviceTarget = Triple("MOLD", mold.id, mold.name) },
                                 isOwner = viewModel.isOwner()
                             )
                         }
@@ -340,6 +376,21 @@ fun MachineMoldManagementScreen(
                 }
             }
         }
+    }
+
+    if (serviceTarget != null) {
+        val (targetType, targetId, targetName) = serviceTarget!!
+        ServiceRecordDialog(
+            assetType = targetType,
+            assetId = targetId,
+            assetName = targetName,
+            onDismiss = { serviceTarget = null },
+            onSave = { serviceType, cost, technician, notes ->
+                viewModel.recordService(targetType, targetId, targetName, serviceType, cost, technician, notes) {
+                    serviceTarget = null
+                }
+            }
+        )
     }
 
     // Machine Dialog Form
@@ -579,11 +630,17 @@ fun MachineCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onToggleActive: () -> Unit,
+    onService: () -> Unit,
     isOwner: Boolean
 ) {
+    val hoursSinceService = machine.totalOperatingHours - machine.lastMaintenanceHours
+    val intervalHours = if (machine.maintenanceIntervalHours > 0) machine.maintenanceIntervalHours else 500
+    val servicePct = (hoursSinceService / intervalHours).coerceIn(0.0, 1.0).toFloat()
+    val needsService = hoursSinceService >= intervalHours
+
     Surface(
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surface,
+        color = if (needsService) Color(0xFFFFF8E1) else MaterialTheme.colorScheme.surface,
         tonalElevation = 2.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -593,12 +650,28 @@ fun MachineCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = machine.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = machine.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (needsService) Color(0xFF8D6E00) else MaterialTheme.colorScheme.onSurface
+                    )
+                    if (needsService) {
+                        Spacer(Modifier.width(6.dp))
+                        Surface(
+                            color = Color(0xFFD32F2F),
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                "Wajib Servis",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Switch(
                         checked = machine.isActive,
@@ -626,30 +699,37 @@ fun MachineCard(
                 }
             }
             Spacer(Modifier.height(8.dp))
-            Divider(color = MaterialTheme.colorScheme.outlineVariant)
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Spacer(Modifier.height(8.dp))
             
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 Text("Penyusutan Bulanan:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 Text(Formatters.rupiah(machine.depreciationMonthly), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
             }
-            // v2.19.24: Biaya listrik harian dihapus dari tampilan kartu mesin
-            // (diisi langsung di halaman Log Produksi per shift)
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                 Text("BOP Bulanan Alokasi:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 Text(Formatters.rupiah(machine.overheadAllocatedMonthly), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
             }
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                Text("Status Mesin:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                Text("Total Jam Operasi:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 Text(
-                    text = if (machine.isActive) "AKTIF / HIDUP" else "MATI / OFF",
+                    "%.1f jam (Servis per %d jam)".format(machine.totalOperatingHours, intervalHours),
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Bold,
-                    color = if (machine.isActive) Color(0xFF4CAF50) else Color(0xFFF44336)
+                    color = if (needsService) Color(0xFFD32F2F) else MaterialTheme.colorScheme.onSurface
                 )
             }
+
+            Spacer(Modifier.height(4.dp))
+            LinearProgressIndicator(
+                progress = { servicePct },
+                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+                color = if (needsService) Color(0xFFD32F2F) else MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.outlineVariant
+            )
+
             // Matras terpasang
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(8.dp))
             if (moldName != null) {
                 Surface(
                     color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
@@ -679,6 +759,17 @@ fun MachineCard(
                     )
                 }
             }
+
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = onService,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF1565C0))
+            ) {
+                Icon(Icons.Outlined.Settings, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("🔧 Catat Servis / Pemeliharaan Mesin")
+            }
         }
     }
 }
@@ -690,12 +781,17 @@ fun MoldCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onResetUsage: () -> Unit = {},
+    onService: () -> Unit = {},
     isOwner: Boolean
 ) {
     val usagePct = if (mold.expectedShotsLifetime > 0)
         (mold.usageCount.toFloat() / mold.expectedShotsLifetime.toFloat()).coerceIn(0f, 1f)
     else 0f
-    val needsService = usagePct >= 0.9f
+
+    val shotsSinceService = mold.usageCount - mold.lastMaintenanceShots
+    val intervalShots = if (mold.maintenanceIntervalShots > 0) mold.maintenanceIntervalShots else 50000
+    val servicePct = (shotsSinceService.toFloat() / intervalShots.toFloat()).coerceIn(0f, 1f)
+    val needsService = shotsSinceService >= intervalShots || usagePct >= 0.9f
 
     Surface(
         shape = RoundedCornerShape(12.dp),
@@ -753,7 +849,7 @@ fun MoldCard(
                 }
             }
             Spacer(Modifier.height(8.dp))
-            Divider(color = MaterialTheme.colorScheme.outlineVariant)
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             Spacer(Modifier.height(8.dp))
 
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
@@ -761,7 +857,7 @@ fun MoldCard(
                 Text(Formatters.rupiah(mold.purchasePrice), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
             }
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                Text("Expected Shots Lifetime:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                Text("Lifetime Target:", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 Text("${Formatters.number(mold.expectedShotsLifetime.toDouble())} kali", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
             }
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
@@ -772,9 +868,8 @@ fun MoldCard(
                     color = if (needsService) Color(0xFFE65100) else MaterialTheme.colorScheme.onSurface)
             }
             Spacer(Modifier.height(6.dp))
-            // Usage progress bar
             LinearProgressIndicator(
-                progress = usagePct,
+                progress = { usagePct },
                 modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
                 color = if (needsService) Color(0xFFFF8F00) else MaterialTheme.colorScheme.primary,
                 trackColor = MaterialTheme.colorScheme.outlineVariant
@@ -799,36 +894,102 @@ fun MoldCard(
                     color = MaterialTheme.colorScheme.onSecondaryContainer
                 )
             }
-            // v2.19.25: Tombol reset pemakaian setelah servis (muncul jika usage >= 70%)
-            if (usagePct >= 0.7f) {
-                Spacer(Modifier.height(8.dp))
-                var showResetConfirm by remember { mutableStateOf(false) }
-                OutlinedButton(
-                    onClick = { showResetConfirm = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = Color(0xFFE65100)
-                    )
-                ) {
-                    Text("🔧 Reset Pemakaian Setelah Servis")
-                }
-                if (showResetConfirm) {
-                    AlertDialog(
-                        onDismissRequest = { showResetConfirm = false },
-                        title = { Text("Konfirmasi Reset") },
-                        text = { Text("Yakin ingin mereset pemakaian matras \"${mold.name}\" ke 0? Lakukan ini hanya setelah matras sudah diservis atau diganti.") },
-                        confirmButton = {
-                            Button(
-                                onClick = { onResetUsage(); showResetConfirm = false },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100))
-                            ) { Text("Ya, Reset") }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { showResetConfirm = false }) { Text("Batal") }
-                        }
-                    )
-                }
+
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = onService,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFE65100))
+            ) {
+                Icon(Icons.Outlined.Settings, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("🔧 Catat Servis / Pelumasan Matras")
             }
         }
     }
 }
+
+@Composable
+fun ServiceRecordDialog(
+    assetType: String,
+    assetId: Long,
+    assetName: String,
+    onDismiss: () -> Unit,
+    onSave: (serviceType: String, cost: Double, technician: String?, notes: String?) -> Unit
+) {
+    var serviceType by remember { mutableStateOf("RUTIN") }
+    var costStr by remember { mutableStateOf("") }
+    var technician by remember { mutableStateOf("") }
+    var notes by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Catat Servis ($assetType)") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("Aset: $assetName", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text(
+                    "Setelah dicatat, interval pemeliharaan akan di-reset dan biaya servis otomatis tercatat ke Arus Kas pengeluaran operasional pabrik.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Text("Jenis Servis:", fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("RUTIN", "PELUMASAN", "PERBAIKAN").forEach { t ->
+                        FilterChip(
+                            selected = serviceType == t,
+                            onClick = { serviceType = t },
+                            label = { Text(t, fontSize = 11.sp) }
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = costStr,
+                    onValueChange = { costStr = it.filter { ch -> ch.isDigit() } },
+                    label = { Text("Biaya Servis (Rp)") },
+                    placeholder = { Text("0 jika servis mandiri") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = technician,
+                    onValueChange = { technician = it },
+                    label = { Text("Nama Teknisi / Bengkel (Opsional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text("Catatan Servis (Opsional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 3
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val cost = costStr.toDoubleOrNull() ?: 0.0
+                    onSave(serviceType, cost, technician.ifBlank { null }, notes.ifBlank { null })
+                }
+            ) {
+                Text("Simpan Servis")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Batal") }
+        }
+    )
+}
+

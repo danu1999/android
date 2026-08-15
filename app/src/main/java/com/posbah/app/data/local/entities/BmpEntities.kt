@@ -149,14 +149,34 @@ data class BmpEmployeeEntity(
     val outletId: Long? = null,
     val name: String,
     val position: String? = null,
-    val salaryAmount: Double,
+    val salaryAmount: Double = 0.0,
     val employeeType: String = "OPERATING_EXPENSE",
+    val phone: String? = null,
+    val email: String? = null,
     val isActive: Boolean = true,
     val fingerprintPIN: String? = null,
     val employeeId: Long? = null,
+    val lastPaidAt: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val isSynced: Boolean = false
+)
+
+data class BmpPayrollEntity(
+    val id: Long = 0,
+    val tenantId: String,
+    val employeeId: Long,
+    val employeeName: String? = null,
+    val paymentDate: Long = System.currentTimeMillis(),
+    val amount: Double = 0.0,
+    val attendanceCount: Int = 0,
+    val dailyRate: Double = 0.0,
+    val description: String? = null,
+    val paymentMethod: String = "TRANSFER",
+    val isDeleted: Boolean = false,
+    val isSynced: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
 )
 
 
@@ -300,12 +320,14 @@ data class BmpMachineEntity(
     val depreciationMonthly: Double = 0.0,
     val powerConsumptionKw: Double = 0.0,
     val electricityCostDaily: Double = 0.0,
-    val operatorSalaryMonthly: Double = 0.0,   // deprecated: disembunyikan dari UI v2.19.21+
+    val operatorSalaryMonthly: Double = 0.0,
     val overheadAllocatedMonthly: Double = 0.0,
-    val hoursCapacityMonthly: Double = 624.0,  // deprecated: disembunyikan dari UI v2.19.21+
+    val hoursCapacityMonthly: Double = 624.0,
     val isActive: Boolean = true,
-    /** ID matras/cetakan yang terpasang pada mesin ini */
     val moldId: Long? = null,
+    val maintenanceIntervalHours: Int = 500,
+    val lastMaintenanceHours: Double = 0.0,
+    val totalOperatingHours: Double = 0.0,
     val isDeleted: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
@@ -318,8 +340,9 @@ data class BmpMoldEntity(
     val purchasePrice: Double = 0.0,
     val expectedShotsLifetime: Int = 100000,
     val masterProductId: Long? = null,
-    /** Akumulasi jumlah pemakaian cetakan berdasarkan total shots log produksi */
     val usageCount: Int = 0,
+    val maintenanceIntervalShots: Int = 50000,
+    val lastMaintenanceShots: Int = 0,
     val isDeleted: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
@@ -354,3 +377,88 @@ fun parseWorkersAttendance(json: String?): List<BmpMachineWorkerAttendance> {
         com.google.gson.Gson().fromJson(json, type) ?: emptyList()
     } catch (_: Exception) { emptyList() }
 }
+
+// ─── Surat Perintah Kerja (SPK / Work Orders) (v2.19.58) ──────────────────────
+
+data class BmpWorkOrderEntity(
+    val id: Long = 0,
+    val tenantId: String,
+    val spkNumber: String,
+    val invoiceId: Long? = null,
+    val masterProductId: Long,
+    val masterProductName: String? = null,
+    val targetQuantity: Double,
+    val completedQuantity: Double = 0.0,
+    val rejectedQuantity: Double = 0.0,
+    val machineId: Long? = null,
+    val moldId: Long? = null,
+    val startDate: Long = System.currentTimeMillis(),
+    val targetCompletionDate: Long? = null,
+    val actualCompletionDate: Long? = null,
+    val status: String = "PENDING", // PENDING, IN_PROGRESS, COMPLETED, CANCELLED
+    val priority: String = "NORMAL", // LOW, NORMAL, HIGH, URGENT
+    val notes: String? = null,
+    val isDeleted: Boolean = false,
+    val isSynced: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+// ─── Preventive Maintenance Logs (v2.19.58) ──────────────────────────────────
+
+data class BmpMaintenanceLogEntity(
+    val id: Long = 0,
+    val tenantId: String,
+    val assetType: String, // 'MACHINE' atau 'MOLD'
+    val assetId: Long,
+    val assetName: String? = null,
+    val maintenanceDate: Long = System.currentTimeMillis(),
+    val serviceType: String = "RUTIN", // 'RUTIN', 'PERBAIKAN', 'PENGGANTIAN_SPAREPART', 'PELUMASAN'
+    val cost: Double = 0.0,
+    val technicianName: String? = null,
+    val notes: String? = null,
+    val recordedToCashflow: Boolean = true,
+    val isDeleted: Boolean = false,
+    val isSynced: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+// ─── AR Aging (Laporan Umur Piutang Klien) (v2.19.58) ────────────────────────
+
+data class InvoiceAgingItem(
+    val invoiceId: Long = 0,
+    val invoiceNumber: String = "",
+    val title: String = "",
+    val dueDate: Long = 0,
+    val totalAmount: Double = 0.0,
+    val paidAmount: Double = 0.0,
+    val remaining: Double = 0.0,
+    val overdueDays: Int = 0,
+    val bucket: String = "CURRENT", // "CURRENT", "DAYS_1_30", "DAYS_31_60", "DAYS_OVER_60"
+    val status: String = "PENDING",
+    val createdAt: Long = 0
+)
+
+data class ClientAgingGroup(
+    val clientId: Long = 0,
+    val clientName: String = "",
+    val phoneNumber: String = "",
+    val totalReceivable: Double = 0.0,
+    val currentAmount: Double = 0.0,
+    val days1To30: Double = 0.0,
+    val days31To60: Double = 0.0,
+    val daysOver60: Double = 0.0,
+    val oldestOverdueDays: Int = 0,
+    val invoices: List<InvoiceAgingItem> = emptyList()
+)
+
+data class ArAgingSummary(
+    val totalReceivable: Double = 0.0,
+    val currentAmount: Double = 0.0,
+    val days1To30: Double = 0.0,
+    val days31To60: Double = 0.0,
+    val daysOver60: Double = 0.0,
+    val clientCount: Int = 0,
+    val clients: List<ClientAgingGroup> = emptyList()
+)

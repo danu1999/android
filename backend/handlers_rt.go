@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -72,6 +73,40 @@ func checkOwnerOnly(w http.ResponseWriter, r *http.Request) bool {
 	token := strings.TrimPrefix(authHeader, "Bearer ")
 	if !isOwnerToken(token) {
 		jsonErr(w, 403, "forbidden: owner access only")
+		return false
+	}
+	return true
+}
+
+func isManagerOrOwnerToken(token string) bool {
+	if !strings.HasPrefix(token, "emp:") {
+		var count int
+		_ = db.QueryRow(`
+			SELECT COUNT(1) FROM "local_users" 
+			WHERE ("googleSub" = $1 OR "email" = $1) 
+			  AND "isActive" = TRUE`, token).Scan(&count)
+		return count > 0
+	}
+	empIdStr := strings.TrimPrefix(token, "emp:")
+	var role string
+	err := db.QueryRow(`SELECT "role" FROM "employees" WHERE id = $1 AND "isActive" = TRUE LIMIT 1`, empIdStr).Scan(&role)
+	if err == nil {
+		roleUpper := strings.ToUpper(strings.TrimSpace(role))
+		return roleUpper == "ADMIN" || roleUpper == "SUPERVISOR" || roleUpper == "OWNER"
+	}
+	err2 := db.QueryRow(`SELECT COALESCE("role", "position", '') FROM "bmp_employees" WHERE id = $1 AND "isActive" = TRUE LIMIT 1`, empIdStr).Scan(&role)
+	if err2 == nil {
+		roleUpper := strings.ToUpper(strings.TrimSpace(role))
+		return roleUpper == "ADMIN" || roleUpper == "SUPERVISOR" || roleUpper == "OWNER"
+	}
+	return false
+}
+
+func checkManagerOrOwner(w http.ResponseWriter, r *http.Request) bool {
+	authHeader := r.Header.Get("Authorization")
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	if !isManagerOrOwnerToken(token) {
+		jsonErr(w, 403, "forbidden: manager or owner access only")
 		return false
 	}
 	return true
@@ -1067,14 +1102,40 @@ func handleRtBmpPaymentsById(w http.ResponseWriter, r *http.Request) {
 func handleRtBmpEmployees(w http.ResponseWriter, r *http.Request) {
 	tenantId, ok := extractTenantId(r)
 	if !ok { jsonErr(w, 401, "unauthorized"); return }
-	if !checkOwnerOnly(w, r) { return }
+	if !checkManagerOrOwner(w, r) { return }
 	switch r.Method {
 	case http.MethodGet:
-		rows, _ := db.Query(`SELECT * FROM bmp_employees WHERE "tenantId"=$1 AND "isActive"=TRUE ORDER BY name ASC`, tenantId)
+		rows, err := db.Query(`SELECT * FROM bmp_employees WHERE "tenantId"=$1 AND "isActive"=TRUE AND "isDeleted"=FALSE ORDER BY name ASC`, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
 		defer rows.Close(); jsonOK(w, rowsToJSON(rows))
 	case http.MethodPost:
 		var body map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&body); body["tenantId"] = tenantId; body["updatedAt"] = nowMillis()
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid json body")
+			return
+		}
+		body["tenantId"] = tenantId
+		now := nowMillis()
+		if _, ok := body["createdAt"]; !ok {
+			body["createdAt"] = now
+		}
+		body["updatedAt"] = now
+		body["isDeleted"] = false
+		if _, ok := body["isActive"]; !ok {
+			body["isActive"] = true
+		}
+		if rVal, ok := body["role"]; ok && rVal != nil {
+			if _, hasPos := body["position"]; !hasPos || body["position"] == nil {
+				body["position"] = rVal
+			}
+		} else if pVal, ok := body["position"]; ok && pVal != nil {
+			body["role"] = pVal
+		}
+		if sVal, ok := body["salaryAmount"]; ok && sVal != nil {
+			body["salary"] = sVal
+		} else if sVal, ok := body["salary"]; ok && sVal != nil {
+			body["salaryAmount"] = sVal
+		}
 		id, err := insertRow("bmp_employees", body)
 		if err != nil { jsonErr(w, 500, err.Error()); return }
 		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
@@ -1086,23 +1147,113 @@ func handleRtBmpEmployees(w http.ResponseWriter, r *http.Request) {
 func handleRtBmpEmployeesById(w http.ResponseWriter, r *http.Request) {
 	tenantId, ok := extractTenantId(r)
 	if !ok { jsonErr(w, 401, "unauthorized"); return }
-	if !checkOwnerOnly(w, r) { return }
+	if !checkManagerOrOwner(w, r) { return }
 	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/bmp/employees/")
 	id, _ := strconv.ParseInt(idStr, 10, 64)
 	switch r.Method {
 	case http.MethodPut:
 		var body map[string]interface{}
-		json.NewDecoder(r.Body).Decode(&body); body["updatedAt"] = nowMillis()
-		updateRow("bmp_employees", id, tenantId, body); jsonOK(w, map[string]interface{}{"ok": true})
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid json body")
+			return
+		}
+		body["updatedAt"] = nowMillis()
+		if rVal, ok := body["role"]; ok && rVal != nil {
+			body["position"] = rVal
+		} else if pVal, ok := body["position"]; ok && pVal != nil {
+			body["role"] = pVal
+		}
+		if sVal, ok := body["salaryAmount"]; ok && sVal != nil {
+			body["salary"] = sVal
+		} else if sVal, ok := body["salary"]; ok && sVal != nil {
+			body["salaryAmount"] = sVal
+		}
+		err := updateRow("bmp_employees", id, tenantId, body)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"ok": true})
 	case http.MethodDelete:
-		db.Exec(`UPDATE bmp_employees SET "isActive"=FALSE,"updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, nowMillis(), id, tenantId)
+		_, err := db.Exec(`UPDATE bmp_employees SET "isActive"=FALSE, "isDeleted"=TRUE, "updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, nowMillis(), id, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
 		jsonOK(w, map[string]interface{}{"ok": true})
 	default:
 		jsonErr(w, 405, "method not allowed")
 	}
 }
 
-// handleRtBmpPayrolls dan handleRtBmpPayrollsById dihapus (Jalur 2 removed — v2.20.0)
+func handleRtBmpPayrolls(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	if !checkManagerOrOwner(w, r) { return }
+	switch r.Method {
+	case http.MethodGet:
+		rows, err := db.Query(`SELECT * FROM bmp_payrolls WHERE "tenantId"=$1 AND "isDeleted"=FALSE ORDER BY "paymentDate" DESC`, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		defer rows.Close()
+		jsonOK(w, rowsToJSON(rows))
+	case http.MethodPost:
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid json body")
+			return
+		}
+		body["tenantId"] = tenantId
+		now := nowMillis()
+		if _, ok := body["paymentDate"]; !ok {
+			body["paymentDate"] = now
+		}
+		if _, ok := body["createdAt"]; !ok {
+			body["createdAt"] = now
+		}
+		body["updatedAt"] = now
+		body["isDeleted"] = false
+		body["isSynced"] = true
+
+		id, err := insertRow("bmp_payrolls", body)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+
+		// Update lastPaidAt pada bmp_employees jika employeeId disertakan
+		if empIdVal, ok := body["employeeId"]; ok {
+			var empId int64
+			switch v := empIdVal.(type) {
+			case float64:
+				empId = int64(v)
+			case int64:
+				empId = v
+			case int:
+				empId = int64(v)
+			case string:
+				empId, _ = strconv.ParseInt(v, 10, 64)
+			}
+			if empId > 0 {
+				var payDate int64 = now
+				if pd, ok := body["paymentDate"].(float64); ok {
+					payDate = int64(pd)
+				}
+				_, _ = db.Exec(`UPDATE bmp_employees SET "lastPaidAt"=$1, "updatedAt"=$2 WHERE id=$3 AND "tenantId"=$4`, payDate, now, empId, tenantId)
+			}
+		}
+
+		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+func handleRtBmpPayrollsById(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	if !checkManagerOrOwner(w, r) { return }
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/bmp/payrolls/")
+	id, _ := strconv.ParseInt(idStr, 10, 64)
+	switch r.Method {
+	case http.MethodDelete:
+		_, err := db.Exec(`UPDATE bmp_payrolls SET "isDeleted"=TRUE, "updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, nowMillis(), id, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
 
 
 
@@ -1943,21 +2094,57 @@ func triggerProductionLogCompletion(tenantId string, logId int64) error {
 	// Hitung total shots = quantityProduced + quantityRejected (keduanya pakai cetakan)
 	{
 		var moldIdForLog sql.NullInt64
+		var machineIdForLog sql.NullInt64
 		var quantityRejectedForLog float64
+		var workOrderIdForLog sql.NullInt64
 		_ = db.QueryRow(`
-			SELECT m.mold_id, COALESCE(pl."quantityRejected", 0)
+			SELECT COALESCE(pl."mold_id", m.mold_id), pl."machineId", COALESCE(pl."quantityRejected", 0), pl."workOrderId"
 			FROM bmp_production_logs pl
 			LEFT JOIN bmp_machines m ON pl."machineId" = m.id AND m."isDeleted" = FALSE
 			WHERE pl.id = $1 AND pl."tenantId" = $2
-		`, logId, tenantId).Scan(&moldIdForLog, &quantityRejectedForLog)
-		if moldIdForLog.Valid && moldIdForLog.Int64 > 0 {
-			totalShots := quantityProduced + quantityRejectedForLog
-			if totalShots > 0 {
+		`, logId, tenantId).Scan(&moldIdForLog, &machineIdForLog, &quantityRejectedForLog, &workOrderIdForLog)
+
+		totalShots := quantityProduced + quantityRejectedForLog
+
+		if moldIdForLog.Valid && moldIdForLog.Int64 > 0 && totalShots > 0 {
+			_, _ = db.Exec(`
+				UPDATE bmp_molds SET usage_count = COALESCE(usage_count, 0) + $1
+				WHERE id = $2 AND "tenantId" = $3 AND "isDeleted" = FALSE
+			`, totalShots, moldIdForLog.Int64, tenantId)
+			log.Printf("[MOLD] usage_count +%.0f for mold_id=%d (log=%d)", totalShots, moldIdForLog.Int64, logId)
+		}
+
+		// Update SPK / Work Order progress if linked
+		if workOrderIdForLog.Valid && workOrderIdForLog.Int64 > 0 {
+			now := nowMillis()
+			_, _ = db.Exec(`
+				UPDATE bmp_work_orders 
+				SET "completedQuantity" = COALESCE("completedQuantity", 0) + $1,
+				    "rejectedQuantity" = COALESCE("rejectedQuantity", 0) + $2,
+				    "status" = CASE 
+				        WHEN COALESCE("completedQuantity", 0) + $1 >= "targetQuantity" THEN 'COMPLETED'
+				        ELSE 'IN_PROGRESS'
+				    END,
+				    "actualCompletionDate" = CASE
+				        WHEN COALESCE("completedQuantity", 0) + $1 >= "targetQuantity" THEN $3
+				        ELSE "actualCompletionDate"
+				    END,
+				    "updatedAt" = $3
+				WHERE id = $4 AND "tenantId" = $5 AND "isDeleted" = FALSE
+			`, quantityProduced, quantityRejectedForLog, now, workOrderIdForLog.Int64, tenantId)
+			log.Printf("[SPK] Work order %d progress updated: +%.0f completed (log=%d)", workOrderIdForLog.Int64, quantityProduced, logId)
+		}
+
+		// Update Machine operating hours
+		if machineIdForLog.Valid && machineIdForLog.Int64 > 0 && cycleTimeActual > 0 && totalShots > 0 {
+			hoursRun := (totalShots * cycleTimeActual) / 3600.0
+			if hoursRun > 0 {
 				_, _ = db.Exec(`
-					UPDATE bmp_molds SET usage_count = COALESCE(usage_count, 0) + $1
-					WHERE id = $2 AND "tenantId" = $3 AND "isDeleted" = FALSE
-				`, totalShots, moldIdForLog.Int64, tenantId)
-				log.Printf("[MOLD] usage_count +%.0f for mold_id=%d (log=%d)", totalShots, moldIdForLog.Int64, logId)
+					UPDATE bmp_machines 
+					SET "total_operating_hours" = COALESCE("total_operating_hours", 0) + $1,
+					    "updatedAt" = $2
+					WHERE id = $3 AND "tenantId" = $4 AND "isDeleted" = FALSE
+				`, hoursRun, nowMillis(), machineIdForLog.Int64, tenantId)
 			}
 		}
 	}
@@ -2364,6 +2551,332 @@ func handleRtClearAllBmpEmployees(w http.ResponseWriter, r *http.Request) {
 	if err != nil { jsonErr(w, 500, err.Error()); return }
 
 	jsonOK(w, map[string]interface{}{"ok": true, "message": "Semua data karyawan Manufaktur/BMP telah dibersihkan."})
+}
+
+// ── BMP — Work Orders / SPK (v2.19.58) ────────────────────────────────────────
+
+func handleRtBmpWorkOrders(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	if !checkManagerOrOwner(w, r) { return }
+	switch r.Method {
+	case http.MethodGet:
+		rows, err := db.Query(`SELECT * FROM bmp_work_orders WHERE "tenantId"=$1 AND "isDeleted"=FALSE ORDER BY "startDate" DESC, id DESC`, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		defer rows.Close()
+		jsonOK(w, rowsToJSON(rows))
+	case http.MethodPost:
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid json body")
+			return
+		}
+		body["tenantId"] = tenantId
+		now := nowMillis()
+		if _, ok := body["startDate"]; !ok {
+			body["startDate"] = now
+		}
+		if _, ok := body["createdAt"]; !ok {
+			body["createdAt"] = now
+		}
+		body["updatedAt"] = now
+		body["isDeleted"] = false
+		body["isSynced"] = true
+		if _, ok := body["status"]; !ok {
+			body["status"] = "PENDING"
+		}
+		if _, ok := body["priority"]; !ok {
+			body["priority"] = "NORMAL"
+		}
+
+		id, err := insertRow("bmp_work_orders", body)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+func handleRtBmpWorkOrdersById(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	if !checkManagerOrOwner(w, r) { return }
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/bmp/work-orders/")
+	id, _ := strconv.ParseInt(idStr, 10, 64)
+	switch r.Method {
+	case http.MethodPut:
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid json body")
+			return
+		}
+		body["updatedAt"] = nowMillis()
+		err := updateRow("bmp_work_orders", id, tenantId, body)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"ok": true})
+	case http.MethodDelete:
+		_, err := db.Exec(`UPDATE bmp_work_orders SET "isDeleted"=TRUE, "updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, nowMillis(), id, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+// ── BMP — Preventive Maintenance Logs (v2.19.58) ──────────────────────────────
+
+func handleRtBmpMaintenanceLogs(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	if !checkManagerOrOwner(w, r) { return }
+	switch r.Method {
+	case http.MethodGet:
+		rows, err := db.Query(`SELECT * FROM bmp_maintenance_logs WHERE "tenantId"=$1 AND "isDeleted"=FALSE ORDER BY "maintenanceDate" DESC, id DESC`, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		defer rows.Close()
+		jsonOK(w, rowsToJSON(rows))
+	case http.MethodPost:
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid json body")
+			return
+		}
+		body["tenantId"] = tenantId
+		now := nowMillis()
+		if _, ok := body["maintenanceDate"]; !ok {
+			body["maintenanceDate"] = now
+		}
+		if _, ok := body["createdAt"]; !ok {
+			body["createdAt"] = now
+		}
+		body["updatedAt"] = now
+		body["isDeleted"] = false
+
+		id, err := insertRow("bmp_maintenance_logs", body)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+
+		// Reset maintenance threshold based on assetType
+		assetType, _ := body["assetType"].(string)
+		assetTypeUpper := strings.ToUpper(strings.TrimSpace(assetType))
+		var assetId int64
+		if aIdVal, ok := body["assetId"]; ok {
+			switch v := aIdVal.(type) {
+			case float64: assetId = int64(v)
+			case int64: assetId = v
+			case int: assetId = int64(v)
+			case string: assetId, _ = strconv.ParseInt(v, 10, 64)
+			}
+		}
+
+		if assetTypeUpper == "MOLD" && assetId > 0 {
+			_, _ = db.Exec(`
+				UPDATE bmp_molds 
+				SET "last_maintenance_shots" = COALESCE("usage_count", 0), "updatedAt" = $1 
+				WHERE id = $2 AND "tenantId" = $3
+			`, now, assetId, tenantId)
+		} else if assetTypeUpper == "MACHINE" && assetId > 0 {
+			_, _ = db.Exec(`
+				UPDATE bmp_machines 
+				SET "last_maintenance_hours" = COALESCE("total_operating_hours", 0), "updatedAt" = $1 
+				WHERE id = $2 AND "tenantId" = $3
+			`, now, assetId, tenantId)
+		}
+
+		// If cost > 0 and recordedToCashflow, insert into bmp_bahan_baku as operational expense
+		var cost float64
+		if cVal, ok := body["cost"]; ok {
+			switch v := cVal.(type) {
+			case float64: cost = v
+			case int64: cost = float64(v)
+			case int: cost = float64(v)
+			case string: cost, _ = strconv.ParseFloat(v, 64)
+			}
+		}
+		recToCashflow, hasRec := body["recordedToCashflow"].(bool)
+		if (!hasRec || recToCashflow) && cost > 0 {
+			assetName, _ := body["assetName"].(string)
+			if assetName == "" { assetName = fmt.Sprintf("%s #%d", assetTypeUpper, assetId) }
+			serviceType, _ := body["serviceType"].(string)
+			bbBody := map[string]interface{}{
+				"tenantId":   tenantId,
+				"tanggal":    body["maintenanceDate"],
+				"noTagihan":  fmt.Sprintf("SRV-%d-%d", assetId, now % 100000),
+				"supplier":   fmt.Sprintf("Servis %s", assetName),
+				"category":   "PERLENGKAPAN",
+				"totalHarga": cost,
+				"nominal":    cost,
+				"notes":      fmt.Sprintf("Biaya Pemeliharaan/Servis (%s): %s", serviceType, assetName),
+				"createdAt":  now,
+				"updatedAt":  now,
+			}
+			_, _ = insertRow("bmp_bahan_baku", bbBody)
+		}
+
+		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+func handleRtBmpMaintenanceLogsById(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	if !checkManagerOrOwner(w, r) { return }
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/bmp/maintenance-logs/")
+	id, _ := strconv.ParseInt(idStr, 10, 64)
+	switch r.Method {
+	case http.MethodDelete:
+		_, err := db.Exec(`UPDATE bmp_maintenance_logs SET "isDeleted"=TRUE, "updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, nowMillis(), id, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+// ── BMP — AR Aging Report (Laporan Umur Piutang Klien) (v2.19.58) ───────────────
+
+func handleRtBmpArAging(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+
+	nowMs := nowMillis()
+
+	// Query all unpaid / partially paid invoices
+	rows, err := db.Query(`
+		SELECT bi.id, bi."number", bi."title", COALESCE(bi."clientId", 0), COALESCE(bc."clientName", 'Tanpa Klien'),
+		       COALESCE(bc."phoneNumber", ''), COALESCE(bi."dueDate", bi."createdAt"), bi."totalAmount",
+		       COALESCE(bi."paidAmount", 0.0), bi."status", bi."createdAt"
+		FROM bmp_invoices bi
+		LEFT JOIN bmp_clients bc ON bi."clientId" = bc.id AND bi."tenantId" = bc."tenantId"
+		WHERE bi."tenantId" = $1 AND bi."isDeleted" = FALSE
+		  AND (bi."paidAmount" < bi."totalAmount" OR bi."status" NOT IN ('PAID', 'LUNAS', 'CANCELLED', 'VOID'))
+		ORDER BY bi."createdAt" DESC
+	`, tenantId)
+	if err != nil { jsonErr(w, 500, err.Error()); return }
+	defer rows.Close()
+
+	type InvoiceAgingItem struct {
+		InvoiceId      int64   `json:"invoiceId"`
+		InvoiceNumber  string  `json:"invoiceNumber"`
+		Title          string  `json:"title"`
+		DueDate        int64   `json:"dueDate"`
+		TotalAmount    float64 `json:"totalAmount"`
+		PaidAmount     float64 `json:"paidAmount"`
+		Remaining      float64 `json:"remaining"`
+		OverdueDays    int     `json:"overdueDays"`
+		Bucket         string  `json:"bucket"` // "CURRENT", "DAYS_1_30", "DAYS_31_60", "DAYS_OVER_60"
+		Status         string  `json:"status"`
+		CreatedAt      int64   `json:"createdAt"`
+	}
+
+	type ClientAgingGroup struct {
+		ClientId       int64              `json:"clientId"`
+		ClientName     string             `json:"clientName"`
+		PhoneNumber    string             `json:"phoneNumber"`
+		TotalReceivable float64           `json:"totalReceivable"`
+		CurrentAmount  float64            `json:"currentAmount"`
+		Days1To30      float64            `json:"days1To30"`
+		Days31To60     float64            `json:"days31To60"`
+		DaysOver60     float64            `json:"daysOver60"`
+		OldestOverdueDays int             `json:"oldestOverdueDays"`
+		Invoices       []InvoiceAgingItem `json:"invoices"`
+	}
+
+	clientMap := make(map[int64]*ClientAgingGroup)
+	var grandTotalReceivable, grandCurrent, grandDays1To30, grandDays31To60, grandDaysOver60 float64
+
+	for rows.Next() {
+		var invId, clientId, dueDate, createdAt int64
+		var invNumber, title, clientName, phone, status string
+		var totalAmount, paidAmount float64
+
+		if err := rows.Scan(&invId, &invNumber, &title, &clientId, &clientName, &phone, &dueDate, &totalAmount, &paidAmount, &status, &createdAt); err != nil {
+			continue
+		}
+
+		remaining := totalAmount - paidAmount
+		if remaining <= 0 { continue }
+
+		// Calculate overdue days
+		var overdueDays int = 0
+		if dueDate > 0 && nowMs > dueDate {
+			overdueDays = int((nowMs - dueDate) / (1000 * 60 * 60 * 24))
+		}
+
+		var bucket string
+		if overdueDays <= 0 {
+			bucket = "CURRENT"
+			grandCurrent += remaining
+		} else if overdueDays <= 30 {
+			bucket = "DAYS_1_30"
+			grandDays1To30 += remaining
+		} else if overdueDays <= 60 {
+			bucket = "DAYS_31_60"
+			grandDays31To60 += remaining
+		} else {
+			bucket = "DAYS_OVER_60"
+			grandDaysOver60 += remaining
+		}
+		grandTotalReceivable += remaining
+
+		item := InvoiceAgingItem{
+			InvoiceId:     invId,
+			InvoiceNumber: invNumber,
+			Title:         title,
+			DueDate:       dueDate,
+			TotalAmount:   totalAmount,
+			PaidAmount:    paidAmount,
+			Remaining:     remaining,
+			OverdueDays:   overdueDays,
+			Bucket:        bucket,
+			Status:        status,
+			CreatedAt:     createdAt,
+		}
+
+		grp, exists := clientMap[clientId]
+		if !exists {
+			grp = &ClientAgingGroup{
+				ClientId:    clientId,
+				ClientName:  clientName,
+				PhoneNumber: phone,
+				Invoices:    []InvoiceAgingItem{},
+			}
+			clientMap[clientId] = grp
+		}
+
+		grp.TotalReceivable += remaining
+		switch bucket {
+		case "CURRENT": grp.CurrentAmount += remaining
+		case "DAYS_1_30": grp.Days1To30 += remaining
+		case "DAYS_31_60": grp.Days31To60 += remaining
+		case "DAYS_OVER_60": grp.DaysOver60 += remaining
+		}
+		if overdueDays > grp.OldestOverdueDays {
+			grp.OldestOverdueDays = overdueDays
+		}
+		grp.Invoices = append(grp.Invoices, item)
+	}
+
+	var clientList []ClientAgingGroup
+	for _, grp := range clientMap {
+		clientList = append(clientList, *grp)
+	}
+
+	// Sort clients by TotalReceivable DESC
+	sort.Slice(clientList, func(i, j int) bool {
+		return clientList[i].TotalReceivable > clientList[j].TotalReceivable
+	})
+
+	jsonOK(w, map[string]interface{}{
+		"totalReceivable": grandTotalReceivable,
+		"currentAmount":   grandCurrent,
+		"days1To30":       grandDays1To30,
+		"days31To60":      grandDays31To60,
+		"daysOver60":      grandDaysOver60,
+		"clientCount":     len(clientList),
+		"clients":         clientList,
+	})
 }
 
 

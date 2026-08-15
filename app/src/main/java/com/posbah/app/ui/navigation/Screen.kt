@@ -50,6 +50,8 @@ sealed class Screen(val route: String) {
     }
     object BmpStock : Screen("bmp/stock")
     object BmpProductionLog : Screen("bmp/production")
+    object BmpWorkOrders : Screen("bmp/work_orders")
+    object BmpArAging : Screen("bmp/ar_aging")
     object BmpFinancialReport : Screen("bmp/reports/financial")
     object AdminPanel : Screen("admin/panel")
 

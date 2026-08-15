@@ -204,9 +204,9 @@ func main() {
 	http.HandleFunc("/api/rt/bmp/payments", handleRtBmpPayments)
 	http.HandleFunc("/api/rt/bmp/payments/", handleRtBmpPaymentsById)
 	http.HandleFunc("/api/rt/bmp/employees", handleRtBmpEmployees)
-	// clear-all bmp employees dihapus (Jalur 2 removed v2.20.0)
 	http.HandleFunc("/api/rt/bmp/employees/", handleRtBmpEmployeesById)
-	// payrolls routes dihapus (Jalur 2 removed v2.20.0)
+	http.HandleFunc("/api/rt/bmp/payrolls", handleRtBmpPayrolls)
+	http.HandleFunc("/api/rt/bmp/payrolls/", handleRtBmpPayrollsById)
 	http.HandleFunc("/api/rt/bmp/bahan-baku", handleRtBmpBahanBaku)
 	http.HandleFunc("/api/rt/bmp/bahan-baku/", handleRtBmpBahanBakuById)
 	http.HandleFunc("/api/rt/bmp/bahan-baku-items", handleRtBmpBahanBakuItems)
@@ -233,9 +233,15 @@ func main() {
 	http.HandleFunc("/api/rt/bmp/client-prices", handleRtBmpClientPrices)
 	http.HandleFunc("/api/rt/bmp/clients/latest-prices/", handleRtBmpClientLatestPrices)
 	// v2.19.30: Telemetri memori perangkat — deteksi sisa RAM dinamis untuk cetak JPG
-	http.HandleFunc("/api/rt/bmp/telemetry/memory", handleRtBmpTelemetryMemory)
 	http.HandleFunc("/api/rt/bmp/production-materials", handleRtBmpProductionMaterials)
 	http.HandleFunc("/api/rt/bmp/production-materials/", handleRtBmpProductionMaterialsById)
+
+	// v2.19.58: SPK (Work Orders), Maintenance Logs, & AR Aging
+	http.HandleFunc("/api/rt/bmp/work-orders", handleRtBmpWorkOrders)
+	http.HandleFunc("/api/rt/bmp/work-orders/", handleRtBmpWorkOrdersById)
+	http.HandleFunc("/api/rt/bmp/maintenance-logs", handleRtBmpMaintenanceLogs)
+	http.HandleFunc("/api/rt/bmp/maintenance-logs/", handleRtBmpMaintenanceLogsById)
+	http.HandleFunc("/api/rt/bmp/reports/ar-aging", handleRtBmpArAging)
 
 	// PIN Login for kasir (full online)
 	http.HandleFunc("/api/auth/pin-login", handlePinLogin)
@@ -3813,6 +3819,8 @@ var allowedSyncTables = map[string]bool{
 	"bmp_device_tenants":   true,
 	"bmp_machines":         true,
 	"bmp_molds":            true,
+	"bmp_work_orders":      true,
+	"bmp_maintenance_logs": true,
 }
 
 var columnNameRegex = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
@@ -7311,6 +7319,11 @@ func sendApkUpdateEmailToAllPremiumUsersAndEmployees(version, description string
 		FROM "employees" e
 		JOIN "local_users" u ON e."tenantId" = u."tenantId"
 		WHERE u."isPremium" = TRUE AND u."isActive" = TRUE AND e."email" IS NOT NULL AND e."email" != '' AND e."isActive" = TRUE
+		UNION
+		SELECT DISTINCT be."email"
+		FROM "bmp_employees" be
+		JOIN "local_users" u ON be."tenantId" = u."tenantId"
+		WHERE u."isPremium" = TRUE AND u."isActive" = TRUE AND be."email" IS NOT NULL AND be."email" != '' AND be."isActive" = TRUE
 	`
 
 	rows, err := db.Query(query)

@@ -38,6 +38,8 @@ import com.posbah.app.ui.screens.admin.AdminPanelScreen
 import com.posbah.app.ui.screens.bmp.qr.QrScannerScreen
 import com.posbah.app.ui.screens.bmp.stock.BmpStockScreen
 import com.posbah.app.ui.screens.bmp.production.BmpProductionLogScreen
+import com.posbah.app.ui.screens.bmp.production.WorkOrderScreen
+import com.posbah.app.ui.screens.bmp.invoices.ArAgingScreen
 import com.posbah.app.ui.screens.bmp.reports.FinancialAnalysisScreen
 import com.posbah.app.ui.screens.pos.ShiftManagementScreen
 import com.posbah.app.ui.screens.pos.RawMaterialManagementScreen
@@ -433,6 +435,17 @@ fun PosBahRoot(
 
         composable(Screen.BmpProductionLog.route) {
             BmpProductionLogScreen(onBack = { nav.popBackStack() })
+        }
+
+        composable(Screen.BmpWorkOrders.route) {
+            WorkOrderScreen(onNavigateBack = { nav.popBackStack() })
+        }
+
+        composable(Screen.BmpArAging.route) {
+            ArAgingScreen(
+                onNavigateBack = { nav.popBackStack() },
+                onNavigateToInvoiceDetail = { id -> nav.navigate(Screen.BmpInvoiceDetail.build(id)) }
+            )
         }
 
         composable(Screen.BmpFinancialReport.route) {

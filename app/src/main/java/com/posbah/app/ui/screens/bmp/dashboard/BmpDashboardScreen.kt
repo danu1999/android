@@ -114,9 +114,11 @@ fun BmpDashboardScreen(
         listOf(
             BmpMenuItem("Klien", "Daftar pelanggan & saldo", Icons.Outlined.Group, "bmp/clients", "menu-clients"),
             BmpMenuItem("Invoice", "Buat & kelola tagihan", Icons.Outlined.Description, "bmp/invoices", "menu-invoices"),
+            BmpMenuItem("Umur Piutang", "Analisis AR aging & tagihan", Icons.Outlined.PriceChange, "bmp/ar_aging", "menu-ar-aging"),
             BmpMenuItem("Bahan Baku", "Pembelian bahan & HPP", Icons.Outlined.Science, "bmp/bahanbaku", "menu-bahanbaku"),
             BmpMenuItem("Produk", "Master produk & harga", Icons.Outlined.Inventory2, "bmp/products", "menu-products"),
             BmpMenuItem("Stok", "Stok gudang & ledger", Icons.Outlined.Inventory, "bmp/stock", "menu-stock"),
+            BmpMenuItem("SPK / Work Order", "Surat perintah kerja pabrik", Icons.Outlined.Description, "bmp/work_orders", "menu-work-orders"),
             BmpMenuItem("Produksi", "Catatan produksi harian", Icons.Outlined.PrecisionManufacturing, "bmp/production", "menu-production"),
             BmpMenuItem("Mesin & Matras", "Kelola mesin & cetakan", Icons.Outlined.Settings, "bmp/machines", "menu-machines"),
             BmpMenuItem("Pembayaran", "Catat & lihat penerimaan", Icons.Outlined.Payments, "bmp/payments", "menu-payments"),
@@ -135,9 +137,10 @@ fun BmpDashboardScreen(
                     item.testTag != "menu-payments" &&
                     item.testTag != "menu-settings" &&
                     item.testTag != "menu-invoices" &&
+                    item.testTag != "menu-ar-aging" &&
                     item.testTag != "menu-clients"
                 } else {
-                    item.testTag == "menu-machines" || item.testTag == "menu-production"
+                    item.testTag == "menu-machines" || item.testTag == "menu-production" || item.testTag == "menu-work-orders"
                 }
             }
         }

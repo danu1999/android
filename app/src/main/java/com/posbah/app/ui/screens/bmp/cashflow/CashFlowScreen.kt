@@ -67,7 +67,7 @@ import kotlinx.coroutines.launch
 
 import android.content.Context
 
-// ── Data class pengganti BmpCashFlowEntity (Jalur 2 dihapus) ─────────────────
+// ── Data class CashFlowEntry (BMP Arus Kas Terintegrasi) ──────────────────────
 data class CashFlowEntry(
     val id: Long = 0L,
     val tenantId: String = "",
@@ -76,7 +76,8 @@ data class CashFlowEntry(
     val amount: Double = 0.0,
     val costType: String = "",
     val transactionDate: Long = 0L,
-    val paymentRefId: Long? = null
+    val paymentRefId: Long? = null,
+    val sourceType: String = "MANUAL" // "INVOICE", "BAHAN_BAKU", "PAYROLL", "MANUAL"
 )
 
 @HiltViewModel
@@ -122,18 +123,117 @@ class CashFlowViewModel @Inject constructor(
         }
     }
 
-    fun refreshCashFlow(month: String) = viewModelScope.launch {
+    fun refreshCashFlow(month: String) = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        val sdf = java.text.SimpleDateFormat("yyyy-MM", java.util.Locale.getDefault())
+        val entries = mutableListOf<CashFlowEntry>()
+
         try {
-            // Cashflow modul Jalur 2 telah dihapus — data payment masih bisa dimuat
+            // 1. Kas Masuk: Pembayaran Invoice Klien
             val paymentsResp = api.getPayments()
             if (paymentsResp.isSuccessful) {
                 val paymentList = paymentsResp.body() ?: emptyList()
-                _paymentToInvoice.value = paymentList.mapNotNull { p ->
+                val invoiceMap = paymentList.mapNotNull { p ->
                     val paymentId = (p["id"] as? Number)?.toLong() ?: return@mapNotNull null
                     val invoiceId = (p["invoiceId"] as? Number)?.toLong() ?: return@mapNotNull null
                     paymentId to invoiceId
                 }.toMap()
+                _paymentToInvoice.value = invoiceMap
+
+                paymentList.forEach { p ->
+                    val pDate = (p["paymentDate"] as? Number)?.toLong() ?: return@forEach
+                    val pAmt = (p["paymentAmount"] as? Number)?.toDouble() ?: 0.0
+                    if (pAmt > 0 && sdf.format(java.util.Date(pDate)) == month) {
+                        val pId = (p["id"] as? Number)?.toLong() ?: 0L
+                        val invId = invoiceMap[pId]
+                        val notes = p["notes"] as? String
+                        val desc = buildString {
+                            append("Pembayaran Invoice")
+                            if (invId != null) append(" #$invId")
+                            if (!notes.isNullOrBlank()) append(" ($notes)")
+                        }
+                        entries.add(
+                            CashFlowEntry(
+                                id = 1_000_000L + pId,
+                                tenantId = tenantId,
+                                transactionType = "MASUK",
+                                description = desc,
+                                amount = pAmt,
+                                costType = "OPERATING_EXPENSE",
+                                transactionDate = pDate,
+                                paymentRefId = pId,
+                                sourceType = "INVOICE"
+                            )
+                        )
+                    }
+                }
             }
+
+            // 2. Kas Keluar: Pembelian Bahan Baku & Biaya Operasional
+            val bbResp = api.getBahanBaku()
+            if (bbResp.isSuccessful) {
+                val bbList = bbResp.body() ?: emptyList()
+                bbList.forEach { bb ->
+                    val tgl = (bb["tanggal"] as? Number)?.toLong() ?: return@forEach
+                    val nominal = (bb["nominal"] as? Number)?.toDouble() ?: (bb["totalHarga"] as? Number)?.toDouble() ?: 0.0
+                    if (nominal > 0 && sdf.format(java.util.Date(tgl)) == month) {
+                        val id = (bb["id"] as? Number)?.toLong() ?: 0L
+                        val category = bb["category"] as? String ?: "BAHAN_BAKU"
+                        val supplier = bb["supplier"] as? String
+                        val noTagihan = bb["noTagihan"] as? String
+                        val notes = bb["notes"] as? String
+                        val title = supplier ?: if (category == "BAHAN_BAKU") "Bahan Baku" else "Biaya Pabrik"
+                        val desc = "$title: ${notes ?: noTagihan ?: "Pembelian"}"
+                        val costType = if (category == "BAHAN_BAKU") "DIRECT_LABOR" else "FACTORY_OVERHEAD"
+                        entries.add(
+                            CashFlowEntry(
+                                id = 2_000_000L + id,
+                                tenantId = tenantId,
+                                transactionType = "KELUAR",
+                                description = desc,
+                                amount = nominal,
+                                costType = costType,
+                                transactionDate = tgl,
+                                sourceType = "BAHAN_BAKU"
+                            )
+                        )
+                    }
+                }
+            }
+
+            // 3. Kas Keluar: Penggajian Karyawan (Payrolls)
+            val payrollsResp = api.getPayrolls()
+            if (payrollsResp.isSuccessful) {
+                val payrollList = payrollsResp.body() ?: emptyList()
+                payrollList.forEach { pr ->
+                    val payDate = (pr["paymentDate"] as? Number)?.toLong() ?: return@forEach
+                    val amount = (pr["amount"] as? Number)?.toDouble() ?: 0.0
+                    if (amount > 0 && sdf.format(java.util.Date(payDate)) == month) {
+                        val id = (pr["id"] as? Number)?.toLong() ?: 0L
+                        val empName = pr["employeeName"] as? String ?: "Karyawan"
+                        val days = (pr["attendanceCount"] as? Number)?.toInt() ?: 0
+                        val descNote = pr["description"] as? String
+                        val desc = "Gaji: $empName ($days hari)" + if (!descNote.isNullOrBlank()) " - $descNote" else ""
+                        entries.add(
+                            CashFlowEntry(
+                                id = 3_000_000L + id,
+                                tenantId = tenantId,
+                                transactionType = "KELUAR",
+                                description = desc,
+                                amount = amount,
+                                costType = "DIRECT_LABOR",
+                                transactionDate = payDate,
+                                sourceType = "PAYROLL"
+                            )
+                        )
+                    }
+                }
+            }
+
+            entries.sortByDescending { it.transactionDate }
+            _flows.value = entries
+            _totalIn.value = entries.filter { it.transactionType == "MASUK" }.sumOf { it.amount }
+            _totalOut.value = entries.filter { it.transactionType == "KELUAR" }.sumOf { it.amount }
+
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -154,9 +254,10 @@ class CashFlowViewModel @Inject constructor(
             transactionType = type,
             description = desc,
             amount = amount,
-            costType = if (type == "MASUK") "OPERATING_EXPENSE" else costType
+            costType = if (type == "MASUK") "OPERATING_EXPENSE" else costType,
+            sourceType = "MANUAL"
         )
-        _flows.value = _flows.value + entry
+        _flows.value = (_flows.value + entry).sortedByDescending { it.transactionDate }
         _totalIn.value = _flows.value.filter { it.transactionType == "MASUK" }.sumOf { it.amount }
         _totalOut.value = _flows.value.filter { it.transactionType == "KELUAR" }.sumOf { it.amount }
     }
@@ -165,8 +266,8 @@ class CashFlowViewModel @Inject constructor(
         val s = _settings.value ?: return@launch
         val totalGaji = s.jumlahKaryawan * s.gajiHarian * s.hariKerjaSebulan
 
-        if (totalGaji > 0) insert("KELUAR", "Gaji Karyawan Bulanan (Rutin)", totalGaji, "DIRECT_LABOR")
-        if (s.listrikBulanan > 0) insert("KELUAR", "Listrik Bulanan (Rutin)", s.listrikBulanan, "FACTORY_OVERHEAD")
+        if (totalGaji > 0) insert("KELUAR", "Gaji Karyawan Bulanan (Estimasi Rutin)", totalGaji, "DIRECT_LABOR")
+        if (s.listrikBulanan > 0) insert("KELUAR", "Listrik Bulanan (Estimasi Rutin)", s.listrikBulanan, "FACTORY_OVERHEAD")
     }
 }
 
@@ -300,7 +401,7 @@ fun CashFlowScreen(
                         Column(Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(item.description, style = MaterialTheme.typography.titleSmall)
-                                if (item.paymentRefId != null) {
+                                if (item.sourceType == "INVOICE" || item.paymentRefId != null) {
                                     Spacer(Modifier.width(6.dp))
                                     Surface(
                                         shape = RoundedCornerShape(6.dp),
@@ -309,6 +410,33 @@ fun CashFlowScreen(
                                     ) {
                                         Text(
                                             "Dari Invoice",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                } else if (item.sourceType == "PAYROLL") {
+                                    Spacer(Modifier.width(6.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = Color(0xFF10B981).copy(alpha = 0.15f),
+                                        contentColor = Color(0xFF047857)
+                                    ) {
+                                        Text(
+                                            "Gaji Karyawan",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                } else if (item.sourceType == "BAHAN_BAKU") {
+                                    Spacer(Modifier.width(6.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                                    ) {
+                                        Text(
+                                            "Bahan Baku / Operasional",
                                             style = MaterialTheme.typography.labelSmall,
                                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                         )

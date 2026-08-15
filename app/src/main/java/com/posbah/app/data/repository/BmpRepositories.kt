@@ -124,6 +124,9 @@ data class BmpMachineData(
     val hoursCapacityMonthly: Double = 624.0,
     val isActive: Boolean = true,
     val moldId: Long? = null,
+    val maintenanceIntervalHours: Int = 500,
+    val lastMaintenanceHours: Double = 0.0,
+    val totalOperatingHours: Double = 0.0,
     val isDeleted: Boolean = false,
     val updatedAt: Long = 0
 )
@@ -136,6 +139,46 @@ data class BmpMoldData(
     val expectedShotsLifetime: Int = 100000,
     val masterProductId: Long? = null,
     val usageCount: Int = 0,
+    val maintenanceIntervalShots: Int = 50000,
+    val lastMaintenanceShots: Int = 0,
+    val isDeleted: Boolean = false,
+    val updatedAt: Long = 0
+)
+
+data class BmpWorkOrderData(
+    val id: Long = 0,
+    val tenantId: String = "",
+    val spkNumber: String = "",
+    val invoiceId: Long? = null,
+    val masterProductId: Long = 0,
+    val masterProductName: String? = null,
+    val targetQuantity: Double = 0.0,
+    val completedQuantity: Double = 0.0,
+    val rejectedQuantity: Double = 0.0,
+    val machineId: Long? = null,
+    val moldId: Long? = null,
+    val startDate: Long = System.currentTimeMillis(),
+    val targetCompletionDate: Long? = null,
+    val actualCompletionDate: Long? = null,
+    val status: String = "PENDING", // PENDING, IN_PROGRESS, COMPLETED, CANCELLED
+    val priority: String = "NORMAL", // LOW, NORMAL, HIGH, URGENT
+    val notes: String? = null,
+    val isDeleted: Boolean = false,
+    val updatedAt: Long = 0
+)
+
+data class BmpMaintenanceLogData(
+    val id: Long = 0,
+    val tenantId: String = "",
+    val assetType: String = "MACHINE", // 'MACHINE' atau 'MOLD'
+    val assetId: Long = 0,
+    val assetName: String? = null,
+    val maintenanceDate: Long = System.currentTimeMillis(),
+    val serviceType: String = "RUTIN", // 'RUTIN', 'PERBAIKAN', 'PENGGANTIAN_SPAREPART', 'PELUMASAN'
+    val cost: Double = 0.0,
+    val technicianName: String? = null,
+    val notes: String? = null,
+    val recordedToCashflow: Boolean = true,
     val isDeleted: Boolean = false,
     val updatedAt: Long = 0
 )
@@ -156,6 +199,7 @@ data class BmpPaymentData(
 data class BmpEmployeeData(
     val id: Long = 0,
     val tenantId: String = "",
+    val outletId: Long? = null,
     val name: String = "",
     val role: String = "KARYAWAN",
     val salary: Double = 0.0,
@@ -165,6 +209,22 @@ data class BmpEmployeeData(
     val isActive: Boolean = true,
     val employeeId: Long? = null,
     val fingerprintPIN: String? = null,
+    val lastPaidAt: Long? = null,
+    val updatedAt: Long = 0
+)
+
+data class BmpPayrollData(
+    val id: Long = 0,
+    val tenantId: String = "",
+    val employeeId: Long = 0,
+    val employeeName: String? = null,
+    val paymentDate: Long = System.currentTimeMillis(),
+    val amount: Double = 0.0,
+    val attendanceCount: Int = 0,
+    val dailyRate: Double = 0.0,
+    val description: String? = null,
+    val paymentMethod: String = "TRANSFER",
+    val isDeleted: Boolean = false,
     val updatedAt: Long = 0
 )
 
@@ -368,6 +428,9 @@ fun Map<String, Any?>.toBmpMachineData() = BmpMachineData(
     hoursCapacityMonthly = (getCaseInsensitive("hours_capacity_monthly") as? Number)?.toDouble() ?: 624.0,
     isActive = getCaseInsensitive("is_active") as? Boolean ?: true,
     moldId = (getCaseInsensitive("mold_id") as? Number)?.toLong(),
+    maintenanceIntervalHours = (getCaseInsensitive("maintenance_interval_hours") as? Number)?.toInt() ?: 500,
+    lastMaintenanceHours = (getCaseInsensitive("last_maintenance_hours") as? Number)?.toDouble() ?: 0.0,
+    totalOperatingHours = (getCaseInsensitive("total_operating_hours") as? Number)?.toDouble() ?: 0.0,
     isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false,
     updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0
 )
@@ -380,6 +443,46 @@ fun Map<String, Any?>.toBmpMoldData() = BmpMoldData(
     expectedShotsLifetime = (getCaseInsensitive("expected_shots_lifetime") as? Number)?.toInt() ?: 100000,
     masterProductId = (getCaseInsensitive("master_product_id") as? Number)?.toLong(),
     usageCount = (getCaseInsensitive("usage_count") as? Number)?.toInt() ?: 0,
+    maintenanceIntervalShots = (getCaseInsensitive("maintenance_interval_shots") as? Number)?.toInt() ?: 50000,
+    lastMaintenanceShots = (getCaseInsensitive("last_maintenance_shots") as? Number)?.toInt() ?: 0,
+    isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false,
+    updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0
+)
+
+fun Map<String, Any?>.toBmpWorkOrderData() = BmpWorkOrderData(
+    id = (getCaseInsensitive("id") as? Number)?.toLong() ?: 0,
+    tenantId = getCaseInsensitive("tenantId") as? String ?: "",
+    spkNumber = getCaseInsensitive("spkNumber") as? String ?: "",
+    invoiceId = (getCaseInsensitive("invoiceId") as? Number)?.toLong(),
+    masterProductId = (getCaseInsensitive("masterProductId") as? Number)?.toLong() ?: 0,
+    masterProductName = getCaseInsensitive("masterProductName") as? String,
+    targetQuantity = (getCaseInsensitive("targetQuantity") as? Number)?.toDouble() ?: 0.0,
+    completedQuantity = (getCaseInsensitive("completedQuantity") as? Number)?.toDouble() ?: 0.0,
+    rejectedQuantity = (getCaseInsensitive("rejectedQuantity") as? Number)?.toDouble() ?: 0.0,
+    machineId = (getCaseInsensitive("machineId") as? Number)?.toLong(),
+    moldId = (getCaseInsensitive("moldId") as? Number)?.toLong(),
+    startDate = (getCaseInsensitive("startDate") as? Number)?.toLong() ?: System.currentTimeMillis(),
+    targetCompletionDate = (getCaseInsensitive("targetCompletionDate") as? Number)?.toLong(),
+    actualCompletionDate = (getCaseInsensitive("actualCompletionDate") as? Number)?.toLong(),
+    status = getCaseInsensitive("status") as? String ?: "PENDING",
+    priority = getCaseInsensitive("priority") as? String ?: "NORMAL",
+    notes = getCaseInsensitive("notes") as? String,
+    isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false,
+    updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0
+)
+
+fun Map<String, Any?>.toBmpMaintenanceLogData() = BmpMaintenanceLogData(
+    id = (getCaseInsensitive("id") as? Number)?.toLong() ?: 0,
+    tenantId = getCaseInsensitive("tenantId") as? String ?: "",
+    assetType = getCaseInsensitive("assetType") as? String ?: "MACHINE",
+    assetId = (getCaseInsensitive("assetId") as? Number)?.toLong() ?: 0,
+    assetName = getCaseInsensitive("assetName") as? String,
+    maintenanceDate = (getCaseInsensitive("maintenanceDate") as? Number)?.toLong() ?: System.currentTimeMillis(),
+    serviceType = getCaseInsensitive("serviceType") as? String ?: "RUTIN",
+    cost = (getCaseInsensitive("cost") as? Number)?.toDouble() ?: 0.0,
+    technicianName = getCaseInsensitive("technicianName") as? String,
+    notes = getCaseInsensitive("notes") as? String,
+    recordedToCashflow = getCaseInsensitive("recordedToCashflow") as? Boolean ?: true,
     isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false,
     updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0
 )
@@ -1416,8 +1519,9 @@ class BmpEmployeeRepository @Inject constructor(
                     BmpEmployeeData(
                         id = (it["id"] as? Number)?.toLong() ?: 0,
                         tenantId = it["tenantId"] as? String ?: "",
+                        outletId = (it["outletId"] as? Number)?.toLong(),
                         name = it["name"] as? String ?: "",
-                        role = it["role"] as? String ?: "KARYAWAN",
+                        role = it["role"] as? String ?: it["position"] as? String ?: "KARYAWAN",
                         salary = (it["salaryAmount"] as? Number)?.toDouble() ?: (it["salary"] as? Number)?.toDouble() ?: 0.0,
                         employeeType = it["employeeType"] as? String ?: "OPERATING_EXPENSE",
                         phone = it["phone"] as? String,
@@ -1425,6 +1529,7 @@ class BmpEmployeeRepository @Inject constructor(
                         isActive = it["isActive"] as? Boolean ?: true,
                         employeeId = (it["employeeId"] as? Number)?.toLong(),
                         fingerprintPIN = it["fingerprintPIN"] as? String,
+                        lastPaidAt = (it["lastPaidAt"] as? Number)?.toLong(),
                         updatedAt = (it["updatedAt"] as? Number)?.toLong() ?: 0
                     )
                 } ?: emptyList()
@@ -1454,11 +1559,19 @@ class BmpEmployeeRepository @Inject constructor(
         }
         return try {
             val body = mapOf<String, Any?>(
-                "name" to emp.name, "role" to emp.role, "salaryAmount" to emp.salary,
+                "name" to emp.name,
+                "role" to emp.role,
+                "position" to emp.role,
+                "salaryAmount" to emp.salary,
+                "salary" to emp.salary,
                 "employeeType" to emp.employeeType,
-                "phone" to emp.phone, "email" to emp.email, "isActive" to emp.isActive,
+                "phone" to emp.phone,
+                "email" to emp.email,
+                "outletId" to emp.outletId,
+                "isActive" to emp.isActive,
                 "employeeId" to emp.employeeId,
-                "fingerprintPIN" to emp.fingerprintPIN
+                "fingerprintPIN" to emp.fingerprintPIN,
+                "lastPaidAt" to emp.lastPaidAt
             )
             if (emp.id == 0L) api.createBmpEmployee(body) else api.updateBmpEmployee(emp.id, body)
             refresh()  // sinkronisasi ID asli dari server
@@ -1492,20 +1605,23 @@ class BmpEmployeeRepository @Inject constructor(
         }
     }
 
-
     fun observe(tenantId: String): Flow<List<com.posbah.app.data.local.entities.BmpEmployeeEntity>> =
         _employees.map { list ->
             list.map {
                 com.posbah.app.data.local.entities.BmpEmployeeEntity(
                     id = it.id,
                     tenantId = it.tenantId,
+                    outletId = it.outletId,
                     name = it.name,
                     position = it.role,
                     salaryAmount = it.salary,
                     employeeType = it.employeeType,
+                    phone = it.phone,
+                    email = it.email,
                     isActive = it.isActive,
                     fingerprintPIN = it.fingerprintPIN,
                     employeeId = it.employeeId,
+                    lastPaidAt = it.lastPaidAt,
                     createdAt = System.currentTimeMillis(),
                     updatedAt = it.updatedAt,
                     isSynced = true
@@ -1518,13 +1634,17 @@ class BmpEmployeeRepository @Inject constructor(
         upsert(BmpEmployeeData(
             id = entity.id,
             tenantId = entity.tenantId,
+            outletId = entity.outletId,
             name = entity.name,
             role = entity.position ?: "KARYAWAN",
             salary = entity.salaryAmount,
             employeeType = entity.employeeType,
+            phone = entity.phone,
+            email = entity.email,
             isActive = entity.isActive,
             employeeId = entity.employeeId,
             fingerprintPIN = entity.fingerprintPIN,
+            lastPaidAt = entity.lastPaidAt,
             updatedAt = entity.updatedAt
         ))
 
@@ -1536,6 +1656,88 @@ class BmpEmployeeRepository @Inject constructor(
                 if (it.id == id) it.copy(isActive = false) else it
             }
         } catch (_: Exception) {}
+    }
+}
+
+// ── BmpPayrollRepository (Gaji Karyawan & Arus Kas) ───────────────────────────
+
+@Singleton
+class BmpPayrollRepository @Inject constructor(
+    private val api: BmpApiService,
+    private val securePrefs: SecurePreferences,
+    private val employeeRepo: BmpEmployeeRepository
+) {
+    private val _payrolls = MutableStateFlow<List<BmpPayrollData>>(emptyList())
+    val payrolls = _payrolls.asStateFlow()
+
+    suspend fun refresh() {
+        try {
+            val resp = api.getPayrolls()
+            if (resp.isSuccessful) {
+                _payrolls.value = resp.body()?.map {
+                    BmpPayrollData(
+                        id = (it["id"] as? Number)?.toLong() ?: 0,
+                        tenantId = it["tenantId"] as? String ?: "",
+                        employeeId = (it["employeeId"] as? Number)?.toLong() ?: 0,
+                        employeeName = it["employeeName"] as? String,
+                        paymentDate = (it["paymentDate"] as? Number)?.toLong() ?: 0,
+                        amount = (it["amount"] as? Number)?.toDouble() ?: 0.0,
+                        attendanceCount = (it["attendanceCount"] as? Number)?.toInt() ?: 0,
+                        dailyRate = (it["dailyRate"] as? Number)?.toDouble() ?: 0.0,
+                        description = it["description"] as? String,
+                        paymentMethod = it["paymentMethod"] as? String ?: "TRANSFER",
+                        isDeleted = it["isDeleted"] as? Boolean ?: false,
+                        updatedAt = (it["updatedAt"] as? Number)?.toLong() ?: 0
+                    )
+                } ?: emptyList()
+            }
+        } catch (_: Exception) {}
+    }
+
+    suspend fun list(): List<BmpPayrollData> {
+        val cached = _payrolls.value
+        if (cached.isNotEmpty()) {
+            CoroutineScope(Dispatchers.IO).launch {
+                try { refresh() } catch (_: Exception) {}
+            }
+            return cached
+        }
+        refresh()
+        return _payrolls.value
+    }
+
+    suspend fun paySalary(
+        employeeId: Long,
+        employeeName: String,
+        amount: Double,
+        attendanceCount: Int,
+        dailyRate: Double,
+        description: String,
+        paymentMethod: String = "TRANSFER",
+        paymentDate: Long = System.currentTimeMillis()
+    ): OnlineWriteResult {
+        return try {
+            val body = mapOf<String, Any?>(
+                "employeeId" to employeeId,
+                "employeeName" to employeeName,
+                "paymentDate" to paymentDate,
+                "amount" to amount,
+                "attendanceCount" to attendanceCount,
+                "dailyRate" to dailyRate,
+                "description" to description,
+                "paymentMethod" to paymentMethod
+            )
+            val resp = api.createPayroll(body)
+            if (resp.isSuccessful) {
+                refresh()
+                employeeRepo.refresh()
+                OnlineWriteResult.Success
+            } else {
+                OnlineWriteResult.Error("Gagal mencatat pembayaran gaji: ${resp.code()}")
+            }
+        } catch (e: Exception) {
+            OnlineWriteResult.Error(e.message ?: "Gagal memproses pembayaran gaji")
+        }
     }
 }
 
@@ -2614,6 +2816,9 @@ class BmpMachineRepository @Inject constructor(
                 put("hours_capacity_monthly", item.hoursCapacityMonthly)
                 put("is_active", item.isActive)
                 put("mold_id", item.moldId)
+                put("maintenance_interval_hours", item.maintenanceIntervalHours)
+                put("last_maintenance_hours", item.lastMaintenanceHours)
+                put("total_operating_hours", item.totalOperatingHours)
             }
             if (item.id == 0L) api.createMachine(body)
             else api.updateMachine(item.id, body)
@@ -2652,6 +2857,9 @@ class BmpMachineRepository @Inject constructor(
                     hoursCapacityMonthly = it.hoursCapacityMonthly,
                     isActive = it.isActive,
                     moldId = it.moldId,
+                    maintenanceIntervalHours = it.maintenanceIntervalHours,
+                    lastMaintenanceHours = it.lastMaintenanceHours,
+                    totalOperatingHours = it.totalOperatingHours,
                     isDeleted = it.isDeleted,
                     createdAt = System.currentTimeMillis(),
                     updatedAt = it.updatedAt
@@ -2705,6 +2913,8 @@ class BmpMoldRepository @Inject constructor(
                 put("purchase_price", item.purchasePrice)
                 put("expected_shots_lifetime", item.expectedShotsLifetime)
                 if (item.masterProductId != null) put("master_product_id", item.masterProductId)
+                put("maintenance_interval_shots", item.maintenanceIntervalShots)
+                put("last_maintenance_shots", item.lastMaintenanceShots)
             }
             if (item.id == 0L) api.createMold(body)
             else api.updateMold(item.id, body)
@@ -2770,6 +2980,8 @@ class BmpMoldRepository @Inject constructor(
                     expectedShotsLifetime = it.expectedShotsLifetime,
                     masterProductId = it.masterProductId,
                     usageCount = it.usageCount,
+                    maintenanceIntervalShots = it.maintenanceIntervalShots,
+                    lastMaintenanceShots = it.lastMaintenanceShots,
                     isDeleted = it.isDeleted,
                     createdAt = System.currentTimeMillis(),
                     updatedAt = it.updatedAt
@@ -2815,5 +3027,274 @@ class BmpPriceTrackingRepository @javax.inject.Inject constructor(
     // v2.19.30: Kirim log telemetri sisa RAM perangkat ke server (fire-and-forget)
     suspend fun sendMemoryTelemetry(data: Map<String, Any?>) {
         try { api.sendMemoryTelemetry(data) } catch (_: Exception) {}
+    }
+}
+
+// ── v2.19.58: BMP Work Order (SPK) Repository ─────────────────────────────────
+
+@Singleton
+class BmpWorkOrderRepository @Inject constructor(
+    private val api: BmpApiService
+) {
+    private val _items = MutableStateFlow<List<BmpWorkOrderData>>(emptyList())
+    val items = _items.asStateFlow()
+
+    suspend fun refresh() {
+        try {
+            val resp = api.getWorkOrders()
+            if (resp.isSuccessful) {
+                _items.value = resp.body()?.map { it.toBmpWorkOrderData() } ?: emptyList()
+            }
+        } catch (_: Exception) {}
+    }
+
+    suspend fun list(): List<BmpWorkOrderData> {
+        val cached = _items.value
+        if (cached.isNotEmpty()) {
+            CoroutineScope(Dispatchers.IO).launch {
+                try { refresh() } catch (_: Exception) {}
+            }
+            return cached
+        }
+        refresh()
+        return _items.value
+    }
+
+    suspend fun upsert(item: BmpWorkOrderData): OnlineWriteResult {
+        val snapshot = _items.value
+        if (item.id == 0L) {
+            _items.value = listOf(item.copy(id = -System.currentTimeMillis())) + snapshot
+        } else {
+            _items.value = snapshot.map { if (it.id == item.id) item else it }
+        }
+        return try {
+            val body = mutableMapOf<String, Any?>().apply {
+                put("spkNumber", item.spkNumber)
+                put("invoiceId", item.invoiceId)
+                put("masterProductId", item.masterProductId)
+                put("masterProductName", item.masterProductName)
+                put("targetQuantity", item.targetQuantity)
+                put("completedQuantity", item.completedQuantity)
+                put("rejectedQuantity", item.rejectedQuantity)
+                put("machineId", item.machineId)
+                put("moldId", item.moldId)
+                put("startDate", item.startDate)
+                put("targetCompletionDate", item.targetCompletionDate)
+                put("actualCompletionDate", item.actualCompletionDate)
+                put("status", item.status)
+                put("priority", item.priority)
+                put("notes", item.notes)
+            }
+            if (item.id == 0L) api.createWorkOrder(body)
+            else api.updateWorkOrder(item.id, body)
+            refresh()
+            OnlineWriteResult.Success
+        } catch (e: Exception) {
+            _items.value = snapshot
+            OnlineWriteResult.Error(e.message ?: "Gagal simpan SPK")
+        }
+    }
+
+    suspend fun delete(id: Long): OnlineWriteResult {
+        val snapshot = _items.value
+        _items.value = snapshot.filter { it.id != id }
+        return try {
+            api.deleteWorkOrder(id)
+            OnlineWriteResult.Success
+        } catch (e: Exception) {
+            _items.value = snapshot
+            OnlineWriteResult.Error(e.message ?: "Gagal hapus SPK")
+        }
+    }
+
+    fun observe(tenantId: String): Flow<List<com.posbah.app.data.local.entities.BmpWorkOrderEntity>> =
+        _items.map { list ->
+            list.map {
+                com.posbah.app.data.local.entities.BmpWorkOrderEntity(
+                    id = it.id,
+                    tenantId = it.tenantId,
+                    spkNumber = it.spkNumber,
+                    invoiceId = it.invoiceId,
+                    masterProductId = it.masterProductId,
+                    masterProductName = it.masterProductName,
+                    targetQuantity = it.targetQuantity,
+                    completedQuantity = it.completedQuantity,
+                    rejectedQuantity = it.rejectedQuantity,
+                    machineId = it.machineId,
+                    moldId = it.moldId,
+                    startDate = it.startDate,
+                    targetCompletionDate = it.targetCompletionDate,
+                    actualCompletionDate = it.actualCompletionDate,
+                    status = it.status,
+                    priority = it.priority,
+                    notes = it.notes,
+                    isDeleted = it.isDeleted,
+                    isSynced = true,
+                    createdAt = it.startDate,
+                    updatedAt = it.updatedAt
+                )
+            }
+        }
+}
+
+// ── v2.19.58: BMP Preventive Maintenance Repository ───────────────────────────
+
+@Singleton
+class BmpMaintenanceRepository @Inject constructor(
+    private val api: BmpApiService
+) {
+    private val _items = MutableStateFlow<List<BmpMaintenanceLogData>>(emptyList())
+    val items = _items.asStateFlow()
+
+    suspend fun refresh() {
+        try {
+            val resp = api.getMaintenanceLogs()
+            if (resp.isSuccessful) {
+                _items.value = resp.body()?.map { it.toBmpMaintenanceLogData() } ?: emptyList()
+            }
+        } catch (_: Exception) {}
+    }
+
+    suspend fun list(): List<BmpMaintenanceLogData> {
+        val cached = _items.value
+        if (cached.isNotEmpty()) {
+            CoroutineScope(Dispatchers.IO).launch {
+                try { refresh() } catch (_: Exception) {}
+            }
+            return cached
+        }
+        refresh()
+        return _items.value
+    }
+
+    suspend fun recordMaintenance(item: BmpMaintenanceLogData): OnlineWriteResult {
+        val snapshot = _items.value
+        _items.value = listOf(item.copy(id = -System.currentTimeMillis())) + snapshot
+        return try {
+            val body = mutableMapOf<String, Any?>().apply {
+                put("assetType", item.assetType)
+                put("assetId", item.assetId)
+                put("assetName", item.assetName)
+                put("maintenanceDate", item.maintenanceDate)
+                put("serviceType", item.serviceType)
+                put("cost", item.cost)
+                put("technicianName", item.technicianName)
+                put("notes", item.notes)
+                put("recordedToCashflow", item.recordedToCashflow)
+            }
+            api.createMaintenanceLog(body)
+            refresh()
+            OnlineWriteResult.Success
+        } catch (e: Exception) {
+            _items.value = snapshot
+            OnlineWriteResult.Error(e.message ?: "Gagal catat pemeliharaan")
+        }
+    }
+
+    suspend fun delete(id: Long): OnlineWriteResult {
+        val snapshot = _items.value
+        _items.value = snapshot.filter { it.id != id }
+        return try {
+            api.deleteMaintenanceLog(id)
+            OnlineWriteResult.Success
+        } catch (e: Exception) {
+            _items.value = snapshot
+            OnlineWriteResult.Error(e.message ?: "Gagal hapus log pemeliharaan")
+        }
+    }
+
+    fun observe(tenantId: String): Flow<List<com.posbah.app.data.local.entities.BmpMaintenanceLogEntity>> =
+        _items.map { list ->
+            list.map {
+                com.posbah.app.data.local.entities.BmpMaintenanceLogEntity(
+                    id = it.id,
+                    tenantId = it.tenantId,
+                    assetType = it.assetType,
+                    assetId = it.assetId,
+                    assetName = it.assetName,
+                    maintenanceDate = it.maintenanceDate,
+                    serviceType = it.serviceType,
+                    cost = it.cost,
+                    technicianName = it.technicianName,
+                    notes = it.notes,
+                    recordedToCashflow = it.recordedToCashflow,
+                    isDeleted = it.isDeleted,
+                    isSynced = true,
+                    createdAt = it.maintenanceDate,
+                    updatedAt = it.updatedAt
+                )
+            }
+        }
+}
+
+// ── v2.19.58: BMP AR Aging Repository ─────────────────────────────────────────
+
+@Singleton
+class BmpArAgingRepository @Inject constructor(
+    private val api: BmpApiService
+) {
+    private val _summary = MutableStateFlow<com.posbah.app.data.local.entities.ArAgingSummary>(com.posbah.app.data.local.entities.ArAgingSummary())
+    val summary = _summary.asStateFlow()
+
+    suspend fun fetchArAging(): com.posbah.app.data.local.entities.ArAgingSummary = try {
+        val resp = api.getArAgingReport()
+        val body = resp.body()
+        if (body != null) {
+            val totalReceivable = (body["totalReceivable"] as? Number)?.toDouble() ?: 0.0
+            val currentAmount = (body["currentAmount"] as? Number)?.toDouble() ?: 0.0
+            val days1To30 = (body["days1To30"] as? Number)?.toDouble() ?: 0.0
+            val days31To60 = (body["days31To60"] as? Number)?.toDouble() ?: 0.0
+            val daysOver60 = (body["daysOver60"] as? Number)?.toDouble() ?: 0.0
+            val clientCount = (body["clientCount"] as? Number)?.toInt() ?: 0
+
+            val rawClients = body["clients"] as? List<Map<String, Any?>> ?: emptyList()
+            val clients = rawClients.map { c ->
+                val rawInvoices = c["invoices"] as? List<Map<String, Any?>> ?: emptyList()
+                val invoices = rawInvoices.map { inv ->
+                    com.posbah.app.data.local.entities.InvoiceAgingItem(
+                        invoiceId = (inv["invoiceId"] as? Number)?.toLong() ?: 0L,
+                        invoiceNumber = inv["invoiceNumber"] as? String ?: "",
+                        title = inv["title"] as? String ?: "",
+                        dueDate = (inv["dueDate"] as? Number)?.toLong() ?: 0L,
+                        totalAmount = (inv["totalAmount"] as? Number)?.toDouble() ?: 0.0,
+                        paidAmount = (inv["paidAmount"] as? Number)?.toDouble() ?: 0.0,
+                        remaining = (inv["remaining"] as? Number)?.toDouble() ?: 0.0,
+                        overdueDays = (inv["overdueDays"] as? Number)?.toInt() ?: 0,
+                        bucket = inv["bucket"] as? String ?: "CURRENT",
+                        status = inv["status"] as? String ?: "PENDING",
+                        createdAt = (inv["createdAt"] as? Number)?.toLong() ?: 0L
+                    )
+                }
+
+                com.posbah.app.data.local.entities.ClientAgingGroup(
+                    clientId = (c["clientId"] as? Number)?.toLong() ?: 0L,
+                    clientName = c["clientName"] as? String ?: "",
+                    phoneNumber = c["phoneNumber"] as? String ?: "",
+                    totalReceivable = (c["totalReceivable"] as? Number)?.toDouble() ?: 0.0,
+                    currentAmount = (c["currentAmount"] as? Number)?.toDouble() ?: 0.0,
+                    days1To30 = (c["days1To30"] as? Number)?.toDouble() ?: 0.0,
+                    days31To60 = (c["days31To60"] as? Number)?.toDouble() ?: 0.0,
+                    daysOver60 = (c["daysOver60"] as? Number)?.toDouble() ?: 0.0,
+                    oldestOverdueDays = (c["oldestOverdueDays"] as? Number)?.toInt() ?: 0,
+                    invoices = invoices
+                )
+            }
+
+            val res = com.posbah.app.data.local.entities.ArAgingSummary(
+                totalReceivable = totalReceivable,
+                currentAmount = currentAmount,
+                days1To30 = days1To30,
+                days31To60 = days31To60,
+                daysOver60 = daysOver60,
+                clientCount = clientCount,
+                clients = clients
+            )
+            _summary.value = res
+            res
+        } else {
+            _summary.value
+        }
+    } catch (e: Exception) {
+        _summary.value
     }
 }

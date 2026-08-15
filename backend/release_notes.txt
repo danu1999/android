@@ -1,3 +1,16 @@
+POSBah v2.19.70 - Penyempurnaan Modul Manufaktur (SPK, Perawatan Mesin/Matras, Umur Piutang WA & Arus Kas Gaji)
+
+Halo Rekan POSBah! Versi 2.19.70 menghadirkan pembaharuan besar pada modul manufaktur (BMP):
+1. [Fitur Baru] Surat Perintah Kerja (SPK / Work Order): Kelola instruksi produksi target kuantitas, prioritas kerja, dan pelacakan progres selesai/reject yang tersinkronisasi otomatis saat operator mencatat log produksi.
+2. [Fitur Baru] Pemeliharaan Preventif (Preventive Maintenance Mesin & Matras): Indikator jam operasional mesin dan pukulan cetakan dengan peringatan otomatis, pencatatan biaya servis yang langsung terhubung ke pengeluaran Arus Kas operasional pabrik.
+3. [Fitur Baru] Laporan Umur Piutang (AR Aging) & Pengingat Tagihan WhatsApp: Analisis pengelompokan piutang (Lancar, 1-30 hari, 31-60 hari, >60 hari) lengkap dengan tombol Kirim WA Reminder dan Salin Teks ke klien beserta nomor rekening transfer resmi.
+4. [Fix & Relasi] Data Karyawan Supervisor & Arus Kas Gaji: Memperbaiki persistensi data karyawan supervisor saat relogin serta mengintegrasikan riwayat pembayaran gaji karyawan langsung ke Arus Kas pengeluaran operasional pabrik.
+5. [Sinkronisasi Multi-Perangkat] Arsitektur sinkronisasi multi-device real-time via PostgreSQL Cloud VPS (zedmz.cloud).
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.57 - Perbaikan Pengalaman User Demo
 
 Halo Kak! POSBah v2.19.57 memperbaiki 6 masalah pada pengalaman user demo:
