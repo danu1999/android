@@ -2580,13 +2580,20 @@ func handleRtBmpWorkOrders(w http.ResponseWriter, r *http.Request) {
 			body["createdAt"] = now
 		}
 		body["updatedAt"] = now
-		body["isDeleted"] = false
-		body["isSynced"] = true
 		if _, ok := body["status"]; !ok {
 			body["status"] = "PENDING"
 		}
 		if _, ok := body["priority"]; !ok {
 			body["priority"] = "NORMAL"
+		}
+		if pName, ok := body["masterProductName"].(string); (!ok || strings.TrimSpace(pName) == "") {
+			if mpid, ok := body["masterProductId"]; ok {
+				var pTitle string
+				_ = db.QueryRow(`SELECT "title" FROM "bmp_master_products" WHERE id=$1 AND "tenantId"=$2`, mpid, tenantId).Scan(&pTitle)
+				if pTitle != "" {
+					body["masterProductName"] = pTitle
+				}
+			}
 		}
 
 		id, err := insertRow("bmp_work_orders", body)

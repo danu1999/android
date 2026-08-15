@@ -1383,6 +1383,7 @@ func initSchema() error {
 			"spkNumber" VARCHAR(100) NOT NULL,
 			"invoiceId" BIGINT,
 			"masterProductId" BIGINT NOT NULL,
+			"masterProductName" VARCHAR(255),
 			"targetQuantity" DOUBLE PRECISION NOT NULL,
 			"completedQuantity" DOUBLE PRECISION DEFAULT 0.0,
 			"rejectedQuantity" DOUBLE PRECISION DEFAULT 0.0,
@@ -1402,6 +1403,7 @@ func initSchema() error {
 		);`,
 		`CREATE INDEX IF NOT EXISTS "idx_bmp_wo_tenant_status" ON "bmp_work_orders" ("tenantId", "status") WHERE "isDeleted" = FALSE;`,
 		`CREATE INDEX IF NOT EXISTS "idx_bmp_wo_tenant_invoice" ON "bmp_work_orders" ("tenantId", "invoiceId");`,
+		`ALTER TABLE "bmp_work_orders" ADD COLUMN IF NOT EXISTS "masterProductName" VARCHAR(255);`,
 		`ALTER TABLE "bmp_production_logs" ADD COLUMN IF NOT EXISTS "workOrderId" BIGINT;`,
 
 		// 2. Pemeliharaan Mesin & Matras (Preventive Maintenance)

@@ -3085,8 +3085,12 @@ class BmpWorkOrderRepository @Inject constructor(
                 put("priority", item.priority)
                 put("notes", item.notes)
             }
-            if (item.id == 0L) api.createWorkOrder(body)
-            else api.updateWorkOrder(item.id, body)
+            val resp = if (item.id <= 0L) api.createWorkOrder(body) else api.updateWorkOrder(item.id, body)
+            if (!resp.isSuccessful) {
+                _items.value = snapshot
+                val errMsg = resp.errorBody()?.string() ?: "Server error (${resp.code()})"
+                return OnlineWriteResult.Error(errMsg)
+            }
             refresh()
             OnlineWriteResult.Success
         } catch (e: Exception) {
@@ -3099,7 +3103,13 @@ class BmpWorkOrderRepository @Inject constructor(
         val snapshot = _items.value
         _items.value = snapshot.filter { it.id != id }
         return try {
-            api.deleteWorkOrder(id)
+            val resp = api.deleteWorkOrder(id)
+            if (!resp.isSuccessful) {
+                _items.value = snapshot
+                val errMsg = resp.errorBody()?.string() ?: "Server error (${resp.code()})"
+                return OnlineWriteResult.Error(errMsg)
+            }
+            refresh()
             OnlineWriteResult.Success
         } catch (e: Exception) {
             _items.value = snapshot
@@ -3109,31 +3119,32 @@ class BmpWorkOrderRepository @Inject constructor(
 
     fun observe(tenantId: String): Flow<List<com.posbah.app.data.local.entities.BmpWorkOrderEntity>> =
         _items.map { list ->
-            list.map {
-                com.posbah.app.data.local.entities.BmpWorkOrderEntity(
-                    id = it.id,
-                    tenantId = it.tenantId,
-                    spkNumber = it.spkNumber,
-                    invoiceId = it.invoiceId,
-                    masterProductId = it.masterProductId,
-                    masterProductName = it.masterProductName,
-                    targetQuantity = it.targetQuantity,
-                    completedQuantity = it.completedQuantity,
-                    rejectedQuantity = it.rejectedQuantity,
-                    machineId = it.machineId,
-                    moldId = it.moldId,
-                    startDate = it.startDate,
-                    targetCompletionDate = it.targetCompletionDate,
-                    actualCompletionDate = it.actualCompletionDate,
-                    status = it.status,
-                    priority = it.priority,
-                    notes = it.notes,
-                    isDeleted = it.isDeleted,
-                    isSynced = true,
-                    createdAt = it.startDate,
-                    updatedAt = it.updatedAt
-                )
-            }
+            list.filter { !it.isDeleted && (tenantId.isBlank() || it.tenantId.isBlank() || it.tenantId == tenantId) }
+                .map {
+                    com.posbah.app.data.local.entities.BmpWorkOrderEntity(
+                        id = it.id,
+                        tenantId = it.tenantId,
+                        spkNumber = it.spkNumber,
+                        invoiceId = it.invoiceId,
+                        masterProductId = it.masterProductId,
+                        masterProductName = it.masterProductName,
+                        targetQuantity = it.targetQuantity,
+                        completedQuantity = it.completedQuantity,
+                        rejectedQuantity = it.rejectedQuantity,
+                        machineId = it.machineId,
+                        moldId = it.moldId,
+                        startDate = it.startDate,
+                        targetCompletionDate = it.targetCompletionDate,
+                        actualCompletionDate = it.actualCompletionDate,
+                        status = it.status,
+                        priority = it.priority,
+                        notes = it.notes,
+                        isDeleted = it.isDeleted,
+                        isSynced = true,
+                        createdAt = it.startDate,
+                        updatedAt = it.updatedAt
+                    )
+                }
         }
 }
 
@@ -3182,7 +3193,12 @@ class BmpMaintenanceRepository @Inject constructor(
                 put("notes", item.notes)
                 put("recordedToCashflow", item.recordedToCashflow)
             }
-            api.createMaintenanceLog(body)
+            val resp = api.createMaintenanceLog(body)
+            if (!resp.isSuccessful) {
+                _items.value = snapshot
+                val errMsg = resp.errorBody()?.string() ?: "Server error (${resp.code()})"
+                return OnlineWriteResult.Error(errMsg)
+            }
             refresh()
             OnlineWriteResult.Success
         } catch (e: Exception) {
@@ -3195,11 +3211,17 @@ class BmpMaintenanceRepository @Inject constructor(
         val snapshot = _items.value
         _items.value = snapshot.filter { it.id != id }
         return try {
-            api.deleteMaintenanceLog(id)
+            val resp = api.deleteMaintenanceLog(id)
+            if (!resp.isSuccessful) {
+                _items.value = snapshot
+                val errMsg = resp.errorBody()?.string() ?: "Server error (${resp.code()})"
+                return OnlineWriteResult.Error(errMsg)
+            }
+            refresh()
             OnlineWriteResult.Success
         } catch (e: Exception) {
             _items.value = snapshot
-            OnlineWriteResult.Error(e.message ?: "Gagal hapus log pemeliharaan")
+            OnlineWriteResult.Error(e.message ?: "Gagal hapus pemeliharaan")
         }
     }
 

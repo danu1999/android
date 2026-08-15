@@ -617,6 +617,7 @@ fun WorkOrderFormDialog(
     onDismiss: () -> Unit,
     onSave: (BmpWorkOrderData) -> Unit
 ) {
+    val context = LocalContext.current
     val sdf = remember { SimpleDateFormat("yyyyMMdd", Locale.getDefault()) }
     val defaultSpkNum = remember { "SPK-${sdf.format(Date())}-${(100..999).random()}" }
 
@@ -628,6 +629,12 @@ fun WorkOrderFormDialog(
     var priority by remember { mutableStateOf(existing?.priority ?: "NORMAL") }
     var status by remember { mutableStateOf(existing?.status ?: "PENDING") }
     var notes by remember { mutableStateOf(existing?.notes ?: "") }
+
+    LaunchedEffect(masterProducts) {
+        if (selectedProductId == 0L && masterProducts.isNotEmpty()) {
+            selectedProductId = masterProducts.first().id
+        }
+    }
 
     var productExpanded by remember { mutableStateOf(false) }
     var machineExpanded by remember { mutableStateOf(false) }
@@ -777,11 +784,15 @@ fun WorkOrderFormDialog(
         confirmButton = {
             Button(
                 onClick = {
+                    if (selectedProductId <= 0L) {
+                        Toast.makeText(context, "Silakan pilih produk target terlebih dahulu", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
                     val qty = targetQuantityStr.toDoubleOrNull() ?: 1000.0
                     val prodTitle = masterProducts.find { it.id == selectedProductId }?.title
                     val data = BmpWorkOrderData(
                         id = existing?.id ?: 0L,
-                        spkNumber = spkNumber,
+                        spkNumber = spkNumber.ifBlank { defaultSpkNum },
                         masterProductId = selectedProductId,
                         masterProductName = prodTitle,
                         targetQuantity = qty,
