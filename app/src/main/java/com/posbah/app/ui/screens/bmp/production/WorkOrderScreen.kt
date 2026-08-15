@@ -1,17 +1,25 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.posbah.app.ui.screens.bmp.production
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -26,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.posbah.app.data.local.entities.BmpEmployeeEntity
 import com.posbah.app.data.local.entities.BmpMachineEntity
 import com.posbah.app.data.local.entities.BmpMasterProductEntity
 import com.posbah.app.data.local.entities.BmpMoldEntity
@@ -50,6 +60,7 @@ class WorkOrderViewModel @Inject constructor(
     private val masterProductRepo: BmpMasterProductRepository,
     private val machineRepo: BmpMachineRepository,
     private val moldRepo: BmpMoldRepository,
+    private val employeeRepo: BmpEmployeeRepository,
     private val authRepo: AuthRepository
 ) : ViewModel() {
 
@@ -79,6 +90,12 @@ class WorkOrderViewModel @Inject constructor(
         emptyList()
     )
 
+    val employees = employeeRepo.observe(tenantId).stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        emptyList()
+    )
+
     private val _selectedStatusFilter = MutableStateFlow("ALL")
     val selectedStatusFilter = _selectedStatusFilter.asStateFlow()
 
@@ -87,6 +104,10 @@ class WorkOrderViewModel @Inject constructor(
 
     init {
         refresh()
+    }
+
+    fun getCompanyName(): String {
+        return authRepo.getActiveSession()?.displayName?.ifBlank { "Manajemen Pabrik" } ?: "Manajemen Pabrik"
     }
 
     fun setStatusFilter(status: String) {
@@ -100,6 +121,7 @@ class WorkOrderViewModel @Inject constructor(
             masterProductRepo.refresh()
             machineRepo.refresh()
             moldRepo.refresh()
+            employeeRepo.refresh()
             _isRefreshing.value = false
         }
     }
@@ -151,10 +173,16 @@ class WorkOrderViewModel @Inject constructor(
     }
 }
 
+data class SendWaWorkOrderTarget(
+    val order: BmpWorkOrderEntity,
+    val productName: String,
+    val machineName: String?,
+    val moldName: String?
+)
+
 @Composable
 fun WorkOrderScreen(
     onNavigateBack: () -> Unit,
-    onNavigateToProductionLog: (Long) -> Unit = {},
     viewModel: WorkOrderViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -162,19 +190,23 @@ fun WorkOrderScreen(
     val masterProducts by viewModel.masterProducts.collectAsState()
     val machines by viewModel.machines.collectAsState()
     val molds by viewModel.molds.collectAsState()
+    val employees by viewModel.employees.collectAsState()
     val currentFilter by viewModel.selectedStatusFilter.collectAsState()
-    val isRefreshing by viewModel.isRefreshing.collectAsState()
 
     var showFormDialog by remember { mutableStateOf(false) }
     var editingOrder by remember { mutableStateOf<BmpWorkOrderEntity?>(null) }
     var deleteConfirmOrder by remember { mutableStateOf<BmpWorkOrderEntity?>(null) }
+    var sendWaTarget by remember { mutableStateOf<SendWaWorkOrderTarget?>(null) }
 
     val filteredList = remember(workOrders, currentFilter) {
-        if (currentFilter == "ALL") workOrders
-        else workOrders.filter { it.status == currentFilter }
+        when (currentFilter) {
+            "PENDING" -> workOrders.filter { it.status == "PENDING" }
+            "IN_PROGRESS" -> workOrders.filter { it.status == "IN_PROGRESS" }
+            "COMPLETED" -> workOrders.filter { it.status == "COMPLETED" }
+            else -> workOrders
+        }
     }
 
-    // Aggregates
     val totalSPK = workOrders.size
     val pendingCount = workOrders.count { it.status == "PENDING" }
     val inProgressCount = workOrders.count { it.status == "IN_PROGRESS" }
@@ -286,12 +318,21 @@ fun WorkOrderScreen(
                         val product = masterProducts.find { it.id == item.masterProductId }
                         val machine = machines.find { it.id == item.machineId }
                         val mold = molds.find { it.id == item.moldId }
+                        val prodName = product?.title ?: item.masterProductName ?: "Produk #${item.masterProductId}"
 
                         WorkOrderCard(
                             item = item,
-                            productName = product?.title ?: item.masterProductName ?: "Produk #${item.masterProductId}",
+                            productName = prodName,
                             machineName = machine?.name,
                             moldName = mold?.name,
+                            onSendWa = {
+                                sendWaTarget = SendWaWorkOrderTarget(
+                                    order = item,
+                                    productName = prodName,
+                                    machineName = machine?.name,
+                                    moldName = mold?.name
+                                )
+                            },
                             onStart = {
                                 viewModel.updateStatus(item.id, "IN_PROGRESS") { success, err ->
                                     if (success) Toast.makeText(context, "SPK dimulai!", Toast.LENGTH_SHORT).show()
@@ -338,6 +379,15 @@ fun WorkOrderScreen(
         )
     }
 
+    if (sendWaTarget != null) {
+        SendWorkOrderWaDialog(
+            target = sendWaTarget!!,
+            employees = employees,
+            companyName = viewModel.getCompanyName(),
+            onDismiss = { sendWaTarget = null }
+        )
+    }
+
     if (deleteConfirmOrder != null) {
         val order = deleteConfirmOrder!!
         AlertDialog(
@@ -375,18 +425,29 @@ fun KpiCard(
     value: String,
     color: Color
 ) {
-    Card(
+    Surface(
         modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.1f)),
-        shape = RoundedCornerShape(8.dp)
+        shape = RoundedCornerShape(10.dp),
+        color = color.copy(alpha = 0.1f),
+        border = BorderStroke(1.dp, color.copy(alpha = 0.3f))
     ) {
         Column(
-            modifier = Modifier.padding(8.dp),
+            modifier = Modifier.padding(vertical = 10.dp, horizontal = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(title, fontSize = 11.sp, color = color, fontWeight = FontWeight.Medium)
+            Text(
+                value,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = color
+            )
             Spacer(modifier = Modifier.height(2.dp))
-            Text(value, fontSize = 16.sp, color = color, fontWeight = FontWeight.Bold)
+            Text(
+                title,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.Medium
+            )
         }
     }
 }
@@ -397,6 +458,7 @@ fun WorkOrderCard(
     productName: String,
     machineName: String?,
     moldName: String?,
+    onSendWa: () -> Unit,
     onStart: () -> Unit,
     onComplete: () -> Unit,
     onEdit: () -> Unit,
@@ -575,6 +637,22 @@ fun WorkOrderCard(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // WA Button
+                FilledTonalButton(
+                    onClick = onSendWa,
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = Color(0xFFE8F5E9),
+                        contentColor = Color(0xFF2E7D32)
+                    ),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Icon(Icons.AutoMirrored.Outlined.Chat, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Kirim WA", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
                 if (item.status == "PENDING") {
                     FilledTonalButton(
                         onClick = onStart,
@@ -815,4 +893,294 @@ fun WorkOrderFormDialog(
             TextButton(onClick = onDismiss) { Text("Batal") }
         }
     )
+}
+
+@Composable
+fun SendWorkOrderWaDialog(
+    target: SendWaWorkOrderTarget,
+    employees: List<BmpEmployeeEntity>,
+    companyName: String,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    var selectedEmployee by remember { mutableStateOf<BmpEmployeeEntity?>(employees.firstOrNull { !it.phone.isNullOrBlank() } ?: employees.firstOrNull()) }
+    var customPhone by remember { mutableStateOf(selectedEmployee?.phone ?: "") }
+    var operatorNote by remember { mutableStateOf("") }
+    var searchQuery by remember { mutableStateOf("") }
+
+    val filteredEmployees = remember(employees, searchQuery) {
+        if (searchQuery.isBlank()) employees
+        else employees.filter { it.name.contains(searchQuery, ignoreCase = true) || (it.position ?: "").contains(searchQuery, ignoreCase = true) }
+    }
+
+    val previewText = remember(target, selectedEmployee, customPhone, operatorNote, companyName) {
+        val baseText = buildWorkOrderWaText(
+            companyName = companyName,
+            spk = target.order,
+            productName = target.productName,
+            machineName = target.machineName,
+            moldName = target.moldName,
+            operatorName = selectedEmployee?.name
+        )
+        if (operatorNote.isNotBlank()) {
+            "$baseText\n\n📌 *Pesan Tambahan:*\n$operatorNote"
+        } else baseText
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.AutoMirrored.Outlined.Chat,
+                    contentDescription = null,
+                    tint = Color(0xFF2E7D32),
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Kirim SPK via WhatsApp", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Info Banner
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            "SPK: ${target.order.spkNumber}",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            "Target: ${Formatters.number(target.order.targetQuantity.toLong())} pcs • ${target.productName}",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+
+                // Operator Selection
+                Text("Pilih Karyawan / Operator Penerima:", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+
+                if (employees.isEmpty()) {
+                    Text(
+                        "Belum ada data karyawan terdaftar. Masukkan nomor WhatsApp manual di bawah.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        placeholder = { Text("Cari nama / posisi...", fontSize = 12.sp) },
+                        leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(filteredEmployees) { emp ->
+                            val isSelected = selectedEmployee?.id == emp.id
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = {
+                                    selectedEmployee = emp
+                                    if (!emp.phone.isNullOrBlank()) {
+                                        customPhone = emp.phone
+                                    }
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Outlined.Person,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                },
+                                label = {
+                                    Column {
+                                        Text(emp.name, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
+                                        Text(emp.position ?: "KARYAWAN", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+
+                OutlinedTextField(
+                    value = customPhone,
+                    onValueChange = { customPhone = it },
+                    label = { Text("Nomor WhatsApp Penerima") },
+                    placeholder = { Text("Contoh: 081234567890") },
+                    leadingIcon = { Icon(Icons.Outlined.Phone, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                OutlinedTextField(
+                    value = operatorNote,
+                    onValueChange = { operatorNote = it },
+                    label = { Text("Pesan / Instruksi Tambahan (Opsional)") },
+                    placeholder = { Text("Misal: Kerjakan shift 1, matras sudah diset di mesin.") },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 2
+                )
+
+                // Message Preview
+                Text("Pratinjau Pesan WhatsApp:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFFF1F8E9),
+                    border = BorderStroke(1.dp, Color(0xFFC8E6C9)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        previewText,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = Color(0xFF1B5E20),
+                        modifier = Modifier.padding(10.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    sendWorkOrderToWhatsApp(context, customPhone, previewText)
+                    onDismiss()
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
+            ) {
+                Icon(Icons.AutoMirrored.Outlined.Chat, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Buka WhatsApp")
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val clip = ClipData.newPlainText("SPK POSBah", previewText)
+                        clipboard.setPrimaryClip(clip)
+                        Toast.makeText(context, "Teks SPK berhasil disalin ke clipboard!", Toast.LENGTH_SHORT).show()
+                    }
+                ) {
+                    Icon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Salin")
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Tutup")
+                }
+            }
+        }
+    )
+}
+
+fun buildWorkOrderWaText(
+    companyName: String,
+    spk: BmpWorkOrderEntity,
+    productName: String,
+    machineName: String?,
+    moldName: String?,
+    operatorName: String?
+): String {
+    val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+    val dateStr = sdf.format(Date(spk.startDate))
+    val sb = StringBuilder()
+
+    sb.append("*SURAT PERINTAH KERJA (SPK)*\n")
+    if (companyName.isNotBlank()) {
+        sb.append("*$companyName*\n")
+    }
+    sb.append("\n")
+
+    if (!operatorName.isNullOrBlank()) {
+        sb.append("Yth. Rekan $operatorName,\n")
+    } else {
+        sb.append("Halo Rekan Operator / Karyawan Produksi,\n")
+    }
+    sb.append("Berikut adalah instruksi penugasan kerja pabrik:\n\n")
+
+    sb.append("📋 *No. SPK:* ${spk.spkNumber}\n")
+    sb.append("📦 *Produk Target:* $productName\n")
+    sb.append("🎯 *Target Produksi:* ${Formatters.number(spk.targetQuantity.toLong())} pcs\n")
+    if (spk.completedQuantity > 0 || spk.rejectedQuantity > 0) {
+        sb.append("✅ *Progres Selesai:* ${Formatters.number(spk.completedQuantity.toLong())} pcs\n")
+        if (spk.rejectedQuantity > 0) {
+            sb.append("⚠️ *Reject:* ${Formatters.number(spk.rejectedQuantity.toLong())} pcs\n")
+        }
+    }
+    if (!machineName.isNullOrBlank()) {
+        sb.append("⚙️ *Mesin:* $machineName\n")
+    }
+    if (!moldName.isNullOrBlank()) {
+        sb.append("🔧 *Matras/Cetakan:* $moldName\n")
+    }
+    sb.append("⚡ *Prioritas:* ${spk.priority}\n")
+    val statusText = when (spk.status) {
+        "COMPLETED" -> "Selesai"
+        "IN_PROGRESS" -> "Sedang Berjalan"
+        "CANCELLED" -> "Dibatalkan"
+        else -> "Antrean Produksi"
+    }
+    sb.append("📊 *Status:* $statusText\n")
+    sb.append("📅 *Tanggal Mulai:* $dateStr\n")
+    if (spk.targetCompletionDate != null && spk.targetCompletionDate > 0) {
+        sb.append("🏁 *Target Selesai:* ${sdf.format(Date(spk.targetCompletionDate))}\n")
+    }
+
+    if (!spk.notes.isNullOrBlank()) {
+        sb.append("\n📝 *Catatan Khusus:*\n${spk.notes}\n")
+    }
+
+    sb.append("\nMohon segera diproses sesuai instruksi kerja dan catat hasil produksi harian di aplikasi POSBah. Terima kasih dan selamat bertugas! 💪")
+    return sb.toString()
+}
+
+fun sendWorkOrderToWhatsApp(
+    context: Context,
+    phone: String?,
+    text: String
+) {
+    try {
+        val cleanPhone = phone?.replace("[^0-9]".toRegex(), "").orEmpty()
+        val uri = if (cleanPhone.isNotBlank()) {
+            val formattedPhone = if (cleanPhone.startsWith("0")) "62" + cleanPhone.substring(1) else cleanPhone
+            Uri.parse("https://api.whatsapp.com/send?phone=$formattedPhone&text=" + Uri.encode(text))
+        } else {
+            Uri.parse("https://api.whatsapp.com/send?text=" + Uri.encode(text))
+        }
+        val intent = Intent(Intent.ACTION_VIEW, uri)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        try {
+            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_TEXT, text)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(Intent.createChooser(sendIntent, "Kirim SPK via"))
+        } catch (_: Exception) {
+            Toast.makeText(context, "Tidak dapat membuka WhatsApp: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
 }
