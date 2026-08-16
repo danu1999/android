@@ -484,19 +484,6 @@ fun SettingsScreen(
                 }
             }
             item {
-                OutlinedTextField(
-                    value = if (d.biayaKarungPer1000 == 0.0) "" else d.biayaKarungPer1000.toLong().toString(),
-                    onValueChange = { v ->
-                        val n = v.replace(",", "").toDoubleOrNull() ?: 0.0
-                        viewModel.update { it.copy(biayaKarungPer1000 = n) }
-                    },
-                    label = { Text("Biaya Karung / 1000 Pcs (Rp)") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth().testTag("settings-karung")
-                )
-            }
-            item {
                 Spacer(Modifier.height(12.dp))
                 PrimaryButton(
                     label = "Simpan Profil & Pengaturan",

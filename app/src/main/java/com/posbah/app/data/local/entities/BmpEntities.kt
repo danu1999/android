@@ -134,7 +134,7 @@ data class BmpSettingsEntity(
     val jumlahKaryawan: Int = 19,
     val gajiHarian: Double = 80_000.0,
     val hariKerjaSebulan: Int = 26,
-    val biayaKarungPer1000: Double = 2_100_000.0,
+    val biayaKarungPer1000: Double = 0.0,
     val hoursPerDay: Int = 24,
     val attendanceMode: String = "SUPERVISOR",
     val fingerprintIp: String = "",

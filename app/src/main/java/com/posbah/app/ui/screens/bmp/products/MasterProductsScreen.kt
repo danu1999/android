@@ -236,8 +236,7 @@ class MasterProductsViewModel @Inject constructor(
             }
 
             val hppSatuan = (e.beratGram * (mixedRate / 1000.0) + biayaMesin + biayaMoldPcs) * (1.0 + (e.rejectRate / 100.0))
-            val biayaKemasanPcs = s.biayaKarungPer1000 / 1000.0
-            val hppTotalPcs = hppSatuan + biayaKemasanPcs
+            val hppTotalPcs = hppSatuan
             val hppLusin = hppTotalPcs * 12.0
             Pair(hppTotalPcs, hppLusin)
         } else {
@@ -574,8 +573,7 @@ fun MasterProductsScreen(
                 }
 
                 val hppSatuan = (e.beratGram * (mixedRate / 1000.0) + biayaMesin + biayaMoldPcs) * (1.0 + (e.rejectRate / 100.0))
-                val biayaKemasanPcs = s.biayaKarungPer1000 / 1000.0
-                val hppTotalPcs = hppSatuan + biayaKemasanPcs
+                val hppTotalPcs = hppSatuan
                 val hppLusin = hppTotalPcs * 12.0
                 val outputJamPcs = if (e.cycleTime > 0) (3600.0 * e.cavity) / e.cycleTime else 0.0
                 val outputJamLusin = outputJamPcs / 12.0

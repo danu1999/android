@@ -123,7 +123,6 @@ class BmpDashboardViewModel @Inject constructor(
                         val overheadBulanan = s.listrikBulanan + totalGaji
                         val totalDetikSebulan = s.jumlahMesin * s.hariKerjaSebulan * s.hoursPerDay * 3600.0
                         val biayaPerDetik = if (totalDetikSebulan > 0) overheadBulanan / totalDetikSebulan else 0.0
-                        val biayaKemasanPcs = s.biayaKarungPer1000 / 1000.0
                         for (stockMap in stocksList) {
                             val masterProductId = (stockMap["masterItemId"] as? Number)?.toLong() ?: 0L
                             val quantity = (stockMap["currentStock"] as? Number)?.toDouble() ?: 0.0
@@ -136,7 +135,7 @@ class BmpDashboardViewModel @Inject constructor(
                                     product.price
                                 }
                                 val hppSatuan = (product.beratGram * (bahanRate / 1000.0) + biayaMesin) * (1.0 + (product.rejectRate / 100.0))
-                                val hppTotalPcs = hppSatuan + biayaKemasanPcs
+                                val hppTotalPcs = hppSatuan
                                 totalStockValue += quantity * hppTotalPcs
                             }
                         }

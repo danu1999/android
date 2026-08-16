@@ -243,7 +243,7 @@ func initSchema() error {
 			"jumlahKaryawan" INT DEFAULT 19,
 			"gajiHarian" DOUBLE PRECISION DEFAULT 80000,
 			"hariKerjaSebulan" INT DEFAULT 26,
-			"biayaKarungPer1000" DOUBLE PRECISION DEFAULT 2100000,
+			"biayaKarungPer1000" DOUBLE PRECISION DEFAULT 0,
 			"hoursPerDay" INT DEFAULT 24,
 			"attendanceMode" VARCHAR(50) DEFAULT 'SUPERVISOR',
 			"fingerprintIp" VARCHAR(50) DEFAULT '',
