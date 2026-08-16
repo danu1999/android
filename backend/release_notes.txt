@@ -1,3 +1,17 @@
+POSBah v2.19.71 - Analisis Keuangan Komprehensif (Laba Bersih, Cetak PDF Resmi, Kirim Ringkasan WA & Pembersihan HPP Karung)
+
+Halo Rekan POSBah! Versi 2.19.71 menghadirkan penyempurnaan menyeluruh pada modul Analisis Keuangan & Manufaktur:
+1. [Fitur Baru] Laporan Laba Rugi Komprehensif: Menghitung Laba Bersih (Net Profit), Net Margin %, dan Titik Impas (BEP) dengan mengintegrasikan Beban Gaji Karyawan, Biaya Pemeliharaan Mesin/Matras, dan Biaya Operasional Pabrik.
+2. [Fitur Baru] Cetak & Ekspor PDF Resmi: Menghasilkan dokumen resmi ber-Kop Surat perusahaan (CV. Bahtera Plastik / CV. Bahtera Mulya Plastik) lengkap dengan tabel laba rugi dan lembar pengesahan tanda tangan.
+3. [Fitur Baru] Kirim Ringkasan Laporan via WhatsApp: Tombol aksi cepat untuk membagikan ikhtisar omzet, laba kotor, beban operasional, dan laba bersih langsung ke WhatsApp Owner/Manajemen.
+4. [Fix & Peningkatan] Ekspor Excel 4 Tabel: Format file Excel (CSV) dilengkapi pemisah titik koma regional Indonesia dengan 4 tabel data akuntansi terpadu dan FileProvider yang aman di Android 10-15.
+5. [Penyempurnaan HPP] Pembersihan Biaya Karung Otomatis: Menghapus biaya karung statis di pengaturan dan beralih ke pencatatan riil manual pada menu Bahan Baku, Perlengkapan & APD agar HPP produk 100% murni dan akurat.
+6. [Fitur Baru] Kirim WA SPK ke Operator: Tombol kirim instruksi Surat Perintah Kerja langsung ke nomor WhatsApp karyawan kerja.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.70 - Penyempurnaan Modul Manufaktur (SPK, Perawatan Mesin/Matras, Umur Piutang WA & Arus Kas Gaji)
 
 Halo Rekan POSBah! Versi 2.19.70 menghadirkan pembaharuan besar pada modul manufaktur (BMP):
