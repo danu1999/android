@@ -773,6 +773,7 @@ fun InvoiceDetailScreen(
                     biayaKuli = kuli,
                     deliveryStatus = status
                 )
+                android.widget.Toast.makeText(context, "Data pengiriman berhasil disimpan!", android.widget.Toast.LENGTH_SHORT).show()
                 showDeliveryDialog = false
             }
         )

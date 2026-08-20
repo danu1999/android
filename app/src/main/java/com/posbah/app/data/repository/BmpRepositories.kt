@@ -741,7 +741,14 @@ class BmpInvoiceRepository @Inject constructor(
         slug = "",
         receiverSignaturePath = receiverSignaturePath,
         receiverSignatureUrl = receiverSignatureUrl,
-        receiverNameActual = receiverNameActual
+        receiverNameActual = receiverNameActual,
+        driverId = driverId,
+        driverName = driverName,
+        driverPhone = driverPhone,
+        plateNumber = plateNumber,
+        ongkirSopir = ongkirSopir,
+        biayaKuli = biayaKuli,
+        deliveryStatus = deliveryStatus
     )
 
     fun observe(tenantId: String): kotlinx.coroutines.flow.Flow<List<com.posbah.app.data.local.entities.BmpInvoiceEntity>> =
@@ -867,7 +874,14 @@ class BmpInvoiceRepository @Inject constructor(
                 "paymentTerms" to invoice.paymentTerms,
                 "dueDate" to computedDueDate,
                 "notes" to invoice.notes,
-                "createdAt" to invoice.createdAt
+                "createdAt" to invoice.createdAt,
+                "driverId" to invoice.driverId,
+                "driverName" to invoice.driverName,
+                "driverPhone" to invoice.driverPhone,
+                "plateNumber" to invoice.plateNumber,
+                "ongkirSopir" to invoice.ongkirSopir,
+                "biayaKuli" to invoice.biayaKuli,
+                "deliveryStatus" to invoice.deliveryStatus
             )
             val invoiceResp = api.createInvoice(invoiceBody)
             if (!invoiceResp.isSuccessful) {
@@ -972,7 +986,14 @@ class BmpInvoiceRepository @Inject constructor(
                 "paidAmount" to totalPaidAmt,
                 "paymentTerms" to invoice.paymentTerms,
                 "dueDate" to computedDueDate,
-                "notes" to invoice.notes
+                "notes" to invoice.notes,
+                "driverId" to invoice.driverId,
+                "driverName" to invoice.driverName,
+                "driverPhone" to invoice.driverPhone,
+                "plateNumber" to invoice.plateNumber,
+                "ongkirSopir" to invoice.ongkirSopir,
+                "biayaKuli" to invoice.biayaKuli,
+                "deliveryStatus" to invoice.deliveryStatus
             ))
 
             // 3. Insert produk baru
@@ -1416,8 +1437,9 @@ class BmpInvoiceRepository @Inject constructor(
         biayaKuli: Double,
         deliveryStatus: String = "ON_DELIVERY"
     ): OnlineWriteResult {
-        val inv = _invoices.value.find { it.id == invoiceId } ?: return OnlineWriteResult.Error("Invoice tidak ditemukan")
-        val updated = inv.copy(
+        val currentList = if (_invoices.value.isEmpty()) list() else _invoices.value
+        val inv = currentList.find { it.id == invoiceId }
+        val updated = inv?.copy(
             driverId = driverId,
             driverName = driverName,
             driverPhone = driverPhone,
@@ -1426,7 +1448,9 @@ class BmpInvoiceRepository @Inject constructor(
             biayaKuli = biayaKuli,
             deliveryStatus = deliveryStatus
         )
-        _invoices.value = _invoices.value.map { if (it.id == invoiceId) updated else it }
+        if (updated != null) {
+            _invoices.value = _invoices.value.map { if (it.id == invoiceId) updated else it }
+        }
         return try {
             val resp = api.updateInvoice(invoiceId, mapOf(
                 "driverId" to driverId,
@@ -1441,7 +1465,7 @@ class BmpInvoiceRepository @Inject constructor(
                 refresh()
                 OnlineWriteResult.Success
             } else {
-                OnlineWriteResult.Error("Gagal simpan info pengiriman ke server")
+                OnlineWriteResult.Error("Gagal simpan info pengiriman ke server (${resp.code()})")
             }
         } catch (e: Exception) {
             OnlineWriteResult.Error(e.message ?: "Gagal update pengiriman")
