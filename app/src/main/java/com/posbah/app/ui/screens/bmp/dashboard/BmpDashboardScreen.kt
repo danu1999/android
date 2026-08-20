@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.Inventory
 import androidx.compose.material.icons.outlined.PrecisionManufacturing
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Analytics
+import androidx.compose.material.icons.outlined.LocalShipping
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -122,6 +123,7 @@ fun BmpDashboardScreen(
             BmpMenuItem("Produksi", "Catatan produksi harian", Icons.Outlined.PrecisionManufacturing, "bmp/production", "menu-production"),
             BmpMenuItem("Mesin & Matras", "Kelola mesin & cetakan", Icons.Outlined.Settings, "bmp/machines", "menu-machines"),
             BmpMenuItem("Pembayaran", "Catat & lihat penerimaan", Icons.Outlined.Payments, "bmp/payments", "menu-payments"),
+            BmpMenuItem("Sopir & Armada", "Data sopir & dokumen", Icons.Outlined.LocalShipping, "bmp/drivers", "menu-drivers"),
             BmpMenuItem("Analisis Keuangan", "Laba rugi & ekspor Excel", Icons.Outlined.Analytics, "bmp/reports/financial", "menu-financial-report"),
             BmpMenuItem("Karyawan", "Data & kontrol staf", Icons.Outlined.Badge, "bmp/employees", "menu-employees"),
             BmpMenuItem("Pengaturan", "Profil perusahaan & sistem", Icons.Outlined.Settings, "bmp/settings", "menu-settings"),
@@ -135,6 +137,7 @@ fun BmpDashboardScreen(
                     item.testTag != "menu-financial-report" &&
                     item.testTag != "menu-employees" &&
                     item.testTag != "menu-payments" &&
+                    item.testTag != "menu-drivers" &&
                     item.testTag != "menu-settings" &&
                     item.testTag != "menu-invoices" &&
                     item.testTag != "menu-ar-aging" &&

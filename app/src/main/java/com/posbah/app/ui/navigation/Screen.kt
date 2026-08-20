@@ -36,6 +36,7 @@ sealed class Screen(val route: String) {
     }
     object BmpPayments : Screen("bmp/payments")
     object BmpEmployees : Screen("bmp/employees")
+    object BmpDrivers : Screen("bmp/drivers")
     object BmpEmployeeEdit : Screen("bmp/employees/edit?id={id}") {
         fun build(id: Long? = null) = "bmp/employees/edit?id=${id ?: -1}"
     }

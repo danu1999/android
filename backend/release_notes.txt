@@ -1,3 +1,15 @@
+POSBah v2.19.73 - Fitur Manajemen Sopir Armada & Pengiriman Barang
+
+Halo Rekan POSBah! Versi 2.19.73 hadir dengan fitur baru yang memudahkan operasional pengiriman barang Anda:
+1. [Menu Sopir & Armada]: Catat data sopir, nomor HP/WA, plat kendaraan, serta simpan foto KTP, Truk, dan STNK dengan rapi di aplikasi.
+2. [Atur Pengiriman di Invoice]: Pasangkan sopir dan catat biaya operasional (ongkir sopir & upah kuli) di setiap invoice. Biaya ini otomatis masuk ke Laporan Keuangan pabrik tanpa mengubah nota tagihan klien.
+3. [Kirim Info Sopir ke WA Klien]: Tombol cepat untuk membagikan nama dan nomor HP sopir ke WhatsApp klien agar mudah dihubungi saat penurunan barang.
+4. [Pembaruan Pricelist]: Daftar produk dan harga jual telah diperbarui ke katalog terbaru.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.72 - Perbaikan Relasi Database & Pencegahan Dobel Pembayaran Invoice
 
 Halo Rekan POSBah! Versi 2.19.72 menghadirkan penyempurnaan menyeluruh pada sistem pembayaran invoice dan rekonsiliasi data:

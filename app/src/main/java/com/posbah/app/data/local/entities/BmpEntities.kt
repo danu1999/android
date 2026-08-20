@@ -50,6 +50,13 @@ data class BmpInvoiceEntity(
     val receiverSignaturePath: String? = null,
     val receiverSignatureUrl: String? = null,
     val receiverNameActual: String? = null,
+    val driverId: Long? = null,
+    val driverName: String? = null,
+    val driverPhone: String? = null,
+    val plateNumber: String? = null,
+    val ongkirSopir: Double = 0.0,
+    val biayaKuli: Double = 0.0,
+    val deliveryStatus: String = "PENDING",
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
@@ -461,4 +468,21 @@ data class ArAgingSummary(
     val daysOver60: Double = 0.0,
     val clientCount: Int = 0,
     val clients: List<ClientAgingGroup> = emptyList()
+)
+
+data class BmpDriverEntity(
+    val id: Long = 0,
+    val tenantId: String = "",
+    val name: String = "",
+    val phone: String = "",
+    val plateNumber: String = "",
+    val truckType: String = "",
+    val ktpImageUrl: String? = null,
+    val truckImageUrl: String? = null,
+    val stnkImageUrl: String? = null,
+    val notes: String? = null,
+    val isActive: Boolean = true,
+    val isDeleted: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
 )

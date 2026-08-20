@@ -1057,6 +1057,32 @@ func initSchema() error {
 		     GROUP BY "tenantId", "invoiceId"
 		 ) sub
 		 WHERE bi."tenantId" = sub."tenantId" AND bi."id" = sub."invoiceId";`,
+
+		// v2.19.73: Master Data Sopir & Armada (bmp_drivers) + Kolom Pengiriman di bmp_invoices
+		`CREATE TABLE IF NOT EXISTS "bmp_drivers" (
+			"id" SERIAL PRIMARY KEY,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"name" VARCHAR(150) NOT NULL,
+			"phone" VARCHAR(50) NOT NULL,
+			"plateNumber" VARCHAR(50) DEFAULT '',
+			"truckType" VARCHAR(100) DEFAULT '',
+			"ktpImageUrl" TEXT DEFAULT '',
+			"truckImageUrl" TEXT DEFAULT '',
+			"stnkImageUrl" TEXT DEFAULT '',
+			"notes" TEXT DEFAULT '',
+			"isActive" BOOLEAN DEFAULT TRUE,
+			"isDeleted" BOOLEAN DEFAULT FALSE,
+			"createdAt" BIGINT,
+			"updatedAt" BIGINT
+		);`,
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_drivers_tenant" ON "bmp_drivers" ("tenantId", "isDeleted");`,
+		`ALTER TABLE "bmp_invoices" ADD COLUMN IF NOT EXISTS "driverId" INT;`,
+		`ALTER TABLE "bmp_invoices" ADD COLUMN IF NOT EXISTS "driverName" VARCHAR(150) DEFAULT '';`,
+		`ALTER TABLE "bmp_invoices" ADD COLUMN IF NOT EXISTS "driverPhone" VARCHAR(50) DEFAULT '';`,
+		`ALTER TABLE "bmp_invoices" ADD COLUMN IF NOT EXISTS "plateNumber" VARCHAR(50) DEFAULT '';`,
+		`ALTER TABLE "bmp_invoices" ADD COLUMN IF NOT EXISTS "ongkirSopir" DOUBLE PRECISION DEFAULT 0.0;`,
+		`ALTER TABLE "bmp_invoices" ADD COLUMN IF NOT EXISTS "biayaKuli" DOUBLE PRECISION DEFAULT 0.0;`,
+		`ALTER TABLE "bmp_invoices" ADD COLUMN IF NOT EXISTS "deliveryStatus" VARCHAR(50) DEFAULT 'PENDING';`,
 	}
 	for _, q := range manufakturMigrations {
 		if _, err := db.Exec(q); err != nil {

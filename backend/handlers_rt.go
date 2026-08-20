@@ -1196,6 +1196,61 @@ func handleRtBmpPaymentsById(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ── BMP — drivers & fleet ───────────────────────────────────────────────────
+
+func handleRtBmpDrivers(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	switch r.Method {
+	case http.MethodGet:
+		rows, err := db.Query(`SELECT * FROM bmp_drivers WHERE "tenantId"=$1 AND "isDeleted"=FALSE ORDER BY name ASC`, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		defer rows.Close()
+		jsonOK(w, rowsToJSON(rows))
+	case http.MethodPost:
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid json body")
+			return
+		}
+		body["tenantId"] = tenantId
+		now := nowMillis()
+		if _, ok := body["createdAt"]; !ok { body["createdAt"] = now }
+		body["updatedAt"] = now
+		id, err := insertRow("bmp_drivers", body)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+func handleRtBmpDriversById(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/bmp/drivers/")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil { jsonErr(w, 400, "invalid id"); return }
+
+	switch r.Method {
+	case http.MethodPut:
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid json body")
+			return
+		}
+		body["updatedAt"] = nowMillis()
+		updateRow("bmp_drivers", id, tenantId, body)
+		jsonOK(w, map[string]interface{}{"ok": true})
+	case http.MethodDelete:
+		_, err := db.Exec(`UPDATE bmp_drivers SET "isDeleted"=TRUE, "updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, nowMillis(), id, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
 // ── BMP — employees & payrolls ────────────────────────────────────────────────
 
 func handleRtBmpEmployees(w http.ResponseWriter, r *http.Request) {
@@ -1848,7 +1903,15 @@ func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
 		WHERE "tenantId"=$1 AND "maintenanceDate" >= $2 AND "maintenanceDate" < $3 AND "isDeleted"=FALSE
 	`, tenantId, startMs, endMs).Scan(&biayaMaintenance)
 
-	// c. Beban Operasional Lainnya (bmp_cashflow)
+	// c. Biaya Pengiriman & Upah Kuli (bmp_invoices)
+	var biayaPengirimanDanKuli float64
+	_ = db.QueryRow(`
+		SELECT COALESCE(SUM(COALESCE("ongkirSopir", 0) + COALESCE("biayaKuli", 0)), 0)
+		FROM bmp_invoices
+		WHERE "tenantId"=$1 AND "createdAt" >= $2 AND "createdAt" < $3 AND "isDeleted"=FALSE
+	`, tenantId, startMs, endMs).Scan(&biayaPengirimanDanKuli)
+
+	// d. Beban Operasional Lainnya (bmp_cashflow)
 	var biayaOperasionalLain float64
 	_ = db.QueryRow(`
 		SELECT COALESCE(SUM(amount), 0)
@@ -1857,7 +1920,7 @@ func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
 		  AND ("transactionType"='EXPENSE' OR "transactionType"='OUT') AND "isDeleted"=FALSE AND "paymentRefId" IS NULL
 	`, tenantId, startMs, endMs).Scan(&biayaOperasionalLain)
 
-	totalBebanOperasional := gajiKaryawan + biayaMaintenance + biayaOperasionalLain
+	totalBebanOperasional := gajiKaryawan + biayaMaintenance + biayaPengirimanDanKuli + biayaOperasionalLain
 	labaBersih := labaKotor - totalBebanOperasional
 
 	cogsPercentage := 0.0
@@ -1924,10 +1987,11 @@ func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
 		"totalUnpaid":           totalUnpaid,
 		"cogs":                  cogs,
 		"labaKotor":             labaKotor,
-		"gajiKaryawan":          gajiKaryawan,
-		"biayaMaintenance":      biayaMaintenance,
-		"biayaOperasionalLain":  biayaOperasionalLain,
-		"totalBebanOperasional": totalBebanOperasional,
+		"gajiKaryawan":           gajiKaryawan,
+		"biayaMaintenance":       biayaMaintenance,
+		"biayaPengirimanDanKuli": biayaPengirimanDanKuli,
+		"biayaOperasionalLain":   biayaOperasionalLain,
+		"totalBebanOperasional":  totalBebanOperasional,
 		"labaBersih":            labaBersih,
 		"cogsPercentage":        cogsPercentage,
 		"marginPercentage":      marginPercentage,

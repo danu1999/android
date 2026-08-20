@@ -103,4 +103,52 @@ object VpsImageUploader {
         }
         null
     }
+
+    suspend fun uploadDriverDocToVps(context: Context, bytes: ByteArray, tenantId: String, docType: String): String? = withContext(Dispatchers.IO) {
+        var conn: java.net.HttpURLConnection? = null
+        try {
+            val boundary = "Boundary-${System.currentTimeMillis()}"
+            val url = java.net.URL("https://www.zedmz.cloud/api/upload/driver-doc")
+            conn = url.openConnection() as java.net.HttpURLConnection
+            conn.doOutput = true
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+            conn.setRequestProperty("X-Tenant-Id", tenantId)
+
+            conn.outputStream.use { os ->
+                val writer = os.bufferedWriter(Charsets.UTF_8)
+                writer.write("--$boundary\r\n")
+                writer.write("Content-Disposition: form-data; name=\"tenantId\"\r\n\r\n")
+                writer.write("$tenantId\r\n")
+
+                writer.write("--$boundary\r\n")
+                writer.write("Content-Disposition: form-data; name=\"docType\"\r\n\r\n")
+                writer.write("$docType\r\n")
+
+                writer.write("--$boundary\r\n")
+                writer.write("Content-Disposition: form-data; name=\"file\"; filename=\"${docType}_${System.currentTimeMillis()}.jpg\"\r\n")
+                writer.write("Content-Type: image/jpeg\r\n\r\n")
+                writer.flush()
+
+                os.write(bytes)
+                os.flush()
+
+                writer.write("\r\n--$boundary--\r\n")
+                writer.flush()
+            }
+
+            if (conn.responseCode in 200..299) {
+                val resp = conn.inputStream.bufferedReader().use { it.readText() }
+                val json = org.json.JSONObject(resp)
+                if (json.optBoolean("success")) {
+                    return@withContext json.optString("url")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "uploadDriverDocToVps error", e)
+        } finally {
+            conn?.disconnect()
+        }
+        null
+    }
 }

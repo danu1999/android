@@ -29,23 +29,39 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import android.net.Uri
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Call
+import androidx.compose.material.icons.outlined.DirectionsCar
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.LocalShipping
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Print
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.window.Dialog
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -86,12 +102,14 @@ fun InvoiceDetailScreen(
     viewModel: InvoiceDetailViewModel = hiltViewModel()
 ) {
     val ui by viewModel.ui.collectAsState()
+    val drivers by viewModel.drivers.collectAsState()
     val inv = ui.invoice
     val context = LocalContext.current
 
     var showLocalSignDialog by remember { mutableStateOf(false) }
     var showShareLinkDialog by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showDeliveryDialog by remember { mutableStateOf(false) }
 
     // Auto-dismiss dialog dan tampil toast saat tanda tangan berhasil diterima via link
     LaunchedEffect(ui.signatureReceivedRemotely) {
@@ -193,6 +211,130 @@ fun InvoiceDetailScreen(
                         InfoRow("Term Pembayaran", inv.paymentTerms)
                         inv.dueDate?.let { InfoRow("Jatuh Tempo", Formatters.dateLong(it)) }
                         inv.notes?.let { InfoRow("Catatan", it) }
+                    }
+                }
+            }
+
+            // ── Informasi Pengiriman & Ekspedisi ──────────────────────────────────────
+            item {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(2.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Outlined.LocalShipping, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("PENGIRIMAN & EKSPEDISI", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            
+                            val statusText = when (inv.deliveryStatus) {
+                                "DELIVERED" -> "Sampai / Selesai"
+                                "ON_DELIVERY" -> "Sedang Dikirim"
+                                else -> "Belum Dikirim"
+                            }
+                            val statusBg = when (inv.deliveryStatus) {
+                                "DELIVERED" -> Color(0xFFE8F5E9)
+                                "ON_DELIVERY" -> Color(0xFFE3F2FD)
+                                else -> Color(0xFFFFF3E0)
+                            }
+                            val statusColor = when (inv.deliveryStatus) {
+                                "DELIVERED" -> Color(0xFF2E7D32)
+                                "ON_DELIVERY" -> Color(0xFF1976D2)
+                                else -> Color(0xFFE65100)
+                            }
+                            Surface(shape = RoundedCornerShape(6.dp), color = statusBg) {
+                                Text(statusText, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = statusColor, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                            }
+                        }
+
+                        Spacer(Modifier.height(12.dp))
+
+                        if (!inv.driverName.isNullOrBlank()) {
+                            InfoRow("Nama Sopir", inv.driverName)
+                            if (!inv.driverPhone.isNullOrBlank()) {
+                                InfoRow("No. HP / WA Sopir", inv.driverPhone)
+                            }
+                            if (!inv.plateNumber.isNullOrBlank()) {
+                                InfoRow("Plat Kendaraan", inv.plateNumber)
+                            }
+                            if (inv.ongkirSopir > 0) {
+                                InfoRow("Biaya Sopir / Bensin", Formatters.rupiah(inv.ongkirSopir))
+                            }
+                            if (inv.biayaKuli > 0) {
+                                InfoRow("Upah Kuli Angkut", Formatters.rupiah(inv.biayaKuli))
+                            }
+                        } else {
+                            Text(
+                                "Belum ada sopir dan armada yang ditugaskan untuk pengiriman invoice ini.",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Spacer(Modifier.height(14.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { showDeliveryDialog = true },
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(if (inv.driverName.isNullOrBlank()) "Atur Pengiriman" else "Ubah Sopir/Biaya", fontSize = 12.sp)
+                            }
+
+                            if (!inv.driverName.isNullOrBlank() && !inv.driverPhone.isNullOrBlank()) {
+                                Button(
+                                    onClick = {
+                                        val clientPhone = ui.client?.phoneNumber ?: ""
+                                        val cleanClientPhone = clientPhone.replace("+", "").replace("-", "").replace(" ", "").trim()
+                                        val targetPhone = if (cleanClientPhone.startsWith("0")) "62" + cleanClientPhone.substring(1) else cleanClientPhone
+
+                                        val msg = buildString {
+                                            append("Halo *${ui.client?.clientName ?: "Bapak/Ibu"}*,\n")
+                                            append("Pesanan Anda dengan No. Invoice *#${inv.number}* sedang dalam proses pengiriman.\n\n")
+                                            append("🚚 *Informasi Sopir Pengiriman:*\n")
+                                            append("• *Nama Sopir:* ${inv.driverName}\n")
+                                            append("• *No. Telp / WA:* ${inv.driverPhone}\n")
+                                            if (!inv.plateNumber.isNullOrBlank()) {
+                                                append("• *Kendaraan:* ${inv.plateNumber}\n")
+                                            }
+                                            append("\nSilakan hubungi nomor sopir di atas untuk koordinasi penurunan barang di lokasi. Terima kasih.\n")
+                                            append("*${ui.defaultCompanyName}*")
+                                        }
+
+                                        val encodedMsg = java.net.URLEncoder.encode(msg, "UTF-8")
+                                        val uriStr = if (targetPhone.isNotBlank()) {
+                                            "https://api.whatsapp.com/send?phone=$targetPhone&text=$encodedMsg"
+                                        } else {
+                                            "https://api.whatsapp.com/send?text=$encodedMsg"
+                                        }
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uriStr))
+                                        context.startActivity(intent)
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF25D366)),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Icon(Icons.Outlined.Share, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Kirim WA Klien", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -608,6 +750,262 @@ fun InvoiceDetailScreen(
                 }
             }
         )
+    }
+
+    if (showDeliveryDialog && inv != null) {
+        DeliveryFormDialog(
+            currentDriverId = inv.driverId,
+            currentDriverName = inv.driverName ?: "",
+            currentDriverPhone = inv.driverPhone ?: "",
+            currentPlateNumber = inv.plateNumber ?: "",
+            currentOngkir = if (inv.ongkirSopir > 0) inv.ongkirSopir.toLong().toString() else "",
+            currentBiayaKuli = if (inv.biayaKuli > 0) inv.biayaKuli.toLong().toString() else "",
+            currentDeliveryStatus = inv.deliveryStatus,
+            availableDrivers = drivers,
+            onDismiss = { showDeliveryDialog = false },
+            onSave = { driverId, driverName, driverPhone, plateNumber, ongkir, kuli, status ->
+                viewModel.updateDelivery(
+                    driverId = driverId,
+                    driverName = driverName,
+                    driverPhone = driverPhone,
+                    plateNumber = plateNumber,
+                    ongkirSopir = ongkir,
+                    biayaKuli = kuli,
+                    deliveryStatus = status
+                )
+                showDeliveryDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+fun DeliveryFormDialog(
+    currentDriverId: Long?,
+    currentDriverName: String,
+    currentDriverPhone: String,
+    currentPlateNumber: String,
+    currentOngkir: String,
+    currentBiayaKuli: String,
+    currentDeliveryStatus: String,
+    availableDrivers: List<com.posbah.app.data.repository.BmpDriverData>,
+    onDismiss: () -> Unit,
+    onSave: (driverId: Long?, driverName: String, driverPhone: String, plateNumber: String, ongkir: Double, kuli: Double, status: String) -> Unit
+) {
+    var selectedDriverId by remember { mutableStateOf(currentDriverId) }
+    var driverName by remember { mutableStateOf(currentDriverName) }
+    var driverPhone by remember { mutableStateOf(currentDriverPhone) }
+    var plateNumber by remember { mutableStateOf(currentPlateNumber) }
+    var ongkirText by remember { mutableStateOf(currentOngkir) }
+    var biayaKuliText by remember { mutableStateOf(currentBiayaKuli) }
+    var deliveryStatus by remember { mutableStateOf(if (currentDeliveryStatus.isNotBlank()) currentDeliveryStatus else "ON_DELIVERY") }
+    var showDriverPicker by remember { mutableStateOf(false) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.LocalShipping, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Pengiriman & Ekspedisi", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                }
+                Text("Atur sopir, nomor kendaraan, dan beban operasional pengiriman", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                Spacer(Modifier.height(16.dp))
+
+                // Pilih dari Master Sopir jika ada
+                if (availableDrivers.isNotEmpty()) {
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = { showDriverPicker = true },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                            )
+                        ) {
+                            Icon(Icons.Outlined.Person, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = if (selectedDriverId != null && selectedDriverId != 0L) {
+                                    val d = availableDrivers.find { it.id == selectedDriverId }
+                                    "Sopir: ${d?.name ?: driverName}"
+                                } else "Pilih dari Master Sopir (${availableDrivers.size})",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = showDriverPicker,
+                            onDismissRequest = { showDriverPicker = false }
+                        ) {
+                            availableDrivers.forEach { d ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(d.name, fontWeight = FontWeight.Bold)
+                                            Text("${d.phone} • ${if (d.plateNumber.isNotBlank()) d.plateNumber else "-"}", fontSize = 11.sp, color = Color.Gray)
+                                        }
+                                    },
+                                    onClick = {
+                                        selectedDriverId = d.id
+                                        driverName = d.name
+                                        driverPhone = d.phone
+                                        plateNumber = d.plateNumber
+                                        showDriverPicker = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                }
+
+                OutlinedTextField(
+                    value = driverName,
+                    onValueChange = {
+                        driverName = it
+                        selectedDriverId = null
+                    },
+                    label = { Text("Nama Sopir") },
+                    placeholder = { Text("Contoh: Pak Slamet") },
+                    leadingIcon = { Icon(Icons.Outlined.Person, contentDescription = null) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                OutlinedTextField(
+                    value = driverPhone,
+                    onValueChange = { driverPhone = it },
+                    label = { Text("No. HP / WhatsApp Sopir") },
+                    placeholder = { Text("08123456789") },
+                    leadingIcon = { Icon(Icons.Outlined.Call, contentDescription = null) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                OutlinedTextField(
+                    value = plateNumber,
+                    onValueChange = { plateNumber = it.uppercase() },
+                    label = { Text("Plat / Nomor Kendaraan") },
+                    placeholder = { Text("L 1234 AB") },
+                    leadingIcon = { Icon(Icons.Outlined.DirectionsCar, contentDescription = null) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
+
+                Spacer(Modifier.height(14.dp))
+
+                Text("Beban Operasional Pengiriman (Internal Pabrik)", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = MaterialTheme.colorScheme.primary)
+                Text("Otomatis masuk ke Laporan Laba Rugi tanpa menambah/mengurangi tagihan invoice", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                Spacer(Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = ongkirText,
+                    onValueChange = { ongkirText = it.filter { ch -> ch.isDigit() } },
+                    label = { Text("Biaya Sopir / Bensin (Rp)") },
+                    placeholder = { Text("0") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
+
+                Spacer(Modifier.height(10.dp))
+
+                OutlinedTextField(
+                    value = biayaKuliText,
+                    onValueChange = { biayaKuliText = it.filter { ch -> ch.isDigit() } },
+                    label = { Text("Upah Kuli Angkut Barang (Rp)") },
+                    placeholder = { Text("0") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
+
+                Spacer(Modifier.height(14.dp))
+
+                Text("Status Pengiriman", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Spacer(Modifier.height(6.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        "PENDING" to "Belum Dikirim",
+                        "ON_DELIVERY" to "Sedang Kirim",
+                        "DELIVERED" to "Sampai"
+                    ).forEach { (st, label) ->
+                        val selected = deliveryStatus == st
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else Color.Transparent),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { deliveryStatus = st }
+                        ) {
+                            Text(
+                                text = label,
+                                fontSize = 11.sp,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Batal")
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            val ongkir = ongkirText.toDoubleOrNull() ?: 0.0
+                            val kuli = biayaKuliText.toDoubleOrNull() ?: 0.0
+                            onSave(
+                                selectedDriverId,
+                                driverName.trim(),
+                                driverPhone.trim(),
+                                plateNumber.trim(),
+                                ongkir,
+                                kuli,
+                                deliveryStatus
+                            )
+                        },
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Simpan Pengiriman")
+                    }
+                }
+            }
+        }
     }
 }
 

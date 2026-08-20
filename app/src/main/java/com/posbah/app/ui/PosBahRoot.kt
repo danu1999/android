@@ -15,6 +15,7 @@ import com.posbah.app.ui.screens.bmp.clients.ClientEditScreen
 import com.posbah.app.ui.screens.bmp.clients.ClientsScreen
 import com.posbah.app.ui.screens.bmp.dashboard.BmpDashboardScreen
 import com.posbah.app.ui.screens.bmp.employees.EmployeesScreen
+import com.posbah.app.ui.screens.bmp.drivers.DriversScreen
 import com.posbah.app.ui.screens.bmp.invoices.InvoiceDetailScreen
 import com.posbah.app.ui.screens.bmp.invoices.InvoiceFormScreen
 import com.posbah.app.ui.screens.bmp.invoices.InvoicesListScreen
@@ -383,6 +384,10 @@ fun PosBahRoot(
             } else {
                 EmployeesScreen(onBack = { nav.popBackStack() })
             }
+        }
+
+        composable(Screen.BmpDrivers.route) {
+            DriversScreen(onBack = { nav.popBackStack() })
         }
 
 

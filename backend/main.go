@@ -153,15 +153,18 @@ func main() {
 	// Serve static files from TTD
 	http.Handle("/api/signatures/", http.StripPrefix("/api/signatures/", http.FileServer(http.Dir("./TTD"))))
 
-	// Upload endpoints for tenant-isolated logo & TTD pengirim assets
+	// Upload endpoints for tenant-isolated logo & TTD pengirim assets & driver docs
 	http.HandleFunc("/api/upload/logo", handleUploadLogo)
 	http.HandleFunc("/api/upload/ttd-pengirim", handleUploadTtdPengirim)
+	http.HandleFunc("/api/upload/driver-doc", handleUploadDriverDoc)
 
-	// Serve uploaded logos & TTD pengirim as static files (tenant-isolated folders)
+	// Serve uploaded logos & TTD pengirim & driver docs as static files (tenant-isolated folders)
 	// URL format: https://zedmz.cloud/logos/{tenantId}/logo.png
 	// URL format: https://zedmz.cloud/ttd-pengirim/{tenantId}/{moduleKey}_{docType}.png
+	// URL format: https://zedmz.cloud/drivers/{tenantId}/{fileName}.jpg
 	http.Handle("/logos/", http.StripPrefix("/logos/", http.FileServer(http.Dir("./logos"))))
 	http.Handle("/ttd-pengirim/", http.StripPrefix("/ttd-pengirim/", http.FileServer(http.Dir("./ttd-pengirim"))))
+	http.Handle("/drivers/", http.StripPrefix("/drivers/", http.FileServer(http.Dir("./drivers"))))
 
 	// Reports API
 	http.HandleFunc("/api/reports/outlet-margin", handleOutletMarginReport)
@@ -203,6 +206,8 @@ func main() {
 	// cashflow routes dihapus (Jalur 2 removed v2.20.0)
 	http.HandleFunc("/api/rt/bmp/payments", handleRtBmpPayments)
 	http.HandleFunc("/api/rt/bmp/payments/", handleRtBmpPaymentsById)
+	http.HandleFunc("/api/rt/bmp/drivers", handleRtBmpDrivers)
+	http.HandleFunc("/api/rt/bmp/drivers/", handleRtBmpDriversById)
 	http.HandleFunc("/api/rt/bmp/employees", handleRtBmpEmployees)
 	http.HandleFunc("/api/rt/bmp/employees/", handleRtBmpEmployeesById)
 	http.HandleFunc("/api/rt/bmp/payrolls", handleRtBmpPayrolls)
@@ -8764,6 +8769,84 @@ func handleUploadTtdPengirim(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success": true,
 		"url":     ttdURL,
+	})
+}
+
+// handleUploadDriverDoc menerima foto dokumen sopir (KTP, Truk, STNK)
+// POST /api/upload/driver-doc
+// Form fields: docType (ktp|truck|stnk), file (multipart)
+func handleUploadDriverDoc(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Tenant-Id")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	tenantId, ok := extractTenantId(r)
+	if !ok {
+		tenantId = strings.TrimSpace(r.FormValue("tenantId"))
+	}
+	if tenantId == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if err := r.ParseMultipartForm(5 << 20); err != nil { // 5MB max
+		http.Error(w, "Gagal parse form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	docType := strings.TrimSpace(r.FormValue("docType"))
+	if docType == "" {
+		docType = "doc"
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, "File tidak ditemukan: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	fileBytes, err := io.ReadAll(file)
+	if err != nil || len(fileBytes) == 0 {
+		http.Error(w, "File kosong", http.StatusBadRequest)
+		return
+	}
+
+	dir := filepath.Join(".", "drivers", tenantId)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		http.Error(w, "Gagal menyiapkan folder penyimpanan", http.StatusInternalServerError)
+		return
+	}
+
+	ext := filepath.Ext(header.Filename)
+	if ext == "" {
+		ext = ".jpg"
+	}
+	fileName := fmt.Sprintf("%s_%d%s", docType, time.Now().UnixNano()/1e6, ext)
+	destPath := filepath.Join(dir, fileName)
+	if err := os.WriteFile(destPath, fileBytes, 0644); err != nil {
+		http.Error(w, "Gagal menyimpan file", http.StatusInternalServerError)
+		return
+	}
+
+	baseURL := os.Getenv("BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://www.zedmz.cloud"
+	}
+	fileURL := fmt.Sprintf("%s/drivers/%s/%s", baseURL, tenantId, fileName)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"url":     fileURL,
 	})
 }
 

@@ -73,6 +73,7 @@ data class FinancialReportUiState(
     val labaKotor: Double = 0.0,
     val gajiKaryawan: Double = 0.0,
     val biayaMaintenance: Double = 0.0,
+    val biayaPengirimanDanKuli: Double = 0.0,
     val biayaOperasionalLain: Double = 0.0,
     val totalBebanOperasional: Double = 0.0,
     val labaBersih: Double = 0.0,
@@ -190,6 +191,7 @@ class FinancialAnalysisViewModel @Inject constructor(
                         labaKotor = (body["labaKotor"] as? Number)?.toDouble() ?: 0.0,
                         gajiKaryawan = (body["gajiKaryawan"] as? Number)?.toDouble() ?: 0.0,
                         biayaMaintenance = (body["biayaMaintenance"] as? Number)?.toDouble() ?: 0.0,
+                        biayaPengirimanDanKuli = (body["biayaPengirimanDanKuli"] as? Number)?.toDouble() ?: 0.0,
                         biayaOperasionalLain = (body["biayaOperasionalLain"] as? Number)?.toDouble() ?: 0.0,
                         totalBebanOperasional = (body["totalBebanOperasional"] as? Number)?.toDouble() ?: 0.0,
                         labaBersih = (body["labaBersih"] as? Number)?.toDouble() ?: 0.0,
@@ -661,6 +663,9 @@ fun FinancialAnalysisScreen(
                             Text("BEBAN OPERASIONAL (OPEX)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE65100))
                             ReportLine("  - Beban Gaji Karyawan", "- ${Formatters.rupiah(state.gajiKaryawan)}")
                             ReportLine("  - Beban Pemeliharaan Mesin & Matras", "- ${Formatters.rupiah(state.biayaMaintenance)}")
+                            if (state.biayaPengirimanDanKuli > 0) {
+                                ReportLine("  - Beban Pengiriman & Upah Kuli", "- ${Formatters.rupiah(state.biayaPengirimanDanKuli)}")
+                            }
                             if (state.biayaOperasionalLain > 0) {
                                 ReportLine("  - Beban Kas Operasional Lainnya", "- ${Formatters.rupiah(state.biayaOperasionalLain)}")
                             }
@@ -1057,6 +1062,7 @@ fun buildFinancialReportHtml(companyName: String, state: FinancialReportUiState)
                     <td style="text-align: right;">- ${Formatters.rupiah(state.biayaMaintenance)}</td>
                     <td>Biaya servis preventif & perbaikan</td>
                 </tr>
+                ${if (state.biayaPengirimanDanKuli > 0) "<tr><td style='padding-left: 20px;'>- Beban Pengiriman & Upah Kuli</td><td style='text-align: right;'>- ${Formatters.rupiah(state.biayaPengirimanDanKuli)}</td><td>Ongkir sopir & upah kuli muat</td></tr>" else ""}
                 ${if (state.biayaOperasionalLain > 0) "<tr><td style='padding-left: 20px;'>- Beban Operasional Lainnya</td><td style='text-align: right;'>- ${Formatters.rupiah(state.biayaOperasionalLain)}</td><td>Operasional pabrik</td></tr>" else ""}
                 <tr style="font-weight: bold;">
                     <td>TOTAL BEBAN OPERASIONAL</td>
@@ -1098,6 +1104,9 @@ fun shareFinancialSummaryWhatsApp(context: Context, companyName: String, state: 
     sb.append("⚙️ *Beban Operasional:*\n")
     sb.append("  • Gaji Karyawan: ${Formatters.rupiah(state.gajiKaryawan)}\n")
     sb.append("  • Servis Mesin/Matras: ${Formatters.rupiah(state.biayaMaintenance)}\n")
+    if (state.biayaPengirimanDanKuli > 0) {
+        sb.append("  • Pengiriman & Kuli: ${Formatters.rupiah(state.biayaPengirimanDanKuli)}\n")
+    }
     if (state.biayaOperasionalLain > 0) {
         sb.append("  • Biaya Kas Lain: ${Formatters.rupiah(state.biayaOperasionalLain)}\n")
     }

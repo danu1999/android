@@ -104,6 +104,19 @@ interface BmpApiService {
     @DELETE("api/rt/bmp/payments/{id}")
     suspend fun deletePayment(@Path("id") id: Long): Response<Map<String, Any?>>
 
+    // ── BMP Drivers & Fleet ───────────────────────────────────────────────────
+    @GET("api/rt/bmp/drivers")
+    suspend fun getDrivers(): Response<List<Map<String, Any?>>>
+
+    @POST("api/rt/bmp/drivers")
+    suspend fun createDriver(@Body body: Map<String, Any?>): Response<Map<String, Any?>>
+
+    @PUT("api/rt/bmp/drivers/{id}")
+    suspend fun updateDriver(@Path("id") id: Long, @Body body: Map<String, Any?>): Response<Map<String, Any?>>
+
+    @DELETE("api/rt/bmp/drivers/{id}")
+    suspend fun deleteDriver(@Path("id") id: Long): Response<Map<String, Any?>>
+
     // ── BMP Employees ─────────────────────────────────────────────────────────
     @GET("api/rt/bmp/employees")
     suspend fun getBmpEmployees(): Response<List<Map<String, Any?>>>

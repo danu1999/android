@@ -6,6 +6,7 @@ import com.posbah.app.security.SecurePreferences
 import com.posbah.app.data.local.entities.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.async
@@ -65,7 +66,31 @@ data class BmpInvoiceData(
     val updatedAt: Long = 0,
     val receiverSignaturePath: String? = null,
     val receiverSignatureUrl: String? = null,
-    val receiverNameActual: String? = null
+    val receiverNameActual: String? = null,
+    val driverId: Long? = null,
+    val driverName: String? = null,
+    val driverPhone: String? = null,
+    val plateNumber: String? = null,
+    val ongkirSopir: Double = 0.0,
+    val biayaKuli: Double = 0.0,
+    val deliveryStatus: String = "PENDING"
+)
+
+data class BmpDriverData(
+    val id: Long = 0,
+    val tenantId: String = "",
+    val name: String = "",
+    val phone: String = "",
+    val plateNumber: String = "",
+    val truckType: String = "",
+    val ktpImageUrl: String? = null,
+    val truckImageUrl: String? = null,
+    val stnkImageUrl: String? = null,
+    val notes: String? = null,
+    val isActive: Boolean = true,
+    val isDeleted: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = 0
 )
 
 data class BmpProductItemData(
@@ -370,7 +395,31 @@ fun Map<String, Any?>.toBmpInvoiceData() = BmpInvoiceData(
     updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0,
     receiverSignaturePath = getCaseInsensitive("receiverSignaturePath") as? String,
     receiverSignatureUrl = getCaseInsensitive("receiverSignatureUrl") as? String,
-    receiverNameActual = getCaseInsensitive("receiverNameActual") as? String
+    receiverNameActual = getCaseInsensitive("receiverNameActual") as? String,
+    driverId = (getCaseInsensitive("driverId") as? Number)?.toLong(),
+    driverName = getCaseInsensitive("driverName") as? String,
+    driverPhone = getCaseInsensitive("driverPhone") as? String,
+    plateNumber = getCaseInsensitive("plateNumber") as? String,
+    ongkirSopir = (getCaseInsensitive("ongkirSopir") as? Number)?.toDouble() ?: 0.0,
+    biayaKuli = (getCaseInsensitive("biayaKuli") as? Number)?.toDouble() ?: 0.0,
+    deliveryStatus = getCaseInsensitive("deliveryStatus") as? String ?: "PENDING"
+)
+
+fun Map<String, Any?>.toBmpDriverData() = BmpDriverData(
+    id = (getCaseInsensitive("id") as? Number)?.toLong() ?: 0,
+    tenantId = getCaseInsensitive("tenantId") as? String ?: "",
+    name = getCaseInsensitive("name") as? String ?: "",
+    phone = getCaseInsensitive("phone") as? String ?: "",
+    plateNumber = getCaseInsensitive("plateNumber") as? String ?: "",
+    truckType = getCaseInsensitive("truckType") as? String ?: "",
+    ktpImageUrl = getCaseInsensitive("ktpImageUrl") as? String,
+    truckImageUrl = getCaseInsensitive("truckImageUrl") as? String,
+    stnkImageUrl = getCaseInsensitive("stnkImageUrl") as? String,
+    notes = getCaseInsensitive("notes") as? String,
+    isActive = getCaseInsensitive("isActive") as? Boolean ?: true,
+    isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false,
+    createdAt = (getCaseInsensitive("createdAt") as? Number)?.toLong() ?: System.currentTimeMillis(),
+    updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0
 )
 
 fun Map<String, Any?>.toBmpProductItemData() = BmpProductItemData(
@@ -1355,6 +1404,151 @@ class BmpInvoiceRepository @Inject constructor(
             method = method,
             notes = notes
         )
+    }
+
+    suspend fun updateDeliveryInfo(
+        invoiceId: Long,
+        driverId: Long?,
+        driverName: String?,
+        driverPhone: String?,
+        plateNumber: String?,
+        ongkirSopir: Double,
+        biayaKuli: Double,
+        deliveryStatus: String = "ON_DELIVERY"
+    ): OnlineWriteResult {
+        val inv = _invoices.value.find { it.id == invoiceId } ?: return OnlineWriteResult.Error("Invoice tidak ditemukan")
+        val updated = inv.copy(
+            driverId = driverId,
+            driverName = driverName,
+            driverPhone = driverPhone,
+            plateNumber = plateNumber,
+            ongkirSopir = ongkirSopir,
+            biayaKuli = biayaKuli,
+            deliveryStatus = deliveryStatus
+        )
+        _invoices.value = _invoices.value.map { if (it.id == invoiceId) updated else it }
+        return try {
+            val resp = api.updateInvoice(invoiceId, mapOf(
+                "driverId" to driverId,
+                "driverName" to driverName,
+                "driverPhone" to driverPhone,
+                "plateNumber" to plateNumber,
+                "ongkirSopir" to ongkirSopir,
+                "biayaKuli" to biayaKuli,
+                "deliveryStatus" to deliveryStatus
+            ))
+            if (resp.isSuccessful) {
+                refresh()
+                OnlineWriteResult.Success
+            } else {
+                OnlineWriteResult.Error("Gagal simpan info pengiriman ke server")
+            }
+        } catch (e: Exception) {
+            OnlineWriteResult.Error(e.message ?: "Gagal update pengiriman")
+        }
+    }
+}
+
+// ── BmpDriverRepository ───────────────────────────────────────────────────────
+
+@Singleton
+class BmpDriverRepository @Inject constructor(
+    private val api: BmpApiService
+) {
+    private val _drivers = MutableStateFlow<List<BmpDriverData>>(emptyList())
+    val drivers: StateFlow<List<BmpDriverData>> = _drivers.asStateFlow()
+
+    suspend fun refresh() {
+        try {
+            val resp = api.getDrivers()
+            if (resp.isSuccessful) {
+                val list = resp.body()?.map { it.toBmpDriverData() }?.filter { !it.isDeleted } ?: emptyList()
+                _drivers.value = list
+            }
+        } catch (_: Exception) {}
+    }
+
+    suspend fun addDriver(
+        name: String,
+        phone: String,
+        plateNumber: String,
+        truckType: String,
+        ktpImageUrl: String?,
+        truckImageUrl: String?,
+        stnkImageUrl: String?,
+        notes: String?
+    ): OnlineWriteResult {
+        return try {
+            val resp = api.createDriver(mapOf(
+                "name" to name,
+                "phone" to phone,
+                "plateNumber" to plateNumber,
+                "truckType" to truckType,
+                "ktpImageUrl" to ktpImageUrl,
+                "truckImageUrl" to truckImageUrl,
+                "stnkImageUrl" to stnkImageUrl,
+                "notes" to notes,
+                "isActive" to true
+            ))
+            if (resp.isSuccessful) {
+                refresh()
+                OnlineWriteResult.Success
+            } else {
+                OnlineWriteResult.Error("Gagal tambah sopir: ${resp.code()}")
+            }
+        } catch (e: Exception) {
+            OnlineWriteResult.Error(e.message ?: "Gagal tambah sopir")
+        }
+    }
+
+    suspend fun updateDriver(
+        id: Long,
+        name: String,
+        phone: String,
+        plateNumber: String,
+        truckType: String,
+        ktpImageUrl: String?,
+        truckImageUrl: String?,
+        stnkImageUrl: String?,
+        notes: String?,
+        isActive: Boolean = true
+    ): OnlineWriteResult {
+        return try {
+            val resp = api.updateDriver(id, mapOf(
+                "name" to name,
+                "phone" to phone,
+                "plateNumber" to plateNumber,
+                "truckType" to truckType,
+                "ktpImageUrl" to ktpImageUrl,
+                "truckImageUrl" to truckImageUrl,
+                "stnkImageUrl" to stnkImageUrl,
+                "notes" to notes,
+                "isActive" to isActive
+            ))
+            if (resp.isSuccessful) {
+                refresh()
+                OnlineWriteResult.Success
+            } else {
+                OnlineWriteResult.Error("Gagal ubah sopir: ${resp.code()}")
+            }
+        } catch (e: Exception) {
+            OnlineWriteResult.Error(e.message ?: "Gagal ubah sopir")
+        }
+    }
+
+    suspend fun deleteDriver(id: Long): OnlineWriteResult {
+        return try {
+            val resp = api.deleteDriver(id)
+            if (resp.isSuccessful) {
+                _drivers.value = _drivers.value.filter { it.id != id }
+                refresh()
+                OnlineWriteResult.Success
+            } else {
+                OnlineWriteResult.Error("Gagal hapus sopir: ${resp.code()}")
+            }
+        } catch (e: Exception) {
+            OnlineWriteResult.Error(e.message ?: "Gagal hapus sopir")
+        }
     }
 }
 

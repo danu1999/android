@@ -14,6 +14,8 @@ import com.posbah.app.data.local.entities.BmpSettingsEntity
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpClientRepository
 import com.posbah.app.data.repository.BmpInvoiceRepository
+import com.posbah.app.data.repository.BmpDriverRepository
+import com.posbah.app.data.repository.BmpDriverData
 import com.posbah.app.data.repository.BmpMachineRepository
 import com.posbah.app.data.repository.BmpMasterProductRepository
 import com.posbah.app.data.repository.BmpSettingsRepository
@@ -23,6 +25,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -41,7 +44,7 @@ class InvoicesListViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
-    private val tenantId = authRepository.activeTenantId().orEmpty()
+    val tenantId = authRepository.activeTenantId().orEmpty()
 
     init {
         viewModelScope.launch {
@@ -194,6 +197,7 @@ class InvoiceDetailViewModel @Inject constructor(
     @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context,
     private val invoiceRepo: BmpInvoiceRepository,
     private val clientRepo: BmpClientRepository,
+    private val driverRepo: BmpDriverRepository,
     private val settingsRepo: BmpSettingsRepository,
     private val printSettingsRepo: PrintSettingsRepository,
     private val authRepository: AuthRepository,
@@ -203,6 +207,8 @@ class InvoiceDetailViewModel @Inject constructor(
 ) : ViewModel() {
     val tenantId = authRepository.activeTenantId().orEmpty()
     private val invoiceId: Long = savedState.get<String>("id")?.toLongOrNull() ?: -1L
+
+    val drivers: StateFlow<List<BmpDriverData>> = driverRepo.drivers
 
     private val _ui = MutableStateFlow(InvoiceDetailUi())
     val ui = _ui.asStateFlow()
@@ -217,6 +223,9 @@ class InvoiceDetailViewModel @Inject constructor(
         _ui.update { it.copy(defaultCompanyName = computedDefault) }
 
         viewModelScope.launch {
+            try {
+                driverRepo.refresh()
+            } catch (_: Exception) {}
             try {
                 invoiceRepo.refresh()
             } catch (e: Exception) {
@@ -348,6 +357,31 @@ class InvoiceDetailViewModel @Inject constructor(
                 _ui.update { it.copy(pollingError = "Tidak ada koneksi internet.") }
                 return@launch
             }
+            val inv = invoiceRepo.getById(invoiceId)
+            _ui.update { it.copy(invoice = inv) }
+        }
+    }
+
+    fun updateDelivery(
+        driverId: Long?,
+        driverName: String?,
+        driverPhone: String?,
+        plateNumber: String?,
+        ongkirSopir: Double,
+        biayaKuli: Double,
+        deliveryStatus: String = "ON_DELIVERY"
+    ) {
+        viewModelScope.launch {
+            val res = invoiceRepo.updateDeliveryInfo(
+                invoiceId = invoiceId,
+                driverId = driverId,
+                driverName = driverName,
+                driverPhone = driverPhone,
+                plateNumber = plateNumber,
+                ongkirSopir = ongkirSopir,
+                biayaKuli = biayaKuli,
+                deliveryStatus = deliveryStatus
+            )
             val inv = invoiceRepo.getById(invoiceId)
             _ui.update { it.copy(invoice = inv) }
         }
