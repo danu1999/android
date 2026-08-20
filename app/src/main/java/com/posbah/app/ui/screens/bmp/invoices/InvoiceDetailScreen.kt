@@ -324,7 +324,8 @@ fun InvoiceDetailScreen(
             }
             item {
                 Spacer(Modifier.height(16.dp))
-                val isLunas = invoice != null && invoice.paidAmount >= invoice.totalAmount - 0.01
+                val currentInv = ui.invoice
+                val isLunas = currentInv != null && currentInv.paidAmount >= currentInv.totalAmount - 0.01
                 if (isLunas) {
                     Surface(
                         shape = RoundedCornerShape(12.dp),
@@ -337,7 +338,7 @@ fun InvoiceDetailScreen(
                             horizontalArrangement = Arrangement.Center
                         ) {
                             Text(
-                                text = "✓ Invoice ini telah lunas sepenuhnya (${Formatters.rupiah(invoice?.totalAmount ?: 0.0)})",
+                                text = "✓ Invoice ini telah lunas sepenuhnya (${Formatters.rupiah(currentInv.totalAmount)})",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -356,13 +357,14 @@ fun InvoiceDetailScreen(
     }
 
     if (ui.showAddPayment) {
-        val remaining = if (invoice != null) maxOf(0.0, invoice.totalAmount - invoice.paidAmount) else 0.0
+        val currentInv = ui.invoice
+        val remaining = if (currentInv != null) maxOf(0.0, currentInv.totalAmount - currentInv.paidAmount) else 0.0
         AlertDialog(
             onDismissRequest = { viewModel.togglePayment(false) },
             title = { Text("Catat Pembayaran") },
             text = {
                 Column {
-                    if (invoice != null) {
+                    if (currentInv != null) {
                         Text(
                             text = "Sisa Tagihan: ${Formatters.rupiah(remaining)}",
                             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),

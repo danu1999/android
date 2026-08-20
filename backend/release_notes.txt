@@ -1,3 +1,16 @@
+POSBah v2.19.72 - Perbaikan Relasi Database & Pencegahan Dobel Pembayaran Invoice
+
+Halo Rekan POSBah! Versi 2.19.72 menghadirkan penyempurnaan menyeluruh pada sistem pembayaran invoice dan rekonsiliasi data:
+1. [Fix Relasi Database] Pencegahan Dobel Pembayaran: Memperbaiki perhitungan pembayaran invoice di frontend dan backend sehingga nominal pembayaran tidak akan pernah terhitung dobel.
+2. [Otomatisasi Uang Muka / DP]: Pengisian "Jumlah Lunas (DP)" saat pembuatan Invoice Baru kini otomatis tercatat sebagai riwayat pembayaran pertama di database relasi dengan catatan "Uang Muka (DP)".
+3. [Sinkronisasi Real-Time Terpusat]: Status lunas, sebagian (partial), atau belum lunas disinkronkan secara atomik langsung di database server berdasarkan jumlah riil riwayat pembayaran aktif.
+4. [Penyempurnaan UI Catat Pembayaran]: Menampilkan sisa tagihan secara real-time pada dialog pembayaran serta mengubah tombol menjadi badge "Invoice Lunas" jika tagihan telah lunas sepenuhnya.
+5. [Rekonsiliasi Data Otomatis]: Seluruh invoice dan riwayat pembayaran terdahulu telah disinkronkan dan dibersihkan 100% dari selisih atau duplikasi nilai.
+
+Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!
+
+---
+
 POSBah v2.19.71 - Analisis Keuangan Komprehensif (Laba Bersih, Cetak PDF Resmi, Kirim Ringkasan WA & Pembersihan HPP Karung)
 
 Halo Rekan POSBah! Versi 2.19.71 menghadirkan penyempurnaan menyeluruh pada modul Analisis Keuangan & Manufaktur:
