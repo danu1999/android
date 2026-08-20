@@ -131,10 +131,13 @@ class DriversViewModel @Inject constructor(
 
     suspend fun uploadDoc(file: File, docType: String): String? = withContext(Dispatchers.IO) {
         try {
-            val compressed = CameraUtils.compressToMaxSize(file, maxSizeKb = 150)
+            val tId = authRepo.activeTenantId()?.takeIf { it.isNotBlank() } ?: "ten_default"
+            val token = authRepo.activeUserSub() ?: authRepo.activeUserEmail()
+            val compressed = CameraUtils.compressToMaxSize(file, maxSizeKb = 250)
             val bytes = compressed.readBytes()
-            VpsImageUploader.uploadDriverDocToVps(context, bytes, tenantId, docType)
+            VpsImageUploader.uploadDriverDocToVps(context, bytes, tId, docType, token)
         } catch (e: Exception) {
+            android.util.Log.e("DriversViewModel", "Gagal upload dokumen sopir", e)
             null
         }
     }
@@ -661,15 +664,19 @@ fun DriverFormDialog(
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         if (success && tempCameraFile != null && currentTargetDocType.isNotBlank()) {
             val type = currentTargetDocType
+            val fileToUpload = tempCameraFile!!
             scope.launch {
                 uploadingDocType = type
-                val uploadedUrl = onUploadDoc(tempCameraFile!!, type)
+                val uploadedUrl = onUploadDoc(fileToUpload, type)
                 if (uploadedUrl != null) {
                     when (type) {
                         "ktp" -> ktpUrl = uploadedUrl
                         "truck" -> truckUrl = uploadedUrl
                         "stnk" -> stnkUrl = uploadedUrl
                     }
+                    android.widget.Toast.makeText(context, "Foto berhasil diunggah!", android.widget.Toast.LENGTH_SHORT).show()
+                } else {
+                    android.widget.Toast.makeText(context, "Gagal mengunggah foto. Silakan coba lagi.", android.widget.Toast.LENGTH_SHORT).show()
                 }
                 uploadingDocType = null
             }
@@ -680,10 +687,10 @@ fun DriverFormDialog(
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null && currentTargetDocType.isNotBlank()) {
             val type = currentTargetDocType
-            val file = CameraUtils.copyUriToTempFile(context, uri)
-            if (file != null) {
-                scope.launch {
-                    uploadingDocType = type
+            scope.launch {
+                uploadingDocType = type
+                val file = CameraUtils.copyUriToTempFile(context, uri)
+                if (file != null) {
                     val uploadedUrl = onUploadDoc(file, type)
                     if (uploadedUrl != null) {
                         when (type) {
@@ -691,31 +698,37 @@ fun DriverFormDialog(
                             "truck" -> truckUrl = uploadedUrl
                             "stnk" -> stnkUrl = uploadedUrl
                         }
+                        android.widget.Toast.makeText(context, "Foto berhasil diunggah!", android.widget.Toast.LENGTH_SHORT).show()
+                    } else {
+                        android.widget.Toast.makeText(context, "Gagal mengunggah foto. Silakan coba lagi.", android.widget.Toast.LENGTH_SHORT).show()
                     }
-                    uploadingDocType = null
+                } else {
+                    android.widget.Toast.makeText(context, "Gagal memproses file foto galeri", android.widget.Toast.LENGTH_SHORT).show()
                 }
+                uploadingDocType = null
             }
         }
     }
 
     // Permission launcher
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) {
-            val file = CameraUtils.createTempCameraFile(context)
-            tempCameraFile = file
-            val photoUri = CameraUtils.getFileProviderUri(context, file)
-            photoUri?.let { cameraLauncher.launch(it) }
+        if (granted && tempCameraFile != null) {
+            val photoUri = CameraUtils.getFileProviderUri(context, tempCameraFile!!)
+            photoUri.let { cameraLauncher.launch(it) }
+        } else if (!granted) {
+            android.widget.Toast.makeText(context, "Izin kamera diperlukan untuk mengambil foto", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
     fun takePhoto(type: String) {
         currentTargetDocType = type
+        val file = CameraUtils.createTempCameraFile(context)
+        tempCameraFile = file
+        val photoUri = CameraUtils.getFileProviderUri(context, file)
+
         val permissionCheck = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
         if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
-            val file = CameraUtils.createTempCameraFile(context)
-            tempCameraFile = file
-            val photoUri = CameraUtils.getFileProviderUri(context, file)
-            photoUri?.let { cameraLauncher.launch(it) }
+            photoUri.let { cameraLauncher.launch(it) }
         } else {
             permissionLauncher.launch(Manifest.permission.CAMERA)
         }

@@ -104,7 +104,13 @@ object VpsImageUploader {
         null
     }
 
-    suspend fun uploadDriverDocToVps(context: Context, bytes: ByteArray, tenantId: String, docType: String): String? = withContext(Dispatchers.IO) {
+    suspend fun uploadDriverDocToVps(
+        context: Context,
+        bytes: ByteArray,
+        tenantId: String,
+        docType: String,
+        authToken: String? = null
+    ): String? = withContext(Dispatchers.IO) {
         var conn: java.net.HttpURLConnection? = null
         try {
             val boundary = "Boundary-${System.currentTimeMillis()}"
@@ -112,8 +118,15 @@ object VpsImageUploader {
             conn = url.openConnection() as java.net.HttpURLConnection
             conn.doOutput = true
             conn.requestMethod = "POST"
+            conn.connectTimeout = 20000
+            conn.readTimeout = 30000
             conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
             conn.setRequestProperty("X-Tenant-Id", tenantId)
+            conn.setRequestProperty("x-client-version", "2.19.73")
+            if (!authToken.isNullOrBlank()) {
+                val bearer = if (authToken.startsWith("Bearer ")) authToken else "Bearer $authToken"
+                conn.setRequestProperty("Authorization", bearer)
+            }
 
             conn.outputStream.use { os ->
                 val writer = os.bufferedWriter(Charsets.UTF_8)
@@ -137,15 +150,21 @@ object VpsImageUploader {
                 writer.flush()
             }
 
-            if (conn.responseCode in 200..299) {
+            val respCode = conn.responseCode
+            if (respCode in 200..299) {
                 val resp = conn.inputStream.bufferedReader().use { it.readText() }
                 val json = org.json.JSONObject(resp)
                 if (json.optBoolean("success")) {
-                    return@withContext json.optString("url")
+                    val fileUrl = json.optString("url")
+                    Log.d(TAG, "uploadDriverDocToVps SUCCESS: $fileUrl")
+                    return@withContext fileUrl
                 }
+            } else {
+                val errResp = conn.errorStream?.bufferedReader()?.use { it.readText() }
+                Log.e(TAG, "uploadDriverDocToVps failed HTTP $respCode: $errResp")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "uploadDriverDocToVps error", e)
+            Log.e(TAG, "uploadDriverDocToVps exception", e)
         } finally {
             conn?.disconnect()
         }

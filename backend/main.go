@@ -8778,7 +8778,7 @@ func handleUploadTtdPengirim(w http.ResponseWriter, r *http.Request) {
 func handleUploadDriverDoc(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Tenant-Id")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Tenant-Id, x-client-version")
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
 		return
@@ -8788,18 +8788,20 @@ func handleUploadDriverDoc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tenantId, ok := extractTenantId(r)
-	if !ok {
-		tenantId = strings.TrimSpace(r.FormValue("tenantId"))
-	}
-	if tenantId == "" {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	if err := r.ParseMultipartForm(10 << 20); err != nil { // 10MB max
+		http.Error(w, "Gagal parse form: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	if err := r.ParseMultipartForm(5 << 20); err != nil { // 5MB max
-		http.Error(w, "Gagal parse form: "+err.Error(), http.StatusBadRequest)
-		return
+	tenantId, ok := extractTenantId(r)
+	if !ok || tenantId == "" {
+		tenantId = strings.TrimSpace(r.FormValue("tenantId"))
+	}
+	if tenantId == "" {
+		tenantId = strings.TrimSpace(r.Header.Get("X-Tenant-Id"))
+	}
+	if tenantId == "" {
+		tenantId = "ten_default"
 	}
 
 	docType := strings.TrimSpace(r.FormValue("docType"))
@@ -8859,6 +8861,7 @@ func versionCheckMiddleware(next http.Handler) http.Handler {
 				path == "/api/download-apk" ||
 				path == "/api/dowload-apk" ||
 				path == "/api/apk-version" ||
+				strings.HasPrefix(path, "/api/upload/") ||
 				strings.HasPrefix(path, "/api/store/") ||
 				strings.HasPrefix(path, "/api/sign/") ||
 				strings.HasPrefix(path, "/api/invoice/signature") ||
