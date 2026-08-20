@@ -1040,6 +1040,23 @@ func initSchema() error {
 		// v2.19.17: Tambah kolom status di bmp_production_logs untuk WIP
 		`ALTER TABLE "bmp_production_logs" ADD COLUMN IF NOT EXISTS "status" VARCHAR(50) DEFAULT 'COMPLETED';`,
 		`CREATE INDEX IF NOT EXISTS "idx_production_logs_status" ON "bmp_production_logs" ("tenantId", "status");`,
+
+		// v2.19.72: Auto-reconcile bmp_invoices.paidAmount with sum of payments from bmp_invoice_payments
+		`UPDATE "bmp_invoices" bi
+		 SET "paidAmount" = sub.sum_pay,
+		     "status" = CASE
+		         WHEN sub.sum_pay >= bi."totalAmount" - 0.01 AND bi."totalAmount" > 0 THEN 'PAID'
+		         WHEN sub.sum_pay > 0 THEN 'PARTIAL'
+		         ELSE bi."status"
+		     END,
+		     "updatedAt" = EXTRACT(EPOCH FROM NOW()) * 1000
+		 FROM (
+		     SELECT "tenantId", "invoiceId", COALESCE(SUM("paymentAmount"), 0.0) AS sum_pay
+		     FROM "bmp_invoice_payments"
+		     WHERE "isDeleted" = FALSE
+		     GROUP BY "tenantId", "invoiceId"
+		 ) sub
+		 WHERE bi."tenantId" = sub."tenantId" AND bi."id" = sub."invoiceId";`,
 	}
 	for _, q := range manufakturMigrations {
 		if _, err := db.Exec(q); err != nil {

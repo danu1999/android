@@ -282,8 +282,12 @@ class InvoiceDetailViewModel @Inject constructor(
         }
     }
 
-    fun togglePayment(open: Boolean) =
-        _ui.update { it.copy(showAddPayment = open, newPaymentAmount = "") }
+    fun togglePayment(open: Boolean) {
+        val inv = _ui.value.invoice
+        val remaining = if (inv != null) maxOf(0.0, inv.totalAmount - inv.paidAmount) else 0.0
+        val defaultAmt = if (open && remaining > 0) remaining.toLong().toString() else ""
+        _ui.update { it.copy(showAddPayment = open, newPaymentAmount = defaultAmt) }
+    }
 
     fun updatePayment(amount: String) =
         _ui.update { it.copy(newPaymentAmount = amount) }

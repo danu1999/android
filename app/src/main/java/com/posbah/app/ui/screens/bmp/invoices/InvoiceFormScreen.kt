@@ -278,6 +278,14 @@ fun InvoiceFormScreen(
                             modifier = Modifier.weight(1f)
                         )
                     }
+                    if (invoice.paidAmount > 0) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "• Pembayaran DP ${Formatters.rupiah(invoice.paidAmount)} otomatis dicatat ke riwayat pembayaran invoice.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(16.dp))

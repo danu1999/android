@@ -933,6 +933,53 @@ func handleRtBmpClientsById(w http.ResponseWriter, r *http.Request) {
 
 // ── BMP — invoices ────────────────────────────────────────────────────────────
 
+func syncRtBmpInvoicePaid(tenantId string, invoiceId int64) {
+	if invoiceId <= 0 {
+		return
+	}
+	var totalPaid float64
+	_ = db.QueryRow(`
+		SELECT COALESCE(SUM("paymentAmount"), 0.0)
+		FROM bmp_invoice_payments
+		WHERE "tenantId"=$1 AND "invoiceId"=$2 AND "isDeleted"=FALSE
+	`, tenantId, invoiceId).Scan(&totalPaid)
+
+	var totalAmount float64
+	var dueDate sql.NullInt64
+	err := db.QueryRow(`
+		SELECT "totalAmount", "dueDate"
+		FROM bmp_invoices
+		WHERE "tenantId"=$1 AND id=$2
+	`, tenantId, invoiceId).Scan(&totalAmount, &dueDate)
+	if err != nil {
+		return
+	}
+
+	status := "UNPAID"
+	now := nowMillis()
+	if totalPaid >= totalAmount-0.01 && totalAmount > 0 {
+		status = "PAID"
+	} else if totalPaid > 0 {
+		if dueDate.Valid && now > dueDate.Int64 {
+			status = "OVERDUE"
+		} else {
+			status = "PARTIAL"
+		}
+	} else {
+		if dueDate.Valid && now > dueDate.Int64 {
+			status = "OVERDUE"
+		} else {
+			status = "UNPAID"
+		}
+	}
+
+	_, _ = db.Exec(`
+		UPDATE bmp_invoices
+		SET "paidAmount"=$1, "status"=$2, "updatedAt"=$3
+		WHERE "tenantId"=$4 AND id=$5
+	`, totalPaid, status, now, tenantId, invoiceId)
+}
+
 func handleRtBmpInvoices(w http.ResponseWriter, r *http.Request) {
 	tenantId, ok := extractTenantId(r)
 	if !ok { jsonErr(w, 401, "unauthorized"); return }
@@ -953,8 +1000,33 @@ func handleRtBmpInvoices(w http.ResponseWriter, r *http.Request) {
 			}
 			body["slug"] = fmt.Sprintf("inv-%s-%d", numberStr, nowMillis())
 		}
+		
+		paidAmountInput := 0.0
+		if paidVal, ok := body["paidAmount"]; ok {
+			if num, ok := paidVal.(float64); ok {
+				paidAmountInput = num
+			}
+		}
+
 		id, err := insertRow("bmp_invoices", body)
 		if err != nil { jsonErr(w, 500, err.Error()); return }
+
+		// Jika ada uang muka / DP saat pembuatan invoice, otomatis catat payment record pertama
+		if paidAmountInput > 0 {
+			payBody := map[string]interface{}{
+				"tenantId":      tenantId,
+				"invoiceId":     id,
+				"paymentDate":   body["createdAt"],
+				"paymentAmount": paidAmountInput,
+				"paymentMethod": "CASH",
+				"notes":         "Uang Muka (DP) saat pembuatan invoice",
+				"isDeleted":     false,
+				"isSynced":      true,
+			}
+			_, _ = insertRow("bmp_invoice_payments", payBody)
+			syncRtBmpInvoicePaid(tenantId, id)
+		}
+
 		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
 	default:
 		jsonErr(w, 405, "method not allowed")
@@ -970,7 +1042,9 @@ func handleRtBmpInvoicesById(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPut:
 		var body map[string]interface{}
 		json.NewDecoder(r.Body).Decode(&body); body["updatedAt"] = nowMillis()
-		updateRow("bmp_invoices", id, tenantId, body); jsonOK(w, map[string]interface{}{"ok": true})
+		updateRow("bmp_invoices", id, tenantId, body)
+		syncRtBmpInvoicePaid(tenantId, id)
+		jsonOK(w, map[string]interface{}{"ok": true})
 	case http.MethodDelete:
 		db.Exec(`UPDATE bmp_invoices SET "isDeleted"=TRUE,"updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, nowMillis(), id, tenantId)
 		jsonOK(w, map[string]interface{}{"ok": true})
@@ -1071,8 +1145,19 @@ func handleRtBmpPayments(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		var body map[string]interface{}
 		json.NewDecoder(r.Body).Decode(&body); body["tenantId"] = tenantId
+		if _, ok := body["paymentDate"]; !ok { body["paymentDate"] = nowMillis() }
 		id, err := insertRow("bmp_invoice_payments", body)
 		if err != nil { jsonErr(w, 500, err.Error()); return }
+
+		var invoiceId int64
+		if invIdVal, ok := body["invoiceId"]; ok {
+			if num, ok := invIdVal.(float64); ok {
+				invoiceId = int64(num)
+			}
+		}
+		if invoiceId > 0 {
+			syncRtBmpInvoicePaid(tenantId, invoiceId)
+		}
 
 		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
 	default:
@@ -1085,12 +1170,26 @@ func handleRtBmpPaymentsById(w http.ResponseWriter, r *http.Request) {
 	if !ok { jsonErr(w, 401, "unauthorized"); return }
 	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/bmp/payments/")
 	id, _ := strconv.ParseInt(idStr, 10, 64)
+
+	var invoiceId int64
+	_ = db.QueryRow(`SELECT "invoiceId" FROM bmp_invoice_payments WHERE id=$1 AND "tenantId"=$2`, id, tenantId).Scan(&invoiceId)
+
 	switch r.Method {
+	case http.MethodPut:
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body)
+		body["updatedAt"] = nowMillis()
+		updateRow("bmp_invoice_payments", id, tenantId, body)
+		if invoiceId > 0 {
+			syncRtBmpInvoicePaid(tenantId, invoiceId)
+		}
+		jsonOK(w, map[string]interface{}{"ok": true})
 	case http.MethodDelete:
-		_, err := db.Exec(`UPDATE bmp_invoice_payments SET "isDeleted"=TRUE WHERE id=$1 AND "tenantId"=$2`, id, tenantId)
+		_, err := db.Exec(`UPDATE bmp_invoice_payments SET "isDeleted"=TRUE, "updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, nowMillis(), id, tenantId)
 		if err != nil { jsonErr(w, 500, err.Error()); return }
-
-
+		if invoiceId > 0 {
+			syncRtBmpInvoicePaid(tenantId, invoiceId)
+		}
 		jsonOK(w, map[string]interface{}{"ok": true})
 	default:
 		jsonErr(w, 405, "method not allowed")

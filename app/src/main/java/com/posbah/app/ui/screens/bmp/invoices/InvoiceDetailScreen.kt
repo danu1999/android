@@ -324,26 +324,56 @@ fun InvoiceDetailScreen(
             }
             item {
                 Spacer(Modifier.height(16.dp))
-                PrimaryButton(
-                    label = "+ Catat Pembayaran",
-                    onClick = { viewModel.togglePayment(true) },
-                    modifier = Modifier.fillMaxWidth().testTag("btn-add-payment")
-                )
+                val isLunas = invoice != null && invoice.paidAmount >= invoice.totalAmount - 0.01
+                if (isLunas) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = "✓ Invoice ini telah lunas sepenuhnya (${Formatters.rupiah(invoice?.totalAmount ?: 0.0)})",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                } else {
+                    PrimaryButton(
+                        label = "+ Catat Pembayaran",
+                        onClick = { viewModel.togglePayment(true) },
+                        modifier = Modifier.fillMaxWidth().testTag("btn-add-payment")
+                    )
+                }
                 Spacer(Modifier.height(24.dp))
             }
         }
     }
 
     if (ui.showAddPayment) {
+        val remaining = if (invoice != null) maxOf(0.0, invoice.totalAmount - invoice.paidAmount) else 0.0
         AlertDialog(
             onDismissRequest = { viewModel.togglePayment(false) },
             title = { Text("Catat Pembayaran") },
             text = {
                 Column {
+                    if (invoice != null) {
+                        Text(
+                            text = "Sisa Tagihan: ${Formatters.rupiah(remaining)}",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
                     OutlinedTextField(
                         value = ui.newPaymentAmount,
                         onValueChange = viewModel::updatePayment,
-                        label = { Text("Jumlah (Rp)") },
+                        label = { Text("Jumlah Pembayaran (Rp)") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth().testTag("payment-amount")

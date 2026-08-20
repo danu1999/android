@@ -1,49 +1,60 @@
 import os
-import requests
-import json
+import sys
+import math
 import time
+import requests
 
 BASE_URL = "https://www.zedmz.cloud"
-AUTH_HEADER = {"Authorization": "Bearer BahteraMigrate123!"}
+AUTH_TOKEN = "Bearer BahteraMigrate123!"
 APK_PATH = r"c:\Users\danus\Documents\antigravity\emergent\app\build\outputs\apk\release\posbah-v2.19.71.apk"
-CHUNK_SIZE = 1024 * 900  # 900 KB chunks
+APK_FILENAME = "posbah-v2.19.71.apk"
+VERSION = "2.19.71"
 
-def upload_apk():
-    file_size = os.path.getsize(APK_PATH)
-    file_name = os.path.basename(APK_PATH)
-    total_chunks = (file_size + CHUNK_SIZE - 1) // CHUNK_SIZE
-    
-    print(f"Uploading APK: {file_name} ({file_size / (1024*1024):.2f} MB)")
-    print(f"Total chunks: {total_chunks}")
-    
-    with open(APK_PATH, "rb") as f:
-        for chunk_idx in range(total_chunks):
-            data = f.read(CHUNK_SIZE)
-            headers = {
-                **AUTH_HEADER,
-                "X-Chunk-Index": str(chunk_idx),
-                "X-Total-Chunks": str(total_chunks),
-                "X-File-Name": file_name,
-                "Content-Type": "application/octet-stream"
-            }
-            print(f"Sending chunk {chunk_idx + 1}/{total_chunks} ({len(data)} bytes)...")
-            res = requests.post(f"{BASE_URL}/api/admin/upload-apk-chunk", headers=headers, data=data, timeout=60)
-            if res.status_code != 200:
-                print(f"Failed chunk {chunk_idx + 1}: {res.status_code} {res.text}")
-                return False
-            time.sleep(0.3)
-            
-    print("\n=== APK Upload Complete! ===")
-    return True
+if not os.path.exists(APK_PATH):
+    print(f"Error: APK file not found at {APK_PATH}")
+    sys.exit(1)
 
-def trigger_deploy_and_update_version():
-    print("\nTriggering server auto-deploy...")
-    res_dep = requests.post(f"{BASE_URL}/api/admin/deploy", headers=AUTH_HEADER, timeout=30)
-    print("Deploy Response ({}): {}".format(res_dep.status_code, res_dep.text))
-    
-    time.sleep(20)
-    
-    desc = """POSBah v2.19.71 - Analisis Keuangan Komprehensif (Laba Bersih, Cetak PDF Resmi, Kirim Ringkasan WA & Pembersihan HPP Karung)
+apk_size = os.path.getsize(APK_PATH)
+print(f"Uploading APK: {APK_FILENAME} ({apk_size / (1024*1024):.2f} MB)")
+
+CHUNK_SIZE = 900 * 1024  # 900 KB per chunk (below 1MB Nginx limit)
+total_chunks = math.ceil(apk_size / CHUNK_SIZE)
+print(f"Total chunks: {total_chunks}")
+
+headers = {
+    "Authorization": AUTH_TOKEN
+}
+
+with open(APK_PATH, "rb") as f:
+    for i in range(total_chunks):
+        chunk_data = f.read(CHUNK_SIZE)
+        files = {
+            "file": (f"chunk_{i}.part", chunk_data, "application/octet-stream")
+        }
+        data = {
+            "filename": APK_FILENAME,
+            "chunkIndex": str(i),
+            "totalChunks": str(total_chunks)
+        }
+        
+        print(f"Sending chunk {i + 1}/{total_chunks} ({len(chunk_data)} bytes)...")
+        res = requests.post(f"{BASE_URL}/api/admin/upload-apk-chunk", headers=headers, data=data, files=files, timeout=30)
+        
+        if res.status_code != 200:
+            print(f"Failed to upload chunk {i + 1}: {res.status_code} - {res.text}")
+            sys.exit(1)
+
+print("\n=== APK Upload Complete! ===")
+
+# Trigger Deploy on VPS
+print("\nTriggering server auto-deploy...")
+deploy_res = requests.post(f"{BASE_URL}/api/admin/deploy", headers=headers, timeout=15)
+print(f"Deploy Response ({deploy_res.status_code}):", deploy_res.text)
+
+print("\nWaiting 20 seconds for server to git pull & restart...")
+time.sleep(20)
+
+desc = """POSBah v2.19.71 - Analisis Keuangan Komprehensif (Laba Bersih, Cetak PDF Resmi, Kirim Ringkasan WA & Pembersihan HPP Karung)
 
 Halo Rekan POSBah! Versi 2.19.71 menghadirkan penyempurnaan menyeluruh pada modul Analisis Keuangan & Manufaktur:
 1. [Fitur Baru] Laporan Laba Rugi Komprehensif: Menghitung Laba Bersih (Net Profit), Net Margin %, dan Titik Impas (BEP) dengan mengintegrasikan Beban Gaji Karyawan, Biaya Pemeliharaan Mesin/Matras, dan Biaya Operasional Pabrik.
@@ -55,27 +66,24 @@ Halo Rekan POSBah! Versi 2.19.71 menghadirkan penyempurnaan menyeluruh pada modu
 
 Silakan klik tombol "Unduh APK Sekarang" di layar untuk memperbarui aplikasi Anda ya!"""
 
-    config_payload = {
-        "version": "2.19.71",
-        "downloadUrl": "/api/download-apk",
-        "description": desc
-    }
-    
-    for attempt in range(5):
-        try:
-            res = requests.post(f"{BASE_URL}/api/admin/apk-config", headers=AUTH_HEADER, json=config_payload, timeout=10)
-            print(f"Server APK Version check (attempt {attempt+1}): {res.status_code} {res.text}")
-            if res.status_code == 200:
-                print("\nVersion updated successfully on server!")
-                break
-        except Exception as e:
-            print(f"Waiting for server... ({e})")
-        time.sleep(5)
-        
-    print("\nTriggering broadcast update email...")
-    res_email = requests.post(f"{BASE_URL}/api/admin/blast-update-email", headers=AUTH_HEADER, timeout=30)
-    print("Blast Email Response ({}): {}".format(res_email.status_code, res_email.text))
+config_payload = {
+    "version": VERSION,
+    "downloadUrl": "/api/download-apk",
+    "description": desc
+}
 
-if __name__ == "__main__":
-    if upload_apk():
-        trigger_deploy_and_update_version()
+for attempt in range(5):
+    try:
+        res = requests.post(f"{BASE_URL}/api/admin/apk-config", headers=headers, json=config_payload, timeout=10)
+        print(f"Server APK Version check (attempt {attempt+1}): {res.status_code} {res.text}")
+        if res.status_code == 200:
+            print("\nVersion updated successfully on server!")
+            break
+    except Exception as e:
+        print(f"Waiting for server... ({e})")
+    time.sleep(5)
+
+print("\nTriggering broadcast update email...")
+res_email = requests.post(f"{BASE_URL}/api/admin/blast-update-email", headers=headers, timeout=30)
+print("Blast Email Response ({}): {}".format(res_email.status_code, res_email.text))
+

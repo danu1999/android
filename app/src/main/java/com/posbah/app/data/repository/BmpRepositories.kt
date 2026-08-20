@@ -860,6 +860,10 @@ class BmpInvoiceRepository @Inject constructor(
             val savedInvoice = tempInvoice.copy(id = newId)
             _invoices.value = snapshot + savedInvoice
 
+            if (invoice.paidAmount > 0) {
+                try { refreshPayments() } catch (_: Exception) {}
+            }
+
             Pair(newId, OnlineWriteResult.Success)
         } catch (e: Exception) {
             _invoices.value = snapshot // rollback
@@ -1031,7 +1035,8 @@ class BmpInvoiceRepository @Inject constructor(
 
         val targetInv = invSnapshot.find { it.id == invoiceId }
         if (targetInv != null) {
-            val newPaid = targetInv.paidAmount + amount
+            val existingPayments = snapshot.filter { it.invoiceId == invoiceId && !it.isDeleted }
+            val newPaid = existingPayments.sumOf { it.paymentAmount } + amount
             val newStatus = computeInvoiceStatus(targetInv.totalAmount, newPaid, targetInv.dueDate)
             _invoices.value = invSnapshot.map {
                 if (it.id == invoiceId) it.copy(paidAmount = newPaid, status = newStatus) else it
@@ -1046,16 +1051,10 @@ class BmpInvoiceRepository @Inject constructor(
                 "paymentMethod" to method,
                 "notes" to notes
             ))
-            val payId = (payResp.body()?.get("id") as? Number)?.toLong()
-
-            if (targetInv != null) {
-                val invoicePayments = getPaymentsByInvoice(invoiceId)
-                val totalPaid = invoicePayments.sumOf { it.paymentAmount } + amount
-                val newStatus = computeInvoiceStatus(targetInv.totalAmount, totalPaid, targetInv.dueDate)
-                api.updateInvoice(invoiceId, mapOf(
-                    "status" to newStatus,
-                    "paidAmount" to totalPaid
-                ))
+            if (!payResp.isSuccessful) {
+                _payments.value = snapshot
+                _invoices.value = invSnapshot
+                return OnlineWriteResult.Error("Gagal catat pembayaran ke server")
             }
 
             refreshPayments()
@@ -1088,7 +1087,7 @@ class BmpInvoiceRepository @Inject constructor(
             val invId = pay.invoiceId
             val inv = invSnapshot.find { it.id == invId }
             if (inv != null) {
-                val invoicePayments = snapshot.filter { it.invoiceId == invId && it.id != paymentId }
+                val invoicePayments = snapshot.filter { it.invoiceId == invId && it.id != paymentId && !it.isDeleted }
                 val totalPaid = invoicePayments.sumOf { it.paymentAmount } + amount
                 val newStatus = computeInvoiceStatus(inv.totalAmount, totalPaid, inv.dueDate)
                 _invoices.value = invSnapshot.map {
@@ -1098,24 +1097,15 @@ class BmpInvoiceRepository @Inject constructor(
         }
 
         return try {
-            api.updatePayment(paymentId, mapOf(
+            val payResp = api.updatePayment(paymentId, mapOf(
                 "paymentAmount" to amount,
                 "paymentMethod" to method,
                 "notes" to notes
             ))
-            if (pay != null) {
-                val invId = pay.invoiceId
-                val inv = getById(invId)
-                if (inv != null) {
-                    val allPayments = api.getPayments().body()?.map { it.toBmpPaymentData() } ?: emptyList()
-                    val invoicePayments = allPayments.filter { it.invoiceId == invId && it.id != paymentId }
-                    val totalPaid = invoicePayments.sumOf { it.paymentAmount } + amount
-                    val newStatus = computeInvoiceStatus(inv.totalAmount, totalPaid, inv.dueDate)
-                    api.updateInvoice(invId, mapOf(
-                        "status" to newStatus,
-                        "paidAmount" to totalPaid
-                    ))
-                }
+            if (!payResp.isSuccessful) {
+                _payments.value = snapshot
+                _invoices.value = invSnapshot
+                return OnlineWriteResult.Error("Gagal ubah pembayaran di server")
             }
             refreshPayments()
             refresh()
@@ -1141,7 +1131,7 @@ class BmpInvoiceRepository @Inject constructor(
             val invId = pay.invoiceId
             val inv = invSnapshot.find { it.id == invId }
             if (inv != null) {
-                val invoicePayments = snapshot.filter { it.invoiceId == invId && it.id != paymentId }
+                val invoicePayments = snapshot.filter { it.invoiceId == invId && it.id != paymentId && !it.isDeleted }
                 val totalPaid = invoicePayments.sumOf { it.paymentAmount }
                 val newStatus = computeInvoiceStatus(inv.totalAmount, totalPaid, inv.dueDate)
                 _invoices.value = invSnapshot.map {
@@ -1151,20 +1141,11 @@ class BmpInvoiceRepository @Inject constructor(
         }
 
         return try {
-            api.deletePayment(paymentId)
-            if (pay != null) {
-                val invId = pay.invoiceId
-                val inv = getById(invId)
-                if (inv != null) {
-                    val allPayments = api.getPayments().body()?.map { it.toBmpPaymentData() } ?: emptyList()
-                    val invoicePayments = allPayments.filter { it.invoiceId == invId && it.id != paymentId }
-                    val totalPaid = invoicePayments.sumOf { it.paymentAmount }
-                    val newStatus = computeInvoiceStatus(inv.totalAmount, totalPaid, inv.dueDate)
-                    api.updateInvoice(invId, mapOf(
-                        "status" to newStatus,
-                        "paidAmount" to totalPaid
-                    ))
-                }
+            val delResp = api.deletePayment(paymentId)
+            if (!delResp.isSuccessful) {
+                _payments.value = snapshot
+                _invoices.value = invSnapshot
+                return OnlineWriteResult.Error("Gagal hapus pembayaran di server")
             }
             refreshPayments()
             refresh()
