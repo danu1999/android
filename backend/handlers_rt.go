@@ -3348,7 +3348,6 @@ func handleRtBmpAcceptApplicant(w http.ResponseWriter, r *http.Request) {
 		"role":         finalRole,
 		"position":     finalPos,
 		"salaryAmount": req.SalaryOffer,
-		"salary":       req.SalaryOffer,
 		"employeeType": "OPERATING_EXPENSE",
 		"isActive":     true,
 		"isDeleted":    false,
