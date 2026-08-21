@@ -6,12 +6,16 @@ package main
 // Target: GET < 150ms, POST/PUT < 300ms.
 
 import (
+	"crypto/rand"
 	"database/sql"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -3183,6 +3187,474 @@ func handleRtBmpArAging(w http.ResponseWriter, r *http.Request) {
 		"daysOver60":      grandDaysOver60,
 		"clientCount":     len(clientList),
 		"clients":         clientList,
+	})
+}
+
+// ── E-Recruitment: Invitations & Applicants ─────────────────────────────────
+
+func handleRtBmpJobInvitations(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	switch r.Method {
+	case http.MethodGet:
+		rows, err := db.Query(`SELECT * FROM bmp_job_invitations WHERE "tenantId"=$1 AND "isDeleted"=FALSE ORDER BY "createdAt" DESC`, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		defer rows.Close()
+		jsonOK(w, rowsToJSON(rows))
+	case http.MethodPost:
+		var req struct {
+			CandidateName  string `json:"candidateName"`
+			CandidatePhone string `json:"candidatePhone"`
+			PositionTarget string `json:"positionTarget"`
+		}
+		json.NewDecoder(r.Body).Decode(&req)
+
+		tokenBytes := make([]byte, 4)
+		_, _ = rand.Read(tokenBytes)
+		token := fmt.Sprintf("BMP-INV-%X", tokenBytes)
+		now := nowMillis()
+		expiresAt := now + 7*86400*1000 // 7 days
+
+		pos := strings.TrimSpace(req.PositionTarget)
+		if pos == "" { pos = "OPERATOR" }
+
+		body := map[string]interface{}{
+			"tenantId":       tenantId,
+			"token":          token,
+			"candidateName":  strings.TrimSpace(req.CandidateName),
+			"candidatePhone": strings.TrimSpace(req.CandidatePhone),
+			"positionTarget": pos,
+			"status":         "ACTIVE",
+			"expiresAt":      expiresAt,
+			"createdAt":      now,
+			"updatedAt":      now,
+			"isDeleted":      false,
+		}
+		id, err := insertRow("bmp_job_invitations", body)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+
+		baseURL := os.Getenv("BASE_URL")
+		if baseURL == "" { baseURL = "https://www.zedmz.cloud" }
+		formURL := fmt.Sprintf("%s/karir/form?token=%s", baseURL, token)
+
+		jsonOK(w, map[string]interface{}{
+			"id":        id,
+			"token":     token,
+			"formUrl":   formURL,
+			"expiresAt": expiresAt,
+			"ok":        true,
+		})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+func handleRtBmpJobInvitationsById(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/bmp/recruitment/invitations/")
+	id, _ := strconv.ParseInt(idStr, 10, 64)
+	switch r.Method {
+	case http.MethodDelete:
+		_, err := db.Exec(`UPDATE bmp_job_invitations SET "isDeleted"=TRUE, "status"='CANCELLED', "updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, nowMillis(), id, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+func handleRtBmpJobApplicants(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	switch r.Method {
+	case http.MethodGet:
+		rows, err := db.Query(`SELECT * FROM bmp_job_applicants WHERE "tenantId"=$1 AND "isDeleted"=FALSE ORDER BY "appliedAt" DESC`, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		defer rows.Close()
+		jsonOK(w, rowsToJSON(rows))
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+func handleRtBmpJobApplicantsById(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/bmp/recruitment/applicants/")
+	id, _ := strconv.ParseInt(idStr, 10, 64)
+	switch r.Method {
+	case http.MethodDelete:
+		_, err := db.Exec(`UPDATE bmp_job_applicants SET "isDeleted"=TRUE, "updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, nowMillis(), id, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+func handleRtBmpAcceptApplicant(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	if r.Method != http.MethodPost { jsonErr(w, 405, "method not allowed"); return }
+
+	var req struct {
+		ApplicantId int64   `json:"applicantId"`
+		SalaryOffer float64 `json:"salaryOffer"`
+		Position    string  `json:"position"`
+		Role        string  `json:"role"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		jsonErr(w, 400, "invalid body")
+		return
+	}
+
+	var app struct {
+		FullName        string
+		Phone           string
+		Email           string
+		PositionApplied string
+		KtpPhotoUrl     string
+		Status          string
+	}
+	err := db.QueryRow(`SELECT "fullName", "phone", "email", "positionApplied", "ktpPhotoUrl", "status" FROM bmp_job_applicants WHERE id=$1 AND "tenantId"=$2 AND "isDeleted"=FALSE`, req.ApplicantId, tenantId).
+		Scan(&app.FullName, &app.Phone, &app.Email, &app.PositionApplied, &app.KtpPhotoUrl, &app.Status)
+	if err != nil {
+		jsonErr(w, 404, "Data pelamar tidak ditemukan")
+		return
+	}
+	if app.Status == "ACCEPTED" {
+		jsonErr(w, 400, "Pelamar ini sudah pernah diterima sebelumnya")
+		return
+	}
+
+	finalPos := strings.TrimSpace(req.Position)
+	if finalPos == "" { finalPos = app.PositionApplied }
+	finalRole := strings.TrimSpace(req.Role)
+	if finalRole == "" { finalRole = finalPos }
+
+	now := nowMillis()
+
+	// 1. Insert ke bmp_employees
+	empBody := map[string]interface{}{
+		"tenantId":     tenantId,
+		"name":         app.FullName,
+		"phone":        app.Phone,
+		"email":        app.Email,
+		"role":         finalRole,
+		"position":     finalPos,
+		"salaryAmount": req.SalaryOffer,
+		"salary":       req.SalaryOffer,
+		"employeeType": "OPERATING_EXPENSE",
+		"isActive":     true,
+		"isDeleted":    false,
+		"isSynced":     true,
+		"createdAt":    now,
+		"updatedAt":    now,
+	}
+	empId, err := insertRow("bmp_employees", empBody)
+	if err != nil {
+		jsonErr(w, 500, "Gagal membuat data karyawan: "+err.Error())
+		return
+	}
+
+	// 2. Jika posisi Sopir / Driver, otomatis insert ke bmp_drivers
+	var driverId int64 = 0
+	if strings.ToUpper(finalPos) == "DRIVER" || strings.Contains(strings.ToUpper(finalPos), "SOPIR") {
+		drvBody := map[string]interface{}{
+			"tenantId":      tenantId,
+			"name":          app.FullName,
+			"phone":         app.Phone,
+			"plateNumber":   "",
+			"truckType":     "",
+			"ktpImageUrl":   app.KtpPhotoUrl,
+			"truckImageUrl": "",
+			"stnkImageUrl":  "",
+			"notes":         "Diterima dari E-Recruitment",
+			"isActive":      true,
+			"isDeleted":     false,
+			"createdAt":     now,
+			"updatedAt":     now,
+		}
+		drvId, errDrv := insertRow("bmp_drivers", drvBody)
+		if errDrv == nil {
+			driverId = drvId
+		}
+	}
+
+	// 3. Update status applicant menjadi ACCEPTED
+	_, _ = db.Exec(`UPDATE bmp_job_applicants SET "status"='ACCEPTED', "acceptedEmployeeId"=$1, "acceptedDriverId"=$2, "salaryOffer"=$3, "updatedAt"=$4 WHERE id=$5 AND "tenantId"=$6`,
+		empId, driverId, req.SalaryOffer, now, req.ApplicantId, tenantId)
+
+	jsonOK(w, map[string]interface{}{
+		"ok":                 true,
+		"acceptedEmployeeId": empId,
+		"acceptedDriverId":   driverId,
+		"message":            "Pelamar berhasil diterima menjadi karyawan aktif",
+	})
+}
+
+func handleRtBmpRejectApplicant(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	if r.Method != http.MethodPost { jsonErr(w, 405, "method not allowed"); return }
+
+	var req struct {
+		ApplicantId int64  `json:"applicantId"`
+		Reason      string `json:"reason"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+
+	_, err := db.Exec(`UPDATE bmp_job_applicants SET "status"='REJECTED', "notes"=$1, "updatedAt"=$2 WHERE id=$3 AND "tenantId"=$4`,
+		req.Reason, nowMillis(), req.ApplicantId, tenantId)
+	if err != nil { jsonErr(w, 500, err.Error()); return }
+	jsonOK(w, map[string]interface{}{"ok": true, "message": "Pelamar ditolak"})
+}
+
+// ── Public E-Recruitment Endpoints ──────────────────────────────────────────
+
+func handleServeJobApplicationPage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+	w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+
+	paths := []string{
+		"/home/muizz9900/job_application_web.html",
+		"./job_application_web.html",
+		"./backend/job_application_web.html",
+	}
+	for _, p := range paths {
+		if data, err := os.ReadFile(p); err == nil {
+			w.Write(data)
+			return
+		}
+	}
+	http.Error(w, "Formulir lamaran sedang tidak tersedia", http.StatusNotFound)
+}
+
+func handlePublicValidateJobToken(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	token := strings.TrimSpace(r.URL.Query().Get("token"))
+	if token == "" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid":   false,
+			"title":   "Token Tidak Ditemukan",
+			"message": "Parameter token undangan tidak ditemukan pada link formulir.",
+		})
+		return
+	}
+
+	var inv struct {
+		Id             int64
+		TenantId       string
+		CandidateName  string
+		CandidatePhone string
+		PositionTarget string
+		Status         string
+		ExpiresAt      int64
+		IsDeleted      bool
+	}
+	err := db.QueryRow(`SELECT id, "tenantId", "candidateName", "candidatePhone", "positionTarget", "status", "expiresAt", "isDeleted" FROM bmp_job_invitations WHERE "token"=$1`, token).
+		Scan(&inv.Id, &inv.TenantId, &inv.CandidateName, &inv.CandidatePhone, &inv.PositionTarget, &inv.Status, &inv.ExpiresAt, &inv.IsDeleted)
+
+	if err != nil || inv.IsDeleted {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid":   false,
+			"title":   "Link Tidak Valid",
+			"message": "Link formulir ini tidak terdaftar di sistem.",
+		})
+		return
+	}
+
+	now := nowMillis()
+	if inv.Status == "USED" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid":   false,
+			"title":   "Link Sudah Pernah Digunakan",
+			"message": "Link formulir undangan ini sudah berhasil diisi dan tidak dapat digunakan kembali.",
+		})
+		return
+	}
+	if inv.Status == "CANCELLED" || (inv.ExpiresAt > 0 && now > inv.ExpiresAt) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid":   false,
+			"title":   "Link Sudah Kadaluarsa",
+			"message": "Masa berlaku link undangan ini telah habis. Silakan hubungi manajemen perusahaan.",
+		})
+		return
+	}
+
+	// Fetch Company Name from tenant / bmp_settings
+	var companyName string
+	_ = db.QueryRow(`SELECT "companyName" FROM bmp_settings WHERE "tenantId"=$1 LIMIT 1`, inv.TenantId).Scan(&companyName)
+	if companyName == "" {
+		_ = db.QueryRow(`SELECT "name" FROM tenants WHERE id=$1 LIMIT 1`, inv.TenantId).Scan(&companyName)
+	}
+	if companyName == "" {
+		companyName = "CV. BAHTERA MULYA PLASTIK"
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"valid":          true,
+		"companyName":    companyName,
+		"candidateName":  inv.CandidateName,
+		"candidatePhone": inv.CandidatePhone,
+		"positionTarget": inv.PositionTarget,
+	})
+}
+
+func handlePublicSubmitJobApplication(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if err := r.ParseMultipartForm(15 << 20); err != nil { // 15MB max
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Gagal membaca form: " + err.Error(),
+		})
+		return
+	}
+
+	token := strings.TrimSpace(r.FormValue("token"))
+	if token == "" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Token undangan tidak valid.",
+		})
+		return
+	}
+
+	// Atomic Check & Lock Token
+	var inv struct {
+		Id        int64
+		TenantId  string
+		Status    string
+		ExpiresAt int64
+	}
+	err := db.QueryRow(`SELECT id, "tenantId", "status", "expiresAt" FROM bmp_job_invitations WHERE "token"=$1 AND "isDeleted"=FALSE`, token).
+		Scan(&inv.Id, &inv.TenantId, &inv.Status, &inv.ExpiresAt)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Token undangan tidak ditemukan.",
+		})
+		return
+	}
+
+	now := nowMillis()
+	if inv.Status == "USED" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Link formulir ini sudah pernah digunakan.",
+		})
+		return
+	}
+	if inv.Status == "CANCELLED" || (inv.ExpiresAt > 0 && now > inv.ExpiresAt) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Link formulir ini sudah kadaluarsa.",
+		})
+		return
+	}
+
+	uploadDir := filepath.Join(".", "recruitment", inv.TenantId)
+	_ = os.MkdirAll(uploadDir, 0755)
+
+	saveFile := func(field string, prefix string) string {
+		file, header, errFile := r.FormFile(field)
+		if errFile != nil {
+			return ""
+		}
+		defer file.Close()
+		ext := filepath.Ext(header.Filename)
+		if ext == "" { ext = ".jpg" }
+		fileName := fmt.Sprintf("%s_%d%s", prefix, time.Now().UnixNano()/1e6, ext)
+		destPath := filepath.Join(uploadDir, fileName)
+		bytes, errRead := io.ReadAll(file)
+		if errRead != nil || len(bytes) == 0 {
+			return ""
+		}
+		if errWrite := os.WriteFile(destPath, bytes, 0644); errWrite != nil {
+			return ""
+		}
+		baseURL := os.Getenv("BASE_URL")
+		if baseURL == "" { baseURL = "https://www.zedmz.cloud" }
+		return fmt.Sprintf("%s/recruitment/%s/%s", baseURL, inv.TenantId, fileName)
+	}
+
+	ktpUrl := saveFile("ktpFile", "ktp")
+	selfUrl := saveFile("selfFile", "self")
+	simUrl := saveFile("simFile", "sim")
+
+	applicantBody := map[string]interface{}{
+		"tenantId":        inv.TenantId,
+		"invitationId":    inv.Id,
+		"token":           token,
+		"fullName":        strings.TrimSpace(r.FormValue("fullName")),
+		"nik":             strings.TrimSpace(r.FormValue("nik")),
+		"phone":           strings.TrimSpace(r.FormValue("phone")),
+		"email":           strings.TrimSpace(r.FormValue("email")),
+		"gender":          strings.TrimSpace(r.FormValue("gender")),
+		"birthPlaceDate":  strings.TrimSpace(r.FormValue("birthPlaceDate")),
+		"address":         strings.TrimSpace(r.FormValue("address")),
+		"positionApplied": strings.TrimSpace(r.FormValue("positionApplied")),
+		"education":       strings.TrimSpace(r.FormValue("education")),
+		"experience":      strings.TrimSpace(r.FormValue("experience")),
+		"ktpPhotoUrl":     ktpUrl,
+		"selfPhotoUrl":    selfUrl,
+		"simPhotoUrl":     simUrl,
+		"status":          "PENDING",
+		"appliedAt":       now,
+		"updatedAt":       now,
+		"isDeleted":       false,
+	}
+
+	appId, errApp := insertRow("bmp_job_applicants", applicantBody)
+	if errApp != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Gagal menyimpan lamaran: " + errApp.Error(),
+		})
+		return
+	}
+
+	// Invalidate token (mark as USED)
+	_, _ = db.Exec(`UPDATE bmp_job_invitations SET "status"='USED', "usedAt"=$1, "updatedAt"=$2 WHERE id=$3`, now, now, inv.Id)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":     true,
+		"applicantId": appId,
+		"message":     "Lamaran berhasil dikirimkan!",
 	})
 }
 

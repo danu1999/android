@@ -486,3 +486,46 @@ data class BmpDriverEntity(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
+
+data class BmpJobInvitationEntity(
+    val id: Long = 0,
+    val tenantId: String = "",
+    val token: String = "",
+    val candidateName: String = "",
+    val candidatePhone: String = "",
+    val positionTarget: String = "OPERATOR",
+    val status: String = "ACTIVE",
+    val usedAt: Long? = null,
+    val expiresAt: Long? = null,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDeleted: Boolean = false
+)
+
+data class BmpJobApplicantEntity(
+    val id: Long = 0,
+    val tenantId: String = "",
+    val invitationId: Long? = null,
+    val token: String = "",
+    val fullName: String = "",
+    val nik: String = "",
+    val phone: String = "",
+    val email: String? = null,
+    val gender: String = "LAKI_LAKI",
+    val birthPlaceDate: String = "",
+    val address: String = "",
+    val positionApplied: String = "OPERATOR",
+    val education: String = "SMA/SMK",
+    val experience: String? = null,
+    val ktpPhotoUrl: String? = null,
+    val selfPhotoUrl: String? = null,
+    val simPhotoUrl: String? = null,
+    val status: String = "PENDING", // PENDING, ACCEPTED, REJECTED
+    val acceptedEmployeeId: Long? = null,
+    val acceptedDriverId: Long? = null,
+    val salaryOffer: Double = 0.0,
+    val notes: String? = null,
+    val appliedAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDeleted: Boolean = false
+)

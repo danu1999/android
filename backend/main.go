@@ -165,6 +165,12 @@ func main() {
 	http.Handle("/logos/", http.StripPrefix("/logos/", http.FileServer(http.Dir("./logos"))))
 	http.Handle("/ttd-pengirim/", http.StripPrefix("/ttd-pengirim/", http.FileServer(http.Dir("./ttd-pengirim"))))
 	http.Handle("/drivers/", http.StripPrefix("/drivers/", http.FileServer(http.Dir("./drivers"))))
+	http.Handle("/recruitment/", http.StripPrefix("/recruitment/", http.FileServer(http.Dir("./recruitment"))))
+
+	// Public Job Application routes
+	http.HandleFunc("/karir/form", handleServeJobApplicationPage)
+	http.HandleFunc("/api/public/recruitment/validate-token", handlePublicValidateJobToken)
+	http.HandleFunc("/api/public/recruitment/submit", handlePublicSubmitJobApplication)
 
 	// Reports API
 	http.HandleFunc("/api/reports/outlet-margin", handleOutletMarginReport)
@@ -208,6 +214,14 @@ func main() {
 	http.HandleFunc("/api/rt/bmp/payments/", handleRtBmpPaymentsById)
 	http.HandleFunc("/api/rt/bmp/drivers", handleRtBmpDrivers)
 	http.HandleFunc("/api/rt/bmp/drivers/", handleRtBmpDriversById)
+
+	// BMP — E-Recruitment (Invitations & Applicants)
+	http.HandleFunc("/api/rt/bmp/recruitment/invitations", handleRtBmpJobInvitations)
+	http.HandleFunc("/api/rt/bmp/recruitment/invitations/", handleRtBmpJobInvitationsById)
+	http.HandleFunc("/api/rt/bmp/recruitment/applicants", handleRtBmpJobApplicants)
+	http.HandleFunc("/api/rt/bmp/recruitment/applicants/", handleRtBmpJobApplicantsById)
+	http.HandleFunc("/api/rt/bmp/recruitment/applicants/accept", handleRtBmpAcceptApplicant)
+	http.HandleFunc("/api/rt/bmp/recruitment/applicants/reject", handleRtBmpRejectApplicant)
 	http.HandleFunc("/api/rt/bmp/employees", handleRtBmpEmployees)
 	http.HandleFunc("/api/rt/bmp/employees/", handleRtBmpEmployeesById)
 	http.HandleFunc("/api/rt/bmp/payrolls", handleRtBmpPayrolls)
@@ -845,6 +859,7 @@ func runAutoDeploy() {
 	_ = copyFile(backendDir+"/terms.html", "/home/muizz9900/web/terms.html")
 	_ = copyFile(backendDir+"/invoice-pdf.html", "/home/muizz9900/invoice-pdf.html")
 	_ = copyFile(backendDir+"/surat-jalan-pdf.html", "/home/muizz9900/surat-jalan-pdf.html")
+	_ = copyFile(backendDir+"/job_application_web.html", "/home/muizz9900/job_application_web.html")
 
 	// 7. Copy posbah-v*.apk files
 	if apks, err := filepath.Glob(backendDir + "/posbah-v*.apk"); err == nil {
@@ -8864,6 +8879,7 @@ func versionCheckMiddleware(next http.Handler) http.Handler {
 				strings.HasPrefix(path, "/api/upload/") ||
 				strings.HasPrefix(path, "/api/store/") ||
 				strings.HasPrefix(path, "/api/sign/") ||
+				strings.HasPrefix(path, "/api/public/") ||
 				strings.HasPrefix(path, "/api/invoice/signature") ||
 				strings.HasPrefix(path, "/api/signatures/") ||
 				strings.HasPrefix(path, "/api/auth/qr-") ||

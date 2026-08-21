@@ -422,6 +422,135 @@ fun Map<String, Any?>.toBmpDriverData() = BmpDriverData(
     updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0
 )
 
+data class BmpJobInvitationData(
+    val id: Long = 0,
+    val tenantId: String = "",
+    val token: String = "",
+    val candidateName: String = "",
+    val candidatePhone: String = "",
+    val positionTarget: String = "OPERATOR",
+    val status: String = "ACTIVE",
+    val usedAt: Long? = null,
+    val expiresAt: Long? = null,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDeleted: Boolean = false
+) {
+    fun toEntity() = com.posbah.app.data.local.entities.BmpJobInvitationEntity(
+        id = id,
+        tenantId = tenantId,
+        token = token,
+        candidateName = candidateName,
+        candidatePhone = candidatePhone,
+        positionTarget = positionTarget,
+        status = status,
+        usedAt = usedAt,
+        expiresAt = expiresAt,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+        isDeleted = isDeleted
+    )
+}
+
+fun Map<String, Any?>.toBmpJobInvitationData() = BmpJobInvitationData(
+    id = (getCaseInsensitive("id") as? Number)?.toLong() ?: 0,
+    tenantId = getCaseInsensitive("tenantId") as? String ?: "",
+    token = getCaseInsensitive("token") as? String ?: "",
+    candidateName = getCaseInsensitive("candidateName") as? String ?: "",
+    candidatePhone = getCaseInsensitive("candidatePhone") as? String ?: "",
+    positionTarget = getCaseInsensitive("positionTarget") as? String ?: "OPERATOR",
+    status = getCaseInsensitive("status") as? String ?: "ACTIVE",
+    usedAt = (getCaseInsensitive("usedAt") as? Number)?.toLong(),
+    expiresAt = (getCaseInsensitive("expiresAt") as? Number)?.toLong(),
+    createdAt = (getCaseInsensitive("createdAt") as? Number)?.toLong() ?: System.currentTimeMillis(),
+    updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0,
+    isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false
+)
+
+data class BmpJobApplicantData(
+    val id: Long = 0,
+    val tenantId: String = "",
+    val invitationId: Long? = null,
+    val token: String = "",
+    val fullName: String = "",
+    val nik: String = "",
+    val phone: String = "",
+    val email: String? = null,
+    val gender: String = "LAKI_LAKI",
+    val birthPlaceDate: String = "",
+    val address: String = "",
+    val positionApplied: String = "OPERATOR",
+    val education: String = "SMA/SMK",
+    val experience: String? = null,
+    val ktpPhotoUrl: String? = null,
+    val selfPhotoUrl: String? = null,
+    val simPhotoUrl: String? = null,
+    val status: String = "PENDING",
+    val acceptedEmployeeId: Long? = null,
+    val acceptedDriverId: Long? = null,
+    val salaryOffer: Double = 0.0,
+    val notes: String? = null,
+    val appliedAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDeleted: Boolean = false
+) {
+    fun toEntity() = com.posbah.app.data.local.entities.BmpJobApplicantEntity(
+        id = id,
+        tenantId = tenantId,
+        invitationId = invitationId,
+        token = token,
+        fullName = fullName,
+        nik = nik,
+        phone = phone,
+        email = email,
+        gender = gender,
+        birthPlaceDate = birthPlaceDate,
+        address = address,
+        positionApplied = positionApplied,
+        education = education,
+        experience = experience,
+        ktpPhotoUrl = ktpPhotoUrl,
+        selfPhotoUrl = selfPhotoUrl,
+        simPhotoUrl = simPhotoUrl,
+        status = status,
+        acceptedEmployeeId = acceptedEmployeeId,
+        acceptedDriverId = acceptedDriverId,
+        salaryOffer = salaryOffer,
+        notes = notes,
+        appliedAt = appliedAt,
+        updatedAt = updatedAt,
+        isDeleted = isDeleted
+    )
+}
+
+fun Map<String, Any?>.toBmpJobApplicantData() = BmpJobApplicantData(
+    id = (getCaseInsensitive("id") as? Number)?.toLong() ?: 0,
+    tenantId = getCaseInsensitive("tenantId") as? String ?: "",
+    invitationId = (getCaseInsensitive("invitationId") as? Number)?.toLong(),
+    token = getCaseInsensitive("token") as? String ?: "",
+    fullName = getCaseInsensitive("fullName") as? String ?: "",
+    nik = getCaseInsensitive("nik") as? String ?: "",
+    phone = getCaseInsensitive("phone") as? String ?: "",
+    email = getCaseInsensitive("email") as? String,
+    gender = getCaseInsensitive("gender") as? String ?: "LAKI_LAKI",
+    birthPlaceDate = getCaseInsensitive("birthPlaceDate") as? String ?: "",
+    address = getCaseInsensitive("address") as? String ?: "",
+    positionApplied = getCaseInsensitive("positionApplied") as? String ?: "OPERATOR",
+    education = getCaseInsensitive("education") as? String ?: "SMA/SMK",
+    experience = getCaseInsensitive("experience") as? String,
+    ktpPhotoUrl = getCaseInsensitive("ktpPhotoUrl") as? String,
+    selfPhotoUrl = getCaseInsensitive("selfPhotoUrl") as? String,
+    simPhotoUrl = getCaseInsensitive("simPhotoUrl") as? String,
+    status = getCaseInsensitive("status") as? String ?: "PENDING",
+    acceptedEmployeeId = (getCaseInsensitive("acceptedEmployeeId") as? Number)?.toLong(),
+    acceptedDriverId = (getCaseInsensitive("acceptedDriverId") as? Number)?.toLong(),
+    salaryOffer = (getCaseInsensitive("salaryOffer") as? Number)?.toDouble() ?: 0.0,
+    notes = getCaseInsensitive("notes") as? String,
+    appliedAt = (getCaseInsensitive("appliedAt") as? Number)?.toLong() ?: System.currentTimeMillis(),
+    updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: 0,
+    isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false
+)
+
 fun Map<String, Any?>.toBmpProductItemData() = BmpProductItemData(
     id = (getCaseInsensitive("id") as? Number)?.toLong() ?: 0,
     tenantId = getCaseInsensitive("tenantId") as? String ?: "",
@@ -3519,3 +3648,126 @@ class BmpArAgingRepository @Inject constructor(
         _summary.value
     }
 }
+
+// ── BmpRecruitmentRepository ──────────────────────────────────────────────────
+
+@Singleton
+class BmpRecruitmentRepository @Inject constructor(
+    private val api: BmpApiService
+) {
+    private val _invitations = MutableStateFlow<List<BmpJobInvitationData>>(emptyList())
+    val invitations: StateFlow<List<BmpJobInvitationData>> = _invitations.asStateFlow()
+
+    private val _applicants = MutableStateFlow<List<BmpJobApplicantData>>(emptyList())
+    val applicants: StateFlow<List<BmpJobApplicantData>> = _applicants.asStateFlow()
+
+    fun observeInvitations(): kotlinx.coroutines.flow.Flow<List<com.posbah.app.data.local.entities.BmpJobInvitationEntity>> =
+        _invitations.map { list -> list.map { it.toEntity() } }
+
+    fun observeApplicants(): kotlinx.coroutines.flow.Flow<List<com.posbah.app.data.local.entities.BmpJobApplicantEntity>> =
+        _applicants.map { list -> list.map { it.toEntity() } }
+
+    suspend fun refresh() {
+        try {
+            val invResp = api.getJobInvitations()
+            if (invResp.isSuccessful) {
+                _invitations.value = invResp.body()?.map { it.toBmpJobInvitationData() } ?: emptyList()
+            }
+        } catch (_: Exception) {}
+
+        try {
+            val appResp = api.getJobApplicants()
+            if (appResp.isSuccessful) {
+                _applicants.value = appResp.body()?.map { it.toBmpJobApplicantData() } ?: emptyList()
+            }
+        } catch (_: Exception) {}
+    }
+
+    suspend fun createInvitation(
+        candidateName: String,
+        candidatePhone: String,
+        positionTarget: String
+    ): Result<Pair<String, String>> = try {
+        val resp = api.createJobInvitation(mapOf(
+            "candidateName" to candidateName,
+            "candidatePhone" to candidatePhone,
+            "positionTarget" to positionTarget
+        ))
+        if (resp.isSuccessful) {
+            val body = resp.body()
+            val token = body?.get("token") as? String ?: ""
+            val formUrl = body?.get("formUrl") as? String ?: ""
+            refresh()
+            Result.success(Pair(token, formUrl))
+        } else {
+            Result.failure(Exception("Gagal membuat link undangan: HTTP ${resp.code()}"))
+        }
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
+
+    suspend fun deleteInvitation(id: Long): OnlineWriteResult = try {
+        val resp = api.deleteJobInvitation(id)
+        if (resp.isSuccessful) {
+            _invitations.value = _invitations.value.filter { it.id != id }
+            OnlineWriteResult.Success
+        } else {
+            OnlineWriteResult.Error("Gagal membatalkan link undangan")
+        }
+    } catch (e: Exception) {
+        OnlineWriteResult.Error(e.message ?: "Gagal membatalkan undangan")
+    }
+
+    suspend fun deleteApplicant(id: Long): OnlineWriteResult = try {
+        val resp = api.deleteJobApplicant(id)
+        if (resp.isSuccessful) {
+            _applicants.value = _applicants.value.filter { it.id != id }
+            OnlineWriteResult.Success
+        } else {
+            OnlineWriteResult.Error("Gagal menghapus data pelamar")
+        }
+    } catch (e: Exception) {
+        OnlineWriteResult.Error(e.message ?: "Gagal menghapus pelamar")
+    }
+
+    suspend fun acceptApplicant(
+        applicantId: Long,
+        salaryOffer: Double,
+        position: String,
+        role: String
+    ): OnlineWriteResult = try {
+        val resp = api.acceptJobApplicant(mapOf(
+            "applicantId" to applicantId,
+            "salaryOffer" to salaryOffer,
+            "position" to position,
+            "role" to role
+        ))
+        if (resp.isSuccessful) {
+            refresh()
+            OnlineWriteResult.Success
+        } else {
+            OnlineWriteResult.Error("Gagal menerima pelamar (HTTP ${resp.code()})")
+        }
+    } catch (e: Exception) {
+        OnlineWriteResult.Error(e.message ?: "Gagal memproses penerimaan")
+    }
+
+    suspend fun rejectApplicant(
+        applicantId: Long,
+        reason: String
+    ): OnlineWriteResult = try {
+        val resp = api.rejectJobApplicant(mapOf(
+            "applicantId" to applicantId,
+            "reason" to reason
+        ))
+        if (resp.isSuccessful) {
+            refresh()
+            OnlineWriteResult.Success
+        } else {
+            OnlineWriteResult.Error("Gagal menolak pelamar")
+        }
+    } catch (e: Exception) {
+        OnlineWriteResult.Error(e.message ?: "Gagal memproses penolakan")
+    }
+}
+

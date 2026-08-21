@@ -1082,7 +1082,52 @@ func initSchema() error {
 		`ALTER TABLE "bmp_invoices" ADD COLUMN IF NOT EXISTS "plateNumber" VARCHAR(50) DEFAULT '';`,
 		`ALTER TABLE "bmp_invoices" ADD COLUMN IF NOT EXISTS "ongkirSopir" DOUBLE PRECISION DEFAULT 0.0;`,
 		`ALTER TABLE "bmp_invoices" ADD COLUMN IF NOT EXISTS "biayaKuli" DOUBLE PRECISION DEFAULT 0.0;`,
-		`ALTER TABLE "bmp_invoices" ADD COLUMN IF NOT EXISTS "deliveryStatus" VARCHAR(50) DEFAULT 'PENDING';`,
+		// v2.19.74: E-Recruitment Formulir Calon Karyawan (Mode Undangan Sekali Pakai) & Pelamar
+		`CREATE TABLE IF NOT EXISTS "bmp_job_invitations" (
+			"id" SERIAL PRIMARY KEY,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"token" VARCHAR(100) NOT NULL,
+			"candidateName" VARCHAR(255) DEFAULT '',
+			"candidatePhone" VARCHAR(50) DEFAULT '',
+			"positionTarget" VARCHAR(100) DEFAULT 'OPERATOR',
+			"status" VARCHAR(50) DEFAULT 'ACTIVE',
+			"usedAt" BIGINT,
+			"expiresAt" BIGINT,
+			"createdAt" BIGINT,
+			"updatedAt" BIGINT,
+			"isDeleted" BOOLEAN DEFAULT FALSE
+		);`,
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_job_invitations_tenant" ON "bmp_job_invitations" ("tenantId", "status", "isDeleted");`,
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_job_invitations_token" ON "bmp_job_invitations" ("token");`,
+
+		`CREATE TABLE IF NOT EXISTS "bmp_job_applicants" (
+			"id" SERIAL PRIMARY KEY,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"invitationId" INT,
+			"token" VARCHAR(100) DEFAULT '',
+			"fullName" VARCHAR(255) NOT NULL,
+			"nik" VARCHAR(50) DEFAULT '',
+			"phone" VARCHAR(50) NOT NULL,
+			"email" VARCHAR(150) DEFAULT '',
+			"gender" VARCHAR(20) DEFAULT '',
+			"birthPlaceDate" VARCHAR(150) DEFAULT '',
+			"address" TEXT DEFAULT '',
+			"positionApplied" VARCHAR(100) NOT NULL,
+			"education" VARCHAR(100) DEFAULT '',
+			"experience" TEXT DEFAULT '',
+			"ktpPhotoUrl" TEXT DEFAULT '',
+			"selfPhotoUrl" TEXT DEFAULT '',
+			"simPhotoUrl" TEXT DEFAULT '',
+			"status" VARCHAR(50) DEFAULT 'PENDING',
+			"acceptedEmployeeId" INT,
+			"acceptedDriverId" INT,
+			"salaryOffer" DOUBLE PRECISION DEFAULT 0.0,
+			"notes" TEXT DEFAULT '',
+			"appliedAt" BIGINT,
+			"updatedAt" BIGINT,
+			"isDeleted" BOOLEAN DEFAULT FALSE
+		);`,
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_job_applicants_tenant" ON "bmp_job_applicants" ("tenantId", "status", "isDeleted");`,
 	}
 	for _, q := range manufakturMigrations {
 		if _, err := db.Exec(q); err != nil {

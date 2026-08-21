@@ -257,5 +257,27 @@ interface BmpApiService {
     // ── AR Aging Report (v2.19.58) ────────────────────────────────────────────
     @GET("api/rt/bmp/reports/ar-aging")
     suspend fun getArAgingReport(): Response<Map<String, Any?>>
+
+    // ── E-Recruitment (v2.19.74) ──────────────────────────────────────────────
+    @GET("api/rt/bmp/recruitment/invitations")
+    suspend fun getJobInvitations(): Response<List<Map<String, Any?>>>
+
+    @POST("api/rt/bmp/recruitment/invitations")
+    suspend fun createJobInvitation(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<Map<String, Any?>>
+
+    @DELETE("api/rt/bmp/recruitment/invitations/{id}")
+    suspend fun deleteJobInvitation(@Path("id") id: Long): Response<Map<String, Any?>>
+
+    @GET("api/rt/bmp/recruitment/applicants")
+    suspend fun getJobApplicants(): Response<List<Map<String, Any?>>>
+
+    @DELETE("api/rt/bmp/recruitment/applicants/{id}")
+    suspend fun deleteJobApplicant(@Path("id") id: Long): Response<Map<String, Any?>>
+
+    @POST("api/rt/bmp/recruitment/applicants/accept")
+    suspend fun acceptJobApplicant(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<Map<String, Any?>>
+
+    @POST("api/rt/bmp/recruitment/applicants/reject")
+    suspend fun rejectJobApplicant(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<Map<String, Any?>>
 }
 
