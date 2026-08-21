@@ -3597,31 +3597,31 @@ func handlePublicSubmitJobApplication(w http.ResponseWriter, r *http.Request) {
 	uploadDir := filepath.Join(".", "recruitment", inv.TenantId)
 	_ = os.MkdirAll(uploadDir, 0755)
 
-	saveFile := func(field string, prefix string) string {
-		file, header, errFile := r.FormFile(field)
-		if errFile != nil {
-			return ""
+	saveFile := func(fields []string, prefix string) string {
+		for _, field := range fields {
+			file, header, errFile := r.FormFile(field)
+			if errFile == nil {
+				defer file.Close()
+				ext := filepath.Ext(header.Filename)
+				if ext == "" { ext = ".jpg" }
+				fileName := fmt.Sprintf("%s_%d%s", prefix, time.Now().UnixNano()/1e6, ext)
+				destPath := filepath.Join(uploadDir, fileName)
+				bytes, errRead := io.ReadAll(file)
+				if errRead == nil && len(bytes) > 0 {
+					if errWrite := os.WriteFile(destPath, bytes, 0644); errWrite == nil {
+						baseURL := os.Getenv("BASE_URL")
+						if baseURL == "" { baseURL = "https://www.zedmz.cloud" }
+						return fmt.Sprintf("%s/recruitment/%s/%s", baseURL, inv.TenantId, fileName)
+					}
+				}
+			}
 		}
-		defer file.Close()
-		ext := filepath.Ext(header.Filename)
-		if ext == "" { ext = ".jpg" }
-		fileName := fmt.Sprintf("%s_%d%s", prefix, time.Now().UnixNano()/1e6, ext)
-		destPath := filepath.Join(uploadDir, fileName)
-		bytes, errRead := io.ReadAll(file)
-		if errRead != nil || len(bytes) == 0 {
-			return ""
-		}
-		if errWrite := os.WriteFile(destPath, bytes, 0644); errWrite != nil {
-			return ""
-		}
-		baseURL := os.Getenv("BASE_URL")
-		if baseURL == "" { baseURL = "https://www.zedmz.cloud" }
-		return fmt.Sprintf("%s/recruitment/%s/%s", baseURL, inv.TenantId, fileName)
+		return ""
 	}
 
-	ktpUrl := saveFile("ktpFile", "ktp")
-	selfUrl := saveFile("selfFile", "self")
-	simUrl := saveFile("simFile", "sim")
+	ktpUrl := saveFile([]string{"ktpFile", "ktpPhoto", "ktp"}, "ktp")
+	selfUrl := saveFile([]string{"selfFile", "selfPhoto", "self"}, "self")
+	simUrl := saveFile([]string{"simFile", "simPhoto", "sim"}, "sim")
 
 	applicantBody := map[string]interface{}{
 		"tenantId":        inv.TenantId,
