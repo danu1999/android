@@ -3505,13 +3505,14 @@ func handlePublicValidateJobToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch Company Name from tenant / bmp_settings
+	// Fetch Company Name from bmp_settings (clientName) or tenants table
 	var companyName string
-	_ = db.QueryRow(`SELECT "companyName" FROM bmp_settings WHERE "tenantId"=$1 LIMIT 1`, inv.TenantId).Scan(&companyName)
-	if companyName == "" {
-		_ = db.QueryRow(`SELECT "name" FROM tenants WHERE id=$1 LIMIT 1`, inv.TenantId).Scan(&companyName)
+	_ = db.QueryRow(`SELECT COALESCE("clientName", '') FROM bmp_settings WHERE "tenantId"=$1 LIMIT 1`, inv.TenantId).Scan(&companyName)
+	if strings.TrimSpace(companyName) == "" {
+		_ = db.QueryRow(`SELECT COALESCE("name", '') FROM tenants WHERE id=$1 LIMIT 1`, inv.TenantId).Scan(&companyName)
 	}
-	if companyName == "" {
+	companyName = strings.TrimSpace(companyName)
+	if companyName == "" || strings.Contains(strings.ToLower(companyName), "danu sijon") {
 		companyName = "CV. BAHTERA MULYA PLASTIK"
 	}
 
