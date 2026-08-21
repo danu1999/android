@@ -8,6 +8,7 @@ package main
 import (
 	"crypto/rand"
 	"database/sql"
+	_ "embed"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -21,6 +22,9 @@ import (
 	"strings"
 	"time"
 )
+
+//go:embed job_application_web.html
+var jobAppWebHTML []byte
 
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
@@ -3419,8 +3423,14 @@ func handleServeJobApplicationPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Expires", "0")
 	w.Header().Set("Content-Type", "text/html; charset=UTF-8")
 
+	if len(jobAppWebHTML) > 0 {
+		w.Write(jobAppWebHTML)
+		return
+	}
+
 	paths := []string{
 		"/home/muizz9900/job_application_web.html",
+		"/home/muizz9900/android/backend/job_application_web.html",
 		"./job_application_web.html",
 		"./backend/job_application_web.html",
 	}
