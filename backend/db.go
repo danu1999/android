@@ -1132,6 +1132,10 @@ func initSchema() error {
 		`ALTER TABLE "bmp_job_applicants" ADD COLUMN IF NOT EXISTS "testScore" INT DEFAULT 0;`,
 		`ALTER TABLE "bmp_job_applicants" ADD COLUMN IF NOT EXISTS "testAnswers" TEXT DEFAULT '';`,
 		`ALTER TABLE "bmp_job_applicants" ADD COLUMN IF NOT EXISTS "wageAgreed" BOOLEAN DEFAULT TRUE;`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "isTraining" BOOLEAN DEFAULT FALSE;`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "trainingTargetDays" INT DEFAULT 14;`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "trainingDaysCompleted" INT DEFAULT 0;`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "trainingStartedAt" BIGINT DEFAULT 0;`,
 	}
 	for _, q := range manufakturMigrations {
 		if _, err := db.Exec(q); err != nil {

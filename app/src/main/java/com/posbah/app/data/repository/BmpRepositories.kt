@@ -231,6 +231,13 @@ data class BmpEmployeeData(
     val employeeType: String = "OPERATING_EXPENSE",
     val phone: String? = null,
     val email: String? = null,
+    val nik: String? = null,
+    val address: String? = null,
+    val ktpPhotoUrl: String? = null,
+    val isTraining: Boolean = false,
+    val trainingTargetDays: Int = 14,
+    val trainingDaysCompleted: Int = 0,
+    val trainingStartedAt: Long? = null,
     val isActive: Boolean = true,
     val employeeId: Long? = null,
     val fingerprintPIN: String? = null,
@@ -1866,6 +1873,13 @@ class BmpEmployeeRepository @Inject constructor(
                         employeeType = it["employeeType"] as? String ?: "OPERATING_EXPENSE",
                         phone = it["phone"] as? String,
                         email = it["email"] as? String,
+                        nik = it["nik"] as? String,
+                        address = it["address"] as? String,
+                        ktpPhotoUrl = it["ktpPhotoUrl"] as? String,
+                        isTraining = it["isTraining"] as? Boolean ?: false,
+                        trainingTargetDays = (it["trainingTargetDays"] as? Number)?.toInt() ?: 14,
+                        trainingDaysCompleted = (it["trainingDaysCompleted"] as? Number)?.toInt() ?: 0,
+                        trainingStartedAt = (it["trainingStartedAt"] as? Number)?.toLong(),
                         isActive = it["isActive"] as? Boolean ?: true,
                         employeeId = (it["employeeId"] as? Number)?.toLong(),
                         fingerprintPIN = it["fingerprintPIN"] as? String,
@@ -1907,6 +1921,13 @@ class BmpEmployeeRepository @Inject constructor(
                 "employeeType" to emp.employeeType,
                 "phone" to emp.phone,
                 "email" to emp.email,
+                "nik" to emp.nik,
+                "address" to emp.address,
+                "ktpPhotoUrl" to emp.ktpPhotoUrl,
+                "isTraining" to emp.isTraining,
+                "trainingTargetDays" to emp.trainingTargetDays,
+                "trainingDaysCompleted" to emp.trainingDaysCompleted,
+                "trainingStartedAt" to emp.trainingStartedAt,
                 "outletId" to emp.outletId,
                 "isActive" to emp.isActive,
                 "employeeId" to emp.employeeId,
@@ -1920,6 +1941,25 @@ class BmpEmployeeRepository @Inject constructor(
             _employees.value = snapshot  // rollback jika gagal
             OnlineWriteResult.Error(e.message ?: "Gagal simpan karyawan")
         }
+    }
+
+    suspend fun incrementTrainingDay(emp: BmpEmployeeData): OnlineWriteResult {
+        val newDays = emp.trainingDaysCompleted + 1
+        val updated = emp.copy(trainingDaysCompleted = newDays)
+        return upsert(updated)
+    }
+
+    suspend fun updateTrainingDays(emp: BmpEmployeeData, completed: Int, target: Int): OnlineWriteResult {
+        val updated = emp.copy(trainingDaysCompleted = completed, trainingTargetDays = target)
+        return upsert(updated)
+    }
+
+    suspend fun graduateTraining(emp: BmpEmployeeData, regularSalary: Double = 70000.0): OnlineWriteResult {
+        val updated = emp.copy(
+            isTraining = false,
+            salary = regularSalary
+        )
+        return upsert(updated)
     }
 
     suspend fun delete(id: Long): OnlineWriteResult {
@@ -1945,6 +1985,36 @@ class BmpEmployeeRepository @Inject constructor(
         }
     }
 
+    suspend fun upsert(e: com.posbah.app.data.local.entities.BmpEmployeeEntity): OnlineWriteResult {
+        return upsert(
+            BmpEmployeeData(
+                id = e.id,
+                tenantId = e.tenantId,
+                outletId = e.outletId,
+                name = e.name,
+                role = e.position ?: "KARYAWAN",
+                salary = e.salaryAmount,
+                employeeType = e.employeeType,
+                phone = e.phone,
+                email = e.email,
+                nik = e.nik,
+                address = e.address,
+                ktpPhotoUrl = e.ktpPhotoUrl,
+                isTraining = e.isTraining,
+                trainingTargetDays = e.trainingTargetDays,
+                trainingDaysCompleted = e.trainingDaysCompleted,
+                trainingStartedAt = e.trainingStartedAt,
+                isActive = e.isActive,
+                employeeId = e.employeeId,
+                fingerprintPIN = e.fingerprintPIN,
+                lastPaidAt = e.lastPaidAt,
+                updatedAt = e.updatedAt
+            )
+        )
+    }
+
+    suspend fun softDelete(id: Long): OnlineWriteResult = delete(id)
+
     fun observe(tenantId: String): Flow<List<com.posbah.app.data.local.entities.BmpEmployeeEntity>> =
         _employees.map { list ->
             list.map {
@@ -1958,6 +2028,13 @@ class BmpEmployeeRepository @Inject constructor(
                     employeeType = it.employeeType,
                     phone = it.phone,
                     email = it.email,
+                    nik = it.nik,
+                    address = it.address,
+                    ktpPhotoUrl = it.ktpPhotoUrl,
+                    isTraining = it.isTraining,
+                    trainingTargetDays = it.trainingTargetDays,
+                    trainingDaysCompleted = it.trainingDaysCompleted,
+                    trainingStartedAt = it.trainingStartedAt,
                     isActive = it.isActive,
                     fingerprintPIN = it.fingerprintPIN,
                     employeeId = it.employeeId,

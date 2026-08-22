@@ -55,8 +55,11 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.School
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -389,6 +392,31 @@ class EmployeesViewModel @Inject constructor(
         }
     }
 
+    fun incrementTrainingDay(e: BmpEmployeeEntity) = viewModelScope.launch(Dispatchers.IO) {
+        val newDays = e.trainingDaysCompleted + 1
+        val updated = e.copy(trainingDaysCompleted = newDays)
+        val res = repo.upsert(updated)
+        if (res is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+            error.value = res.message
+        }
+    }
+
+    fun updateTrainingDays(e: BmpEmployeeEntity, completed: Int, target: Int) = viewModelScope.launch(Dispatchers.IO) {
+        val updated = e.copy(trainingDaysCompleted = completed, trainingTargetDays = target)
+        val res = repo.upsert(updated)
+        if (res is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+            error.value = res.message
+        }
+    }
+
+    fun graduateTraining(e: BmpEmployeeEntity, regularSalary: Double = 70000.0) = viewModelScope.launch(Dispatchers.IO) {
+        val updated = e.copy(isTraining = false, salaryAmount = regularSalary)
+        val res = repo.upsert(updated)
+        if (res is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+            error.value = res.message
+        }
+    }
+
     fun refreshRecruitment() = viewModelScope.launch(Dispatchers.IO) {
         try { recruitmentRepo.refresh() } catch (_: Exception) {}
     }
@@ -415,6 +443,8 @@ fun EmployeesScreen(
     var acceptApplicantTarget by remember { mutableStateOf<BmpJobApplicantEntity?>(null) }
     var rejectApplicantTarget by remember { mutableStateOf<BmpJobApplicantEntity?>(null) }
     var previewImageTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var editTrainingTarget by remember { mutableStateOf<BmpEmployeeEntity?>(null) }
+    var graduateConfirmTarget by remember { mutableStateOf<BmpEmployeeEntity?>(null) }
 
     val context = LocalContext.current
     val errorState by viewModel.error.collectAsState()
@@ -661,16 +691,51 @@ fun EmployeesScreen(
                                     ) {
                                         Surface(
                                             shape = RoundedCornerShape(50),
-                                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                            color = if (e.isTraining) Color(0xFFFFFBEB) else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                            border = if (e.isTraining) BorderStroke(1.dp, Color(0xFFFDE68A)) else null,
                                             modifier = Modifier.size(40.dp)
                                         ) {
                                             Box(contentAlignment = Alignment.Center) {
-                                                Icon(Icons.Outlined.Badge, null, tint = MaterialTheme.colorScheme.primary)
+                                                Icon(
+                                                    if (e.isTraining) Icons.Outlined.School else Icons.Outlined.Badge,
+                                                    null,
+                                                    tint = if (e.isTraining) Color(0xFFD97706) else MaterialTheme.colorScheme.primary
+                                                )
                                             }
                                         }
                                         Spacer(Modifier.size(12.dp))
                                         Column(Modifier.weight(1f)) {
-                                            Text(e.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(e.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                                Spacer(Modifier.width(6.dp))
+                                                if (e.isTraining) {
+                                                    Surface(
+                                                        shape = RoundedCornerShape(4.dp),
+                                                        color = Color(0xFFFEF3C7)
+                                                    ) {
+                                                        Text(
+                                                            "TRAINING",
+                                                            fontSize = 9.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Color(0xFF92400E),
+                                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                } else {
+                                                    Surface(
+                                                        shape = RoundedCornerShape(4.dp),
+                                                        color = Color(0xFFECFDF5)
+                                                    ) {
+                                                        Text(
+                                                            "REGULER",
+                                                            fontSize = 9.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = Color(0xFF065F46),
+                                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
                                             val pinText = if (!e.fingerprintPIN.isNullOrBlank()) "PIN: ${e.fingerprintPIN}" else "PIN Belum Set"
                                             val outletName = outlets.firstOrNull { it.id == e.outletId }?.name
                                                 ?: outlets.firstOrNull()?.name
@@ -682,6 +747,87 @@ fun EmployeesScreen(
                                             )
                                         }
                                     }
+
+                                    // Training Progress Box (if in training period)
+                                    if (e.isTraining) {
+                                        Spacer(Modifier.height(10.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = Color(0xFFFFFBEB),
+                                            border = BorderStroke(1.dp, Color(0xFFFDE68A)),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Column(modifier = Modifier.padding(10.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        "⏳ Masa Training (Upah 50K/hr)",
+                                                        fontSize = 11.5.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color(0xFFB45309)
+                                                    )
+                                                    Text(
+                                                        "${e.trainingDaysCompleted} / ${e.trainingTargetDays} Hari Masuk",
+                                                        fontSize = 11.5.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color(0xFF92400E)
+                                                    )
+                                                }
+                                                Spacer(Modifier.height(6.dp))
+                                                val progress = if (e.trainingTargetDays > 0) (e.trainingDaysCompleted.toFloat() / e.trainingTargetDays).coerceIn(0f, 1f) else 0f
+                                                LinearProgressIndicator(
+                                                    progress = { progress },
+                                                    color = Color(0xFFF59E0B),
+                                                    trackColor = Color(0xFFFEF3C7),
+                                                    modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp))
+                                                )
+                                                Spacer(Modifier.height(8.dp))
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                ) {
+                                                    Button(
+                                                        onClick = { viewModel.incrementTrainingDay(e) },
+                                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                                        shape = RoundedCornerShape(6.dp),
+                                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                                                        modifier = Modifier.weight(1f)
+                                                    ) {
+                                                        Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(13.dp))
+                                                        Spacer(Modifier.width(2.dp))
+                                                        Text("+1 Hari", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                    OutlinedButton(
+                                                        onClick = { editTrainingTarget = e },
+                                                        border = BorderStroke(1.dp, Color(0xFFD97706)),
+                                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFD97706)),
+                                                        shape = RoundedCornerShape(6.dp),
+                                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                                                        modifier = Modifier.weight(1.1f)
+                                                    ) {
+                                                        Icon(Icons.Outlined.Edit, contentDescription = null, modifier = Modifier.size(13.dp))
+                                                        Spacer(Modifier.width(2.dp))
+                                                        Text("Edit Hari", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                                    }
+                                                    Button(
+                                                        onClick = { graduateConfirmTarget = e },
+                                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0)),
+                                                        shape = RoundedCornerShape(6.dp),
+                                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                                                        modifier = Modifier.weight(1.4f)
+                                                    ) {
+                                                        Icon(Icons.Outlined.School, contentDescription = null, modifier = Modifier.size(13.dp))
+                                                        Spacer(Modifier.width(2.dp))
+                                                        Text("Lulus (70K)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
                                     Spacer(Modifier.height(10.dp))
                                     HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                                     Spacer(Modifier.height(8.dp))
@@ -931,6 +1077,9 @@ fun EmployeesScreen(
         var position by remember { mutableStateOf(editing.position.orEmpty()) }
         var pin by remember { mutableStateOf(editing.fingerprintPIN.orEmpty()) }
         var salary by remember { mutableStateOf(if (editing.salaryAmount == 0.0) "" else editing.salaryAmount.toLong().toString()) }
+        var isTraining by remember { mutableStateOf(editing.isTraining) }
+        var trainingCompletedText by remember { mutableStateOf(editing.trainingDaysCompleted.toString()) }
+        var trainingTargetText by remember { mutableStateOf(editing.trainingTargetDays.toString()) }
         var selectedEmployeeType by remember { mutableStateOf(editing.employeeType) }
         val defaultOutlet = remember(outlets) { outlets.firstOrNull { it.id == editing.outletId } ?: outlets.firstOrNull() }
         var selectedOutletId by remember { mutableStateOf(editing.outletId ?: defaultOutlet?.id) }
@@ -970,10 +1119,43 @@ fun EmployeesScreen(
                     Spacer(Modifier.size(8.dp))
                     OutlinedTextField(
                         value = salary, onValueChange = { salary = it },
-                        label = { Text("Gaji Pokok (Rp)") },
+                        label = { Text("Gaji Harian (Rp)") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth().testTag("emp-salary")
                     )
+                    Spacer(Modifier.size(8.dp))
+
+                    // Masa Training Toggle
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().clickable { isTraining = !isTraining }.padding(vertical = 4.dp)
+                    ) {
+                        androidx.compose.material3.Checkbox(
+                            checked = isTraining,
+                            onCheckedChange = { isTraining = it }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Karyawan dalam Masa Training", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    if (isTraining) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = trainingCompletedText,
+                                onValueChange = { trainingCompletedText = it.filter { c -> c.isDigit() } },
+                                label = { Text("Hari Selesai") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = trainingTargetText,
+                                onValueChange = { trainingTargetText = it.filter { c -> c.isDigit() } },
+                                label = { Text("Target Hari") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+
                     Spacer(Modifier.size(8.dp))
                     Text("Kategori Karyawan:", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.padding(top = 4.dp))
@@ -1119,6 +1301,9 @@ fun EmployeesScreen(
                                     name = name,
                                     position = position.ifBlank { null },
                                     salaryAmount = salary.replace(",", "").toDoubleOrNull() ?: 0.0,
+                                    isTraining = isTraining,
+                                    trainingDaysCompleted = trainingCompletedText.toIntOrNull() ?: 0,
+                                    trainingTargetDays = trainingTargetText.toIntOrNull() ?: 14,
                                     employeeType = selectedEmployeeType,
                                     fingerprintPIN = pin.ifBlank { null },
                                     outletId = selectedOutletId
@@ -1270,6 +1455,30 @@ fun EmployeesScreen(
                 TextButton(onClick = { if (!isSubmitting) paySalaryTarget = null }) {
                     Text("Batal")
                 }
+            }
+        )
+    }
+
+    editTrainingTarget?.let { target ->
+        EditTrainingDaysDialog(
+            employee = target,
+            onDismiss = { editTrainingTarget = null },
+            onSave = { completed, targetDays ->
+                viewModel.updateTrainingDays(target, completed, targetDays)
+                android.widget.Toast.makeText(context, "Hari training ${target.name} diperbarui menjadi $completed / $targetDays hari masuk.", android.widget.Toast.SHORT).show()
+                editTrainingTarget = null
+            }
+        )
+    }
+
+    graduateConfirmTarget?.let { target ->
+        GraduateTrainingDialog(
+            employee = target,
+            onDismiss = { graduateConfirmTarget = null },
+            onConfirm = { regularSalary ->
+                viewModel.graduateTraining(target, regularSalary)
+                android.widget.Toast.makeText(context, "${target.name} resmi lulus training menjadi Karyawan Reguler (Upah: ${Formatters.rupiah(regularSalary)}/hari)!", android.widget.Toast.LENGTH_LONG).show()
+                graduateConfirmTarget = null
             }
         )
     }
@@ -1885,4 +2094,106 @@ fun ImagePreviewDialog(
             }
         }
     }
+}
+
+@Composable
+fun EditTrainingDaysDialog(
+    employee: BmpEmployeeEntity,
+    onDismiss: () -> Unit,
+    onSave: (completed: Int, target: Int) -> Unit
+) {
+    var completedText by remember { mutableStateOf(employee.trainingDaysCompleted.toString()) }
+    var targetText by remember { mutableStateOf(employee.trainingTargetDays.toString()) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Outlined.Edit, contentDescription = null, tint = Color(0xFFD97706)) },
+        title = { Text("Koreksi Hari Training: ${employee.name}") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Ubah jumlah hari kerja masuk yang telah dijalani atau ubah total target hari masa training.",
+                    fontSize = 12.sp,
+                    color = Color.Gray
+                )
+                OutlinedTextField(
+                    value = completedText,
+                    onValueChange = { completedText = it.filter { c -> c.isDigit() } },
+                    label = { Text("Hari Masuk Selesai (Saat Ini)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = targetText,
+                    onValueChange = { targetText = it.filter { c -> c.isDigit() } },
+                    label = { Text("Target Total Hari Training") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val comp = completedText.toIntOrNull() ?: employee.trainingDaysCompleted
+                    val targ = targetText.toIntOrNull() ?: employee.trainingTargetDays
+                    onSave(comp, targ)
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706))
+            ) {
+                Text("Simpan Perubahan")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Batal") }
+        }
+    )
+}
+
+@Composable
+fun GraduateTrainingDialog(
+    employee: BmpEmployeeEntity,
+    onDismiss: () -> Unit,
+    onConfirm: (regularSalary: Double) -> Unit
+) {
+    var salaryText by remember { mutableStateOf("70000") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Outlined.School, contentDescription = null, tint = Color(0xFF1565C0)) },
+        title = { Text("Luluskan Training: ${employee.name}?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Karyawan ini akan diubah statusnya menjadi Karyawan Reguler dan upah hariannya akan dinaikkan.",
+                    fontSize = 12.sp,
+                    color = Color.Gray
+                )
+                OutlinedTextField(
+                    value = salaryText,
+                    onValueChange = { salaryText = it.filter { c -> c.isDigit() } },
+                    label = { Text("Upah Reguler Baru (Rp / hari)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val sal = salaryText.toDoubleOrNull() ?: 70000.0
+                    onConfirm(sal)
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0))
+            ) {
+                Text("Luluskan & Naikkan Gaji")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Batal") }
+        }
+    )
 }
