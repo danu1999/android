@@ -1069,7 +1069,14 @@ func handleRtBmpProducts(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		invoiceId := r.URL.Query().Get("invoiceId")
-		rows, _ := db.Query(`SELECT bp.* FROM bmp_products bp JOIN bmp_invoices bi ON bi.id=bp."invoiceId" WHERE bi."tenantId"=$1 AND bp."invoiceId"=$2 AND bp."isDeleted"=FALSE ORDER BY bp.id ASC`, tenantId, invoiceId)
+		var rows *sql.Rows
+		var err error
+		if invoiceId != "" {
+			rows, err = db.Query(`SELECT bp.* FROM bmp_products bp JOIN bmp_invoices bi ON bi.id=bp."invoiceId" WHERE bi."tenantId"=$1 AND bp."invoiceId"=$2 AND bp."isDeleted"=FALSE ORDER BY bp.id ASC`, tenantId, invoiceId)
+		} else {
+			rows, err = db.Query(`SELECT bp.* FROM bmp_products bp JOIN bmp_invoices bi ON bi.id=bp."invoiceId" WHERE bi."tenantId"=$1 AND bp."isDeleted"=FALSE ORDER BY bp.id ASC`, tenantId)
+		}
+		if err != nil { jsonErr(w, 500, err.Error()); return }
 		defer rows.Close(); jsonOK(w, rowsToJSON(rows))
 	case http.MethodPost:
 		var body map[string]interface{}
@@ -1485,7 +1492,14 @@ func handleRtBmpBahanBakuItems(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		bahanBakuId := r.URL.Query().Get("bahanBakuId")
-		rows, _ := db.Query(`SELECT bbi.* FROM bmp_bahan_baku_item bbi JOIN bmp_bahan_baku bb ON bb.id=bbi."bahanBakuId" WHERE bb."tenantId"=$1 AND bbi."bahanBakuId"=$2 AND bbi."isDeleted"=FALSE ORDER BY bbi.id ASC`, tenantId, bahanBakuId)
+		var rows *sql.Rows
+		var err error
+		if bahanBakuId != "" {
+			rows, err = db.Query(`SELECT bbi.* FROM bmp_bahan_baku_item bbi JOIN bmp_bahan_baku bb ON bb.id=bbi."bahanBakuId" WHERE bb."tenantId"=$1 AND bbi."bahanBakuId"=$2 AND bbi."isDeleted"=FALSE ORDER BY bbi.id ASC`, tenantId, bahanBakuId)
+		} else {
+			rows, err = db.Query(`SELECT bbi.* FROM bmp_bahan_baku_item bbi JOIN bmp_bahan_baku bb ON bb.id=bbi."bahanBakuId" WHERE bb."tenantId"=$1 AND bbi."isDeleted"=FALSE ORDER BY bbi.id ASC`, tenantId)
+		}
+		if err != nil { jsonErr(w, 500, err.Error()); return }
 		defer rows.Close(); jsonOK(w, rowsToJSON(rows))
 	case http.MethodPost:
 		var body []map[string]interface{}
@@ -3315,14 +3329,22 @@ func handleRtBmpAcceptApplicant(w http.ResponseWriter, r *http.Request) {
 
 	var app struct {
 		FullName        string
+		Nik             string
 		Phone           string
 		Email           string
+		BirthPlaceDate  string
+		Address         string
 		PositionApplied string
+		Education       string
+		Experience      string
 		KtpPhotoUrl     string
+		SelfPhotoUrl    string
+		SimPhotoUrl     string
+		CvPdfUrl        string
 		Status          string
 	}
-	err := db.QueryRow(`SELECT "fullName", "phone", "email", "positionApplied", "ktpPhotoUrl", "status" FROM bmp_job_applicants WHERE id=$1 AND "tenantId"=$2 AND "isDeleted"=FALSE`, req.ApplicantId, tenantId).
-		Scan(&app.FullName, &app.Phone, &app.Email, &app.PositionApplied, &app.KtpPhotoUrl, &app.Status)
+	err := db.QueryRow(`SELECT "fullName", "nik", "phone", "email", "birthPlaceDate", "address", "positionApplied", "education", "experience", "ktpPhotoUrl", "selfPhotoUrl", "simPhotoUrl", "cvPdfUrl", "status" FROM bmp_job_applicants WHERE id=$1 AND "tenantId"=$2 AND "isDeleted"=FALSE`, req.ApplicantId, tenantId).
+		Scan(&app.FullName, &app.Nik, &app.Phone, &app.Email, &app.BirthPlaceDate, &app.Address, &app.PositionApplied, &app.Education, &app.Experience, &app.KtpPhotoUrl, &app.SelfPhotoUrl, &app.SimPhotoUrl, &app.CvPdfUrl, &app.Status)
 	if err != nil {
 		jsonErr(w, 404, "Data pelamar tidak ditemukan")
 		return
@@ -3348,7 +3370,13 @@ func handleRtBmpAcceptApplicant(w http.ResponseWriter, r *http.Request) {
 		"role":         finalRole,
 		"position":     finalPos,
 		"salaryAmount": req.SalaryOffer,
+		"salary":       req.SalaryOffer,
 		"employeeType": "OPERATING_EXPENSE",
+		"nik":          app.Nik,
+		"address":      app.Address,
+		"ktpPhotoUrl":  app.KtpPhotoUrl,
+		"selfPhotoUrl": app.SelfPhotoUrl,
+		"cvPdfUrl":     app.CvPdfUrl,
 		"isActive":     true,
 		"isDeleted":    false,
 		"isSynced":     true,
@@ -3371,9 +3399,10 @@ func handleRtBmpAcceptApplicant(w http.ResponseWriter, r *http.Request) {
 			"plateNumber":   "",
 			"truckType":     "",
 			"ktpImageUrl":   app.KtpPhotoUrl,
+			"simPhotoUrl":   app.SimPhotoUrl,
 			"truckImageUrl": "",
 			"stnkImageUrl":  "",
-			"notes":         "Diterima dari E-Recruitment",
+			"notes":         "Diterima dari E-Recruitment (NIK: " + app.Nik + ", Alamat: " + app.Address + ")",
 			"isActive":      true,
 			"isDeleted":     false,
 			"createdAt":     now,
