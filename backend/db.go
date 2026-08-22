@@ -1128,6 +1128,7 @@ func initSchema() error {
 			"isDeleted" BOOLEAN DEFAULT FALSE
 		);`,
 		`CREATE INDEX IF NOT EXISTS "idx_bmp_job_applicants_tenant" ON "bmp_job_applicants" ("tenantId", "status", "isDeleted");`,
+		`ALTER TABLE "bmp_job_applicants" ADD COLUMN IF NOT EXISTS "cvPdfUrl" TEXT DEFAULT '';`,
 	}
 	for _, q := range manufakturMigrations {
 		if _, err := db.Exec(q); err != nil {

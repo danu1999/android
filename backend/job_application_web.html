@@ -445,17 +445,17 @@
                 </div>
 
                 <!-- 3. DOKUMEN FOTO -->
-                <div class="section-title">3. Dokumen Foto</div>
+                <div class="section-title">3. Dokumen Foto (Kamera / Galeri / File Manager)</div>
 
                 <div class="form-group">
                     <label class="form-label">Foto KTP Asli <span class="req">*</span></label>
                     <div class="upload-box" id="ktpBox" onclick="document.getElementById('ktpFile').click()">
                         <div class="upload-icon">📷</div>
                         <div class="upload-title" id="ktpTitle">Ambil / Pilih Foto KTP</div>
-                        <div class="upload-hint">Pastikan tulisan pada KTP terbaca jelas</div>
+                        <div class="upload-hint">Bisa dari Kamera, Galeri Foto, atau File Manager (Maks 500 KB)</div>
                         <img id="ktpPreview" class="preview-img" alt="Preview KTP">
                     </div>
-                    <input type="file" id="ktpFile" accept="image/*" capture="environment" style="display:none">
+                    <input type="file" id="ktpFile" accept="image/*" style="display:none">
                 </div>
 
                 <div class="form-group">
@@ -463,10 +463,10 @@
                     <div class="upload-box" id="selfBox" onclick="document.getElementById('selfFile').click()">
                         <div class="upload-icon">👤</div>
                         <div class="upload-title" id="selfTitle">Ambil / Pilih Pas Foto Diri</div>
-                        <div class="upload-hint">Foto wajah terbaru berpakaian rapi</div>
+                        <div class="upload-hint">Bisa dari Kamera, Galeri Foto, atau File Manager (Maks 500 KB)</div>
                         <img id="selfPreview" class="preview-img" alt="Preview Foto Diri">
                     </div>
-                    <input type="file" id="selfFile" accept="image/*" capture="user" style="display:none">
+                    <input type="file" id="selfFile" accept="image/*" style="display:none">
                 </div>
 
                 <div class="form-group hidden" id="simGroup">
@@ -474,10 +474,23 @@
                     <div class="upload-box" id="simBox" onclick="document.getElementById('simFile').click()">
                         <div class="upload-icon">🚚</div>
                         <div class="upload-title" id="simTitle">Ambil / Pilih Foto SIM A / B1 / B2</div>
-                        <div class="upload-hint">SIM aktif pengemudi</div>
+                        <div class="upload-hint">Bisa dari Kamera, Galeri Foto, atau File Manager (Maks 500 KB)</div>
                         <img id="simPreview" class="preview-img" alt="Preview SIM">
                     </div>
                     <input type="file" id="simFile" accept="image/*" style="display:none">
+                </div>
+
+                <!-- 4. LAMPIRAN CV (PDF) -->
+                <div class="section-title">4. Lampiran CV / Berkas (PDF)</div>
+
+                <div class="form-group">
+                    <label class="form-label">Upload CV / Berkas Lamaran (PDF) <span style="font-size: 11px; font-weight: normal; color: #757575;">(Opsional, Maks 500 KB)</span></label>
+                    <div class="upload-box" id="cvBox" onclick="document.getElementById('cvFile').click()">
+                        <div class="upload-icon">📄</div>
+                        <div class="upload-title" id="cvTitle">Pilih File CV / Resume (PDF)</div>
+                        <div class="upload-hint">Format PDF dari File Manager / Dokumen (Maksimal 500 KB)</div>
+                    </div>
+                    <input type="file" id="cvFile" accept="application/pdf,.pdf" style="display:none">
                 </div>
 
                 <button type="submit" id="submitBtn" class="btn-submit">
@@ -494,6 +507,7 @@
         let ktpBlob = null;
         let selfBlob = null;
         let simBlob = null;
+        let cvPdfFile = null;
 
         // Toggle SIM upload if driver position selected
         document.getElementById('positionApplied').addEventListener('change', function(e) {
@@ -563,7 +577,7 @@
             });
         }
 
-        // Setup File Pickers
+        // Setup File Pickers for Photos
         function setupPicker(fileInputId, boxId, titleId, previewId, setBlobCallback) {
             const fileInput = document.getElementById(fileInputId);
             const box = document.getElementById(boxId);
@@ -599,6 +613,35 @@
         setupPicker('ktpFile', 'ktpBox', 'ktpTitle', 'ktpPreview', b => ktpBlob = b);
         setupPicker('selfFile', 'selfBox', 'selfTitle', 'selfPreview', b => selfBlob = b);
         setupPicker('simFile', 'simBox', 'simTitle', 'simPreview', b => simBlob = b);
+
+        // Setup CV PDF Picker with 500 KB Limit
+        const cvInput = document.getElementById('cvFile');
+        const cvBox = document.getElementById('cvBox');
+        const cvTitle = document.getElementById('cvTitle');
+
+        cvInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+                alert('File CV harus berformat PDF (.pdf).');
+                cvInput.value = '';
+                return;
+            }
+
+            const maxPdfSize = 500 * 1024; // 500 KB
+            if (file.size > maxPdfSize) {
+                const kb = Math.round(file.size / 1024);
+                alert('Ukuran file CV melebihi batas maksimal 500 KB.\nUkuran file Anda: ' + kb + ' KB.\n\nSilakan pilih file lain atau kompres file PDF Anda terlebih dahulu.');
+                cvInput.value = '';
+                return;
+            }
+
+            cvPdfFile = file;
+            cvBox.classList.add('has-file');
+            const kb = Math.round(file.size / 1024);
+            cvTitle.innerText = '✓ ' + file.name + ' (' + kb + ' KB)';
+        });
 
         // Verify Token On Load
         async function verifyToken() {
@@ -688,6 +731,9 @@
             if (simBlob) {
                 formData.append('simFile', simBlob, 'sim_' + Date.now() + '.jpg');
             }
+            if (cvPdfFile) {
+                formData.append('cvFile', cvPdfFile, cvPdfFile.name);
+            }
 
             try {
                 const res = await fetch('/api/public/recruitment/submit', {
@@ -701,7 +747,7 @@
                     result = JSON.parse(responseText);
                 } catch (parseErr) {
                     if (res.status === 413) {
-                        result = { success: false, message: 'Ukuran foto terlalu besar. Sistem telah mengompres foto secara otomatis, silakan coba kirim ulang.' };
+                        result = { success: false, message: 'Ukuran berkas terlalu besar. Sistem telah mengompres foto secara otomatis, pastikan file PDF di bawah 500 KB.' };
                     } else {
                         result = { success: false, message: 'Respon server (' + res.status + '): ' + responseText.substring(0, 150) };
                     }

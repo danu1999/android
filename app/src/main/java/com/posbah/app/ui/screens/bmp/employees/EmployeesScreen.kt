@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import android.widget.Toast
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Badge
@@ -35,6 +36,7 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.Person
@@ -1384,6 +1386,30 @@ fun ApplicantCard(
                     DocumentThumbnail(label = "Foto SIM", url = applicant.simPhotoUrl) {
                         onPreviewSim(applicant.simPhotoUrl)
                     }
+                }
+            }
+
+            if (!applicant.cvPdfUrl.isNullOrBlank()) {
+                Spacer(Modifier.height(10.dp))
+                val context = LocalContext.current
+                OutlinedButton(
+                    onClick = {
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(applicant.cvPdfUrl))
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Gagal membuka file PDF: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF1565C0)),
+                    border = BorderStroke(1.dp, Color(0xFF1565C0)),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(vertical = 6.dp, horizontal = 10.dp)
+                ) {
+                    Icon(Icons.Outlined.Description, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("📄 Lihat Lampiran CV (PDF)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
 

@@ -520,6 +520,7 @@ data class BmpJobApplicantEntity(
     val ktpPhotoUrl: String? = null,
     val selfPhotoUrl: String? = null,
     val simPhotoUrl: String? = null,
+    val cvPdfUrl: String? = null,
     val status: String = "PENDING", // PENDING, ACCEPTED, REJECTED
     val acceptedEmployeeId: Long? = null,
     val acceptedDriverId: Long? = null,

@@ -3623,6 +3623,7 @@ func handlePublicSubmitJobApplication(w http.ResponseWriter, r *http.Request) {
 	ktpUrl := saveFile([]string{"ktpFile", "ktpPhoto", "ktp"}, "ktp")
 	selfUrl := saveFile([]string{"selfFile", "selfPhoto", "self"}, "self")
 	simUrl := saveFile([]string{"simFile", "simPhoto", "sim"}, "sim")
+	cvPdfUrl := saveFile([]string{"cvFile", "cvPdfFile", "cv", "cvPdf"}, "cv")
 
 	applicantBody := map[string]interface{}{
 		"tenantId":        inv.TenantId,
@@ -3641,6 +3642,7 @@ func handlePublicSubmitJobApplication(w http.ResponseWriter, r *http.Request) {
 		"ktpPhotoUrl":     ktpUrl,
 		"selfPhotoUrl":    selfUrl,
 		"simPhotoUrl":     simUrl,
+		"cvPdfUrl":        cvPdfUrl,
 		"status":          "PENDING",
 		"appliedAt":       now,
 		"updatedAt":       now,
