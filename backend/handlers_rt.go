@@ -3625,6 +3625,10 @@ func handlePublicSubmitJobApplication(w http.ResponseWriter, r *http.Request) {
 	simUrl := saveFile([]string{"simFile", "simPhoto", "sim"}, "sim")
 	cvPdfUrl := saveFile([]string{"cvFile", "cvPdfFile", "cv", "cvPdf"}, "cv")
 
+	testScore, _ := strconv.Atoi(r.FormValue("testScore"))
+	testAnswers := strings.TrimSpace(r.FormValue("testAnswers"))
+	wageAgreed := r.FormValue("wageAgreed") == "true" || r.FormValue("wageAgreed") == "1" || r.FormValue("wageAgreed") == "on" || r.FormValue("wageAgreed") == ""
+
 	applicantBody := map[string]interface{}{
 		"tenantId":        inv.TenantId,
 		"invitationId":    inv.Id,
@@ -3643,6 +3647,9 @@ func handlePublicSubmitJobApplication(w http.ResponseWriter, r *http.Request) {
 		"selfPhotoUrl":    selfUrl,
 		"simPhotoUrl":     simUrl,
 		"cvPdfUrl":        cvPdfUrl,
+		"testScore":       testScore,
+		"testAnswers":     testAnswers,
+		"wageAgreed":      wageAgreed,
 		"status":          "PENDING",
 		"appliedAt":       now,
 		"updatedAt":       now,

@@ -1366,6 +1366,40 @@ fun ApplicantCard(
                     Text("💼 Pengalaman: ${applicant.experience}", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                 }
                 Text("🕒 Masuk: ${Formatters.dateShort(applicant.appliedAt)}", fontSize = 11.sp, color = Color.Gray)
+
+                // Test Score Badge & Wage Agreement
+                if (applicant.testScore > 0) {
+                    Spacer(Modifier.height(3.dp))
+                    val isPass = applicant.testScore >= 70
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = if (isPass) Color(0xFFE8F5E9) else Color(0xFFFFF3E0),
+                        border = BorderStroke(1.dp, if (isPass) Color(0xFF81C784) else Color(0xFFFFB74D))
+                    ) {
+                        Text(
+                            "🎯 Skor Tes: ${applicant.testScore}/100 ${if (isPass) "(Sangat Baik)" else "(Perlu Ditinjau)"}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isPass) Color(0xFF2E7D32) else Color(0xFFE65100),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+
+                if (applicant.wageAgreed) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color(0xFFF1F8E9)
+                    ) {
+                        Text(
+                            "💰 Setuju Upah: 50K (Training) & 70K (Reguler)",
+                            fontSize = 10.5.sp,
+                            color = Color(0xFF33691E),
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
             }
 
             Spacer(Modifier.height(10.dp))
@@ -1723,7 +1757,7 @@ fun AcceptApplicantDialog(
     onDismiss: () -> Unit,
     onConfirm: (salary: Double, pos: String, role: String) -> Unit
 ) {
-    var salaryText by remember { mutableStateOf("80000") }
+    var salaryText by remember { mutableStateOf("50000") }
     var position by remember { mutableStateOf(applicant.positionApplied) }
     var isSubmitting by remember { mutableStateOf(false) }
 
