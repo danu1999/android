@@ -226,6 +226,8 @@ func main() {
 	http.HandleFunc("/api/rt/bmp/employees/", handleRtBmpEmployeesById)
 	http.HandleFunc("/api/rt/bmp/payrolls", handleRtBmpPayrolls)
 	http.HandleFunc("/api/rt/bmp/payrolls/", handleRtBmpPayrollsById)
+	http.HandleFunc("/api/rt/bmp/warning-letters", handleRtBmpWarningLetters)
+	http.HandleFunc("/api/rt/bmp/warning-letters/", handleRtBmpWarningLettersById)
 	http.HandleFunc("/api/rt/bmp/bahan-baku", handleRtBmpBahanBaku)
 	http.HandleFunc("/api/rt/bmp/bahan-baku/", handleRtBmpBahanBakuById)
 	http.HandleFunc("/api/rt/bmp/bahan-baku-items", handleRtBmpBahanBakuItems)
@@ -444,6 +446,7 @@ func purgeTenantData(tenantID string) {
 		"bmp_device_tenants",
 		"bmp_machines",
 		"bmp_molds",
+		"bmp_warning_letters",
 	}
 
 	for _, table := range tables {
@@ -1199,6 +1202,7 @@ func handleInspectTenant(w http.ResponseWriter, r *http.Request) {
 		"bmp_machines",
 		"bmp_molds",
 		"bmp_device_tenants",
+		"bmp_warning_letters",
 	}
 
 	for _, table := range tables {

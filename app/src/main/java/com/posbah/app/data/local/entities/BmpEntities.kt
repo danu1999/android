@@ -540,3 +540,26 @@ data class BmpJobApplicantEntity(
     val updatedAt: Long = System.currentTimeMillis(),
     val isDeleted: Boolean = false
 )
+
+data class BmpWarningLetterEntity(
+    val id: Long = 0,
+    val tenantId: String = "",
+    val employeeId: Long = 0,
+    val employeeName: String = "",
+    val employeeNik: String = "",
+    val employeeRole: String = "",
+    val letterType: String = "SP_1", // "SP_1", "SP_2", "TERMINATION"
+    val letterNumber: String = "",
+    val issueDate: Long = System.currentTimeMillis(),
+    val validUntil: Long = 0,
+    val reasonCategory: String = "",
+    val reasonDetail: String = "",
+    val correctiveAction: String = "",
+    val issuedBy: String = "Manajemen / HRD",
+    val city: String = "Sidoarjo",
+    val companyName: String = "CV. Bahtera Plastik",
+    val isDeleted: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
+

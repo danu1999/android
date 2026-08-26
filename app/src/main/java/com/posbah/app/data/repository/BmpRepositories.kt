@@ -2045,35 +2045,6 @@ class BmpEmployeeRepository @Inject constructor(
                 )
             }
         }
-
-    /** Konversi BmpEmployeeEntity ke BmpEmployeeData lalu upsert */
-    suspend fun upsert(entity: com.posbah.app.data.local.entities.BmpEmployeeEntity): OnlineWriteResult =
-        upsert(BmpEmployeeData(
-            id = entity.id,
-            tenantId = entity.tenantId,
-            outletId = entity.outletId,
-            name = entity.name,
-            role = entity.position ?: "KARYAWAN",
-            salary = entity.salaryAmount,
-            employeeType = entity.employeeType,
-            phone = entity.phone,
-            email = entity.email,
-            isActive = entity.isActive,
-            employeeId = entity.employeeId,
-            fingerprintPIN = entity.fingerprintPIN,
-            lastPaidAt = entity.lastPaidAt,
-            updatedAt = entity.updatedAt
-        ))
-
-    /** Soft-delete: set isActive=false tanpa hapus data historis */
-    suspend fun softDelete(id: Long) {
-        try {
-            api.updateBmpEmployee(id, mapOf("isActive" to false))
-            _employees.value = _employees.value.map {
-                if (it.id == id) it.copy(isActive = false) else it
-            }
-        } catch (_: Exception) {}
-    }
 }
 
 // ── BmpPayrollRepository (Gaji Karyawan & Arus Kas) ───────────────────────────
@@ -2236,6 +2207,7 @@ class BmpBahanBakuRepository @Inject constructor(
                   "noTagihan" to bahanBaku.noTagihan,
                   "tanggal" to bahanBaku.tanggal,
                   "supplier" to bahanBaku.supplier,
+                  "category" to bahanBaku.category,
                   "totalHarga" to bahanBaku.totalHarga,
                   "nominal" to bahanBaku.nominal,
                   "notaFotoPath" to bahanBaku.notaFotoPath,
@@ -2276,6 +2248,7 @@ class BmpBahanBakuRepository @Inject constructor(
                   "noTagihan" to bahanBaku.noTagihan,
                   "tanggal" to bahanBaku.tanggal,
                   "supplier" to bahanBaku.supplier,
+                  "category" to bahanBaku.category,
                   "totalHarga" to bahanBaku.totalHarga,
                   "nominal" to bahanBaku.nominal,
                   "notaFotoPath" to bahanBaku.notaFotoPath,
@@ -2303,6 +2276,7 @@ class BmpBahanBakuRepository @Inject constructor(
                   "noTagihan" to bahanBaku.noTagihan,
                   "tanggal" to bahanBaku.tanggal,
                   "supplier" to bahanBaku.supplier,
+                  "category" to bahanBaku.category,
                   "totalHarga" to bahanBaku.totalHarga,
                   "nominal" to bahanBaku.nominal,
                   "notaFotoPath" to bahanBaku.notaFotoPath,
@@ -2501,6 +2475,7 @@ class BmpBahanBakuRepository @Inject constructor(
                 "noTagihan" to entity.noTagihan,
                 "tanggal" to entity.tanggal,
                 "supplier" to entity.supplier,
+                "category" to entity.category,
                 "totalHarga" to entity.totalHarga,
                 "nominal" to entity.nominal,
                 "notaFotoPath" to entity.notaFotoPath,
@@ -3859,4 +3834,170 @@ class BmpRecruitmentRepository @Inject constructor(
         OnlineWriteResult.Error(e.message ?: "Gagal memproses penolakan")
     }
 }
+
+// ── BmpWarningLetterRepository (Surat Peringatan & PHK) ─────────────────────
+
+data class BmpWarningLetterData(
+    val id: Long = 0,
+    val tenantId: String = "",
+    val employeeId: Long = 0,
+    val employeeName: String = "",
+    val employeeNik: String = "",
+    val employeeRole: String = "",
+    val letterType: String = "SP_1", // "SP_1", "SP_2", "TERMINATION"
+    val letterNumber: String = "",
+    val issueDate: Long = System.currentTimeMillis(),
+    val validUntil: Long = 0,
+    val reasonCategory: String = "",
+    val reasonDetail: String = "",
+    val correctiveAction: String = "",
+    val issuedBy: String = "Manajemen / HRD",
+    val city: String = "Sidoarjo",
+    val companyName: String = "CV. Bahtera Plastik",
+    val isDeleted: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+)
+
+fun Map<String, Any?>.toBmpWarningLetterData(): BmpWarningLetterData = BmpWarningLetterData(
+    id = (getCaseInsensitive("id") as? Number)?.toLong() ?: 0,
+    tenantId = getCaseInsensitive("tenantId") as? String ?: "",
+    employeeId = (getCaseInsensitive("employeeId") as? Number)?.toLong() ?: 0,
+    employeeName = getCaseInsensitive("employeeName") as? String ?: "",
+    employeeNik = getCaseInsensitive("employeeNik") as? String ?: "",
+    employeeRole = getCaseInsensitive("employeeRole") as? String ?: "",
+    letterType = getCaseInsensitive("letterType") as? String ?: "SP_1",
+    letterNumber = getCaseInsensitive("letterNumber") as? String ?: "",
+    issueDate = (getCaseInsensitive("issueDate") as? Number)?.toLong() ?: System.currentTimeMillis(),
+    validUntil = (getCaseInsensitive("validUntil") as? Number)?.toLong() ?: 0,
+    reasonCategory = getCaseInsensitive("reasonCategory") as? String ?: "",
+    reasonDetail = getCaseInsensitive("reasonDetail") as? String ?: "",
+    correctiveAction = getCaseInsensitive("correctiveAction") as? String ?: "",
+    issuedBy = getCaseInsensitive("issuedBy") as? String ?: "Manajemen / HRD",
+    city = getCaseInsensitive("city") as? String ?: "Sidoarjo",
+    companyName = getCaseInsensitive("companyName") as? String ?: "CV. Bahtera Plastik",
+    isDeleted = getCaseInsensitive("isDeleted") as? Boolean ?: false,
+    createdAt = (getCaseInsensitive("createdAt") as? Number)?.toLong() ?: System.currentTimeMillis(),
+    updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: System.currentTimeMillis()
+)
+
+@Singleton
+class BmpWarningLetterRepository @Inject constructor(
+    private val api: BmpApiService
+) {
+    private val _letters = MutableStateFlow<List<BmpWarningLetterData>>(emptyList())
+    val letters = _letters.asStateFlow()
+
+    suspend fun refresh() {
+        try {
+            val resp = api.getWarningLetters()
+            if (resp.isSuccessful) {
+                _letters.value = resp.body()?.map { it.toBmpWarningLetterData() } ?: emptyList()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    suspend fun create(letter: BmpWarningLetterData): OnlineWriteResult = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+        val snapshot = _letters.value
+        val tempId = -System.currentTimeMillis()
+        val tempLetter = letter.copy(id = tempId)
+        _letters.value = listOf(tempLetter) + snapshot
+
+        try {
+            val resp = api.createWarningLetter(mapOf(
+                "employeeId" to letter.employeeId,
+                "employeeName" to letter.employeeName,
+                "employeeNik" to letter.employeeNik,
+                "employeeRole" to letter.employeeRole,
+                "letterType" to letter.letterType,
+                "letterNumber" to letter.letterNumber,
+                "issueDate" to letter.issueDate,
+                "validUntil" to letter.validUntil,
+                "reasonCategory" to letter.reasonCategory,
+                "reasonDetail" to letter.reasonDetail,
+                "correctiveAction" to letter.correctiveAction,
+                "issuedBy" to letter.issuedBy,
+                "city" to letter.city,
+                "companyName" to letter.companyName
+            ))
+            val newId = (resp.body()?.get("id") as? Number)?.toLong() ?: 0L
+            _letters.value = listOf(tempLetter.copy(id = newId)) + snapshot
+            OnlineWriteResult.Success
+        } catch (e: Exception) {
+            _letters.value = snapshot
+            OnlineWriteResult.Error(e.message ?: "Gagal membuat surat peringatan")
+        }
+    }
+
+    suspend fun update(letter: BmpWarningLetterData): OnlineWriteResult = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+        val snapshot = _letters.value
+        _letters.value = snapshot.map { if (it.id == letter.id) letter else it }
+
+        try {
+            api.updateWarningLetter(letter.id, mapOf(
+                "employeeId" to letter.employeeId,
+                "employeeName" to letter.employeeName,
+                "employeeNik" to letter.employeeNik,
+                "employeeRole" to letter.employeeRole,
+                "letterType" to letter.letterType,
+                "letterNumber" to letter.letterNumber,
+                "issueDate" to letter.issueDate,
+                "validUntil" to letter.validUntil,
+                "reasonCategory" to letter.reasonCategory,
+                "reasonDetail" to letter.reasonDetail,
+                "correctiveAction" to letter.correctiveAction,
+                "issuedBy" to letter.issuedBy,
+                "city" to letter.city,
+                "companyName" to letter.companyName
+            ))
+            OnlineWriteResult.Success
+        } catch (e: Exception) {
+            _letters.value = snapshot
+            OnlineWriteResult.Error(e.message ?: "Gagal update surat peringatan")
+        }
+    }
+
+    suspend fun delete(id: Long): OnlineWriteResult = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+        val snapshot = _letters.value
+        _letters.value = snapshot.filter { it.id != id }
+
+        try {
+            api.deleteWarningLetter(id)
+            OnlineWriteResult.Success
+        } catch (e: Exception) {
+            _letters.value = snapshot
+            OnlineWriteResult.Error(e.message ?: "Gagal menghapus surat peringatan")
+        }
+    }
+
+    fun observe(): Flow<List<com.posbah.app.data.local.entities.BmpWarningLetterEntity>> =
+        _letters.map { list ->
+            list.map {
+                com.posbah.app.data.local.entities.BmpWarningLetterEntity(
+                    id = it.id,
+                    tenantId = it.tenantId,
+                    employeeId = it.employeeId,
+                    employeeName = it.employeeName,
+                    employeeNik = it.employeeNik,
+                    employeeRole = it.employeeRole,
+                    letterType = it.letterType,
+                    letterNumber = it.letterNumber,
+                    issueDate = it.issueDate,
+                    validUntil = it.validUntil,
+                    reasonCategory = it.reasonCategory,
+                    reasonDetail = it.reasonDetail,
+                    correctiveAction = it.correctiveAction,
+                    issuedBy = it.issuedBy,
+                    city = it.city,
+                    companyName = it.companyName,
+                    isDeleted = it.isDeleted,
+                    createdAt = it.createdAt,
+                    updatedAt = it.updatedAt
+                )
+            }
+        }
+}
+
 

@@ -213,8 +213,9 @@ fun BahanBakuListScreen(
                     val categories = listOf(
                         "ALL" to "Semua",
                         "BAHAN_BAKU" to "Bahan Baku",
-                        "PIGMEN" to "Pigmen / Warna",
-                        "PERLENGKAPAN" to "Perlengkapan & APD"
+                        "PIGMEN" to "Pigmen",
+                        "PERLENGKAPAN" to "Perlengkapan",
+                        "OPERASIONAL" to "⚡ Listrik & Operasional"
                     )
                     items(categories.size) { idx ->
                         val (catKey, catLabel) = categories[idx]
@@ -580,14 +581,62 @@ private fun BahanBakuCard(
         Column(modifier = Modifier.padding(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        entry.noTagihan,
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            entry.noTagihan,
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        when (entry.category) {
+                            "OPERASIONAL" -> {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(0xFFF59E0B).copy(alpha = 0.15f),
+                                    contentColor = Color(0xFFD97706)
+                                ) {
+                                    Text(
+                                        "⚡ Listrik & Operasional",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                            "PIGMEN" -> {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(0xFFA855F7).copy(alpha = 0.15f),
+                                    contentColor = Color(0xFF9333EA)
+                                ) {
+                                    Text(
+                                        "Pigmen",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                            "PERLENGKAPAN" -> {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color(0xFF3B82F6).copy(alpha = 0.15f),
+                                    contentColor = Color(0xFF2563EB)
+                                ) {
+                                    Text(
+                                        "Perlengkapan",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                            else -> {}
+                        }
+                    }
                     if (!entry.supplier.isNullOrBlank()) {
                         Text(
-                            "Supplier: ${entry.supplier}",
+                            "Supplier / Vendor: ${entry.supplier}",
                             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -621,9 +670,9 @@ private fun BahanBakuCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         AmountChip(
-                            label = "Total Bahan",
+                            label = if (entry.category == "OPERASIONAL") "Total Biaya" else "Total Bahan",
                             value = Formatters.rupiah(entry.totalHarga),
-                            color = MaterialTheme.colorScheme.primary
+                            color = if (entry.category == "OPERASIONAL") Color(0xFFD97706) else MaterialTheme.colorScheme.primary
                         )
                         AmountChip(
                             label = "Dibayar",

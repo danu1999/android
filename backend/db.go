@@ -1437,6 +1437,12 @@ func initSchema() error {
 		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "isSynced" BOOLEAN DEFAULT TRUE;`,
 		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "createdAt" BIGINT;`,
 		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "updatedAt" BIGINT;`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "nik" VARCHAR(50);`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "address" TEXT;`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "ktpPhotoUrl" TEXT;`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "selfPhotoUrl" TEXT;`,
+		`ALTER TABLE "bmp_employees" ADD COLUMN IF NOT EXISTS "cvPdfUrl" TEXT;`,
+		`ALTER TABLE "bmp_drivers" ADD COLUMN IF NOT EXISTS "simPhotoUrl" TEXT;`,
 		`CREATE SEQUENCE IF NOT EXISTS "bmp_employees_id_seq" START 1;`,
 		`ALTER TABLE "bmp_employees" ALTER COLUMN id SET DEFAULT nextval('"bmp_employees_id_seq"');`,
 		`CREATE TABLE IF NOT EXISTS "bmp_payrolls" (
@@ -1528,6 +1534,32 @@ func initSchema() error {
 		);`,
 		`CREATE INDEX IF NOT EXISTS "idx_bmp_maint_tenant_date" ON "bmp_maintenance_logs" ("tenantId", "maintenanceDate" DESC);`,
 		`CREATE INDEX IF NOT EXISTS "idx_bmp_maint_tenant_asset" ON "bmp_maintenance_logs" ("tenantId", "assetType", "assetId");`,
+
+		// 3. Surat Peringatan (SP 1, SP 2) & Surat Dikeluarkan (PHK)
+		`CREATE TABLE IF NOT EXISTS "bmp_warning_letters" (
+			"id" BIGSERIAL,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"employeeId" BIGINT NOT NULL,
+			"employeeName" VARCHAR(255) NOT NULL,
+			"employeeNik" VARCHAR(100) DEFAULT '',
+			"employeeRole" VARCHAR(100) DEFAULT '',
+			"letterType" VARCHAR(50) NOT NULL,
+			"letterNumber" VARCHAR(100) NOT NULL,
+			"issueDate" BIGINT NOT NULL,
+			"validUntil" BIGINT DEFAULT 0,
+			"reasonCategory" VARCHAR(100) DEFAULT '',
+			"reasonDetail" TEXT NOT NULL,
+			"correctiveAction" TEXT DEFAULT '',
+			"issuedBy" VARCHAR(150) DEFAULT 'Manajemen / HRD',
+			"city" VARCHAR(100) DEFAULT 'Sidoarjo',
+			"companyName" VARCHAR(255) DEFAULT 'CV. Bahtera Plastik',
+			"isDeleted" BOOLEAN DEFAULT FALSE,
+			"createdAt" BIGINT,
+			"updatedAt" BIGINT,
+			PRIMARY KEY ("id", "tenantId")
+		);`,
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_wl_tenant_emp" ON "bmp_warning_letters" ("tenantId", "employeeId", "issueDate" DESC);`,
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_wl_tenant_type" ON "bmp_warning_letters" ("tenantId", "letterType");`,
 	}
 	for _, q := range bmpManufakturPerfectionMigrations {
 		if _, err := db.Exec(q); err != nil {
@@ -1545,7 +1577,8 @@ func hasTenantIdColumn(tableName string) bool {
 		"bmp_master_products", "bmp_invoice_payments", "bmp_cashflow", "bmp_settings",
 		"bmp_employees", "bmp_payrolls", "bmp_bahan_baku", "bmp_bahan_baku_item",
 		"products", "customers", "transactions", "bmp_product_stocks", "bmp_stock_ledger",
-		"bmp_production_logs", "bmp_machines", "bmp_molds", "bmp_work_orders", "bmp_maintenance_logs":
+		"bmp_production_logs", "bmp_machines", "bmp_molds", "bmp_work_orders", "bmp_maintenance_logs",
+		"bmp_warning_letters":
 		return true
 	}
 	return false

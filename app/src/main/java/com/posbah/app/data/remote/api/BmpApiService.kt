@@ -279,5 +279,19 @@ interface BmpApiService {
 
     @POST("api/rt/bmp/recruitment/applicants/reject")
     suspend fun rejectJobApplicant(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<Map<String, Any?>>
+
+    // ── Warning Letters (SP 1, SP 2, Surat Dikeluarkan / PHK) ─────────────────
+    @GET("api/rt/bmp/warning-letters")
+    suspend fun getWarningLetters(@Query("employeeId") employeeId: Long? = null): Response<List<Map<String, Any?>>>
+
+    @POST("api/rt/bmp/warning-letters")
+    suspend fun createWarningLetter(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<Map<String, Any?>>
+
+    @PUT("api/rt/bmp/warning-letters/{id}")
+    suspend fun updateWarningLetter(@Path("id") id: Long, @Body body: Map<String, @JvmSuppressWildcards Any?>): Response<Map<String, Any?>>
+
+    @DELETE("api/rt/bmp/warning-letters/{id}")
+    suspend fun deleteWarningLetter(@Path("id") id: Long): Response<Map<String, Any?>>
 }
+
 

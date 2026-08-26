@@ -27,6 +27,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import android.print.PrintAttributes
+import android.print.PrintManager
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
@@ -42,8 +46,11 @@ import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.Phone
+import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.Warning
+import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -96,12 +103,15 @@ import coil.compose.AsyncImage
 import com.posbah.app.data.local.entities.BmpEmployeeEntity
 import com.posbah.app.data.local.entities.BmpJobApplicantEntity
 import com.posbah.app.data.local.entities.BmpJobInvitationEntity
+import com.posbah.app.data.local.entities.BmpWarningLetterEntity
 import com.posbah.app.data.local.entities.parseWorkersAttendance
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpEmployeeRepository
 import com.posbah.app.data.repository.BmpProductionLogRepository
 import com.posbah.app.data.repository.BmpRecruitmentRepository
 import com.posbah.app.data.repository.BmpSettingsRepository
+import com.posbah.app.data.repository.BmpWarningLetterData
+import com.posbah.app.data.repository.BmpWarningLetterRepository
 import com.posbah.app.data.repository.EmployeeData
 import com.posbah.app.data.repository.EmployeeRepository
 import com.posbah.app.data.repository.OutletData
@@ -131,6 +141,7 @@ class EmployeesViewModel @Inject constructor(
     private val productionLogRepo: BmpProductionLogRepository,
     private val settingsRepo: BmpSettingsRepository,
     private val recruitmentRepo: BmpRecruitmentRepository,
+    private val warningLetterRepo: BmpWarningLetterRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     val tenantId = authRepository.activeTenantId().orEmpty()
@@ -141,6 +152,7 @@ class EmployeesViewModel @Inject constructor(
 
     val invitations = recruitmentRepo.observeInvitations().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<BmpJobInvitationEntity>())
     val applicants = recruitmentRepo.observeApplicants().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<BmpJobApplicantEntity>())
+    val warningLetters = warningLetterRepo.observe().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<BmpWarningLetterEntity>())
 
     init {
         viewModelScope.launch {
@@ -149,6 +161,7 @@ class EmployeesViewModel @Inject constructor(
             try { posEmployeeRepo.refresh() } catch (_: Exception) {}
             try { settingsRepo.refresh() } catch (_: Exception) {}
             try { recruitmentRepo.refresh() } catch (_: Exception) {}
+            try { warningLetterRepo.refresh() } catch (_: Exception) {}
         }
     }
 
@@ -420,6 +433,28 @@ class EmployeesViewModel @Inject constructor(
     fun refreshRecruitment() = viewModelScope.launch(Dispatchers.IO) {
         try { recruitmentRepo.refresh() } catch (_: Exception) {}
     }
+
+    // ── Warning Letters Handlers ──────────────────────────────────────────────
+
+    fun createWarningLetter(
+        letter: BmpWarningLetterData,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) = viewModelScope.launch(Dispatchers.IO) {
+        val res = warningLetterRepo.create(letter)
+        withContext(Dispatchers.Main) {
+            if (res is com.posbah.app.data.repository.OnlineWriteResult.Success) {
+                try { repo.refresh() } catch (_: Exception) {}
+                onSuccess()
+            } else if (res is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+                onError(res.message)
+            }
+        }
+    }
+
+    fun deleteWarningLetter(id: Long) = viewModelScope.launch(Dispatchers.IO) {
+        warningLetterRepo.delete(id)
+    }
 }
 
 @Composable
@@ -431,6 +466,11 @@ fun EmployeesScreen(
     val outlets by viewModel.outlets.collectAsState()
     val invitations by viewModel.invitations.collectAsState()
     val applicants by viewModel.applicants.collectAsState()
+    val warningLetters by viewModel.warningLetters.collectAsState()
+    val settings by viewModel.settings.collectAsState()
+
+    val companyName = settings?.clientName?.takeIf { it.isNotBlank() } ?: "CV. Bahtera Plastik"
+    val companyAddress = settings?.addressLine1?.takeIf { it.isNotBlank() } ?: "Sidoarjo, Jawa Timur"
 
     val pendingApplicants = remember(applicants) { applicants.filter { it.status == "PENDING" && !it.isDeleted } }
 
@@ -446,6 +486,11 @@ fun EmployeesScreen(
     var editTrainingTarget by remember { mutableStateOf<BmpEmployeeEntity?>(null) }
     var graduateConfirmTarget by remember { mutableStateOf<BmpEmployeeEntity?>(null) }
 
+    // Warning letters state
+    var createWarningLetterTarget by remember { mutableStateOf<BmpEmployeeEntity?>(null) }
+    var showCreateWarningLetterDialog by remember { mutableStateOf(false) }
+    var selectedWarningLetterDetail by remember { mutableStateOf<BmpWarningLetterEntity?>(null) }
+
     val context = LocalContext.current
     val errorState by viewModel.error.collectAsState()
     LaunchedEffect(errorState) {
@@ -459,8 +504,12 @@ fun EmployeesScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             PosBahTopBar(
-                title = "Karyawan & Rekrutmen",
-                subtitle = if (selectedTab == 0) "${list.size} aktif" else "${pendingApplicants.size} pelamar baru",
+                title = "Karyawan & Kedisiplinan",
+                subtitle = when (selectedTab) {
+                    0 -> "${list.size} karyawan aktif"
+                    1 -> "${warningLetters.size} surat peringatan & PHK"
+                    else -> "${pendingApplicants.size} pelamar baru"
+                },
                 onBack = onBack,
                 actions = {
                     if (selectedTab == 0 && list.isNotEmpty()) {
@@ -472,28 +521,50 @@ fun EmployeesScreen(
             )
         },
         floatingActionButton = {
-            if (selectedTab == 0) {
-                FloatingActionButton(
-                    onClick = {
-                        formEdit = BmpEmployeeEntity(tenantId = viewModel.tenantId, name = "", salaryAmount = 0.0)
-                    },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.testTag("fab-add-employee")
-                ) { Icon(Icons.Outlined.Add, contentDescription = null) }
-            } else {
-                FloatingActionButton(
-                    onClick = { showCreateInviteDialog = true },
-                    containerColor = Color(0xFF0D47A1),
-                    contentColor = Color.White
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+            when (selectedTab) {
+                0 -> {
+                    FloatingActionButton(
+                        onClick = {
+                            formEdit = BmpEmployeeEntity(tenantId = viewModel.tenantId, name = "", salaryAmount = 0.0)
+                        },
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.testTag("fab-add-employee")
+                    ) { Icon(Icons.Outlined.Add, contentDescription = null) }
+                }
+                1 -> {
+                    FloatingActionButton(
+                        onClick = {
+                            createWarningLetterTarget = null
+                            showCreateWarningLetterDialog = true
+                        },
+                        containerColor = Color(0xFFD97706),
+                        contentColor = Color.White
                     ) {
-                        Icon(Icons.Outlined.Link, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Buat Link Undangan", fontWeight = FontWeight.Bold)
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Outlined.WarningAmber, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Terbitkan Surat", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                2 -> {
+                    FloatingActionButton(
+                        onClick = { showCreateInviteDialog = true },
+                        containerColor = Color(0xFF0D47A1),
+                        contentColor = Color.White
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Outlined.Link, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Buat Link Undangan", fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -515,7 +586,7 @@ fun EmployeesScreen(
                     onClick = { selectedTab = 0 },
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Karyawan Aktif", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal)
+                            Text("Karyawan", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal)
                             Spacer(Modifier.width(6.dp))
                             Surface(
                                 shape = CircleShape,
@@ -538,7 +609,32 @@ fun EmployeesScreen(
                     onClick = { selectedTab = 1 },
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Calon Karyawan & Undangan", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal)
+                            Text("SP & PHK", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal)
+                            if (warningLetters.isNotEmpty()) {
+                                Spacer(Modifier.width(6.dp))
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color(0xFFD97706).copy(alpha = 0.15f),
+                                    modifier = Modifier.padding(2.dp)
+                                ) {
+                                    Text(
+                                        text = "${warningLetters.size}",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFD97706),
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                )
+                Tab(
+                    selected = selectedTab == 2,
+                    onClick = { selectedTab = 2 },
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Rekrutmen", fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal)
                             if (pendingApplicants.isNotEmpty()) {
                                 Spacer(Modifier.width(6.dp))
                                 Surface(
@@ -705,6 +801,9 @@ fun EmployeesScreen(
                                         }
                                         Spacer(Modifier.size(12.dp))
                                         Column(Modifier.weight(1f)) {
+                                            val latestLetter = remember(warningLetters, e.id) {
+                                                warningLetters.filter { it.employeeId == e.id }.maxByOrNull { it.issueDate }
+                                            }
                                             Row(verticalAlignment = Alignment.CenterVertically) {
                                                 Text(e.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                                                 Spacer(Modifier.width(6.dp))
@@ -733,6 +832,57 @@ fun EmployeesScreen(
                                                             color = Color(0xFF065F46),
                                                             modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                                                         )
+                                                    }
+                                                }
+
+                                                if (latestLetter != null) {
+                                                    Spacer(Modifier.width(4.dp))
+                                                    when (latestLetter.letterType) {
+                                                        "TERMINATION" -> {
+                                                            Surface(
+                                                                shape = RoundedCornerShape(4.dp),
+                                                                color = Color(0xFFFEE2E2),
+                                                                border = BorderStroke(1.dp, Color(0xFFFCA5A5))
+                                                            ) {
+                                                                Text(
+                                                                    "🛑 PHK",
+                                                                    fontSize = 9.sp,
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    color = Color(0xFF991B1B),
+                                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                        "SP_2" -> {
+                                                            Surface(
+                                                                shape = RoundedCornerShape(4.dp),
+                                                                color = Color(0xFFFFE4E6),
+                                                                border = BorderStroke(1.dp, Color(0xFFFDA4AF))
+                                                            ) {
+                                                                Text(
+                                                                    "🚨 SP 2",
+                                                                    fontSize = 9.sp,
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    color = Color(0xFFBE123C),
+                                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                        "SP_1" -> {
+                                                            Surface(
+                                                                shape = RoundedCornerShape(4.dp),
+                                                                color = Color(0xFFFEF3C7),
+                                                                border = BorderStroke(1.dp, Color(0xFFFCD34D))
+                                                            ) {
+                                                                Text(
+                                                                    "⚠️ SP 1",
+                                                                    fontSize = 9.sp,
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    color = Color(0xFFB45309),
+                                                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                                                )
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }
@@ -830,41 +980,102 @@ fun EmployeesScreen(
 
                                     Spacer(Modifier.height(10.dp))
                                     HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
-                                    Spacer(Modifier.height(8.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                    Spacer(Modifier.height(10.dp))
+
+                                    // Rincian Gaji & Kehadiran (Full Width Info Box)
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Column {
-                                            Text(
-                                                "Gaji Harian: ${Formatters.rupiah(e.salaryAmount)}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                fontWeight = FontWeight.Medium
-                                            )
-                                            Text(
-                                                "Hadir Bulan Ini: $attendanceCount hari | Est. Gaji: ${Formatters.rupiah(estimatedTotalGaji)}",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                            if (e.lastPaidAt != null && e.lastPaidAt > 0) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Text(
+                                                        "Upah Harian: ",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                    Text(
+                                                        Formatters.rupiah(e.salaryAmount),
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+                                                Spacer(Modifier.height(2.dp))
                                                 Text(
-                                                    "Terakhir Dibayar: ${Formatters.dateShort(e.lastPaidAt)}",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = Color(0xFF10B981),
-                                                    fontWeight = FontWeight.SemiBold
+                                                    "Hadir Bulan Ini: $attendanceCount hari • Est. ${Formatters.rupiah(estimatedTotalGaji)}",
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    color = MaterialTheme.colorScheme.primary
                                                 )
                                             }
+                                            if (e.lastPaidAt != null && e.lastPaidAt > 0) {
+                                                Surface(
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    color = Color(0xFFECFDF5)
+                                                ) {
+                                                    Text(
+                                                        "Dibayar: ${Formatters.dateShort(e.lastPaidAt)}",
+                                                        fontSize = 11.sp,
+                                                        color = Color(0xFF065F46),
+                                                        fontWeight = FontWeight.Bold,
+                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                    )
+                                                }
+                                            }
                                         }
+                                    }
+
+                                    Spacer(Modifier.height(10.dp))
+
+                                    // Action Buttons Row: Proporsional, Luas, & Nyaman Ditekan
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        val latestLetter = remember(warningLetters, e.id) {
+                                            warningLetters.filter { it.employeeId == e.id }.maxByOrNull { it.issueDate }
+                                        }
+
+                                        OutlinedButton(
+                                            onClick = {
+                                                createWarningLetterTarget = e
+                                                showCreateWarningLetterDialog = true
+                                            },
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                            colors = ButtonDefaults.outlinedButtonColors(
+                                                contentColor = if (latestLetter != null) Color(0xFFDC2626) else Color(0xFFD97706)
+                                            ),
+                                            border = BorderStroke(1.dp, if (latestLetter != null) Color(0xFFFCA5A5) else Color(0xFFFDE68A)),
+                                            shape = RoundedCornerShape(10.dp),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .height(46.dp)
+                                        ) {
+                                            Icon(Icons.Outlined.WarningAmber, contentDescription = null, modifier = Modifier.size(17.dp))
+                                            Spacer(Modifier.width(5.dp))
+                                            Text("SP / PHK", fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+                                        }
+
                                         Button(
                                             onClick = { paySalaryTarget = e },
-                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
-                                            modifier = Modifier.testTag("btn-pay-salary-${e.id}")
+                                            shape = RoundedCornerShape(10.dp),
+                                            modifier = Modifier
+                                                .weight(1.5f)
+                                                .height(46.dp)
+                                                .testTag("btn-pay-salary-${e.id}")
                                         ) {
-                                            Icon(Icons.Outlined.Payments, contentDescription = null, modifier = Modifier.size(16.dp))
-                                            Spacer(Modifier.width(4.dp))
-                                            Text("Bayar Gaji", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                            Icon(Icons.Outlined.Payments, contentDescription = null, modifier = Modifier.size(19.dp))
+                                            Spacer(Modifier.width(6.dp))
+                                            Text("Bayar Gaji", fontSize = 13.5.sp, fontWeight = FontWeight.Bold)
                                         }
                                     }
                                 }
@@ -872,8 +1083,22 @@ fun EmployeesScreen(
                         }
                     }
                 }
+            } else if (selectedTab == 1) {
+                // TAB 1: SURAT PERINGATAN & PHK
+                WarningLettersTabContent(
+                    letters = warningLetters,
+                    employees = list,
+                    companyName = companyName,
+                    companyAddress = companyAddress,
+                    onCreateClick = {
+                        createWarningLetterTarget = null
+                        showCreateWarningLetterDialog = true
+                    },
+                    onSelectDetail = { selectedWarningLetterDetail = it },
+                    onDelete = { viewModel.deleteWarningLetter(it) }
+                )
             } else {
-                // TAB 1: CALON KARYAWAN & UNDANGAN
+                // TAB 2: CALON KARYAWAN & UNDANGAN
                 var selectedPositionFilter by remember { mutableStateOf("ALL") }
 
                 val filteredApplicants = remember(applicants, selectedPositionFilter) {
@@ -1020,6 +1245,60 @@ fun EmployeesScreen(
                 }
             }
         }
+    }
+
+    // ── Dialog: Buat Surat Peringatan / PHK Baru ────────────────────────────
+    if (showCreateWarningLetterDialog) {
+        CreateWarningLetterDialog(
+            targetEmployee = createWarningLetterTarget,
+            allEmployees = list,
+            companyName = companyName,
+            onDismiss = {
+                showCreateWarningLetterDialog = false
+                createWarningLetterTarget = null
+            },
+            onConfirm = { letterData ->
+                viewModel.createWarningLetter(
+                    letter = letterData,
+                    onSuccess = {
+                        Toast.makeText(context, "Surat resmi berhasil diterbitkan!", Toast.LENGTH_SHORT).show()
+                        showCreateWarningLetterDialog = false
+                        createWarningLetterTarget = null
+                        selectedTab = 1
+                    },
+                    onError = { err ->
+                        Toast.makeText(context, "Gagal: $err", Toast.LENGTH_LONG).show()
+                    }
+                )
+            }
+        )
+    }
+
+    // ── Dialog: Detail Surat Peringatan / PHK ──────────────────────────────
+    selectedWarningLetterDetail?.let { letter ->
+        WarningLetterDetailDialog(
+            letter = letter,
+            companyName = companyName,
+            companyAddress = companyAddress,
+            employeePhone = list.firstOrNull { it.id == letter.employeeId }?.phone,
+            onDismiss = { selectedWarningLetterDetail = null },
+            onPrint = {
+                val html = generateWarningLetterHtml(
+                    letter = letter,
+                    companyName = companyName,
+                    companyAddress = companyAddress
+                )
+                printWarningLetter(context, html, "Surat_${letter.letterNumber}")
+            },
+            onShareWa = {
+                val phone = list.firstOrNull { it.id == letter.employeeId }?.phone
+                shareWarningLetterWhatsApp(context, letter, phone, companyName)
+            },
+            onDelete = {
+                viewModel.deleteWarningLetter(letter.id)
+                selectedWarningLetterDetail = null
+            }
+        )
     }
 
     // ── Dialog: Buat Link Undangan Baru ─────────────────────────────────────────
@@ -1442,13 +1721,18 @@ fun EmployeesScreen(
                     },
                     enabled = !isSubmitting,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
-                    modifier = Modifier.testTag("btn-confirm-pay-salary")
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                    modifier = Modifier.height(44.dp).testTag("btn-confirm-pay-salary")
                 ) {
                     if (isSubmitting) {
                         CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
                         Spacer(Modifier.width(6.dp))
+                    } else {
+                        Icon(Icons.Outlined.CheckCircle, contentDescription = null, modifier = Modifier.size(17.dp))
+                        Spacer(Modifier.width(5.dp))
                     }
-                    Text("Konfirmasi Bayar Gaji", fontWeight = FontWeight.Bold)
+                    Text("Konfirmasi Bayar Gaji", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
             },
             dismissButton = {
@@ -1465,7 +1749,7 @@ fun EmployeesScreen(
             onDismiss = { editTrainingTarget = null },
             onSave = { completed, targetDays ->
                 viewModel.updateTrainingDays(target, completed, targetDays)
-                android.widget.Toast.makeText(context, "Hari training ${target.name} diperbarui menjadi $completed / $targetDays hari masuk.", android.widget.Toast.SHORT).show()
+                android.widget.Toast.makeText(context, "Hari training ${target.name} diperbarui menjadi $completed / $targetDays hari masuk.", android.widget.Toast.LENGTH_SHORT).show()
                 editTrainingTarget = null
             }
         )
@@ -2197,3 +2481,903 @@ fun GraduateTrainingDialog(
         }
     )
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SURAT PERINGATAN (SP 1, SP 2) & SURAT DIKELUARKAN (PHK)
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+fun WarningLettersTabContent(
+    letters: List<BmpWarningLetterEntity>,
+    employees: List<BmpEmployeeEntity>,
+    companyName: String,
+    companyAddress: String,
+    onCreateClick: () -> Unit,
+    onSelectDetail: (BmpWarningLetterEntity) -> Unit,
+    onDelete: (Long) -> Unit
+) {
+    var selectedFilter by remember { mutableStateOf("ALL") }
+    val context = LocalContext.current
+
+    val filteredLetters = remember(letters, selectedFilter) {
+        when (selectedFilter) {
+            "SP_1" -> letters.filter { it.letterType == "SP_1" }
+            "SP_2" -> letters.filter { it.letterType == "SP_2" }
+            "TERMINATION" -> letters.filter { it.letterType == "TERMINATION" }
+            else -> letters
+        }
+    }
+
+    LazyColumn(
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        // Top Banner / Information
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFBEB)),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, Color(0xFFFDE68A)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.WarningAmber, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Manajemen Disiplin & Surat Peringatan", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF92400E))
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Kelola Surat Peringatan I (SP 1), Peringatan II (SP 2), dan Surat Pemutusan Hubungan Kerja (PHK). Dilengkapi cetak PDF resmi ber-Kop Surat Sidoarjo dan kirim via WhatsApp.",
+                        fontSize = 12.sp,
+                        color = Color(0xFF78350F),
+                        lineHeight = 16.sp
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Button(
+                        onClick = onCreateClick,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Terbitkan Surat Peringatan / PHK", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+
+        // Filter Chips
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Daftar Surat Resmi (${filteredLetters.size})", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            }
+            Spacer(Modifier.height(6.dp))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                val filters = listOf(
+                    "ALL" to "Semua (${letters.size})",
+                    "SP_1" to "SP 1 (${letters.count { it.letterType == "SP_1" }})",
+                    "SP_2" to "SP 2 (${letters.count { it.letterType == "SP_2" }})",
+                    "TERMINATION" to "PHK (${letters.count { it.letterType == "TERMINATION" }})"
+                )
+                items(filters) { (key, label) ->
+                    FilterChip(
+                        selected = selectedFilter == key,
+                        onClick = { selectedFilter = key },
+                        label = { Text(label, fontSize = 12.sp) }
+                    )
+                }
+            }
+        }
+
+        if (filteredLetters.isEmpty()) {
+            item {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(28.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(40.dp))
+                        Spacer(Modifier.height(8.dp))
+                        Text("Tidak Ada Catatan Surat Peringatan", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Spacer(Modifier.height(4.dp))
+                        Text("Seluruh staf dan operator bekerja dengan tertib dan mematuhi SOP.", fontSize = 12.sp, color = Color.Gray)
+                    }
+                }
+            }
+        } else {
+            items(filteredLetters, key = { it.id }) { letter ->
+                val emp = employees.firstOrNull { it.id == letter.employeeId }
+                WarningLetterCard(
+                    letter = letter,
+                    employeePhone = emp?.phone,
+                    companyName = companyName,
+                    companyAddress = companyAddress,
+                    onDetailClick = { onSelectDetail(letter) },
+                    onPrint = {
+                        val html = generateWarningLetterHtml(letter, companyName, companyAddress)
+                        printWarningLetter(context, html, "Surat_${letter.letterNumber}")
+                    },
+                    onShareWa = {
+                        shareWarningLetterWhatsApp(context, letter, emp?.phone, companyName)
+                    },
+                    onDelete = { onDelete(letter.id) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun WarningLetterCard(
+    letter: BmpWarningLetterEntity,
+    employeePhone: String?,
+    companyName: String,
+    companyAddress: String,
+    onDetailClick: () -> Unit,
+    onPrint: () -> Unit,
+    onShareWa: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    when (letter.letterType) {
+                        "TERMINATION" -> {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFFFEE2E2),
+                                border = BorderStroke(1.dp, Color(0xFFFCA5A5))
+                            ) {
+                                Text(
+                                    "🛑 SURAT PHK / KELUAR",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF991B1B),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        "SP_2" -> {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFFFFE4E6),
+                                border = BorderStroke(1.dp, Color(0xFFFDA4AF))
+                            ) {
+                                Text(
+                                    "🚨 SURAT PERINGATAN II (SP-2)",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFBE123C),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        else -> {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFFFEF3C7),
+                                border = BorderStroke(1.dp, Color(0xFFFCD34D))
+                            ) {
+                                Text(
+                                    "⚠️ SURAT PERINGATAN I (SP-1)",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFB45309),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        letter.letterNumber,
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                IconButton(
+                    onClick = { showDeleteConfirm = true },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(Icons.Outlined.Delete, contentDescription = "Hapus", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Nama & Posisi
+            Text(
+                letter.employeeName,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                "${if (letter.employeeRole.isNotBlank()) letter.employeeRole else "Karyawan"} • Diterbitkan: ${Formatters.dateLong(letter.issueDate)}",
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            if (letter.letterType != "TERMINATION" && letter.validUntil > 0) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "⏱️ Berlaku s/d: ${Formatters.dateLong(letter.validUntil)}",
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFFD97706)
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(10.dp)) {
+                    Text(
+                        "Pelanggaran: ${letter.reasonCategory}",
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        letter.reasonDetail,
+                        fontSize = 12.sp,
+                        maxLines = 2,
+                        lineHeight = 16.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+            Spacer(Modifier.height(8.dp))
+
+            // Action Buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onDetailClick,
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Outlined.Visibility, contentDescription = null, modifier = Modifier.size(15.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Detail", fontSize = 11.5.sp)
+                }
+
+                Button(
+                    onClick = onPrint,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B)),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    modifier = Modifier.weight(1.2f)
+                ) {
+                    Icon(Icons.Outlined.Print, contentDescription = null, modifier = Modifier.size(15.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Cetak PDF", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                }
+
+                Button(
+                    onClick = onShareWa,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    modifier = Modifier.weight(1.1f)
+                ) {
+                    Icon(Icons.Outlined.Share, contentDescription = null, modifier = Modifier.size(15.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Kirim WA", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Hapus Surat Ini?") },
+            text = { Text("Surat ${letter.letterNumber} untuk ${letter.employeeName} akan dihapus dari arsip.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirm = false
+                        onDelete()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Hapus") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("Batal") }
+            }
+        )
+    }
+}
+
+@Composable
+fun CreateWarningLetterDialog(
+    targetEmployee: BmpEmployeeEntity?,
+    allEmployees: List<BmpEmployeeEntity>,
+    companyName: String,
+    onDismiss: () -> Unit,
+    onConfirm: (BmpWarningLetterData) -> Unit
+) {
+    var selectedEmployee by remember { mutableStateOf(targetEmployee ?: allEmployees.firstOrNull()) }
+    var letterType by remember { mutableStateOf("SP_1") }
+    var letterNumber by remember { mutableStateOf("") }
+    var reasonCategory by remember { mutableStateOf("Mangkir / Tidak Hadir Tanpa Izin") }
+    var reasonDetail by remember { mutableStateOf("") }
+    var correctiveAction by remember { mutableStateOf("") }
+    var validityMonths by remember { mutableStateOf(3) }
+    var city by remember { mutableStateOf("Sidoarjo") }
+    var issuedBy by remember { mutableStateOf("Manajemen Perusahaan") }
+
+    // Auto-generate letter number on type or emp change
+    LaunchedEffect(letterType, selectedEmployee) {
+        val typeCode = when (letterType) {
+            "SP_1" -> "SP1"
+            "SP_2" -> "SP2"
+            else -> "SK-PHK"
+        }
+        val cal = Calendar.getInstance()
+        val year = cal.get(Calendar.YEAR)
+        val month = String.format("%02d", cal.get(Calendar.MONTH) + 1)
+        val randCode = String.format("%03d", (System.currentTimeMillis() % 900 + 100))
+        letterNumber = "$typeCode/BP/$year/$month/$randCode"
+    }
+
+    val reasonTemplates = listOf(
+        "Mangkir / Tidak Hadir Tanpa Izin",
+        "Terlambat Datang & Indisipliner Jam Kerja",
+        "Kelalaian Operasional Mesin / Reject Tinggi",
+        "Pelanggaran SOP & Tata Tertib Pabrik",
+        "Tindakan Merugikan Kinerja Tim / Perusahaan",
+        "Pemutusan Hubungan Kerja (Masa Evaluasi / Pelanggaran Berat)"
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.WarningAmber, contentDescription = null, tint = Color(0xFFD97706))
+                Spacer(Modifier.width(8.dp))
+                Text("Terbitkan Surat Resmi", fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(androidx.compose.foundation.rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Pilih Karyawan
+                Text("Pilih Karyawan Target", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(allEmployees) { emp ->
+                        FilterChip(
+                            selected = selectedEmployee?.id == emp.id,
+                            onClick = { selectedEmployee = emp },
+                            label = { Text(emp.name, fontSize = 11.5.sp) }
+                        )
+                    }
+                }
+
+                // Pilih Jenis Surat
+                Text("Jenis Surat", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val types = listOf(
+                        "SP_1" to "⚠️ SP 1",
+                        "SP_2" to "🚨 SP 2",
+                        "TERMINATION" to "🛑 PHK"
+                    )
+                    types.forEach { (tKey, tLabel) ->
+                        FilterChip(
+                            selected = letterType == tKey,
+                            onClick = { letterType = tKey },
+                            label = { Text(tLabel, fontSize = 11.5.sp, fontWeight = if (letterType == tKey) FontWeight.Bold else FontWeight.Normal) }
+                        )
+                    }
+                }
+
+                // Nomor Surat
+                OutlinedTextField(
+                    value = letterNumber,
+                    onValueChange = { letterNumber = it },
+                    label = { Text("Nomor Surat Resmi") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Masa Berlaku (jika bukan PHK)
+                if (letterType != "TERMINATION") {
+                    Text("Masa Berlaku Surat", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        val validityOptions = listOf(1 to "1 Bulan", 3 to "3 Bulan", 6 to "6 Bulan", 0 to "Selamanya")
+                        validityOptions.forEach { (m, label) ->
+                            FilterChip(
+                                selected = validityMonths == m,
+                                onClick = { validityMonths = m },
+                                label = { Text(label, fontSize = 11.sp) }
+                            )
+                        }
+                    }
+                }
+
+                // Kategori Alasan Template
+                Text("Kategori Pelanggaran / Alasan", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(reasonTemplates) { tmpl ->
+                        FilterChip(
+                            selected = reasonCategory == tmpl,
+                            onClick = { reasonCategory = tmpl },
+                            label = { Text(tmpl, fontSize = 11.sp) }
+                        )
+                    }
+                }
+
+                // Rincian Kronologi / Detail Pelanggaran
+                OutlinedTextField(
+                    value = reasonDetail,
+                    onValueChange = { reasonDetail = it },
+                    label = { Text("Rincian Kronologi & Poin Pelanggaran") },
+                    placeholder = { Text("Contoh: Karyawan tidak masuk kerja tanpa izin selama 3 hari berturut-turut...") },
+                    minLines = 3,
+                    maxLines = 5,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Tindakan Korektif (Opsional)
+                OutlinedTextField(
+                    value = correctiveAction,
+                    onValueChange = { correctiveAction = it },
+                    label = { Text("Tindakan Korektif / Catatan Khusus") },
+                    placeholder = { Text("Contoh: Wajib hadir tepat waktu dan melapor setiap pagi ke supervisor...") },
+                    minLines = 2,
+                    maxLines = 3,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Kota Penerbitan (Default: Sidoarjo)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = city,
+                        onValueChange = { city = it },
+                        label = { Text("Kota Terbit") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedTextField(
+                        value = issuedBy,
+                        onValueChange = { issuedBy = it },
+                        label = { Text("Penandatangan") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1.3f)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val emp = selectedEmployee ?: return@Button
+                    val now = System.currentTimeMillis()
+                    val validUntil = if (letterType != "TERMINATION" && validityMonths > 0) {
+                        val cal = Calendar.getInstance()
+                        cal.add(Calendar.MONTH, validityMonths)
+                        cal.timeInMillis
+                    } else 0L
+
+                    val data = BmpWarningLetterData(
+                        employeeId = emp.id,
+                        employeeName = emp.name,
+                        employeeNik = emp.nik.orEmpty(),
+                        employeeRole = emp.position ?: "Karyawan",
+                        letterType = letterType,
+                        letterNumber = letterNumber.trim(),
+                        issueDate = now,
+                        validUntil = validUntil,
+                        reasonCategory = reasonCategory.trim(),
+                        reasonDetail = reasonDetail.ifBlank { "Tindakan ketidakdisiplinan tata tertib kerja perusahaan." }.trim(),
+                        correctiveAction = correctiveAction.trim(),
+                        issuedBy = issuedBy.trim().ifBlank { "Manajemen Perusahaan" },
+                        city = city.trim().ifBlank { "Sidoarjo" },
+                        companyName = companyName
+                    )
+                    onConfirm(data)
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706))
+            ) {
+                Text("Terbitkan Surat")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Batal") }
+        }
+    )
+}
+
+@Composable
+fun WarningLetterDetailDialog(
+    letter: BmpWarningLetterEntity,
+    companyName: String,
+    companyAddress: String,
+    employeePhone: String?,
+    onDismiss: () -> Unit,
+    onPrint: () -> Unit,
+    onShareWa: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                when (letter.letterType) {
+                    "TERMINATION" -> Icon(Icons.Outlined.Warning, null, tint = Color(0xFFDC2626))
+                    "SP_2" -> Icon(Icons.Outlined.WarningAmber, null, tint = Color(0xFFE11D48))
+                    else -> Icon(Icons.Outlined.WarningAmber, null, tint = Color(0xFFD97706))
+                }
+                Spacer(Modifier.width(8.dp))
+                Text("Detail Surat Resmi", fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(androidx.compose.foundation.rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            when (letter.letterType) {
+                                "TERMINATION" -> "SURAT PEMUTUSAN HUBUNGAN KERJA (PHK)"
+                                "SP_2" -> "SURAT PERINGATAN KEDUA (SP-2)"
+                                else -> "SURAT PERINGATAN PERTAMA (SP-1)"
+                            },
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text("Nomor: ${letter.letterNumber}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Perusahaan: $companyName", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+
+                Text("Identitas Karyawan:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Text("• Nama: ${letter.employeeName}", fontSize = 12.sp)
+                if (letter.employeeNik.isNotBlank()) Text("• NIK / KTP: ${letter.employeeNik}", fontSize = 12.sp)
+                Text("• Jabatan: ${letter.employeeRole}", fontSize = 12.sp)
+                Text("• Tanggal Terbit: ${Formatters.dateLong(letter.issueDate)}", fontSize = 12.sp)
+                if (letter.letterType != "TERMINATION" && letter.validUntil > 0) {
+                    Text("• Masa Berlaku: s/d ${Formatters.dateLong(letter.validUntil)}", fontSize = 12.sp, color = Color(0xFFD97706), fontWeight = FontWeight.Bold)
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                Text("Poin & Rincian Pelanggaran:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFFFFFBEB),
+                    border = BorderStroke(1.dp, Color(0xFFFDE68A)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text("Kategori: ${letter.reasonCategory}", fontWeight = FontWeight.Bold, fontSize = 11.5.sp, color = Color(0xFF92400E))
+                        Spacer(Modifier.height(4.dp))
+                        Text(letter.reasonDetail, fontSize = 12.sp, color = Color(0xFF78350F))
+                    }
+                }
+
+                if (letter.correctiveAction.isNotBlank()) {
+                    Text("Tindakan Korektif Manajemen:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text(letter.correctiveAction, fontSize = 12.sp)
+                }
+
+                Text("Kota & Pengesahan:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Text("• Kota: ${letter.city}", fontSize = 12.sp)
+                Text("• Penandatangan: ${letter.issuedBy} (Tanpa Tanda Tangan Karyawan)", fontSize = 12.sp)
+            }
+        },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Button(
+                    onClick = onPrint,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B))
+                ) {
+                    Icon(Icons.Outlined.Print, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Cetak PDF")
+                }
+                Button(
+                    onClick = onShareWa,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                ) {
+                    Icon(Icons.Outlined.Share, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Kirim WA")
+                }
+            }
+        },
+        dismissButton = {
+            Row {
+                TextButton(
+                    onClick = { showDeleteConfirm = true },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Hapus")
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Tutup")
+                }
+            }
+        }
+    )
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Hapus Surat Resmi?") },
+            text = { Text("Surat nomor ${letter.letterNumber} akan dihapus permanen.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirm = false
+                        onDelete()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Hapus") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("Batal") }
+            }
+        )
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HTML & PRINT & WHATSAPP GENERATORS
+// ─────────────────────────────────────────────────────────────────────────────
+
+fun generateWarningLetterHtml(
+    letter: BmpWarningLetterEntity,
+    companyName: String = "CV. Bahtera Plastik",
+    companyAddress: String = "Sidoarjo, Jawa Timur"
+): String {
+    val title = when (letter.letterType) {
+        "SP_1" -> "SURAT PERINGATAN PERTAMA (SP-1)"
+        "SP_2" -> "SURAT PERINGATAN KEDUA (SP-2)"
+        "TERMINATION" -> "SURAT PEMUTUSAN HUBUNGAN KERJA (PHK)"
+        else -> "SURAT PERINGATAN RESMI"
+    }
+
+    val introText = when (letter.letterType) {
+        "SP_1" -> "Sehubungan dengan hasil evaluasi kedisiplinan dan tata tertib kerja, dengan ini Manajemen perusahaan menerbitkan <b>Surat Peringatan Pertama (SP-1)</b> kepada karyawan yang bersangkutan sehubungan dengan adanya tindakan pelanggaran berupa:"
+        "SP_2" -> "Sehubungan dengan adanya pengulangan pelanggaran dan/atau tindakan indisipliner setelah diterbitkannya Surat Peringatan Pertama, dengan ini Manajemen perusahaan menerbitkan <b>Surat Peringatan Kedua (SP-2 / Peringatan Terakhir)</b> sehubungan dengan tindakan pelanggaran berupa:"
+        "TERMINATION" -> "Berdasarkan evaluasi menyeluruh atas catatan kedisiplinan kerja dan ketentuan peraturan perusahaan yang berlaku, dengan ini Manajemen perusahaan memberitahukan bahwa terhitung sejak tanggal surat ini diterbitkan, hubungan kerja antara perusahaan dengan yang bersangkutan dinyatakan <b>BERAKHIR (DIBERHENTIKAN / PHK)</b> atas dasar pertimbangan:"
+        else -> "Sehubungan dengan evaluasi kerja, dengan ini Manajemen perusahaan menerbitkan surat ini atas dasar pertimbangan:"
+    }
+
+    val consequenceText = when (letter.letterType) {
+        "SP_1" -> "<div class='content'>Diharapkan yang bersangkutan dapat segera memperbaiki sikap, disiplin, dan etos kerja. Apabila dalam masa berlaku Surat Peringatan Pertama ini karyawan yang bersangkutan kembali melakukan pelanggaran serupa atau pelanggaran tata tertib lainnya, maka Manajemen akan menerbitkan <b>Surat Peringatan Kedua (SP-2)</b>.</div>"
+        "SP_2" -> "<div class='content'>Surat Peringatan Kedua ini merupakan <b>peringatan terakhir</b>. Apabila dalam masa berlaku surat ini yang bersangkutan kembali melakukan pelanggaran disiplin kerja, maka Manajemen akan mengambil tindakan tegas berupa <b>Pemutusan Hubungan Kerja (PHK / Diberhentikan)</b> tanpa peringatan lanjutan.</div>"
+        "TERMINATION" -> "<div class='content'>Perusahaan mengucapkan terima kasih atas kontribusi yang telah diberikan selama masa kerja. Segala hak dan kewajiban administrasi terkait penyelesaian masa kerja akan diselesaikan sesuai dengan ketentuan manajemen yang berlaku.</div>"
+        else -> ""
+    }
+
+    val validUntilRow = if (letter.letterType != "TERMINATION" && letter.validUntil > 0) {
+        "<tr><td>Masa Berlaku</td><td>:</td><td>${Formatters.dateLong(letter.validUntil)}</td></tr>"
+    } else ""
+
+    val nikRow = if (letter.employeeNik.isNotBlank()) {
+        "<tr><td>NIK / No. KTP</td><td>:</td><td>${letter.employeeNik}</td></tr>"
+    } else ""
+
+    val correctiveBox = if (letter.correctiveAction.isNotBlank()) {
+        """
+        <div class="reason-box" style="margin-top: 10px; border-left: 4px solid #0284c7;">
+            <b>Tindakan Korektif / Catatan Khusus Manajemen:</b>
+            <div style="margin-top: 6px; white-space: pre-wrap;">${letter.correctiveAction}</div>
+        </div>
+        """.trimIndent()
+    } else ""
+
+    val issueDateStr = Formatters.dateLong(letter.issueDate)
+    val city = if (letter.city.isNotBlank()) letter.city else "Sidoarjo"
+
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <meta charset="utf-8">
+    <title>$title</title>
+    <style>
+      @page { size: A4; margin: 15mm 20mm; }
+      body { font-family: 'Times New Roman', Times, serif; color: #111; margin: 0; padding: 20px 25px; line-height: 1.6; font-size: 12.5pt; }
+      .kop { text-align: center; margin-bottom: 5px; }
+      .company-title { font-size: 18pt; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; color: #111; }
+      .company-sub { font-size: 10.5pt; color: #333; margin-top: 2px; }
+      .company-addr { font-size: 9.5pt; color: #555; margin-top: 2px; }
+      .divider { border: 0; border-top: 2.5px solid #000; border-bottom: 1px solid #000; height: 3px; margin: 12px 0 22px 0; }
+      .letter-title { text-align: center; font-size: 14pt; font-weight: bold; text-decoration: underline; text-transform: uppercase; margin-bottom: 3px; }
+      .letter-no { text-align: center; font-size: 11pt; margin-bottom: 25px; }
+      .content { text-align: justify; margin-bottom: 14px; }
+      table.emp-info { width: 100%; border-collapse: collapse; margin: 12px 0 18px 0; font-size: 12pt; }
+      table.emp-info td { padding: 4px 6px; vertical-align: top; }
+      .reason-box { background: #fdfdfd; border: 1px solid #ccc; border-left: 4px solid #d97706; padding: 12px 16px; margin: 14px 0; border-radius: 4px; }
+      .sig-container { width: 100%; margin-top: 40px; display: table; }
+      .sig-right { display: table-cell; width: 45%; text-align: center; float: right; }
+      .sig-space { height: 70px; }
+      .sig-name { font-weight: bold; text-decoration: underline; }
+    </style>
+    </head>
+    <body>
+      <div class="kop">
+        <div class="company-title">$companyName</div>
+        <div class="company-sub">Manufaktur Produk Plastik & Injection Moulding</div>
+        <div class="company-addr">$companyAddress</div>
+      </div>
+      <div class="divider"></div>
+
+      <div class="letter-title">$title</div>
+      <div class="letter-no">Nomor: ${letter.letterNumber}</div>
+
+      <div class="content">
+        Surat ini diterbitkan dan diberikan secara resmi kepada karyawan:
+      </div>
+
+      <table class="emp-info">
+        <tr><td style="width: 140px;">Nama Karyawan</td><td style="width: 15px;">:</td><td><b>${letter.employeeName}</b></td></tr>
+        $nikRow
+        <tr><td>Jabatan / Posisi</td><td>:</td><td>${if (letter.employeeRole.isNotBlank()) letter.employeeRole else "Operator / Staf"}</td></tr>
+        <tr><td>Tanggal Terbit</td><td>:</td><td>$issueDateStr</td></tr>
+        $validUntilRow
+      </table>
+
+      <div class="content">
+        $introText
+      </div>
+
+      <div class="reason-box">
+        <b>Kategori & Rincian Pelanggaran / Alasan:</b>
+        <div style="margin-top: 6px; font-weight: 500; color: #b45309;">${letter.reasonCategory}</div>
+        <div style="margin-top: 4px; white-space: pre-wrap;">${letter.reasonDetail}</div>
+      </div>
+
+      $correctiveBox
+
+      $consequenceText
+
+      <div class="content" style="margin-top: 14px;">
+        Demikian Surat ini dibuat untuk menjadi perhatian sungguh-sungguh dan dipatuhi dengan penuh tanggung jawab demi kelancaran dan ketertiban operasional kerja.
+      </div>
+
+      <div class="sig-container">
+        <div class="sig-right">
+          <div>$city, $issueDateStr</div>
+          <div style="font-weight: bold; margin-top: 4px;">$companyName</div>
+          <div class="sig-space"></div>
+          <div class="sig-name">( ${letter.issuedBy.ifBlank { "Manajemen Perusahaan" }} )</div>
+          <div style="font-size: 10pt; color: #444;">Pimpinan / HRD Manajemen</div>
+        </div>
+      </div>
+    </body>
+    </html>
+    """.trimIndent()
+}
+
+private fun printWarningLetter(context: Context, html: String, jobName: String) {
+    val webView = WebView(context)
+    webView.webViewClient = object : WebViewClient() {
+        override fun onPageFinished(view: WebView?, url: String?) {
+            val printManager = context.getSystemService(Context.PRINT_SERVICE) as PrintManager
+            val printAdapter = webView.createPrintDocumentAdapter(jobName)
+            val printAttributes = PrintAttributes.Builder()
+                .setColorMode(PrintAttributes.COLOR_MODE_COLOR)
+                .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                .build()
+            printManager.print(jobName, printAdapter, printAttributes)
+        }
+    }
+    webView.loadDataWithBaseURL("https://www.zedmz.cloud", html, "text/html", "UTF-8", null)
+}
+
+private fun shareWarningLetterWhatsApp(
+    context: Context,
+    letter: BmpWarningLetterEntity,
+    employeePhone: String?,
+    companyName: String = "CV. Bahtera Plastik"
+) {
+    val title = when (letter.letterType) {
+        "SP_1" -> "SURAT PERINGATAN PERTAMA (SP-1)"
+        "SP_2" -> "SURAT PERINGATAN KEDUA (SP-2)"
+        "TERMINATION" -> "SURAT PEMUTUSAN HUBUNGAN KERJA (PHK)"
+        else -> "SURAT PERINGATAN RESMI"
+    }
+    val city = if (letter.city.isNotBlank()) letter.city else "Sidoarjo"
+    val issueDateStr = Formatters.dateLong(letter.issueDate)
+    val validUntilStr = if (letter.letterType != "TERMINATION" && letter.validUntil > 0) "\n⏱️ *Masa Berlaku s/d:* ${Formatters.dateLong(letter.validUntil)}" else ""
+    val correctiveStr = if (letter.correctiveAction.isNotBlank()) "\n💡 *Tindakan Korektif:* ${letter.correctiveAction}" else ""
+
+    val text = """
+    *${title}*
+    *$companyName*
+    ----------------------------------------
+    📄 *No. Surat:* ${letter.letterNumber}
+    📅 *Tanggal Terbit:* $issueDateStr$validUntilStr
+    
+    Kepada Yth.
+    *${letter.employeeName}*
+    Jabatan: ${if (letter.employeeRole.isNotBlank()) letter.employeeRole else "Karyawan / Operator"}
+    
+    Dengan ini Manajemen menyampaikan surat resmi terkait kedisiplinan dan tata tertib kerja:
+    
+    ⚠️ *Kategori:* ${letter.reasonCategory}
+    📌 *Poin Pelanggaran / Alasan:*
+    ${letter.reasonDetail}$correctiveStr
+    
+    ----------------------------------------
+    Diterbitkan di $city, $issueDateStr
+    *Manajemen $companyName*
+    _(Dokumen resmi fisik / cetak PDF ber-kop surat telah diarsipkan oleh HRD)_
+    """.trimIndent()
+
+    val cleanPhone = employeePhone?.replace(Regex("[^0-9]"), "")?.let {
+        if (it.startsWith("0")) "62" + it.substring(1) else it
+    }
+
+    val intent = if (!cleanPhone.isNullOrBlank() && cleanPhone.length >= 8) {
+        Intent(Intent.ACTION_VIEW).apply {
+            data = Uri.parse("https://api.whatsapp.com/send?phone=$cleanPhone&text=${Uri.encode(text)}")
+        }
+    } else {
+        Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+    }
+
+    try {
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        Toast.makeText(context, "Tidak dapat membuka WhatsApp", Toast.LENGTH_SHORT).show()
+    }
+}
+

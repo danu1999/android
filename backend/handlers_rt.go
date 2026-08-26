@@ -1933,13 +1933,13 @@ func handleRtBmpFinancialReport(w http.ResponseWriter, r *http.Request) {
 		WHERE "tenantId"=$1 AND "createdAt" >= $2 AND "createdAt" < $3 AND "isDeleted"=FALSE
 	`, tenantId, startMs, endMs).Scan(&biayaPengirimanDanKuli)
 
-	// d. Beban Operasional Lainnya (bmp_cashflow)
+	// d. Beban Operasional Lainnya (bmp_cashflow + bmp_bahan_baku dengan category 'OPERASIONAL', 'LISTRIK', 'PERLENGKAPAN')
 	var biayaOperasionalLain float64
 	_ = db.QueryRow(`
-		SELECT COALESCE(SUM(amount), 0)
-		FROM bmp_cashflow
-		WHERE "tenantId"=$1 AND "transactionDate" >= $2 AND "transactionDate" < $3 
-		  AND ("transactionType"='EXPENSE' OR "transactionType"='OUT') AND "isDeleted"=FALSE AND "paymentRefId" IS NULL
+		SELECT COALESCE(SUM("totalHarga"), 0)
+		FROM bmp_bahan_baku
+		WHERE "tenantId"=$1 AND "tanggal" >= $2 AND "tanggal" < $3 
+		  AND ("category" = 'OPERASIONAL' OR "category" = 'LISTRIK' OR "category" = 'PERLENGKAPAN') AND "isDeleted"=FALSE
 	`, tenantId, startMs, endMs).Scan(&biayaOperasionalLain)
 
 	totalBebanOperasional := gajiKaryawan + biayaMaintenance + biayaPengirimanDanKuli + biayaOperasionalLain
@@ -2080,7 +2080,12 @@ func handleRtBmpExportReport(w http.ResponseWriter, r *http.Request) {
 	_ = db.QueryRow(`SELECT COALESCE(SUM(cost), 0) FROM bmp_maintenance_logs WHERE "tenantId"=$1 AND "maintenanceDate" >= $2 AND "maintenanceDate" < $3 AND "isDeleted"=FALSE`, tenantId, startMs, endMs).Scan(&biayaMaintenance)
 
 	var biayaOperasionalLain float64
-	_ = db.QueryRow(`SELECT COALESCE(SUM(amount), 0) FROM bmp_cashflow WHERE "tenantId"=$1 AND "transactionDate" >= $2 AND "transactionDate" < $3 AND ("transactionType"='EXPENSE' OR "transactionType"='OUT') AND "isDeleted"=FALSE AND "paymentRefId" IS NULL`, tenantId, startMs, endMs).Scan(&biayaOperasionalLain)
+	_ = db.QueryRow(`
+		SELECT COALESCE(SUM("totalHarga"), 0) 
+		FROM bmp_bahan_baku 
+		WHERE "tenantId"=$1 AND "tanggal" >= $2 AND "tanggal" < $3 
+		  AND ("category" = 'OPERASIONAL' OR "category" = 'LISTRIK' OR "category" = 'PERLENGKAPAN') AND "isDeleted"=FALSE
+	`, tenantId, startMs, endMs).Scan(&biayaOperasionalLain)
 
 	totalBebanOperasional := gajiKaryawan + biayaMaintenance + biayaOperasionalLain
 	labaBersih := labaKotor - totalBebanOperasional
@@ -3370,7 +3375,6 @@ func handleRtBmpAcceptApplicant(w http.ResponseWriter, r *http.Request) {
 		"role":         finalRole,
 		"position":     finalPos,
 		"salaryAmount": req.SalaryOffer,
-		"salary":       req.SalaryOffer,
 		"employeeType": "OPERATING_EXPENSE",
 		"nik":          app.Nik,
 		"address":      app.Address,
@@ -3709,5 +3713,81 @@ func handlePublicSubmitJobApplication(w http.ResponseWriter, r *http.Request) {
 		"message":     "Lamaran berhasil dikirimkan!",
 	})
 }
+
+// ── BMP — warning letters (SP 1, SP 2, Surat Dikeluarkan / PHK) ─────────────
+
+func handleRtBmpWarningLetters(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	switch r.Method {
+	case http.MethodGet:
+		employeeIdStr := r.URL.Query().Get("employeeId")
+		var rows *sql.Rows
+		var err error
+		if employeeIdStr != "" {
+			empId, _ := strconv.ParseInt(employeeIdStr, 10, 64)
+			rows, err = db.Query(`SELECT * FROM bmp_warning_letters WHERE "tenantId"=$1 AND "employeeId"=$2 AND "isDeleted"=FALSE ORDER BY "issueDate" DESC, id DESC`, tenantId, empId)
+		} else {
+			rows, err = db.Query(`SELECT * FROM bmp_warning_letters WHERE "tenantId"=$1 AND "isDeleted"=FALSE ORDER BY "issueDate" DESC, id DESC`, tenantId)
+		}
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		defer rows.Close()
+		jsonOK(w, rowsToJSON(rows))
+	case http.MethodPost:
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid json body")
+			return
+		}
+		body["tenantId"] = tenantId
+		now := nowMillis()
+		if _, ok := body["createdAt"]; !ok { body["createdAt"] = now }
+		body["updatedAt"] = now
+		id, err := insertRow("bmp_warning_letters", body)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+
+		// Jika jenis surat adalah TERMINATION / Surat Dikeluarkan, otomatis nonaktifkan karyawan
+		if letterType, ok := body["letterType"].(string); ok && letterType == "TERMINATION" {
+			var empId int64
+			if empIdVal, ok := body["employeeId"].(float64); ok {
+				empId = int64(empIdVal)
+			}
+			if empId > 0 {
+				_, _ = db.Exec(`UPDATE bmp_employees SET "isActive"=FALSE, "updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, now, empId, tenantId)
+			}
+		}
+
+		jsonOK(w, map[string]interface{}{"id": id, "ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+func handleRtBmpWarningLettersById(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/bmp/warning-letters/")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil { jsonErr(w, 400, "invalid id"); return }
+
+	switch r.Method {
+	case http.MethodPut:
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid json body")
+			return
+		}
+		body["updatedAt"] = nowMillis()
+		updateRow("bmp_warning_letters", id, tenantId, body)
+		jsonOK(w, map[string]interface{}{"ok": true})
+	case http.MethodDelete:
+		_, err := db.Exec(`UPDATE bmp_warning_letters SET "isDeleted"=TRUE, "updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, nowMillis(), id, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
 
 

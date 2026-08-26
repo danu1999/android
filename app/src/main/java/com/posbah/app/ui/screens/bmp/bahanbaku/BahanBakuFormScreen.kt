@@ -92,6 +92,18 @@ private val PERLENGKAPAN_OPTIONS = listOf(
     "Oli Mesin Tellus 68", "Oli Hidrolik", "Selang Hidrolik High Pressure", "Sarung Tangan Safety (APD)", "Masker & Kacamata APD", "Karung Plastik Woven", "Lakban & Packing", "Sparepart & Accessories", "Perlengkapan Pabrik"
 )
 
+private val OPERASIONAL_OPTIONS = listOf(
+    "Tagihan Listrik PLN Bulanan",
+    "Token Listrik PLN Pabrik",
+    "Air PDAM / Sumur",
+    "Solar / BBM Truk Armada",
+    "Sewa Gedung / Pabrik",
+    "Kebersihan & Keamanan Lingkungan",
+    "Konsumsi Lembur & Dapur Pabrik",
+    "ATK & Perlengkapan Kantor",
+    "Biaya Operasional Lainnya"
+)
+
 internal val WARNA_OPTIONS = listOf(
     "Natural/Bening", "Putih", "Hitam",
     "Merah", "Merah Marun", "Merah Muda (Pink)",
@@ -208,12 +220,13 @@ fun BahanBakuFormScreen(
                         Spacer(Modifier.height(4.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             listOf(
                                 "BAHAN_BAKU" to "Bahan Baku",
-                                "PIGMEN" to "Pigmen / Warna",
-                                "PERLENGKAPAN" to "Perlengkapan & APD"
+                                "PIGMEN" to "Pigmen",
+                                "PERLENGKAPAN" to "Perlengkapan",
+                                "OPERASIONAL" to "⚡ Listrik & Operasional"
                             ).forEach { (catKey, catLabel) ->
                                 val isSelected = header.category == catKey
                                 androidx.compose.material3.OutlinedButton(
@@ -222,7 +235,7 @@ fun BahanBakuFormScreen(
                                         containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
                                         contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
                                     ),
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier.weight(if (catKey == "OPERASIONAL") 1.3f else 1f),
                                     contentPadding = PaddingValues(horizontal = 2.dp, vertical = 2.dp)
                                 ) {
                                     Text(catLabel, style = MaterialTheme.typography.labelSmall, maxLines = 1)
@@ -630,27 +643,32 @@ private fun BahanBakuItemRow(
     val options = when (category) {
         "PIGMEN" -> PIGMEN_OPTIONS
         "PERLENGKAPAN" -> PERLENGKAPAN_OPTIONS
+        "OPERASIONAL" -> OPERASIONAL_OPTIONS
         else -> BAHAN_BAKU_OPTIONS
     }
 
     val jenisLabel = when (category) {
         "PIGMEN" -> "Nama Pigmen / Pewarna"
         "PERLENGKAPAN" -> "Nama Barang / APD / Perlengkapan"
+        "OPERASIONAL" -> "Jenis Biaya / Pengeluaran"
         else -> "Jenis Bahan Baku"
     }
 
     val qtyLabel = when (category) {
         "PERLENGKAPAN" -> "Jumlah (Qty)"
+        "OPERASIONAL" -> "Jumlah / Periode"
         else -> "Kuantitas / Berat"
     }
 
     val unitLabel = when (category) {
         "PERLENGKAPAN" -> "Satuan (Pcs/Liter/Set)"
+        "OPERASIONAL" -> "Satuan (Bln/kWh/Liter/Ls)"
         else -> "Satuan (Unit)"
     }
 
     val rateLabel = when (category) {
         "PERLENGKAPAN" -> "Harga per Satuan (Rp)"
+        "OPERASIONAL" -> "Biaya Satuan / Total (Rp)"
         else -> "Harga per Kg (Rp)"
     }
 

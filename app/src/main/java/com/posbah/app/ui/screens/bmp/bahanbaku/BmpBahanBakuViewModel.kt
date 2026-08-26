@@ -115,6 +115,7 @@ class BahanBakuListViewModel @Inject constructor(
                         "BAHAN_BAKU" -> text.contains("biji") || text.contains("plastik") || text.contains("pp") || text.contains("pe") || text.contains("hd") || text.contains("abs") || text.contains("recycle") || text.contains("baku") || text.contains("giling")
                         "PIGMEN" -> text.contains("pigmen") || text.contains("warna") || text.contains("color") || text.contains("masterbatch") || text.contains("pewarna")
                         "PERLENGKAPAN" -> text.contains("oli") || text.contains("selang") || text.contains("safety") || text.contains("apd") || text.contains("karung") || text.contains("packing") || text.contains("kemasan") || text.contains("sparepart") || text.contains("perlengkapan") || text.contains("alat")
+                        "OPERASIONAL" -> text.contains("listrik") || text.contains("pln") || text.contains("token") || text.contains("pdam") || text.contains("air") || text.contains("solar") || text.contains("bbm") || text.contains("sewa") || text.contains("operasional") || text.contains("kebersihan") || text.contains("atk") || text.contains("dapur")
                         else -> true
                     }
                 }
