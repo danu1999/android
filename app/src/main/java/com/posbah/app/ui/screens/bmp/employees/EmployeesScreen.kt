@@ -48,9 +48,28 @@ import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material.icons.outlined.WarningAmber
+import android.os.ParcelFileDescriptor
+import android.os.Handler
+import android.os.Looper
+import android.os.Build
+import android.os.Environment
+import android.content.ContentValues
+import android.provider.MediaStore
+import androidx.core.content.FileProvider
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import android.print.PageRange
+import android.print.PrintDocumentAdapter
+import android.print.PrintDocumentInfo
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -442,11 +461,14 @@ class EmployeesViewModel @Inject constructor(
         onError: (String) -> Unit
     ) = viewModelScope.launch(Dispatchers.IO) {
         val res = warningLetterRepo.create(letter)
-        withContext(Dispatchers.Main) {
-            if (res is com.posbah.app.data.repository.OnlineWriteResult.Success) {
-                try { repo.refresh() } catch (_: Exception) {}
+        if (res is com.posbah.app.data.repository.OnlineWriteResult.Success) {
+            try { warningLetterRepo.refresh() } catch (_: Exception) {}
+            try { repo.refresh() } catch (_: Exception) {}
+            withContext(Dispatchers.Main) {
                 onSuccess()
-            } else if (res is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+            }
+        } else if (res is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+            withContext(Dispatchers.Main) {
                 onError(res.message)
             }
         }
@@ -1031,6 +1053,120 @@ fun EmployeesScreen(
                                         }
                                     }
 
+                                    val empLetters = remember(warningLetters, e.id) {
+                                        warningLetters.filter { it.employeeId == e.id }.sortedByDescending { it.issueDate }
+                                    }
+
+                                    if (empLetters.isNotEmpty()) {
+                                        Spacer(Modifier.height(10.dp))
+                                        var isExpanded by remember { mutableStateOf(false) }
+                                        Surface(
+                                            shape = RoundedCornerShape(10.dp),
+                                            color = Color(0xFFFFFBEB),
+                                            border = BorderStroke(1.dp, Color(0xFFFDE68A)),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Column(modifier = Modifier.padding(10.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth().clickable { isExpanded = !isExpanded },
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Icon(Icons.Outlined.History, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(16.dp))
+                                                        Spacer(Modifier.width(6.dp))
+                                                        Text(
+                                                            "Catatan Riwayat Disiplin (${empLetters.size} Surat)",
+                                                            fontWeight = FontWeight.Bold,
+                                                            fontSize = 12.sp,
+                                                            color = Color(0xFF92400E)
+                                                        )
+                                                    }
+                                                    Icon(
+                                                        if (isExpanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                                                        contentDescription = null,
+                                                        tint = Color(0xFF92400E),
+                                                        modifier = Modifier.size(18.dp)
+                                                    )
+                                                }
+
+                                                val displayLetters = if (isExpanded) empLetters else empLetters.take(1)
+                                                displayLetters.forEach { letter ->
+                                                    Spacer(Modifier.height(6.dp))
+                                                    HorizontalDivider(color = Color(0xFFFDE68A))
+                                                    Spacer(Modifier.height(6.dp))
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                                            val badgeColor = when (letter.letterType) {
+                                                                "TERMINATION" -> Color(0xFFDC2626)
+                                                                "SP_2" -> Color(0xFFE11D48)
+                                                                else -> Color(0xFFD97706)
+                                                            }
+                                                            val badgeText = when (letter.letterType) {
+                                                                "TERMINATION" -> "PHK"
+                                                                "SP_2" -> "SP-2"
+                                                                else -> "SP-1"
+                                                            }
+                                                            Surface(shape = RoundedCornerShape(4.dp), color = badgeColor) {
+                                                                Text(badgeText, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 9.sp, modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp))
+                                                            }
+                                                            Spacer(Modifier.width(6.dp))
+                                                            Text(letter.letterNumber, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF78350F))
+                                                        }
+                                                        Text(Formatters.dateShort(letter.issueDate), fontSize = 10.5.sp, color = Color(0xFF92400E))
+                                                    }
+                                                    Spacer(Modifier.height(2.dp))
+                                                    Text(
+                                                        "Pelanggaran: ${letter.reasonCategory}",
+                                                        fontSize = 11.5.sp,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = Color(0xFF78350F)
+                                                    )
+                                                    if (letter.reasonDetail.isNotBlank()) {
+                                                        Text(
+                                                            letter.reasonDetail,
+                                                            fontSize = 11.sp,
+                                                            color = Color(0xFF451A03),
+                                                            maxLines = if (isExpanded) 5 else 2,
+                                                            lineHeight = 15.sp
+                                                        )
+                                                    }
+                                                    Spacer(Modifier.height(6.dp))
+                                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                        OutlinedButton(
+                                                            onClick = {
+                                                                downloadWarningLetterPdf(context, letter, companyName, companyAddress)
+                                                            },
+                                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF0284C7)),
+                                                            border = BorderStroke(1.dp, Color(0xFF0284C7)),
+                                                            shape = RoundedCornerShape(6.dp),
+                                                            modifier = Modifier.height(28.dp)
+                                                        ) {
+                                                            Icon(Icons.Outlined.Download, contentDescription = null, modifier = Modifier.size(13.dp))
+                                                            Spacer(Modifier.width(4.dp))
+                                                            Text("Unduh PDF", fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+                                                        }
+                                                        OutlinedButton(
+                                                            onClick = { selectedWarningLetterDetail = letter },
+                                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                                            shape = RoundedCornerShape(6.dp),
+                                                            modifier = Modifier.height(28.dp)
+                                                        ) {
+                                                            Icon(Icons.Outlined.Visibility, contentDescription = null, modifier = Modifier.size(13.dp))
+                                                            Spacer(Modifier.width(4.dp))
+                                                            Text("Detail Surat", fontSize = 10.5.sp)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
                                     Spacer(Modifier.height(10.dp))
 
                                     // Action Buttons Row: Proporsional, Luas, & Nyaman Ditekan
@@ -1095,6 +1231,9 @@ fun EmployeesScreen(
                         showCreateWarningLetterDialog = true
                     },
                     onSelectDetail = { selectedWarningLetterDetail = it },
+                    onDownloadPdf = { letter ->
+                        downloadWarningLetterPdf(context, letter, companyName, companyAddress)
+                    },
                     onDelete = { viewModel.deleteWarningLetter(it) }
                 )
             } else {
@@ -1253,6 +1392,7 @@ fun EmployeesScreen(
             targetEmployee = createWarningLetterTarget,
             allEmployees = list,
             companyName = companyName,
+            existingLetters = warningLetters,
             onDismiss = {
                 showCreateWarningLetterDialog = false
                 createWarningLetterTarget = null
@@ -1282,6 +1422,9 @@ fun EmployeesScreen(
             companyAddress = companyAddress,
             employeePhone = list.firstOrNull { it.id == letter.employeeId }?.phone,
             onDismiss = { selectedWarningLetterDetail = null },
+            onDownloadPdf = {
+                downloadWarningLetterPdf(context, letter, companyName, companyAddress)
+            },
             onPrint = {
                 val html = generateWarningLetterHtml(
                     letter = letter,
@@ -2494,6 +2637,7 @@ fun WarningLettersTabContent(
     companyAddress: String,
     onCreateClick: () -> Unit,
     onSelectDetail: (BmpWarningLetterEntity) -> Unit,
+    onDownloadPdf: (BmpWarningLetterEntity) -> Unit,
     onDelete: (Long) -> Unit
 ) {
     var selectedFilter by remember { mutableStateOf("ALL") }
@@ -2604,6 +2748,7 @@ fun WarningLettersTabContent(
                     companyName = companyName,
                     companyAddress = companyAddress,
                     onDetailClick = { onSelectDetail(letter) },
+                    onDownloadPdf = { onDownloadPdf(letter) },
                     onPrint = {
                         val html = generateWarningLetterHtml(letter, companyName, companyAddress)
                         printWarningLetter(context, html, "Surat_${letter.letterNumber}")
@@ -2625,6 +2770,7 @@ fun WarningLetterCard(
     companyName: String,
     companyAddress: String,
     onDetailClick: () -> Unit,
+    onDownloadPdf: () -> Unit,
     onPrint: () -> Unit,
     onShareWa: () -> Unit,
     onDelete: () -> Unit
@@ -2763,41 +2909,53 @@ fun WarningLetterCard(
             // Action Buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 OutlinedButton(
                     onClick = onDetailClick,
                     shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                    modifier = Modifier.weight(1f)
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier.weight(0.9f)
                 ) {
-                    Icon(Icons.Outlined.Visibility, contentDescription = null, modifier = Modifier.size(15.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Detail", fontSize = 11.5.sp)
+                    Icon(Icons.Outlined.Visibility, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(3.dp))
+                    Text("Detail", fontSize = 11.sp)
+                }
+
+                Button(
+                    onClick = onDownloadPdf,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier.weight(1.2f)
+                ) {
+                    Icon(Icons.Outlined.Download, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(3.dp))
+                    Text("Unduh PDF", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
 
                 Button(
                     onClick = onPrint,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B)),
                     shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                    modifier = Modifier.weight(1.2f)
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Icon(Icons.Outlined.Print, contentDescription = null, modifier = Modifier.size(15.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Cetak PDF", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Outlined.Print, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(3.dp))
+                    Text("Cetak", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
 
                 Button(
                     onClick = onShareWa,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
                     shape = RoundedCornerShape(8.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                     modifier = Modifier.weight(1.1f)
                 ) {
-                    Icon(Icons.Outlined.Share, contentDescription = null, modifier = Modifier.size(15.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Kirim WA", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Outlined.Share, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(3.dp))
+                    Text("Kirim WA", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -2829,11 +2987,20 @@ fun CreateWarningLetterDialog(
     targetEmployee: BmpEmployeeEntity?,
     allEmployees: List<BmpEmployeeEntity>,
     companyName: String,
+    existingLetters: List<BmpWarningLetterEntity> = emptyList(),
     onDismiss: () -> Unit,
     onConfirm: (BmpWarningLetterData) -> Unit
 ) {
     var selectedEmployee by remember { mutableStateOf(targetEmployee ?: allEmployees.firstOrNull()) }
-    var letterType by remember { mutableStateOf("SP_1") }
+    var letterType by remember {
+        val latest = existingLetters.filter { it.employeeId == (targetEmployee ?: allEmployees.firstOrNull())?.id }.maxByOrNull { it.issueDate }
+        val suggested = when (latest?.letterType) {
+            "SP_1" -> "SP_2"
+            "SP_2" -> "TERMINATION"
+            else -> "SP_1"
+        }
+        mutableStateOf(suggested)
+    }
     var letterNumber by remember { mutableStateOf("") }
     var reasonCategory by remember { mutableStateOf("Mangkir / Tidak Hadir Tanpa Izin") }
     var reasonDetail by remember { mutableStateOf("") }
@@ -2887,9 +3054,56 @@ fun CreateWarningLetterDialog(
                     items(allEmployees) { emp ->
                         FilterChip(
                             selected = selectedEmployee?.id == emp.id,
-                            onClick = { selectedEmployee = emp },
+                            onClick = {
+                                selectedEmployee = emp
+                                val latest = existingLetters.filter { it.employeeId == emp.id }.maxByOrNull { it.issueDate }
+                                letterType = when (latest?.letterType) {
+                                    "SP_1" -> "SP_2"
+                                    "SP_2" -> "TERMINATION"
+                                    else -> "SP_1"
+                                }
+                            },
                             label = { Text(emp.name, fontSize = 11.5.sp) }
                         )
+                    }
+                }
+
+                // Riwayat Surat Karyawan Ini (jika ada surat sebelumnya)
+                val empHistory = remember(selectedEmployee, existingLetters) {
+                    existingLetters.filter { it.employeeId == selectedEmployee?.id }.sortedByDescending { it.issueDate }
+                }
+                if (empHistory.isNotEmpty()) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = Color(0xFFFFFBEB),
+                        border = BorderStroke(1.dp, Color(0xFFFDE68A)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Outlined.History, null, tint = Color(0xFFD97706), modifier = Modifier.size(15.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    "Riwayat Surat Sebelumnya (${empHistory.size} Surat)",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF92400E)
+                                )
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            empHistory.forEach { prev ->
+                                val badgeText = when (prev.letterType) {
+                                    "TERMINATION" -> "PHK"
+                                    "SP_2" -> "SP 2"
+                                    else -> "SP 1"
+                                }
+                                Text(
+                                    "• [$badgeText] ${prev.letterNumber} (${Formatters.dateShort(prev.issueDate)}) - ${prev.reasonCategory}",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF78350F)
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -3034,6 +3248,7 @@ fun WarningLetterDetailDialog(
     companyAddress: String,
     employeePhone: String?,
     onDismiss: () -> Unit,
+    onDownloadPdf: () -> Unit,
     onPrint: () -> Unit,
     onShareWa: () -> Unit,
     onDelete: () -> Unit
@@ -3119,12 +3334,20 @@ fun WarningLetterDetailDialog(
         confirmButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Button(
+                    onClick = onDownloadPdf,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7))
+                ) {
+                    Icon(Icons.Outlined.Download, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Unduh PDF")
+                }
+                Button(
                     onClick = onPrint,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B))
                 ) {
                     Icon(Icons.Outlined.Print, null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Cetak PDF")
+                    Text("Cetak")
                 }
                 Button(
                     onClick = onShareWa,
@@ -3379,5 +3602,141 @@ private fun shareWarningLetterWhatsApp(
     } catch (e: Exception) {
         Toast.makeText(context, "Tidak dapat membuka WhatsApp", Toast.LENGTH_SHORT).show()
     }
+}
+
+fun downloadWarningLetterPdf(
+    context: Context,
+    letter: BmpWarningLetterEntity,
+    companyName: String = "CV. Bahtera Plastik",
+    companyAddress: String = "Sidoarjo, Jawa Timur"
+) {
+    Toast.makeText(context, "Menyiapkan file PDF surat resmi...", Toast.LENGTH_SHORT).show()
+    val cleanNum = letter.letterNumber.replace(Regex("[^a-zA-Z0-9_-]"), "_")
+    val cleanEmp = letter.employeeName.replace(Regex("[^a-zA-Z0-9_-]"), "_")
+    val typeName = when (letter.letterType) {
+        "SP_1" -> "SP1"
+        "SP_2" -> "SP2"
+        "TERMINATION" -> "PHK"
+        else -> "SP"
+    }
+    val fileName = "Surat_${typeName}_${cleanEmp}_${cleanNum}.pdf"
+    val html = generateWarningLetterHtml(letter, companyName, companyAddress)
+
+    val webView = WebView(context)
+    webView.settings.apply {
+        javaScriptEnabled = false
+        useWideViewPort = true
+        loadWithOverviewMode = true
+    }
+
+    webView.webViewClient = object : WebViewClient() {
+        override fun onPageFinished(view: WebView?, url: String?) {
+            Handler(Looper.getMainLooper()).postDelayed({
+                try {
+                    val printAdapter = webView.createPrintDocumentAdapter(fileName)
+                    val printAttributes = PrintAttributes.Builder()
+                        .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                        .setResolution(PrintAttributes.Resolution("pdf", "pdf", 300, 300))
+                        .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+                        .build()
+
+                    val docsDir = File(context.cacheDir, "documents").apply { mkdirs() }
+                    val tempPdf = File(docsDir, fileName)
+                    val pfd = ParcelFileDescriptor.open(
+                        tempPdf,
+                        ParcelFileDescriptor.MODE_READ_WRITE or ParcelFileDescriptor.MODE_CREATE or ParcelFileDescriptor.MODE_TRUNCATE
+                    )
+
+                    printAdapter.onLayout(
+                        null,
+                        printAttributes,
+                        null,
+                        object : android.print.PrintHelperCallbacks.LayoutCallback() {
+                            override fun onLayoutFinished(info: PrintDocumentInfo?, changed: Boolean) {
+                                printAdapter.onWrite(
+                                    arrayOf(PageRange.ALL_PAGES),
+                                    pfd,
+                                    null,
+                                    object : android.print.PrintHelperCallbacks.WriteCallback() {
+                                        override fun onWriteFinished(pages: Array<out PageRange>?) {
+                                            try {
+                                                pfd.close()
+
+                                                // 1. Simpan salinan ke folder Download perangkat
+                                                savePdfToPublicDownloads(context, tempPdf, fileName)
+
+                                                // 2. Buka file PDF melalui FileProvider
+                                                val uri = FileProvider.getUriForFile(
+                                                    context,
+                                                    "${context.packageName}.fileprovider",
+                                                    tempPdf
+                                                )
+                                                val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+                                                    setDataAndType(uri, "application/pdf")
+                                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                }
+                                                val chooser = Intent.createChooser(viewIntent, "Buka Dokumen PDF Resmi").apply {
+                                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                }
+                                                context.startActivity(chooser)
+                                                Toast.makeText(context, "Berhasil diunduh: $fileName", Toast.LENGTH_LONG).show()
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, "Dokumen PDF tersimpan: $fileName", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+
+                                        override fun onWriteFailed(error: CharSequence?) {
+                                            try { pfd.close() } catch (_: Exception) {}
+                                            Toast.makeText(context, "Gagal menulis PDF: $error", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                )
+                            }
+
+                            override fun onLayoutFailed(error: CharSequence?) {
+                                try { pfd.close() } catch (_: Exception) {}
+                                Toast.makeText(context, "Gagal merender layout PDF: $error", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        null
+                    )
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Error pembuatan PDF: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }, 400)
+        }
+    }
+
+    webView.loadDataWithBaseURL("https://www.zedmz.cloud", html, "text/html", "UTF-8", null)
+}
+
+private fun savePdfToPublicDownloads(context: Context, srcFile: File, fileName: String) {
+    try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val contentValues = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/CV_Bahtera_Plastik")
+            }
+            val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+            if (uri != null) {
+                context.contentResolver.openOutputStream(uri)?.use { out ->
+                    FileInputStream(srcFile).use { input ->
+                        input.copyTo(out)
+                    }
+                }
+            }
+        } else {
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val destDir = File(downloadsDir, "CV_Bahtera_Plastik").apply { mkdirs() }
+            val destFile = File(destDir, fileName)
+            FileInputStream(srcFile).use { input ->
+                FileOutputStream(destFile).use { output ->
+                    input.copyTo(output)
+                }
+            }
+        }
+    } catch (_: Exception) {}
 }
 

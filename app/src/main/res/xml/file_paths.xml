@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Untuk share generated PDF / JPG invoice (cetak) -->
+    <!-- Untuk share generated PDF / JPG invoice / surat resmi -->
     <cache-path name="shared_images" path="images/" />
+    <cache-path name="shared_documents" path="documents/" />
+    <cache-path name="cache_root" path="." />
+    <external-cache-path name="ext_cache" path="." />
+    <external-files-path name="ext_files" path="." />
+    <external-path name="external_files" path="." />
     <!-- Untuk foto nota bahan baku dari kamera (disimpan lokal sebelum upload) -->
     <external-files-path name="nota_bahan_baku" path="Pictures/NotaBahanBaku/" />
     <cache-path name="camera_temp" path="camera/" />
