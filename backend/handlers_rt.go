@@ -3789,5 +3789,557 @@ func handleRtBmpWarningLettersById(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ── BMP — PHL (Pekerja Harian Lepas / Cadangan) & Web Registration Form ───────
+
+var phlFormWebHTML []byte
+
+func handleServePhlFormPage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+	w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+
+	if len(phlFormWebHTML) > 0 {
+		w.Write(phlFormWebHTML)
+		return
+	}
+
+	paths := []string{
+		"/home/muizz9900/phl_form_web.html",
+		"/home/muizz9900/android/backend/phl_form_web.html",
+		"./phl_form_web.html",
+		"./backend/phl_form_web.html",
+	}
+	for _, p := range paths {
+		if data, err := os.ReadFile(p); err == nil {
+			w.Write(data)
+			return
+		}
+	}
+	http.Error(w, "Formulir pendaftaran PHL sedang tidak tersedia", http.StatusNotFound)
+}
+
+func handlePublicValidatePhlSession(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	token := strings.TrimSpace(r.URL.Query().Get("session"))
+	if token == "" {
+		token = strings.TrimSpace(r.URL.Query().Get("token"))
+	}
+	if token == "" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid":   false,
+			"title":   "Token Tidak Ditemukan",
+			"message": "Parameter sesi pendaftaran PHL tidak ditemukan pada tautan.",
+		})
+		return
+	}
+
+	var session struct {
+		Id              int64
+		TenantId        string
+		SessionCode     string
+		Token           string
+		Title           string
+		WorkDate        int64
+		ShiftName       string
+		DailyWage       float64
+		MaxQuota        int
+		RegisteredCount int
+		Status          string
+		Notes           string
+		IsDeleted       bool
+	}
+	err := db.QueryRow(`SELECT id, "tenantId", "sessionCode", "token", "title", "workDate", "shiftName", "dailyWage", "maxQuota", "registeredCount", "status", "notes", "isDeleted" FROM bmp_phl_sessions WHERE "token"=$1`, token).
+		Scan(&session.Id, &session.TenantId, &session.SessionCode, &session.Token, &session.Title, &session.WorkDate, &session.ShiftName, &session.DailyWage, &session.MaxQuota, &session.RegisteredCount, &session.Status, &session.Notes, &session.IsDeleted)
+
+	if err != nil || session.IsDeleted {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"valid":   false,
+			"title":   "Jadwal Tidak Ditemukan",
+			"message": "Jadwal pendaftaran PHL ini tidak terdaftar di sistem atau sudah dihapus.",
+		})
+		return
+	}
+
+	// Calculate actual active registered count
+	var activeRegisteredCount int
+	_ = db.QueryRow(`SELECT COUNT(*) FROM bmp_phl_applicants WHERE "sessionId"=$1 AND "isDeleted"=FALSE`, session.Id).Scan(&activeRegisteredCount)
+	if activeRegisteredCount != session.RegisteredCount {
+		session.RegisteredCount = activeRegisteredCount
+		_, _ = db.Exec(`UPDATE bmp_phl_sessions SET "registeredCount"=$1 WHERE id=$2`, activeRegisteredCount, session.Id)
+	}
+
+	var companyName string
+	_ = db.QueryRow(`SELECT COALESCE("clientName", '') FROM bmp_settings WHERE "tenantId"=$1 LIMIT 1`, session.TenantId).Scan(&companyName)
+	if strings.TrimSpace(companyName) == "" {
+		_ = db.QueryRow(`SELECT COALESCE("name", '') FROM tenants WHERE id=$1 LIMIT 1`, session.TenantId).Scan(&companyName)
+	}
+	companyName = strings.TrimSpace(companyName)
+	if companyName == "" || strings.Contains(strings.ToLower(companyName), "danu sijon") {
+		companyName = "CV. BAHTERA MULYA PLASTIK"
+	}
+
+	isFull := session.Status == "FULL" || (session.MaxQuota > 0 && session.RegisteredCount >= session.MaxQuota)
+	remaining := session.MaxQuota - session.RegisteredCount
+	if remaining < 0 { remaining = 0 }
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"valid":           true,
+		"sessionId":       session.Id,
+		"sessionCode":     session.SessionCode,
+		"title":           session.Title,
+		"workDate":        session.WorkDate,
+		"shiftName":       session.ShiftName,
+		"dailyWage":       session.DailyWage,
+		"maxQuota":        session.MaxQuota,
+		"registeredCount": session.RegisteredCount,
+		"remainingQuota":  remaining,
+		"status":          session.Status,
+		"isFull":          isFull,
+		"companyName":     companyName,
+		"notes":           session.Notes,
+		"message":         ifThen(isFull, "Maaf, pendaftaran PHL sudah penuh. Kuota telah terpenuhi.", ""),
+	})
+}
+
+func handlePublicSubmitPhlApplication(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if err := r.ParseMultipartForm(25 << 20); err != nil { // 25MB max
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Gagal membaca berkas formulir: " + err.Error(),
+		})
+		return
+	}
+
+	token := strings.TrimSpace(r.FormValue("token"))
+	if token == "" {
+		token = strings.TrimSpace(r.FormValue("session"))
+	}
+	if token == "" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Token pendaftaran tidak valid.",
+		})
+		return
+	}
+
+	// Atomic Check & Lock Session
+	tx, errTx := db.Begin()
+	if errTx != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "message": "Database transaction error: " + errTx.Error()})
+		return
+	}
+	defer tx.Rollback()
+
+	var session struct {
+		Id              int64
+		TenantId        string
+		MaxQuota        int
+		RegisteredCount int
+		Status          string
+	}
+	err := tx.QueryRow(`SELECT id, "tenantId", "maxQuota", "registeredCount", "status" FROM bmp_phl_sessions WHERE "token"=$1 AND "isDeleted"=FALSE FOR UPDATE`, token).
+		Scan(&session.Id, &session.TenantId, &session.MaxQuota, &session.RegisteredCount, &session.Status)
+
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Jadwal pendaftaran tidak ditemukan atau sudah tidak aktif.",
+		})
+		return
+	}
+
+	// Double check active applicants
+	var activeCount int
+	_ = tx.QueryRow(`SELECT COUNT(*) FROM bmp_phl_applicants WHERE "sessionId"=$1 AND "isDeleted"=FALSE`, session.Id).Scan(&activeCount)
+
+	if session.Status == "FULL" || session.Status == "CLOSED" || (session.MaxQuota > 0 && activeCount >= session.MaxQuota) {
+		if session.Status == "OPEN" && activeCount >= session.MaxQuota {
+			_, _ = tx.Exec(`UPDATE bmp_phl_sessions SET "status"='FULL', "registeredCount"=$1 WHERE id=$2`, activeCount, session.Id)
+			_ = tx.Commit()
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"isFull":  true,
+			"message": "Maaf, pendaftaran PHL sudah penuh. Kuota maksimal telah terpenuhi.",
+		})
+		return
+	}
+
+	uploadDir := filepath.Join(".", "recruitment", session.TenantId)
+	_ = os.MkdirAll(uploadDir, 0755)
+
+	saveFile := func(fields []string, prefix string) string {
+		for _, field := range fields {
+			file, header, errFile := r.FormFile(field)
+			if errFile == nil {
+				defer file.Close()
+				ext := filepath.Ext(header.Filename)
+				if ext == "" { ext = ".jpg" }
+				fileName := fmt.Sprintf("%s_%d%s", prefix, time.Now().UnixNano()/1e6, ext)
+				destPath := filepath.Join(uploadDir, fileName)
+				bytes, errRead := io.ReadAll(file)
+				if errRead == nil && len(bytes) > 0 {
+					if errWrite := os.WriteFile(destPath, bytes, 0644); errWrite == nil {
+						baseURL := os.Getenv("BASE_URL")
+						if baseURL == "" { baseURL = "https://www.zedmz.cloud" }
+						return fmt.Sprintf("%s/recruitment/%s/%s", baseURL, session.TenantId, fileName)
+					}
+				}
+			}
+		}
+		return ""
+	}
+
+	ktpUrl := saveFile([]string{"ktpFile", "ktpPhoto", "ktp"}, "phl_ktp")
+	selfUrl := saveFile([]string{"selfFile", "selfPhoto", "self"}, "phl_selfie")
+	ijazahUrl := saveFile([]string{"ijazahFile", "ijazahPhoto", "ijazah"}, "phl_ijazah")
+	cvPdfUrl := saveFile([]string{"cvFile", "cvPdfFile", "cv"}, "phl_cv")
+
+	now := nowMillis()
+	fullName := strings.TrimSpace(r.FormValue("fullName"))
+	phone := strings.TrimSpace(r.FormValue("phone"))
+	nik := strings.TrimSpace(r.FormValue("nik"))
+	address := strings.TrimSpace(r.FormValue("address"))
+
+	var appId int64
+	errInsert := tx.QueryRow(`INSERT INTO bmp_phl_applicants 
+		("tenantId", "sessionId", "fullName", "phone", "nik", "address", "ktpPhotoUrl", "selfPhotoUrl", "ijazahPhotoUrl", "cvPdfUrl", "status", "notes", "appliedAt", "updatedAt", "isDeleted") 
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'REGISTERED', '', $11, $12, FALSE) RETURNING id`,
+		session.TenantId, session.Id, fullName, phone, nik, address, ktpUrl, selfUrl, ijazahUrl, cvPdfUrl, now, now).Scan(&appId)
+
+	if errInsert != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"message": "Gagal menyimpan data pendaftaran: " + errInsert.Error(),
+		})
+		return
+	}
+
+	newCount := activeCount + 1
+	newStatus := "OPEN"
+	if session.MaxQuota > 0 && newCount >= session.MaxQuota {
+		newStatus = "FULL"
+	}
+	_, errUpd := tx.Exec(`UPDATE bmp_phl_sessions SET "registeredCount"=$1, "status"=$2, "updatedAt"=$3 WHERE id=$4`, newCount, newStatus, now, session.Id)
+	if errUpd != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "message": "Gagal mengupdate kuota sesi: " + errUpd.Error()})
+		return
+	}
+
+	if errCommit := tx.Commit(); errCommit != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "message": "Commit error: " + errCommit.Error()})
+		return
+	}
+
+	// Broadcast WS to POSBah App
+	wsMsg := fmt.Sprintf(`{"type":"bmp_phl_update","sessionId":%d,"applicantId":%d,"count":%d,"status":"%s"}`, session.Id, appId, newCount, newStatus)
+	broadcastWSMessage(wsMsg)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":     true,
+		"applicantId": appId,
+		"message":     "Pendaftaran PHL berhasil! Data Anda telah terdaftar.",
+	})
+}
+
+func handleRtBmpPhlSessions(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+
+	switch r.Method {
+	case http.MethodGet:
+		rows, err := db.Query(`SELECT id, "tenantId", "sessionCode", "token", "title", "workDate", "shiftName", "dailyWage", "maxQuota", "registeredCount", "status", "notes", "createdAt", "updatedAt", "isDeleted" FROM bmp_phl_sessions WHERE "tenantId"=$1 AND "isDeleted"=FALSE ORDER BY "workDate" DESC, id DESC`, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		defer rows.Close()
+
+		var sessions []map[string]interface{}
+		for rows.Next() {
+			var s struct {
+				Id              int64
+				TenantId        string
+				SessionCode     string
+				Token           string
+				Title           string
+				WorkDate        int64
+				ShiftName       string
+				DailyWage       float64
+				MaxQuota        int
+				RegisteredCount int
+				Status          string
+				Notes           string
+				CreatedAt       int64
+				UpdatedAt       int64
+				IsDeleted       bool
+			}
+			if err := rows.Scan(&s.Id, &s.TenantId, &s.SessionCode, &s.Token, &s.Title, &s.WorkDate, &s.ShiftName, &s.DailyWage, &s.MaxQuota, &s.RegisteredCount, &s.Status, &s.Notes, &s.CreatedAt, &s.UpdatedAt, &s.IsDeleted); err == nil {
+				var count int
+				_ = db.QueryRow(`SELECT COUNT(*) FROM bmp_phl_applicants WHERE "sessionId"=$1 AND "isDeleted"=FALSE`, s.Id).Scan(&count)
+				sessions = append(sessions, map[string]interface{}{
+					"id":              s.Id,
+					"tenantId":        s.TenantId,
+					"sessionCode":     s.SessionCode,
+					"token":           s.Token,
+					"title":           s.Title,
+					"workDate":        s.WorkDate,
+					"shiftName":       s.ShiftName,
+					"dailyWage":       s.DailyWage,
+					"maxQuota":        s.MaxQuota,
+					"registeredCount": count,
+					"status":          s.Status,
+					"notes":           s.Notes,
+					"createdAt":       s.CreatedAt,
+					"updatedAt":       s.UpdatedAt,
+					"isDeleted":       s.IsDeleted,
+				})
+			}
+		}
+		if sessions == nil { sessions = []map[string]interface{}{} }
+		jsonOK(w, sessions)
+
+	case http.MethodPost:
+		var req struct {
+			Title     string  `json:"title"`
+			WorkDate  int64   `json:"workDate"`
+			ShiftName string  `json:"shiftName"`
+			DailyWage float64 `json:"dailyWage"`
+			MaxQuota  int     `json:"maxQuota"`
+			Notes     string  `json:"notes"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			jsonErr(w, 400, "invalid json: "+err.Error())
+			return
+		}
+
+		tokenBytes := make([]byte, 6)
+		_, _ = rand.Read(tokenBytes)
+		token := fmt.Sprintf("phl_%x", tokenBytes)
+		sessionCode := fmt.Sprintf("PHL-%s-%02X%02X", time.Now().Format("20060102"), tokenBytes[0], tokenBytes[1])
+		now := nowMillis()
+
+		if req.Title == "" { req.Title = "Operator Injeksi Cadangan" }
+		if req.ShiftName == "" { req.ShiftName = "Shift 1 (08:00 - 16:00)" }
+		if req.MaxQuota <= 0 { req.MaxQuota = 3 }
+		if req.WorkDate <= 0 { req.WorkDate = now }
+
+		body := map[string]interface{}{
+			"tenantId":        tenantId,
+			"sessionCode":     sessionCode,
+			"token":           token,
+			"title":           req.Title,
+			"workDate":        req.WorkDate,
+			"shiftName":       req.ShiftName,
+			"dailyWage":       req.DailyWage,
+			"maxQuota":        req.MaxQuota,
+			"registeredCount": 0,
+			"status":          "OPEN",
+			"notes":           req.Notes,
+			"createdAt":       now,
+			"updatedAt":       now,
+			"isDeleted":       false,
+		}
+
+		id, err := insertRow("bmp_phl_sessions", body)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+
+		baseURL := os.Getenv("BASE_URL")
+		if baseURL == "" { baseURL = "https://www.zedmz.cloud" }
+		formURL := fmt.Sprintf("%s/phl/form?session=%s", baseURL, token)
+
+		jsonOK(w, map[string]interface{}{
+			"id":          id,
+			"sessionCode": sessionCode,
+			"token":       token,
+			"formUrl":     formURL,
+		})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+func handleRtBmpPhlSessionsById(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/bmp/phl/sessions/")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil { jsonErr(w, 400, "invalid id"); return }
+
+	switch r.Method {
+	case http.MethodPut:
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid json body")
+			return
+		}
+		body["updatedAt"] = nowMillis()
+
+		if maxQ, ok := body["maxQuota"].(float64); ok && maxQ > 0 {
+			var regCount int
+			_ = db.QueryRow(`SELECT COUNT(*) FROM bmp_phl_applicants WHERE "sessionId"=$1 AND "isDeleted"=FALSE`, id).Scan(&regCount)
+			if regCount < int(maxQ) && body["status"] == "FULL" {
+				body["status"] = "OPEN"
+			} else if regCount >= int(maxQ) {
+				body["status"] = "FULL"
+			}
+			body["registeredCount"] = regCount
+		}
+
+		updateRow("bmp_phl_sessions", id, tenantId, body)
+		jsonOK(w, map[string]interface{}{"ok": true})
+
+	case http.MethodDelete:
+		_, err := db.Exec(`UPDATE bmp_phl_sessions SET "isDeleted"=TRUE, "updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, nowMillis(), id, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		jsonOK(w, map[string]interface{}{"ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+func handleRtBmpPhlApplicants(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+
+	switch r.Method {
+	case http.MethodGet:
+		sessionIdStr := r.URL.Query().Get("sessionId")
+		var rows *sql.Rows
+		var err error
+		if sessionIdStr != "" {
+			sId, _ := strconv.ParseInt(sessionIdStr, 10, 64)
+			rows, err = db.Query(`SELECT id, "tenantId", "sessionId", "fullName", "phone", "nik", "address", "ktpPhotoUrl", "selfPhotoUrl", "ijazahPhotoUrl", "cvPdfUrl", "status", "notes", "appliedAt", "updatedAt", "isDeleted" FROM bmp_phl_applicants WHERE "tenantId"=$1 AND "sessionId"=$2 AND "isDeleted"=FALSE ORDER BY "appliedAt" DESC`, tenantId, sId)
+		} else {
+			rows, err = db.Query(`SELECT id, "tenantId", "sessionId", "fullName", "phone", "nik", "address", "ktpPhotoUrl", "selfPhotoUrl", "ijazahPhotoUrl", "cvPdfUrl", "status", "notes", "appliedAt", "updatedAt", "isDeleted" FROM bmp_phl_applicants WHERE "tenantId"=$1 AND "isDeleted"=FALSE ORDER BY "appliedAt" DESC`, tenantId)
+		}
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+		defer rows.Close()
+
+		var list []map[string]interface{}
+		for rows.Next() {
+			var a struct {
+				Id             int64
+				TenantId       string
+				SessionId      int64
+				FullName       string
+				Phone          string
+				Nik            string
+				Address        string
+				KtpPhotoUrl    string
+				SelfPhotoUrl   string
+				IjazahPhotoUrl string
+				CvPdfUrl       string
+				Status         string
+				Notes          string
+				AppliedAt      int64
+				UpdatedAt      int64
+				IsDeleted      bool
+			}
+			if err := rows.Scan(&a.Id, &a.TenantId, &a.SessionId, &a.FullName, &a.Phone, &a.Nik, &a.Address, &a.KtpPhotoUrl, &a.SelfPhotoUrl, &a.IjazahPhotoUrl, &a.CvPdfUrl, &a.Status, &a.Notes, &a.AppliedAt, &a.UpdatedAt, &a.IsDeleted); err == nil {
+				list = append(list, map[string]interface{}{
+					"id":             a.Id,
+					"tenantId":       a.TenantId,
+					"sessionId":      a.SessionId,
+					"fullName":       a.FullName,
+					"phone":          a.Phone,
+					"nik":            a.Nik,
+					"address":        a.Address,
+					"ktpPhotoUrl":    a.KtpPhotoUrl,
+					"selfPhotoUrl":   a.SelfPhotoUrl,
+					"ijazahPhotoUrl": a.IjazahPhotoUrl,
+					"cvPdfUrl":       a.CvPdfUrl,
+					"status":         a.Status,
+					"notes":          a.Notes,
+					"appliedAt":      a.AppliedAt,
+					"updatedAt":      a.UpdatedAt,
+					"isDeleted":      a.IsDeleted,
+				})
+			}
+		}
+		if list == nil { list = []map[string]interface{}{} }
+		jsonOK(w, list)
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+func handleRtBmpPhlApplicantsById(w http.ResponseWriter, r *http.Request) {
+	tenantId, ok := extractTenantId(r)
+	if !ok { jsonErr(w, 401, "unauthorized"); return }
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/rt/bmp/phl/applicants/")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil { jsonErr(w, 400, "invalid id"); return }
+
+	switch r.Method {
+	case http.MethodPut:
+		var body map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			jsonErr(w, 400, "invalid json body")
+			return
+		}
+		body["updatedAt"] = nowMillis()
+		updateRow("bmp_phl_applicants", id, tenantId, body)
+		jsonOK(w, map[string]interface{}{"ok": true})
+
+	case http.MethodDelete:
+		var sessionId int64
+		_ = db.QueryRow(`SELECT "sessionId" FROM bmp_phl_applicants WHERE id=$1 AND "tenantId"=$2`, id, tenantId).Scan(&sessionId)
+		_, err := db.Exec(`UPDATE bmp_phl_applicants SET "isDeleted"=TRUE, "updatedAt"=$1 WHERE id=$2 AND "tenantId"=$3`, nowMillis(), id, tenantId)
+		if err != nil { jsonErr(w, 500, err.Error()); return }
+
+		if sessionId > 0 {
+			var activeCount int
+			_ = db.QueryRow(`SELECT COUNT(*) FROM bmp_phl_applicants WHERE "sessionId"=$1 AND "isDeleted"=FALSE`, sessionId).Scan(&activeCount)
+			var maxQ int
+			_ = db.QueryRow(`SELECT "maxQuota" FROM bmp_phl_sessions WHERE id=$1`, sessionId).Scan(&maxQ)
+			newStatus := "OPEN"
+			if maxQ > 0 && activeCount >= maxQ {
+				newStatus = "FULL"
+			}
+			_, _ = db.Exec(`UPDATE bmp_phl_sessions SET "registeredCount"=$1, "status"=$2, "updatedAt"=$3 WHERE id=$4`, activeCount, newStatus, nowMillis(), sessionId)
+		}
+
+		jsonOK(w, map[string]interface{}{"ok": true})
+	default:
+		jsonErr(w, 405, "method not allowed")
+	}
+}
+
+func ifThen(condition bool, a, b string) string {
+	if condition { return a }
+	return b
+}
+
 
 

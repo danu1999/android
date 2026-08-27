@@ -1560,6 +1560,47 @@ func initSchema() error {
 		);`,
 		`CREATE INDEX IF NOT EXISTS "idx_bmp_wl_tenant_emp" ON "bmp_warning_letters" ("tenantId", "employeeId", "issueDate" DESC);`,
 		`CREATE INDEX IF NOT EXISTS "idx_bmp_wl_tenant_type" ON "bmp_warning_letters" ("tenantId", "letterType");`,
+
+		// 4. Jadwal & Kuota PHL (Pekerja Harian Lepas) & Pendaftar PHL
+		`CREATE TABLE IF NOT EXISTS "bmp_phl_sessions" (
+			"id" SERIAL PRIMARY KEY,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"sessionCode" VARCHAR(50) NOT NULL,
+			"token" VARCHAR(100) NOT NULL UNIQUE,
+			"title" VARCHAR(255) NOT NULL,
+			"workDate" BIGINT NOT NULL,
+			"shiftName" VARCHAR(100) DEFAULT 'Shift 1 (08:00 - 16:00)',
+			"dailyWage" DOUBLE PRECISION DEFAULT 50000.0,
+			"maxQuota" INT NOT NULL DEFAULT 3,
+			"registeredCount" INT DEFAULT 0,
+			"status" VARCHAR(50) DEFAULT 'OPEN',
+			"notes" TEXT DEFAULT '',
+			"createdAt" BIGINT,
+			"updatedAt" BIGINT,
+			"isDeleted" BOOLEAN DEFAULT FALSE
+		);`,
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_phl_sessions_tenant" ON "bmp_phl_sessions" ("tenantId", "status", "isDeleted");`,
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_phl_sessions_token" ON "bmp_phl_sessions" ("token");`,
+
+		`CREATE TABLE IF NOT EXISTS "bmp_phl_applicants" (
+			"id" SERIAL PRIMARY KEY,
+			"tenantId" VARCHAR(100) NOT NULL,
+			"sessionId" INT REFERENCES bmp_phl_sessions(id) ON DELETE CASCADE,
+			"fullName" VARCHAR(255) NOT NULL,
+			"phone" VARCHAR(50) NOT NULL,
+			"nik" VARCHAR(50) DEFAULT '',
+			"address" TEXT DEFAULT '',
+			"ktpPhotoUrl" TEXT DEFAULT '',
+			"selfPhotoUrl" TEXT DEFAULT '',
+			"ijazahPhotoUrl" TEXT DEFAULT '',
+			"cvPdfUrl" TEXT DEFAULT '',
+			"status" VARCHAR(50) DEFAULT 'REGISTERED',
+			"notes" TEXT DEFAULT '',
+			"appliedAt" BIGINT,
+			"updatedAt" BIGINT,
+			"isDeleted" BOOLEAN DEFAULT FALSE
+		);`,
+		`CREATE INDEX IF NOT EXISTS "idx_bmp_phl_applicants_tenant" ON "bmp_phl_applicants" ("tenantId", "sessionId", "status", "isDeleted");`,
 	}
 	for _, q := range bmpManufakturPerfectionMigrations {
 		if _, err := db.Exec(q); err != nil {
@@ -1578,7 +1619,7 @@ func hasTenantIdColumn(tableName string) bool {
 		"bmp_employees", "bmp_payrolls", "bmp_bahan_baku", "bmp_bahan_baku_item",
 		"products", "customers", "transactions", "bmp_product_stocks", "bmp_stock_ledger",
 		"bmp_production_logs", "bmp_machines", "bmp_molds", "bmp_work_orders", "bmp_maintenance_logs",
-		"bmp_warning_letters":
+		"bmp_warning_letters", "bmp_phl_sessions", "bmp_phl_applicants":
 		return true
 	}
 	return false

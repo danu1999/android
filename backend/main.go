@@ -172,6 +172,11 @@ func main() {
 	http.HandleFunc("/api/public/recruitment/validate-token", handlePublicValidateJobToken)
 	http.HandleFunc("/api/public/recruitment/submit", handlePublicSubmitJobApplication)
 
+	// Public PHL (Pekerja Harian Lepas) routes
+	http.HandleFunc("/phl/form", handleServePhlFormPage)
+	http.HandleFunc("/api/public/phl/validate", handlePublicValidatePhlSession)
+	http.HandleFunc("/api/public/phl/submit", handlePublicSubmitPhlApplication)
+
 	// Reports API
 	http.HandleFunc("/api/reports/outlet-margin", handleOutletMarginReport)
 
@@ -228,6 +233,10 @@ func main() {
 	http.HandleFunc("/api/rt/bmp/payrolls/", handleRtBmpPayrollsById)
 	http.HandleFunc("/api/rt/bmp/warning-letters", handleRtBmpWarningLetters)
 	http.HandleFunc("/api/rt/bmp/warning-letters/", handleRtBmpWarningLettersById)
+	http.HandleFunc("/api/rt/bmp/phl/sessions", handleRtBmpPhlSessions)
+	http.HandleFunc("/api/rt/bmp/phl/sessions/", handleRtBmpPhlSessionsById)
+	http.HandleFunc("/api/rt/bmp/phl/applicants", handleRtBmpPhlApplicants)
+	http.HandleFunc("/api/rt/bmp/phl/applicants/", handleRtBmpPhlApplicantsById)
 	http.HandleFunc("/api/rt/bmp/bahan-baku", handleRtBmpBahanBaku)
 	http.HandleFunc("/api/rt/bmp/bahan-baku/", handleRtBmpBahanBakuById)
 	http.HandleFunc("/api/rt/bmp/bahan-baku-items", handleRtBmpBahanBakuItems)

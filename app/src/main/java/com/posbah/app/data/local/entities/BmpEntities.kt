@@ -563,3 +563,47 @@ data class BmpWarningLetterEntity(
     val updatedAt: Long = System.currentTimeMillis()
 )
 
+data class BmpPhlSessionEntity(
+    val id: Long = 0,
+    val tenantId: String = "",
+    val sessionCode: String = "",
+    val token: String = "",
+    val title: String = "",
+    val workDate: Long = System.currentTimeMillis(),
+    val shiftName: String = "Shift 1 (08:00 - 16:00)",
+    val dailyWage: Double = 50000.0,
+    val maxQuota: Int = 3,
+    val registeredCount: Int = 0,
+    val status: String = "OPEN", // "OPEN", "FULL", "CLOSED"
+    val notes: String = "",
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDeleted: Boolean = false
+) {
+    val formUrl: String
+        get() = "https://www.zedmz.cloud/phl/form?session=$token"
+    val isFull: Boolean
+        get() = status == "FULL" || (maxQuota > 0 && registeredCount >= maxQuota)
+    val remainingQuota: Int
+        get() = (maxQuota - registeredCount).coerceAtLeast(0)
+}
+
+data class BmpPhlApplicantEntity(
+    val id: Long = 0,
+    val tenantId: String = "",
+    val sessionId: Long = 0,
+    val fullName: String = "",
+    val phone: String = "",
+    val nik: String = "",
+    val address: String = "",
+    val ktpPhotoUrl: String? = null,
+    val selfPhotoUrl: String? = null,
+    val ijazahPhotoUrl: String? = null,
+    val cvPdfUrl: String? = null,
+    val status: String = "REGISTERED", // "REGISTERED", "ACCEPTED", "ATTENDED", "CANCELLED"
+    val notes: String = "",
+    val appliedAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+    val isDeleted: Boolean = false
+)
+

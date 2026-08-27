@@ -83,6 +83,13 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.School
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.EventAvailable
+import androidx.compose.material.icons.outlined.People
+import androidx.compose.material.icons.outlined.PersonSearch
+import androidx.compose.material.icons.outlined.PictureAsPdf
+import androidx.compose.material.icons.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -90,6 +97,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -122,10 +130,13 @@ import coil.compose.AsyncImage
 import com.posbah.app.data.local.entities.BmpEmployeeEntity
 import com.posbah.app.data.local.entities.BmpJobApplicantEntity
 import com.posbah.app.data.local.entities.BmpJobInvitationEntity
+import com.posbah.app.data.local.entities.BmpPhlApplicantEntity
+import com.posbah.app.data.local.entities.BmpPhlSessionEntity
 import com.posbah.app.data.local.entities.BmpWarningLetterEntity
 import com.posbah.app.data.local.entities.parseWorkersAttendance
 import com.posbah.app.data.repository.AuthRepository
 import com.posbah.app.data.repository.BmpEmployeeRepository
+import com.posbah.app.data.repository.BmpPhlRepository
 import com.posbah.app.data.repository.BmpProductionLogRepository
 import com.posbah.app.data.repository.BmpRecruitmentRepository
 import com.posbah.app.data.repository.BmpSettingsRepository
@@ -161,6 +172,7 @@ class EmployeesViewModel @Inject constructor(
     private val settingsRepo: BmpSettingsRepository,
     private val recruitmentRepo: BmpRecruitmentRepository,
     private val warningLetterRepo: BmpWarningLetterRepository,
+    private val phlRepo: BmpPhlRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     val tenantId = authRepository.activeTenantId().orEmpty()
@@ -172,6 +184,8 @@ class EmployeesViewModel @Inject constructor(
     val invitations = recruitmentRepo.observeInvitations().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<BmpJobInvitationEntity>())
     val applicants = recruitmentRepo.observeApplicants().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<BmpJobApplicantEntity>())
     val warningLetters = warningLetterRepo.observe().stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<BmpWarningLetterEntity>())
+    val phlSessions = phlRepo.sessions.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<BmpPhlSessionEntity>())
+    val phlApplicants = phlRepo.applicants.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList<BmpPhlApplicantEntity>())
 
     init {
         viewModelScope.launch {
@@ -181,11 +195,57 @@ class EmployeesViewModel @Inject constructor(
             try { settingsRepo.refresh() } catch (_: Exception) {}
             try { recruitmentRepo.refresh() } catch (_: Exception) {}
             try { warningLetterRepo.refresh() } catch (_: Exception) {}
+            try { phlRepo.refresh() } catch (_: Exception) {}
         }
     }
 
     val error = MutableStateFlow<String?>(null)
     fun dismissError() { error.value = null }
+
+    fun createPhlSession(session: BmpPhlSessionEntity) = viewModelScope.launch {
+        val res = phlRepo.createSession(session)
+        if (res is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+            error.value = res.message
+        } else {
+            phlRepo.refresh()
+        }
+    }
+
+    fun updatePhlSession(session: BmpPhlSessionEntity) = viewModelScope.launch {
+        val res = phlRepo.updateSession(session)
+        if (res is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+            error.value = res.message
+        } else {
+            phlRepo.refresh()
+        }
+    }
+
+    fun deletePhlSession(id: Long) = viewModelScope.launch {
+        val res = phlRepo.deleteSession(id)
+        if (res is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+            error.value = res.message
+        } else {
+            phlRepo.refresh()
+        }
+    }
+
+    fun updatePhlApplicantStatus(id: Long, status: String) = viewModelScope.launch {
+        val res = phlRepo.updateApplicantStatus(id, status)
+        if (res is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+            error.value = res.message
+        } else {
+            phlRepo.refresh()
+        }
+    }
+
+    fun deletePhlApplicant(id: Long) = viewModelScope.launch {
+        val res = phlRepo.deleteApplicant(id)
+        if (res is com.posbah.app.data.repository.OnlineWriteResult.Error) {
+            error.value = res.message
+        } else {
+            phlRepo.refresh()
+        }
+    }
 
     fun saveAttendanceSettings(mode: String, ip: String, port: String) = viewModelScope.launch(Dispatchers.IO) {
         val current = settings.value ?: com.posbah.app.data.local.entities.BmpSettingsEntity(tenantId = tenantId, clientName = "CV. BAHTERA MULYA PLASTIK")
@@ -489,6 +549,8 @@ fun EmployeesScreen(
     val invitations by viewModel.invitations.collectAsState()
     val applicants by viewModel.applicants.collectAsState()
     val warningLetters by viewModel.warningLetters.collectAsState()
+    val phlSessions by viewModel.phlSessions.collectAsState()
+    val phlApplicants by viewModel.phlApplicants.collectAsState()
     val settings by viewModel.settings.collectAsState()
 
     val companyName = settings?.clientName?.takeIf { it.isNotBlank() } ?: "CV. Bahtera Plastik"
@@ -513,6 +575,11 @@ fun EmployeesScreen(
     var showCreateWarningLetterDialog by remember { mutableStateOf(false) }
     var selectedWarningLetterDetail by remember { mutableStateOf<BmpWarningLetterEntity?>(null) }
 
+    // PHL state
+    var showCreatePhlDialog by remember { mutableStateOf(false) }
+    var editPhlSessionTarget by remember { mutableStateOf<BmpPhlSessionEntity?>(null) }
+    var selectedPhlApplicantDetail by remember { mutableStateOf<BmpPhlApplicantEntity?>(null) }
+
     val context = LocalContext.current
     val errorState by viewModel.error.collectAsState()
     LaunchedEffect(errorState) {
@@ -530,7 +597,8 @@ fun EmployeesScreen(
                 subtitle = when (selectedTab) {
                     0 -> "${list.size} karyawan aktif"
                     1 -> "${warningLetters.size} surat peringatan & PHK"
-                    else -> "${pendingApplicants.size} pelamar baru"
+                    2 -> "${pendingApplicants.size} pelamar baru"
+                    else -> "${phlSessions.size} jadwal PHL"
                 },
                 onBack = onBack,
                 actions = {
@@ -586,6 +654,22 @@ fun EmployeesScreen(
                             Icon(Icons.Outlined.Link, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
                             Text("Buat Link Undangan", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                3 -> {
+                    FloatingActionButton(
+                        onClick = { showCreatePhlDialog = true },
+                        containerColor = Color(0xFF0284C7),
+                        contentColor = Color.White
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Outlined.Add, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Buat Jadwal PHL", fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -669,6 +753,31 @@ fun EmployeesScreen(
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                )
+                Tab(
+                    selected = selectedTab == 3,
+                    onClick = { selectedTab = 3 },
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("PHL", fontWeight = if (selectedTab == 3) FontWeight.Bold else FontWeight.Normal)
+                            if (phlSessions.isNotEmpty()) {
+                                Spacer(Modifier.width(6.dp))
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color(0xFF0284C7).copy(alpha = 0.15f),
+                                    modifier = Modifier.padding(2.dp)
+                                ) {
+                                    Text(
+                                        text = "${phlSessions.size}",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF0284C7),
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
                                 }
@@ -1236,7 +1345,7 @@ fun EmployeesScreen(
                     },
                     onDelete = { viewModel.deleteWarningLetter(it) }
                 )
-            } else {
+            } else if (selectedTab == 2) {
                 // TAB 2: CALON KARYAWAN & UNDANGAN
                 var selectedPositionFilter by remember { mutableStateOf("ALL") }
 
@@ -1382,8 +1491,73 @@ fun EmployeesScreen(
                         }
                     }
                 }
+            } else {
+                // TAB 3: JADWAL & PENDAFTAR PHL (CADANGAN)
+                PhlTabContent(
+                    sessions = phlSessions,
+                    applicants = phlApplicants,
+                    companyName = companyName,
+                    onCreateSession = { showCreatePhlDialog = true },
+                    onEditSession = { editPhlSessionTarget = it },
+                    onDeleteSession = { viewModel.deletePhlSession(it.id) },
+                    onViewApplicant = { selectedPhlApplicantDetail = it },
+                    onShareSession = { session ->
+                        sharePhlSessionWhatsApp(context, session, companyName)
+                    },
+                    onCopyLink = { session ->
+                        copyPhlLink(context, session)
+                    }
+                )
             }
         }
+    }
+
+    // ── Dialog: Buat Jadwal PHL Baru ───────────────────────────────────────────
+    if (showCreatePhlDialog) {
+        CreatePhlSessionDialog(
+            companyName = companyName,
+            onDismiss = { showCreatePhlDialog = false },
+            onConfirm = { newSession ->
+                viewModel.createPhlSession(newSession)
+                showCreatePhlDialog = false
+                Toast.makeText(context, "Jadwal & Link PHL berhasil diterbitkan!", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    // ── Dialog: Edit Kuota / Jadwal PHL ────────────────────────────────────────
+    editPhlSessionTarget?.let { session ->
+        EditPhlSessionDialog(
+            session = session,
+            onDismiss = { editPhlSessionTarget = null },
+            onConfirm = { updated ->
+                viewModel.updatePhlSession(updated)
+                editPhlSessionTarget = null
+                Toast.makeText(context, "Jadwal & Kuota berhasil diperbarui!", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    // ── Dialog: Detail Pendaftar PHL & Berkas ──────────────────────────────────
+    selectedPhlApplicantDetail?.let { app ->
+        PhlApplicantDetailDialog(
+            applicant = app,
+            session = phlSessions.firstOrNull { it.id == app.sessionId },
+            onDismiss = { selectedPhlApplicantDetail = null },
+            onPreviewImage = { title, url ->
+                previewImageTarget = Pair(title, url)
+            },
+            onUpdateStatus = { newStatus ->
+                viewModel.updatePhlApplicantStatus(app.id, newStatus)
+                selectedPhlApplicantDetail = null
+                Toast.makeText(context, "Status pendaftar diubah menjadi $newStatus", Toast.LENGTH_SHORT).show()
+            },
+            onDelete = {
+                viewModel.deletePhlApplicant(app.id)
+                selectedPhlApplicantDetail = null
+                Toast.makeText(context, "Pendaftar berhasil dihapus", Toast.LENGTH_SHORT).show()
+            }
+        )
     }
 
     // ── Dialog: Buat Surat Peringatan / PHK Baru ────────────────────────────
@@ -3738,5 +3912,977 @@ private fun savePdfToPublicDownloads(context: Context, srcFile: File, fileName: 
             }
         }
     } catch (_: Exception) {}
+}
+
+// ── PHL (Pekerja Harian Lepas / Cadangan) Composables & Dialogs ────────────────
+
+@Composable
+fun PhlTabContent(
+    sessions: List<BmpPhlSessionEntity>,
+    applicants: List<BmpPhlApplicantEntity>,
+    companyName: String,
+    onCreateSession: () -> Unit,
+    onEditSession: (BmpPhlSessionEntity) -> Unit,
+    onDeleteSession: (BmpPhlSessionEntity) -> Unit,
+    onViewApplicant: (BmpPhlApplicantEntity) -> Unit,
+    onShareSession: (BmpPhlSessionEntity) -> Unit,
+    onCopyLink: (BmpPhlSessionEntity) -> Unit
+) {
+    var subTab by remember { mutableStateOf(0) } // 0: Jadwal & Kuota, 1: Pendaftar Masuk
+    var selectedSessionFilterId by remember { mutableStateOf<Long?>(null) }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Sub-Tab Switcher
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            FilterChip(
+                selected = subTab == 0,
+                onClick = { subTab = 0 },
+                label = { Text("Jadwal & Kuota (${sessions.size})", fontWeight = if (subTab == 0) FontWeight.Bold else FontWeight.Normal) },
+                leadingIcon = { Icon(Icons.Outlined.CalendarMonth, null, modifier = Modifier.size(16.dp)) },
+                modifier = Modifier.weight(1f)
+            )
+            FilterChip(
+                selected = subTab == 1,
+                onClick = { subTab = 1 },
+                label = { Text("Pendaftar Masuk (${applicants.size})", fontWeight = if (subTab == 1) FontWeight.Bold else FontWeight.Normal) },
+                leadingIcon = { Icon(Icons.Outlined.People, null, modifier = Modifier.size(16.dp)) },
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        if (subTab == 0) {
+            // SUB-TAB 0: DAFTAR JADWAL & KUOTA PHL
+            if (sessions.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    EmptyState(
+                        title = "Belum Ada Jadwal PHL",
+                        description = "Tentukan tanggal masuk kerja dan kuota orang untuk mengundang Pekerja Harian Lepas cadangan.",
+                        actionLabel = "Buat Jadwal PHL",
+                        onAction = onCreateSession
+                    )
+                }
+            } else {
+                LazyColumn(
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(sessions, key = { it.id }) { session ->
+                        PhlSessionCard(
+                            session = session,
+                            companyName = companyName,
+                            onEdit = { onEditSession(session) },
+                            onDelete = { onDeleteSession(session) },
+                            onCopyLink = { onCopyLink(session) },
+                            onShare = { onShareSession(session) },
+                            onViewApplicants = {
+                                selectedSessionFilterId = session.id
+                                subTab = 1
+                            }
+                        )
+                    }
+                }
+            }
+        } else {
+            // SUB-TAB 1: DAFTAR PENDAFTAR PHL
+            val activeApplicants = remember(applicants, selectedSessionFilterId) {
+                if (selectedSessionFilterId != null) {
+                    applicants.filter { it.sessionId == selectedSessionFilterId && !it.isDeleted }
+                } else {
+                    applicants.filter { !it.isDeleted }
+                }
+            }
+
+            Column(modifier = Modifier.fillMaxSize()) {
+                if (sessions.isNotEmpty()) {
+                    ScrollableTabRow(
+                        selectedTabIndex = if (selectedSessionFilterId == null) 0 else (sessions.indexOfFirst { it.id == selectedSessionFilterId } + 1).coerceAtLeast(0),
+                        edgePadding = 16.dp,
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ) {
+                        Tab(
+                            selected = selectedSessionFilterId == null,
+                            onClick = { selectedSessionFilterId = null },
+                            text = { Text("Semua Jadwal (${applicants.size})", fontSize = 12.sp) }
+                        )
+                        sessions.forEach { s ->
+                            val count = applicants.count { it.sessionId == s.id && !it.isDeleted }
+                            Tab(
+                                selected = selectedSessionFilterId == s.id,
+                                onClick = { selectedSessionFilterId = s.id },
+                                text = { Text("${s.shiftName.take(14)} ($count)", fontSize = 12.sp) }
+                            )
+                        }
+                    }
+                }
+
+                if (activeApplicants.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        EmptyState(
+                            title = "Belum Ada Pendaftar",
+                            description = "Bagikan tautan formulir pendaftaran PHL ke WhatsApp calon tenaga kerja."
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(activeApplicants, key = { it.id }) { app ->
+                            PhlApplicantCard(
+                                applicant = app,
+                                sessionTitle = sessions.firstOrNull { it.id == app.sessionId }?.title ?: "Jadwal PHL",
+                                onDetail = { onViewApplicant(app) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PhlSessionCard(
+    session: BmpPhlSessionEntity,
+    companyName: String,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onCopyLink: () -> Unit,
+    onShare: () -> Unit,
+    onViewApplicants: () -> Unit
+) {
+    val isFull = session.isFull
+    val fillPercent = if (session.maxQuota > 0) {
+        (session.registeredCount.toFloat() / session.maxQuota.toFloat()).coerceIn(0f, 1f)
+    } else 0f
+
+    val statusContainerColor = when {
+        session.status == "CLOSED" -> Color(0xFFE2E8F0)
+        isFull -> Color(0xFFFEE2E2)
+        else -> Color(0xFFDCFCE7)
+    }
+    val statusContentColor = when {
+        session.status == "CLOSED" -> Color(0xFF64748B)
+        isFull -> Color(0xFFDC2626)
+        else -> Color(0xFF16A34A)
+    }
+    val statusText = when {
+        session.status == "CLOSED" -> "DITUTUP"
+        isFull -> "PENUH (Maksimal)"
+        else -> "BUKA (${session.remainingQuota} Kuota Tersedia)"
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, if (isFull) Color(0xFFFCA5A5) else MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Header: Title, Code, Status Badge
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = session.title,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = session.sessionCode,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = statusContainerColor
+                ) {
+                    Text(
+                        text = statusText,
+                        color = statusContentColor,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // Grid Details (Tanggal, Shift, Upah, Kuota Terisi)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        Text("📅 TANGGAL", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(2.dp))
+                        Text(Formatters.dateLong(session.workDate), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        Text("⏰ SHIFT KERJA", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(2.dp))
+                        Text(session.shiftName, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        Text("💰 ESTIMASI UPAH", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            if (session.dailyWage > 0) Formatters.rupiah(session.dailyWage) + " / Hari" else "Standar PHL",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0D9488)
+                        )
+                    }
+                }
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        Text("👥 KUOTA TERISI", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            "${session.registeredCount} / ${session.maxQuota} Orang",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isFull) Color(0xFFDC2626) else MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+
+            // Quota progress indicator
+            Spacer(Modifier.height(10.dp))
+            LinearProgressIndicator(
+                progress = { fillPercent },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp)),
+                color = when {
+                    isFull -> Color(0xFFDC2626)
+                    fillPercent > 0.7f -> Color(0xFFD97706)
+                    else -> Color(0xFF0284C7)
+                },
+                trackColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+
+            if (session.notes.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFFF0F9FF),
+                    border = BorderStroke(1.dp, Color(0xFFBAE6FD)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "📌 Catatan: ${session.notes}",
+                        fontSize = 11.5.sp,
+                        color = Color(0xFF0369A1),
+                        modifier = Modifier.padding(8.dp),
+                        lineHeight = 15.sp
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            Spacer(Modifier.height(10.dp))
+
+            // Action Buttons Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onCopyLink,
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(15.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Salin Link", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                }
+
+                Button(
+                    onClick = onShare,
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Outlined.Share, contentDescription = null, modifier = Modifier.size(15.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Kirim WA", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                }
+
+                OutlinedButton(
+                    onClick = onViewApplicants,
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                ) {
+                    Icon(Icons.Outlined.People, contentDescription = null, modifier = Modifier.size(16.dp))
+                }
+
+                IconButton(
+                    onClick = onEdit,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(Icons.Outlined.Edit, contentDescription = "Edit Kuota", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                }
+
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(Icons.Outlined.Delete, contentDescription = "Hapus Jadwal", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PhlApplicantCard(
+    applicant: BmpPhlApplicantEntity,
+    sessionTitle: String,
+    onDetail: () -> Unit
+) {
+    val statusColor = when (applicant.status) {
+        "ACCEPTED" -> Color(0xFF16A34A)
+        "CANCELLED" -> Color(0xFFDC2626)
+        else -> Color(0xFF0284C7)
+    }
+    val statusText = when (applicant.status) {
+        "ACCEPTED" -> "Terkonfirmasi Hadir"
+        "CANCELLED" -> "Dibatalkan"
+        else -> "Terdaftar"
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onDetail() }
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(applicant.fullName, fontWeight = FontWeight.Bold, fontSize = 14.5.sp)
+                    Spacer(Modifier.height(2.dp))
+                    Text("Jadwal: $sessionTitle", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = statusColor.copy(alpha = 0.15f)
+                ) {
+                    Text(
+                        statusText,
+                        color = statusColor,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Text("📞 WA: ${applicant.phone}  •  🪪 NIK: ${applicant.nik.ifEmpty { "-" }}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface)
+            if (applicant.address.isNotBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Text("🏠 Alamat: ${applicant.address}", fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Badges for uploaded files
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (!applicant.ktpPhotoUrl.isNullOrBlank()) {
+                    Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFEFF6FF)) {
+                        Text("🪪 KTP", fontSize = 10.sp, color = Color(0xFF1D4ED8), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), fontWeight = FontWeight.Bold)
+                    }
+                }
+                if (!applicant.selfPhotoUrl.isNullOrBlank()) {
+                    Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFFDF4FF)) {
+                        Text("🤳 Selfie", fontSize = 10.sp, color = Color(0xFFA21CAF), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), fontWeight = FontWeight.Bold)
+                    }
+                }
+                if (!applicant.ijazahPhotoUrl.isNullOrBlank()) {
+                    Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFF0FDF4)) {
+                        Text("🎓 Ijazah", fontSize = 10.sp, color = Color(0xFF15803D), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), fontWeight = FontWeight.Bold)
+                    }
+                }
+                if (!applicant.cvPdfUrl.isNullOrBlank()) {
+                    Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFFEF2F2)) {
+                        Text("📄 CV PDF", fontSize = 10.sp, color = Color(0xFFB91C1C), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), fontWeight = FontWeight.Bold)
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                Text("Lihat Detail >", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+fun CreatePhlSessionDialog(
+    companyName: String,
+    onDismiss: () -> Unit,
+    onConfirm: (BmpPhlSessionEntity) -> Unit
+) {
+    val context = LocalContext.current
+    var title by remember { mutableStateOf("Operator Injeksi Cadangan") }
+    var workDate by remember { mutableStateOf(System.currentTimeMillis()) }
+    var shiftName by remember { mutableStateOf("Shift 1 (08:00 - 16:00)") }
+    var maxQuota by remember { mutableStateOf(3) }
+    var dailyWageStr by remember { mutableStateOf("50000") }
+    var notes by remember { mutableStateOf("Pakaian rapi, celana panjang, sandal/sepatu, makan siang disediakan.") }
+
+    val shifts = listOf(
+        "Shift 1 (08:00 - 16:00)",
+        "Shift 2 (16:00 - 00:00)",
+        "Shift 3 (00:00 - 08:00)",
+        "Shift Pagi (07:00 - 15:00)"
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.EventAvailable, null, tint = Color(0xFF0284C7))
+                Spacer(Modifier.width(8.dp))
+                Text("Buat Jadwal & Kuota PHL", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(androidx.compose.foundation.rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Posisi / Tugas PHL") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp)
+                )
+
+                // Date Picker trigger
+                Text("Tanggal Masuk Kerja PHL", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            val cal = Calendar.getInstance().apply { timeInMillis = workDate }
+                            android.app.DatePickerDialog(
+                                context,
+                                { _, y, m, d ->
+                                    val newCal = Calendar.getInstance().apply {
+                                        set(y, m, d, 8, 0, 0)
+                                    }
+                                    workDate = newCal.timeInMillis
+                                },
+                                cal.get(Calendar.YEAR),
+                                cal.get(Calendar.MONTH),
+                                cal.get(Calendar.DAY_OF_MONTH)
+                            ).show()
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Outlined.CalendarMonth, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(Formatters.dateLong(workDate), fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.weight(1f))
+                        Text("Ubah", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                // Shift selector chips
+                Text("Shift / Jam Kerja", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    shifts.chunked(2).forEach { rowShifts ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                            rowShifts.forEach { s ->
+                                FilterChip(
+                                    selected = shiftName == s,
+                                    onClick = { shiftName = s },
+                                    label = { Text(s, fontSize = 11.sp) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Kuota Stepper
+                Text("Pengaturan Jumlah Orang (Kuota Maksimal)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    OutlinedButton(
+                        onClick = { if (maxQuota > 1) maxQuota-- },
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                    ) {
+                        Text("-", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Text(
+                        "$maxQuota Orang",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0284C7)
+                    )
+                    OutlinedButton(
+                        onClick = { maxQuota++ },
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                    ) {
+                        Text("+", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Text(
+                    "*(Jika $maxQuota orang sudah mendaftar, link formulir otomatis mengunci dan memberi notifikasi bahwa kuota sudah penuh)*",
+                    fontSize = 11.sp,
+                    color = Color(0xFFD97706),
+                    lineHeight = 14.sp
+                )
+
+                // Daily Wage
+                OutlinedTextField(
+                    value = dailyWageStr,
+                    onValueChange = { dailyWageStr = it.filter { ch -> ch.isDigit() } },
+                    label = { Text("Estimasi Upah Harian (Rp)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp)
+                )
+
+                // Notes
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text("Catatan / Syarat Khusus") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    minLines = 2
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val wage = dailyWageStr.toDoubleOrNull() ?: 50000.0
+                    onConfirm(
+                        BmpPhlSessionEntity(
+                            title = title.ifBlank { "Operator Injeksi Cadangan" },
+                            workDate = workDate,
+                            shiftName = shiftName,
+                            maxQuota = maxQuota.coerceAtLeast(1),
+                            dailyWage = wage,
+                            notes = notes,
+                            status = "OPEN"
+                        )
+                    )
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("Terbitkan & Buat Link", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Batal") }
+        }
+    )
+}
+
+@Composable
+fun EditPhlSessionDialog(
+    session: BmpPhlSessionEntity,
+    onDismiss: () -> Unit,
+    onConfirm: (BmpPhlSessionEntity) -> Unit
+) {
+    var maxQuota by remember { mutableStateOf(session.maxQuota) }
+    var status by remember { mutableStateOf(session.status) }
+    var notes by remember { mutableStateOf(session.notes) }
+
+    val statuses = listOf(
+        "OPEN" to "BUKA",
+        "FULL" to "PENUH (Kunci)",
+        "CLOSED" to "TUTUP"
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Atur Kuota & Status PHL", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(session.title, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
+                Text("Terdaftar Saat Ini: ${session.registeredCount} orang", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                // Kuota Stepper
+                Text("Batas Kuota Maksimal:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    OutlinedButton(
+                        onClick = { if (maxQuota > 1) maxQuota-- },
+                        shape = RoundedCornerShape(8.dp)
+                    ) { Text("-", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+                    Text("$maxQuota Orang", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0284C7))
+                    OutlinedButton(
+                        onClick = { maxQuota++ },
+                        shape = RoundedCornerShape(8.dp)
+                    ) { Text("+", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+                }
+
+                // Status selection
+                Text("Status Pendaftaran Link:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                    statuses.forEach { (key, label) ->
+                        FilterChip(
+                            selected = status == key,
+                            onClick = { status = key },
+                            label = { Text(label, fontSize = 11.sp) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text("Catatan") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp)
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onConfirm(session.copy(maxQuota = maxQuota, status = status, notes = notes))
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+                shape = RoundedCornerShape(8.dp)
+            ) { Text("Simpan", fontWeight = FontWeight.Bold) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Batal") }
+        }
+    )
+}
+
+@Composable
+fun PhlApplicantDetailDialog(
+    applicant: BmpPhlApplicantEntity,
+    session: BmpPhlSessionEntity?,
+    onDismiss: () -> Unit,
+    onPreviewImage: (title: String, url: String) -> Unit,
+    onUpdateStatus: (newStatus: String) -> Unit,
+    onDelete: () -> Unit
+) {
+    val context = LocalContext.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Person, null, tint = Color(0xFF0284C7))
+                Spacer(Modifier.width(8.dp))
+                Text("Detail Pendaftar PHL", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(androidx.compose.foundation.rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Info Box
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(applicant.fullName, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        Text("📞 No. WhatsApp: ${applicant.phone}", fontSize = 12.5.sp)
+                        Text("🪪 NIK: ${applicant.nik.ifEmpty { "-" }}", fontSize = 12.5.sp)
+                        Text("🏠 Alamat: ${applicant.address.ifEmpty { "-" }}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (session != null) {
+                            Text("📅 Jadwal: ${session.title} (${Formatters.dateLong(session.workDate)})", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+
+                // Berkas Lampiran Section (KTP, Selfie, Ijazah, CV)
+                Text("Berkas Lampiran Pendaftar", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+
+                // 1. KTP
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("🪪 Foto KTP Asli", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    if (!applicant.ktpPhotoUrl.isNullOrBlank()) {
+                        OutlinedButton(
+                            onClick = { onPreviewImage("Foto KTP: ${applicant.fullName}", applicant.ktpPhotoUrl) },
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Icon(Icons.Outlined.Visibility, null, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Lihat Foto", fontSize = 11.sp)
+                        }
+                    } else {
+                        Text("Tidak ada", fontSize = 11.sp, color = Color.Gray)
+                    }
+                }
+
+                // 2. Selfie
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("🤳 Pas Foto Selfie", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    if (!applicant.selfPhotoUrl.isNullOrBlank()) {
+                        OutlinedButton(
+                            onClick = { onPreviewImage("Foto Selfie: ${applicant.fullName}", applicant.selfPhotoUrl) },
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Icon(Icons.Outlined.Visibility, null, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Lihat Foto", fontSize = 11.sp)
+                        }
+                    } else {
+                        Text("Tidak ada", fontSize = 11.sp, color = Color.Gray)
+                    }
+                }
+
+                // 3. Ijazah
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("🎓 Ijazah Terakhir", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    if (!applicant.ijazahPhotoUrl.isNullOrBlank()) {
+                        OutlinedButton(
+                            onClick = {
+                                if (applicant.ijazahPhotoUrl.endsWith(".pdf", ignoreCase = true)) {
+                                    try {
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(applicant.ijazahPhotoUrl))
+                                        context.startActivity(intent)
+                                    } catch (_: Exception) {
+                                        Toast.makeText(context, "Tidak dapat membuka dokumen", Toast.LENGTH_SHORT).show()
+                                    }
+                                } else {
+                                    onPreviewImage("Ijazah: ${applicant.fullName}", applicant.ijazahPhotoUrl)
+                                }
+                            },
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Icon(Icons.Outlined.OpenInNew, null, modifier = Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Buka Ijazah", fontSize = 11.sp)
+                        }
+                    } else {
+                        Text("Tidak ada", fontSize = 11.sp, color = Color.Gray)
+                    }
+                }
+
+                // 4. CV PDF
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("📄 Curriculum Vitae (CV)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    if (!applicant.cvPdfUrl.isNullOrBlank()) {
+                        OutlinedButton(
+                            onClick = {
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(applicant.cvPdfUrl))
+                                    context.startActivity(intent)
+                                } catch (_: Exception) {
+                                    Toast.makeText(context, "Tidak dapat membuka dokumen PDF", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            shape = RoundedCornerShape(6.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Icon(Icons.Outlined.PictureAsPdf, null, modifier = Modifier.size(14.dp), tint = Color(0xFFDC2626))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Buka PDF", fontSize = 11.sp)
+                        }
+                    } else {
+                        Text("Tidak ada", fontSize = 11.sp, color = Color.Gray)
+                    }
+                }
+
+                Spacer(Modifier.height(6.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(Modifier.height(6.dp))
+
+                // Chat WA Button
+                Button(
+                    onClick = {
+                        val cleanPhone = if (applicant.phone.startsWith("0")) "62" + applicant.phone.substring(1) else applicant.phone.replace("+", "")
+                        val msg = "Halo ${applicant.fullName}, kami dari CV. Bahtera Mulya Plastik terkait pendaftaran Pekerja Harian Lepas (PHL) jadwal ${session?.shiftName ?: ""}. "
+                        val uri = Uri.parse("https://api.whatsapp.com/send?phone=$cleanPhone&text=${Uri.encode(msg)}")
+                        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Outlined.Phone, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Chat WhatsApp Calon PHL", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+
+                // Action Status Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { onUpdateStatus("ACCEPTED") },
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF15803D))
+                    ) {
+                        Icon(Icons.Outlined.Check, null, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Konfirmasi", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    OutlinedButton(
+                        onClick = { onUpdateStatus("CANCELLED") },
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFDC2626))
+                    ) {
+                        Text("Batalkan", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Outlined.Delete, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Tutup") }
+        }
+    )
+}
+
+fun copyPhlLink(context: Context, session: BmpPhlSessionEntity) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    val clip = ClipData.newPlainText("Link Pendaftaran PHL", session.formUrl)
+    clipboard.setPrimaryClip(clip)
+    Toast.makeText(context, "Link pendaftaran PHL disalin ke clipboard:\n${session.formUrl}", Toast.LENGTH_LONG).show()
+}
+
+fun sharePhlSessionWhatsApp(context: Context, session: BmpPhlSessionEntity, companyName: String) {
+    val dateStr = Formatters.dateLong(session.workDate)
+    val wageStr = if (session.dailyWage > 0) Formatters.rupiah(session.dailyWage) + " / Hari" else "Sesuai Standar"
+    val text = """
+*LOWONGAN PEKERJA HARIAN LEPAS (PHL)*
+*$companyName*
+----------------------------------------
+📌 *Posisi/Tugas:* ${session.title}
+📅 *Hari/Tanggal:* $dateStr
+⏰ *Shift Kerja:* ${session.shiftName}
+👥 *Kuota Dibutuhkan:* ${session.maxQuota} Orang
+💰 *Upah Harian:* $wageStr
+${if (session.notes.isNotBlank()) "📝 *Keterangan:* ${session.notes}\n" else ""}
+Silakan mendaftar dan mengunggah berkas melalui tautan resmi berikut:
+👉 ${session.formUrl}
+
+*(Pendaftaran akan otomatis tertutup jika kuota ${session.maxQuota} orang telah terpenuhi).*
+    """.trimIndent()
+
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, text)
+    }
+    try {
+        context.startActivity(Intent.createChooser(intent, "Bagikan Lowongan PHL via WhatsApp"))
+    } catch (_: Exception) {
+        Toast.makeText(context, "Tidak dapat membuka aplikasi berbagi", Toast.LENGTH_SHORT).show()
+    }
 }
 

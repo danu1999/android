@@ -4000,4 +4000,179 @@ class BmpWarningLetterRepository @Inject constructor(
         }
 }
 
+// ── BmpPhlRepository (Pekerja Harian Lepas / Cadangan) ─────────────────────
+
+fun Map<String, Any?>.toBmpPhlSessionEntity(): com.posbah.app.data.local.entities.BmpPhlSessionEntity = com.posbah.app.data.local.entities.BmpPhlSessionEntity(
+    id = (getCaseInsensitive("id") as? Number)?.toLong() ?: 0L,
+    tenantId = getCaseInsensitive("tenantId")?.toString() ?: "",
+    sessionCode = getCaseInsensitive("sessionCode")?.toString() ?: "",
+    token = getCaseInsensitive("token")?.toString() ?: "",
+    title = getCaseInsensitive("title")?.toString() ?: "",
+    workDate = (getCaseInsensitive("workDate") as? Number)?.toLong() ?: System.currentTimeMillis(),
+    shiftName = getCaseInsensitive("shiftName")?.toString() ?: "Shift 1 (08:00 - 16:00)",
+    dailyWage = (getCaseInsensitive("dailyWage") as? Number)?.toDouble() ?: 50000.0,
+    maxQuota = (getCaseInsensitive("maxQuota") as? Number)?.toInt() ?: 3,
+    registeredCount = (getCaseInsensitive("registeredCount") as? Number)?.toInt() ?: 0,
+    status = getCaseInsensitive("status")?.toString() ?: "OPEN",
+    notes = getCaseInsensitive("notes")?.toString() ?: "",
+    isDeleted = (getCaseInsensitive("isDeleted") as? Boolean) ?: false,
+    createdAt = (getCaseInsensitive("createdAt") as? Number)?.toLong() ?: System.currentTimeMillis(),
+    updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: System.currentTimeMillis()
+)
+
+fun Map<String, Any?>.toBmpPhlApplicantEntity(): com.posbah.app.data.local.entities.BmpPhlApplicantEntity = com.posbah.app.data.local.entities.BmpPhlApplicantEntity(
+    id = (getCaseInsensitive("id") as? Number)?.toLong() ?: 0L,
+    tenantId = getCaseInsensitive("tenantId")?.toString() ?: "",
+    sessionId = (getCaseInsensitive("sessionId") as? Number)?.toLong() ?: 0L,
+    fullName = getCaseInsensitive("fullName")?.toString() ?: "",
+    phone = getCaseInsensitive("phone")?.toString() ?: "",
+    nik = getCaseInsensitive("nik")?.toString() ?: "",
+    address = getCaseInsensitive("address")?.toString() ?: "",
+    ktpPhotoUrl = getCaseInsensitive("ktpPhotoUrl")?.toString(),
+    selfPhotoUrl = getCaseInsensitive("selfPhotoUrl")?.toString(),
+    ijazahPhotoUrl = getCaseInsensitive("ijazahPhotoUrl")?.toString(),
+    cvPdfUrl = getCaseInsensitive("cvPdfUrl")?.toString(),
+    status = getCaseInsensitive("status")?.toString() ?: "REGISTERED",
+    notes = getCaseInsensitive("notes")?.toString() ?: "",
+    appliedAt = (getCaseInsensitive("appliedAt") as? Number)?.toLong() ?: System.currentTimeMillis(),
+    updatedAt = (getCaseInsensitive("updatedAt") as? Number)?.toLong() ?: System.currentTimeMillis(),
+    isDeleted = (getCaseInsensitive("isDeleted") as? Boolean) ?: false
+)
+
+@Singleton
+class BmpPhlRepository @Inject constructor(
+    private val api: BmpApiService
+) {
+    private val _sessions = MutableStateFlow<List<com.posbah.app.data.local.entities.BmpPhlSessionEntity>>(emptyList())
+    val sessions = _sessions.asStateFlow()
+
+    private val _applicants = MutableStateFlow<List<com.posbah.app.data.local.entities.BmpPhlApplicantEntity>>(emptyList())
+    val applicants = _applicants.asStateFlow()
+
+    suspend fun refresh() {
+        try {
+            val resp = api.getPhlSessions()
+            if (resp.isSuccessful) {
+                _sessions.value = resp.body()?.map { it.toBmpPhlSessionEntity() } ?: emptyList()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        try {
+            val respApps = api.getPhlApplicants()
+            if (respApps.isSuccessful) {
+                _applicants.value = respApps.body()?.map { it.toBmpPhlApplicantEntity() } ?: emptyList()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    suspend fun createSession(session: com.posbah.app.data.local.entities.BmpPhlSessionEntity): OnlineWriteResult = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+        val snapshot = _sessions.value
+        try {
+            val resp = api.createPhlSession(mapOf(
+                "title" to session.title,
+                "workDate" to session.workDate,
+                "shiftName" to session.shiftName,
+                "dailyWage" to session.dailyWage,
+                "maxQuota" to session.maxQuota,
+                "notes" to session.notes
+            ))
+            if (resp.isSuccessful) {
+                refresh()
+                OnlineWriteResult.Success
+            } else {
+                OnlineWriteResult.Error("Gagal membuat jadwal PHL: ${resp.message()}")
+            }
+        } catch (e: Exception) {
+            _sessions.value = snapshot
+            OnlineWriteResult.Error(e.message ?: "Gagal membuat jadwal PHL")
+        }
+    }
+
+    suspend fun updateSession(session: com.posbah.app.data.local.entities.BmpPhlSessionEntity): OnlineWriteResult = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+        val snapshot = _sessions.value
+        _sessions.value = snapshot.map { if (it.id == session.id) session else it }
+
+        try {
+            val resp = api.updatePhlSession(session.id, mapOf(
+                "title" to session.title,
+                "workDate" to session.workDate,
+                "shiftName" to session.shiftName,
+                "dailyWage" to session.dailyWage,
+                "maxQuota" to session.maxQuota,
+                "status" to session.status,
+                "notes" to session.notes
+            ))
+            if (resp.isSuccessful) {
+                refresh()
+                OnlineWriteResult.Success
+            } else {
+                _sessions.value = snapshot
+                OnlineWriteResult.Error("Gagal update jadwal PHL: ${resp.message()}")
+            }
+        } catch (e: Exception) {
+            _sessions.value = snapshot
+            OnlineWriteResult.Error(e.message ?: "Gagal update jadwal PHL")
+        }
+    }
+
+    suspend fun deleteSession(id: Long): OnlineWriteResult = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+        val snapshot = _sessions.value
+        _sessions.value = snapshot.filter { it.id != id }
+
+        try {
+            val resp = api.deletePhlSession(id)
+            if (resp.isSuccessful) {
+                OnlineWriteResult.Success
+            } else {
+                _sessions.value = snapshot
+                OnlineWriteResult.Error("Gagal menghapus jadwal PHL")
+            }
+        } catch (e: Exception) {
+            _sessions.value = snapshot
+            OnlineWriteResult.Error(e.message ?: "Gagal menghapus jadwal PHL")
+        }
+    }
+
+    suspend fun updateApplicantStatus(applicantId: Long, newStatus: String): OnlineWriteResult = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+        val snapshot = _applicants.value
+        _applicants.value = snapshot.map { if (it.id == applicantId) it.copy(status = newStatus) else it }
+
+        try {
+            val resp = api.updatePhlApplicant(applicantId, mapOf("status" to newStatus))
+            if (resp.isSuccessful) {
+                refresh()
+                OnlineWriteResult.Success
+            } else {
+                _applicants.value = snapshot
+                OnlineWriteResult.Error("Gagal update status pendaftar")
+            }
+        } catch (e: Exception) {
+            _applicants.value = snapshot
+            OnlineWriteResult.Error(e.message ?: "Gagal update status pendaftar")
+        }
+    }
+
+    suspend fun deleteApplicant(applicantId: Long): OnlineWriteResult = kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+        val snapshot = _applicants.value
+        _applicants.value = snapshot.filter { it.id != applicantId }
+
+        try {
+            val resp = api.deletePhlApplicant(applicantId)
+            if (resp.isSuccessful) {
+                refresh()
+                OnlineWriteResult.Success
+            } else {
+                _applicants.value = snapshot
+                OnlineWriteResult.Error("Gagal menghapus pendaftar")
+            }
+        } catch (e: Exception) {
+            _applicants.value = snapshot
+            OnlineWriteResult.Error(e.message ?: "Gagal menghapus pendaftar")
+        }
+    }
+}
+
 

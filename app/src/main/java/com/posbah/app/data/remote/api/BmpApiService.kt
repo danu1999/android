@@ -292,6 +292,28 @@ interface BmpApiService {
 
     @DELETE("api/rt/bmp/warning-letters/{id}")
     suspend fun deleteWarningLetter(@Path("id") id: Long): Response<Map<String, Any?>>
+
+    // ── PHL (Pekerja Harian Lepas / Cadangan) ──────────────────────────────
+    @GET("api/rt/bmp/phl/sessions")
+    suspend fun getPhlSessions(): Response<List<Map<String, Any?>>>
+
+    @POST("api/rt/bmp/phl/sessions")
+    suspend fun createPhlSession(@Body body: Map<String, @JvmSuppressWildcards Any?>): Response<Map<String, Any?>>
+
+    @PUT("api/rt/bmp/phl/sessions/{id}")
+    suspend fun updatePhlSession(@Path("id") id: Long, @Body body: Map<String, @JvmSuppressWildcards Any?>): Response<Map<String, Any?>>
+
+    @DELETE("api/rt/bmp/phl/sessions/{id}")
+    suspend fun deletePhlSession(@Path("id") id: Long): Response<Map<String, Any?>>
+
+    @GET("api/rt/bmp/phl/applicants")
+    suspend fun getPhlApplicants(@Query("sessionId") sessionId: Long? = null): Response<List<Map<String, Any?>>>
+
+    @PUT("api/rt/bmp/phl/applicants/{id}")
+    suspend fun updatePhlApplicant(@Path("id") id: Long, @Body body: Map<String, @JvmSuppressWildcards Any?>): Response<Map<String, Any?>>
+
+    @DELETE("api/rt/bmp/phl/applicants/{id}")
+    suspend fun deletePhlApplicant(@Path("id") id: Long): Response<Map<String, Any?>>
 }
 
 

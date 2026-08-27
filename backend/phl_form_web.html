@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pendaftaran Pekerja Harian Lepas (PHL)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0284C7;
+            --primary-dark: #0369A1;
+            --primary-light: #E0F2FE;
+            --accent: #0D9488;
+            --success: #16A34A;
+            --success-light: #DCFCE7;
+            --warning: #D97706;
+            --warning-light: #FEF3C7;
+            --danger: #DC2626;
+            --danger-light: #FEE2E2;
+            --surface: #FFFFFF;
+            --bg: #F8FAFC;
+            --text-main: #0F172A;
+            --text-muted: #64748B;
+            --border: #E2E8F0;
+            --radius-lg: 16px;
+            --radius-md: 12px;
+            --radius-sm: 8px;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+            --shadow-md: 0 4px 14px rgba(0,0,0,0.08);
+            --shadow-lg: 0 10px 25px rgba(0,0,0,0.12);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 16px 12px 48px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 520px;
+            margin: 0 auto;
+        }
+
+        .header-card {
+            background: linear-gradient(135deg, #0369A1, #075985);
+            color: white;
+            padding: 24px 20px;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-md);
+            margin-bottom: 16px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header-card::after {
+            content: '';
+            position: absolute;
+            bottom: -30px;
+            right: -30px;
+            width: 110px;
+            height: 110px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 50%;
+        }
+
+        .header-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(4px);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .company-title {
+            font-size: 20px;
+            font-weight: 800;
+            line-height: 1.3;
+            margin-bottom: 4px;
+        }
+
+        .header-subtitle {
+            font-size: 13px;
+            opacity: 0.9;
+        }
+
+        .card {
+            background: var(--surface);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border);
+            margin-bottom: 16px;
+        }
+
+        /* Full / Quota Notice Banner */
+        .banner-full {
+            background: #FEF2F2;
+            border: 2px solid #FCA5A5;
+            border-radius: var(--radius-md);
+            padding: 24px 20px;
+            text-align: center;
+            box-shadow: var(--shadow-sm);
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .banner-full .icon-box {
+            width: 64px;
+            height: 64px;
+            background: #FEE2E2;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+            font-size: 32px;
+        }
+
+        .banner-full h2 {
+            font-size: 18px;
+            font-weight: 800;
+            color: #991B1B;
+            margin-bottom: 8px;
+        }
+
+        .banner-full p {
+            font-size: 13.5px;
+            color: #7F1D1D;
+            line-height: 1.5;
+        }
+
+        /* Schedule Info Box */
+        .schedule-box {
+            background: #F0F9FF;
+            border: 1px solid #BAE6FD;
+            border-radius: var(--radius-md);
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .schedule-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 10px;
+        }
+
+        .schedule-item {
+            background: white;
+            padding: 10px 12px;
+            border-radius: var(--radius-sm);
+            border: 1px solid #E0F2FE;
+        }
+
+        .schedule-item .label {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .schedule-item .value {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-top: 2px;
+        }
+
+        .quota-bar-container {
+            margin-top: 12px;
+            background: #E2E8F0;
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .quota-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #0284C7, #0D9488);
+            border-radius: 4px;
+            transition: width 0.3s;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 12.5px;
+            font-weight: 600;
+            color: #334155;
+            margin-bottom: 6px;
+        }
+
+        .form-label .req {
+            color: var(--danger);
+            margin-left: 2px;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 11px 14px;
+            font-size: 13.5px;
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: #FAFAFA;
+            outline: none;
+            transition: border-color 0.2s, background 0.2s;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary);
+            background: #FFFFFF;
+        }
+
+        textarea.form-control {
+            resize: vertical;
+            min-height: 70px;
+        }
+
+        /* Upload File Dropzones */
+        .upload-card {
+            border: 1.5px dashed #CBD5E1;
+            border-radius: var(--radius-sm);
+            padding: 14px;
+            text-align: center;
+            background: #F8FAFC;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s;
+        }
+
+        .upload-card:hover, .upload-card.dragover {
+            border-color: var(--primary);
+            background: var(--primary-light);
+        }
+
+        .upload-card input[type="file"] {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .upload-card .icon {
+            font-size: 24px;
+            margin-bottom: 4px;
+        }
+
+        .upload-card .upload-title {
+            font-size: 12.5px;
+            font-weight: 700;
+            color: #334155;
+        }
+
+        .upload-card .upload-hint {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .preview-box {
+            display: none;
+            margin-top: 8px;
+            position: relative;
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            border: 1px solid #CBD5E1;
+            max-height: 160px;
+            text-align: center;
+            background: #000;
+        }
+
+        .preview-box img {
+            max-width: 100%;
+            max-height: 160px;
+            object-fit: contain;
+            display: block;
+            margin: 0 auto;
+        }
+
+        .file-badge {
+            display: none;
+            margin-top: 8px;
+            background: #F1F5F9;
+            padding: 8px 12px;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-weight: 600;
+            color: #334155;
+            align-items: center;
+            justify-content: space-between;
+            border: 1px solid #CBD5E1;
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 14px 20px;
+            background: linear-gradient(135deg, #0284C7, #0369A1);
+            color: white;
+            font-size: 14.5px;
+            font-weight: 700;
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(2,132,199,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+
+        .btn-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            background: #94A3B8;
+            box-shadow: none;
+        }
+
+        .btn-submit:active {
+            transform: scale(0.98);
+        }
+
+        /* Success Card */
+        .success-card {
+            display: none;
+            background: white;
+            border-radius: var(--radius-lg);
+            padding: 32px 24px;
+            text-align: center;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border);
+        }
+
+        .success-icon {
+            width: 72px;
+            height: 72px;
+            background: var(--success-light);
+            color: var(--success);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            margin: 0 auto 16px;
+        }
+
+        .spinner {
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top: 3px solid white;
+            width: 18px;
+            height: 18px;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-cover {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        .loading-cover .spinner-blue {
+            border: 3px solid #E2E8F0;
+            border-radius: 50%;
+            border-top: 3px solid var(--primary);
+            width: 36px;
+            height: 36px;
+            margin: 0 auto 12px;
+            animation: spin 0.8s linear infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header-card">
+            <span class="header-badge">Pekerja Harian Lepas (PHL)</span>
+            <h1 class="company-title" id="dispCompany">CV. Bahtera Mulya Plastik</h1>
+            <p class="header-subtitle" id="dispSubtitle">Formulir Resmi Pendaftaran Pekerja Cadangan</p>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loadingState" class="card loading-cover">
+            <div class="spinner-blue"></div>
+            <div style="font-weight: 600; color: var(--text-muted); font-size: 13px;">Memeriksa jadwal & ketersediaan kuota...</div>
+        </div>
+
+        <!-- Banner Kuota Penuh (Jika registeredCount >= maxQuota atau status == FULL) -->
+        <div id="bannerFull" class="banner-full">
+            <div class="icon-box">🛑</div>
+            <h2 id="fullTitle">Maaf, Pendaftaran PHL Sudah Penuh</h2>
+            <p id="fullDesc">
+                Kuota maksimal pendaftar untuk jadwal kerja ini telah terpenuhi. Formulir pendaftaran otomatis ditutup oleh sistem. Terima kasih atas minat dan partisipasi Anda.
+            </p>
+            <div style="margin-top: 16px; font-size: 12px; color: #991B1B; font-weight: 600;" id="fullScheduleInfo"></div>
+        </div>
+
+        <!-- Banner Tutup / Kadaluarsa -->
+        <div id="bannerClosed" class="banner-full" style="background:#F8FAFC; border-color:#CBD5E1;">
+            <div class="icon-box" style="background:#E2E8F0;">🔒</div>
+            <h2 style="color:#334155;">Pendaftaran PHL Telah Ditutup</h2>
+            <p style="color:#64748B;" id="closedDesc">
+                Pendaftaran untuk jadwal ini telah ditutup oleh manajemen perusahaan.
+            </p>
+        </div>
+
+        <!-- Form Container (Hanya tampil jika kuota masih tersedia) -->
+        <div id="formContainer" style="display: none;">
+            <!-- Info Jadwal & Kuota -->
+            <div class="schedule-box">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-size: 13px; font-weight: 800; color: #0369A1;" id="dispTitle">Operator Cadangan</div>
+                    <span id="badgeQuota" style="background: #DCFCE7; color: #15803D; font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 12px;">
+                        Tersedia 3 Kuota
+                    </span>
+                </div>
+
+                <div class="schedule-grid">
+                    <div class="schedule-item">
+                        <div class="label">📅 Tanggal Kerja</div>
+                        <div class="value" id="dispWorkDate">-</div>
+                    </div>
+                    <div class="schedule-item">
+                        <div class="label">⏰ Shift / Jam</div>
+                        <div class="value" id="dispShift">-</div>
+                    </div>
+                    <div class="schedule-item">
+                        <div class="label">💰 Estimasi Upah</div>
+                        <div class="value" id="dispWage">-</div>
+                    </div>
+                    <div class="schedule-item">
+                        <div class="label">👥 Terisi</div>
+                        <div class="value" id="dispCount">-</div>
+                    </div>
+                </div>
+
+                <div class="quota-bar-container">
+                    <div id="quotaBar" class="quota-bar-fill" style="width: 0%;"></div>
+                </div>
+
+                <div id="dispNotes" style="font-size: 11.5px; color: #0369A1; margin-top: 10px; line-height: 1.4; display: none;"></div>
+            </div>
+
+            <form id="phlForm" onsubmit="submitPhlForm(event)" enctype="multipart/form-data">
+                <input type="hidden" id="tokenInput" name="token">
+
+                <!-- 1. Data Diri -->
+                <div class="card">
+                    <div class="section-title">👤 1. Identitas Calon Pekerja</div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Nama Lengkap Sesuai KTP <span class="req">*</span></label>
+                        <input type="text" id="fullName" name="fullName" class="form-control" placeholder="Contoh: Budi Santoso" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Nomor WhatsApp Aktif <span class="req">*</span></label>
+                        <input type="tel" id="phone" name="phone" class="form-control" placeholder="Contoh: 081234567890" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">NIK (Nomor Induk Kependudukan / No. KTP) <span class="req">*</span></label>
+                        <input type="text" id="nik" name="nik" maxlength="16" class="form-control" placeholder="16 digit nomor KTP" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Alamat Domisili Saat Ini <span class="req">*</span></label>
+                        <textarea id="address" name="address" class="form-control" placeholder="Jalan, RT/RW, Desa/Kelurahan, Kecamatan, Kota" required></textarea>
+                    </div>
+                </div>
+
+                <!-- 2. Berkas Lampiran (KTP, Selfie, Ijazah, CV) -->
+                <div class="card">
+                    <div class="section-title">📁 2. Berkas Lampiran Wajib</div>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+                        Pastikan foto dan dokumen terlihat jelas, terang, dan tidak buram.
+                    </p>
+
+                    <!-- A. Foto KTP -->
+                    <div class="form-group">
+                        <label class="form-label">🪪 Foto KTP Asli <span class="req">*</span></label>
+                        <div class="upload-card" onclick="document.getElementById('ktpFile').click()">
+                            <div class="icon">📷</div>
+                            <div class="upload-title">Ambil Foto / Pilih KTP</div>
+                            <div class="upload-hint">Format JPG, PNG (Maks 10MB)</div>
+                            <input type="file" id="ktpFile" name="ktpFile" accept="image/*" required onchange="handleFilePreview(this, 'ktpPreview', 'ktpBadge')">
+                        </div>
+                        <div id="ktpPreview" class="preview-box"><img src=""></div>
+                        <div id="ktpBadge" class="file-badge"></div>
+                    </div>
+
+                    <!-- B. Foto Selfie -->
+                    <div class="form-group">
+                        <label class="form-label">🤳 Foto Selfie Wajah Jelas <span class="req">*</span></label>
+                        <div class="upload-card" onclick="document.getElementById('selfFile').click()">
+                            <div class="icon">📸</div>
+                            <div class="upload-title">Ambil Foto Selfie Wajah</div>
+                            <div class="upload-hint">Foto wajah polos tanpa masker/kacamata hitam</div>
+                            <input type="file" id="selfFile" name="selfFile" accept="image/*" required onchange="handleFilePreview(this, 'selfPreview', 'selfBadge')">
+                        </div>
+                        <div id="selfPreview" class="preview-box"><img src=""></div>
+                        <div id="selfBadge" class="file-badge"></div>
+                    </div>
+
+                    <!-- C. Ijazah Terakhir -->
+                    <div class="form-group">
+                        <label class="form-label">🎓 Foto / Dokumen Ijazah Terakhir <span class="req">*</span></label>
+                        <div class="upload-card" onclick="document.getElementById('ijazahFile').click()">
+                            <div class="icon">📄</div>
+                            <div class="upload-title">Pilih Berkas Ijazah</div>
+                            <div class="upload-hint">Format JPG, PNG, atau PDF (Maks 10MB)</div>
+                            <input type="file" id="ijazahFile" name="ijazahFile" accept="image/*,.pdf" required onchange="handleFilePreview(this, 'ijazahPreview', 'ijazahBadge')">
+                        </div>
+                        <div id="ijazahPreview" class="preview-box"><img src=""></div>
+                        <div id="ijazahBadge" class="file-badge"></div>
+                    </div>
+
+                    <!-- D. Curriculum Vitae (CV) -->
+                    <div class="form-group">
+                        <label class="form-label">📑 Curriculum Vitae (CV) <span class="req">*</span></label>
+                        <div class="upload-card" onclick="document.getElementById('cvFile').click()">
+                            <div class="icon">📁</div>
+                            <div class="upload-title">Unggah File CV (PDF)</div>
+                            <div class="upload-hint">Format PDF (Maks 15MB)</div>
+                            <input type="file" id="cvFile" name="cvFile" accept=".pdf,application/pdf,image/*" required onchange="handleFilePreview(this, null, 'cvBadge')">
+                        </div>
+                        <div id="cvBadge" class="file-badge"></div>
+                    </div>
+                </div>
+
+                <!-- 3. Persetujuan & Tombol Kirim -->
+                <div class="card">
+                    <label style="display: flex; gap: 10px; align-items: flex-start; cursor: pointer;">
+                        <input type="checkbox" id="agreement" required style="margin-top: 3px; accent-color: var(--primary); transform: scale(1.15);">
+                        <span style="font-size: 12px; color: #334155; line-height: 1.4;">
+                            Saya menyatakan bahwa data yang saya kirimkan adalah benar dan bersedia hadir tepat waktu di pabrik sesuai jadwal kerja di atas.
+                        </span>
+                    </label>
+
+                    <div style="margin-top: 16px;">
+                        <button type="submit" id="btnSubmit" class="btn-submit">
+                            <span id="btnText">Kirim Pendaftaran PHL</span>
+                            <div id="btnSpinner" class="spinner" style="display: none;"></div>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Success Screen -->
+        <div id="successCard" class="success-card">
+            <div class="success-icon">✓</div>
+            <h2 style="font-size: 19px; font-weight: 800; color: #1E293B; margin-bottom: 6px;">Pendaftaran Berhasil!</h2>
+            <p style="font-size: 13.5px; color: var(--text-muted); line-height: 1.5; margin-bottom: 16px;">
+                Data pendaftaran dan berkas Anda telah tersimpan di sistem manajemen CV. Bahtera Plastik.
+            </p>
+
+            <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: var(--radius-sm); padding: 14px; text-align: left; margin-bottom: 16px;">
+                <div style="font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Nomor Registrasi</div>
+                <div id="resRegNo" style="font-size: 15px; font-weight: 800; color: #0284C7; margin-top: 2px;">PHL-001</div>
+                <hr style="border: 0; border-top: 1px solid #E2E8F0; margin: 8px 0;">
+                <div style="font-size: 12px; color: #334155; line-height: 1.5;">
+                    <div>• <b>Nama:</b> <span id="resName">-</span></div>
+                    <div>• <b>Jadwal:</b> <span id="resSchedule">-</span></div>
+                    <div>• <b>Shift:</b> <span id="resShift">-</span></div>
+                </div>
+            </div>
+
+            <div style="background: #FEF3C7; border: 1px solid #FDE68A; border-radius: var(--radius-sm); padding: 12px; font-size: 12px; color: #92400E; text-align: left; line-height: 1.4;">
+                📌 <b>Petunjuk Penting:</b><br>
+                1. Mohon bawa <b>KTP Asli</b> saat datang ke pabrik.<br>
+                2. Harap hadir <b>15 menit</b> sebelum shift dimulai.<br>
+                3. Kenakan pakaian kerja rapi (celana panjang & alas kaki yang aman).
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionToken = urlParams.get('session') || urlParams.get('token') || '';
+        document.getElementById('tokenInput').value = sessionToken;
+
+        function formatDateLong(epochMs) {
+            if (!epochMs) return '-';
+            const d = new Date(epochMs);
+            const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+            const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+            return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+        }
+
+        function formatRupiah(num) {
+            return 'Rp ' + Number(num || 0).toLocaleString('id-ID');
+        }
+
+        async function initPage() {
+            if (!sessionToken) {
+                showClosedState('Link pendaftaran tidak valid atau tidak memiliki parameter token.');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/public/phl/validate?session=${encodeURIComponent(sessionToken)}`);
+                const data = await res.json();
+                document.getElementById('loadingState').style.display = 'none';
+
+                if (data.companyName) {
+                    document.getElementById('dispCompany').textContent = data.companyName;
+                }
+
+                // 1. Cek Apakah Kuota Penuh
+                if (data.isFull || (data.maxQuota > 0 && data.registeredCount >= data.maxQuota)) {
+                    showFullState(data);
+                    return;
+                }
+
+                // 2. Cek Apakah Sesi Ditutup
+                if (data.status === 'CLOSED' || !data.valid) {
+                    showClosedState(data.message || 'Pendaftaran untuk jadwal ini telah ditutup.');
+                    return;
+                }
+
+                // 3. Tampilkan Form dengan Info Kuota
+                showFormState(data);
+            } catch (err) {
+                document.getElementById('loadingState').style.display = 'none';
+                showClosedState('Gagal memuat informasi pendaftaran. Silakan refresh halaman.');
+            }
+        }
+
+        function showFullState(data) {
+            document.getElementById('bannerFull').style.display = 'block';
+            document.getElementById('formContainer').style.display = 'none';
+            if (data && data.workDate) {
+                document.getElementById('fullScheduleInfo').textContent = 
+                    `Jadwal: ${formatDateLong(data.workDate)} (${data.shiftName || 'Shift Kerja'}) | Kuota: ${data.maxQuota} Orang`;
+            }
+        }
+
+        function showClosedState(msg) {
+            document.getElementById('bannerClosed').style.display = 'block';
+            document.getElementById('closedDesc').textContent = msg;
+            document.getElementById('formContainer').style.display = 'none';
+        }
+
+        function showFormState(data) {
+            document.getElementById('formContainer').style.display = 'block';
+            document.getElementById('dispTitle').textContent = data.title || 'Operator Cadangan PHL';
+            document.getElementById('dispWorkDate').textContent = formatDateLong(data.workDate);
+            document.getElementById('dispShift').textContent = data.shiftName || 'Shift 1';
+            document.getElementById('dispWage').textContent = (data.dailyWage > 0 ? formatRupiah(data.dailyWage) + ' / Hari' : 'Sesuai Standar');
+            
+            const maxQ = data.maxQuota || 3;
+            const regCount = data.registeredCount || 0;
+            const remaining = Math.max(0, maxQ - regCount);
+            
+            document.getElementById('dispCount').textContent = `${regCount} / ${maxQ} Orang`;
+            document.getElementById('badgeQuota').textContent = `Sisa ${remaining} dari ${maxQ} Kuota`;
+            
+            const pct = Math.min(100, Math.round((regCount / maxQ) * 100));
+            document.getElementById('quotaBar').style.width = pct + '%';
+
+            if (data.notes && data.notes.trim()) {
+                const notesEl = document.getElementById('dispNotes');
+                notesEl.style.display = 'block';
+                notesEl.innerHTML = `📌 <b>Catatan:</b> ${escapeHtml(data.notes)}`;
+            }
+        }
+
+        function handleFilePreview(input, previewBoxId, badgeId) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const badge = badgeId ? document.getElementById(badgeId) : null;
+            if (badge) {
+                badge.style.display = 'flex';
+                const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+                badge.innerHTML = `<span>📎 ${escapeHtml(file.name)}</span> <span style="color:#64748B; font-weight: normal;">${sizeMB} MB</span>`;
+            }
+
+            if (previewBoxId) {
+                const box = document.getElementById(previewBoxId);
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        box.style.display = 'block';
+                        box.querySelector('img').src = e.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                } else {
+                    box.style.display = 'none';
+                }
+            }
+        }
+
+        async function submitPhlForm(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btnSubmit');
+            const btnText = document.getElementById('btnText');
+            const btnSpinner = document.getElementById('btnSpinner');
+
+            btn.disabled = true;
+            btnText.textContent = 'Mengirim & Memvalidasi Kuota...';
+            btnSpinner.style.display = 'block';
+
+            const form = document.getElementById('phlForm');
+            const formData = new FormData(form);
+
+            try {
+                const res = await fetch('/api/public/phl/submit', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    document.getElementById('formContainer').style.display = 'none';
+                    document.getElementById('successCard').style.display = 'block';
+                    document.getElementById('resRegNo').textContent = 'PHL-' + (result.applicantId || Date.now().toString().slice(-4));
+                    document.getElementById('resName').textContent = document.getElementById('fullName').value;
+                    document.getElementById('resSchedule').textContent = document.getElementById('dispWorkDate').textContent;
+                    document.getElementById('resShift').textContent = document.getElementById('dispShift').textContent;
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                } else {
+                    if (result.isFull) {
+                        alert('Maaf, kuota pendaftaran baru saja penuh oleh peserta lain!');
+                        showFullState();
+                    } else {
+                        alert(result.message || 'Gagal mengirimkan pendaftaran. Periksa kembali kelengkapan berkas Anda.');
+                    }
+                    btn.disabled = false;
+                    btnText.textContent = 'Kirim Pendaftaran PHL';
+                    btnSpinner.style.display = 'none';
+                }
+            } catch (err) {
+                alert('Terjadi kendala koneksi saat mengirim formulir: ' + err.message);
+                btn.disabled = false;
+                btnText.textContent = 'Kirim Pendaftaran PHL';
+                btnSpinner.style.display = 'none';
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        }
+
+        document.addEventListener('DOMContentLoaded', initPage);
+    </script>
+</body>
+</html>
