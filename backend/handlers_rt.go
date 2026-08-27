@@ -3926,7 +3926,7 @@ func handlePublicSubmitPhlApplication(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := r.ParseMultipartForm(25 << 20); err != nil { // 25MB max
+	if err := r.ParseMultipartForm(64 << 20); err != nil { // 64MB max
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
