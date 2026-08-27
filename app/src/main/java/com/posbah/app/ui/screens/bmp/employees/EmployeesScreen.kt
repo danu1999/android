@@ -4387,16 +4387,15 @@ fun CreatePhlSessionDialog(
     val context = LocalContext.current
     var title by remember { mutableStateOf("Operator Injeksi Cadangan") }
     var workDate by remember { mutableStateOf(System.currentTimeMillis()) }
-    var shiftName by remember { mutableStateOf("Shift 1 (08:00 - 16:00)") }
+    var shiftName by remember { mutableStateOf("Pagi (07.00 - 15.00)") }
     var maxQuota by remember { mutableStateOf(3) }
     var dailyWageStr by remember { mutableStateOf("50000") }
-    var notes by remember { mutableStateOf("Pakaian rapi, celana panjang, sandal/sepatu, makan siang disediakan.") }
+    var notes by remember { mutableStateOf("15 menit wajib sudah ada di lokasi, silahkan japri no. wa 082245077959 untuk lokasi") }
 
     val shifts = listOf(
-        "Shift 1 (08:00 - 16:00)",
-        "Shift 2 (16:00 - 00:00)",
-        "Shift 3 (00:00 - 08:00)",
-        "Shift Pagi (07:00 - 15:00)"
+        "Pagi (07.00 - 15.00)",
+        "Sore (15.00 - 23.00)",
+        "Malam (23.00 - 07.00)"
     )
 
     AlertDialog(
@@ -4460,18 +4459,14 @@ fun CreatePhlSessionDialog(
 
                 // Shift selector chips
                 Text("Shift / Jam Kerja", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    shifts.chunked(2).forEach { rowShifts ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                            rowShifts.forEach { s ->
-                                FilterChip(
-                                    selected = shiftName == s,
-                                    onClick = { shiftName = s },
-                                    label = { Text(s, fontSize = 11.sp) },
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                        }
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    shifts.forEach { s ->
+                        FilterChip(
+                            selected = shiftName == s,
+                            onClick = { shiftName = s },
+                            label = { Text(s, fontSize = 12.sp, fontWeight = if (shiftName == s) FontWeight.Bold else FontWeight.Normal) },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
                 }
 
@@ -4565,9 +4560,16 @@ fun EditPhlSessionDialog(
     onDismiss: () -> Unit,
     onConfirm: (BmpPhlSessionEntity) -> Unit
 ) {
+    var shiftName by remember { mutableStateOf(session.shiftName) }
     var maxQuota by remember { mutableStateOf(session.maxQuota) }
     var status by remember { mutableStateOf(session.status) }
     var notes by remember { mutableStateOf(session.notes) }
+
+    val shifts = listOf(
+        "Pagi (07.00 - 15.00)",
+        "Sore (15.00 - 23.00)",
+        "Malam (23.00 - 07.00)"
+    )
 
     val statuses = listOf(
         "OPEN" to "BUKA",
@@ -4577,11 +4579,29 @@ fun EditPhlSessionDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Atur Kuota & Status PHL", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+        title = { Text("Atur Kuota, Shift & Status PHL", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(androidx.compose.foundation.rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 Text(session.title, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
                 Text("Terdaftar Saat Ini: ${session.registeredCount} orang", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                // Shift Selector
+                Text("Pilihan Shift / Jam Kerja:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    shifts.forEach { s ->
+                        FilterChip(
+                            selected = shiftName == s,
+                            onClick = { shiftName = s },
+                            label = { Text(s, fontSize = 11.5.sp, fontWeight = if (shiftName == s) FontWeight.Bold else FontWeight.Normal) },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
 
                 // Kuota Stepper
                 Text("Batas Kuota Maksimal:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -4617,16 +4637,17 @@ fun EditPhlSessionDialog(
                 OutlinedTextField(
                     value = notes,
                     onValueChange = { notes = it },
-                    label = { Text("Catatan") },
+                    label = { Text("Catatan / Syarat Khusus") },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(8.dp),
+                    minLines = 2
                 )
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    onConfirm(session.copy(maxQuota = maxQuota, status = status, notes = notes))
+                    onConfirm(session.copy(shiftName = shiftName, maxQuota = maxQuota, status = status, notes = notes))
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
                 shape = RoundedCornerShape(8.dp)
@@ -4859,6 +4880,7 @@ fun copyPhlLink(context: Context, session: BmpPhlSessionEntity) {
 fun sharePhlSessionWhatsApp(context: Context, session: BmpPhlSessionEntity, companyName: String) {
     val dateStr = Formatters.dateLong(session.workDate)
     val wageStr = if (session.dailyWage > 0) Formatters.rupiah(session.dailyWage) + " / Hari" else "Sesuai Standar"
+    val noteContent = if (session.notes.isNotBlank()) session.notes else "15 menit wajib sudah ada di lokasi, silahkan japri no. wa 082245077959 untuk lokasi"
     val text = """
 *LOWONGAN PEKERJA HARIAN LEPAS (PHL)*
 *$companyName*
@@ -4868,7 +4890,9 @@ fun sharePhlSessionWhatsApp(context: Context, session: BmpPhlSessionEntity, comp
 ⏰ *Shift Kerja:* ${session.shiftName}
 👥 *Kuota Dibutuhkan:* ${session.maxQuota} Orang
 💰 *Upah Harian:* $wageStr
-${if (session.notes.isNotBlank()) "📝 *Keterangan:* ${session.notes}\n" else ""}
+📝 *Catatan Kehadiran & Lokasi:*
+$noteContent
+
 Silakan mendaftar dan mengunggah berkas melalui tautan resmi berikut:
 👉 ${session.formUrl}
 

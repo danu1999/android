@@ -4150,7 +4150,8 @@ func handleRtBmpPhlSessions(w http.ResponseWriter, r *http.Request) {
 		now := nowMillis()
 
 		if req.Title == "" { req.Title = "Operator Injeksi Cadangan" }
-		if req.ShiftName == "" { req.ShiftName = "Shift 1 (08:00 - 16:00)" }
+		if req.ShiftName == "" { req.ShiftName = "Pagi (07.00 - 15.00)" }
+		if req.Notes == "" { req.Notes = "15 menit wajib sudah ada di lokasi, silahkan japri no. wa 082245077959 untuk lokasi" }
 		if req.MaxQuota <= 0 { req.MaxQuota = 3 }
 		if req.WorkDate <= 0 { req.WorkDate = now }
 

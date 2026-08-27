@@ -570,12 +570,12 @@ data class BmpPhlSessionEntity(
     val token: String = "",
     val title: String = "",
     val workDate: Long = System.currentTimeMillis(),
-    val shiftName: String = "Shift 1 (08:00 - 16:00)",
+    val shiftName: String = "Pagi (07.00 - 15.00)",
     val dailyWage: Double = 50000.0,
     val maxQuota: Int = 3,
     val registeredCount: Int = 0,
     val status: String = "OPEN", // "OPEN", "FULL", "CLOSED"
-    val notes: String = "",
+    val notes: String = "15 menit wajib sudah ada di lokasi, silahkan japri no. wa 082245077959 untuk lokasi",
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val isDeleted: Boolean = false

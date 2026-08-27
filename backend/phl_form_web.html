@@ -473,7 +473,7 @@
                     <div id="quotaBar" class="quota-bar-fill" style="width: 0%;"></div>
                 </div>
 
-                <div id="dispNotes" style="font-size: 11.5px; color: #0369A1; margin-top: 10px; line-height: 1.4; display: none;"></div>
+                <div id="dispNotes" style="font-size: 12.5px; background: #FFFBEB; border: 1.5px solid #FCD34D; color: #92400E; padding: 12px 14px; border-radius: 8px; margin-top: 14px; line-height: 1.5; display: none;"></div>
             </div>
 
             <form id="phlForm" onsubmit="submitPhlForm(event)" enctype="multipart/form-data">
@@ -681,7 +681,7 @@
             document.getElementById('formContainer').style.display = 'block';
             document.getElementById('dispTitle').textContent = data.title || 'Operator Cadangan PHL';
             document.getElementById('dispWorkDate').textContent = formatDateLong(data.workDate);
-            document.getElementById('dispShift').textContent = data.shiftName || 'Shift 1';
+            document.getElementById('dispShift').textContent = data.shiftName || 'Pagi (07.00 - 15.00)';
             document.getElementById('dispWage').textContent = (data.dailyWage > 0 ? formatRupiah(data.dailyWage) + ' / Hari' : 'Sesuai Standar');
             
             const maxQ = data.maxQuota || 3;
@@ -694,11 +694,20 @@
             const pct = Math.min(100, Math.round((regCount / maxQ) * 100));
             document.getElementById('quotaBar').style.width = pct + '%';
 
-            if (data.notes && data.notes.trim()) {
-                const notesEl = document.getElementById('dispNotes');
-                notesEl.style.display = 'block';
-                notesEl.innerHTML = `📌 <b>Catatan:</b> ${escapeHtml(data.notes)}`;
+            const rawNotes = (data.notes && data.notes.trim()) 
+                ? data.notes.trim() 
+                : '15 menit wajib sudah ada di lokasi, silahkan japri no. wa 082245077959 untuk lokasi';
+            
+            const notesEl = document.getElementById('dispNotes');
+            notesEl.style.display = 'block';
+            let formattedNotes = escapeHtml(rawNotes);
+            if (formattedNotes.includes('082245077959')) {
+                formattedNotes = formattedNotes.replace(
+                    /082245077959/g,
+                    '<a href="https://api.whatsapp.com/send?phone=6282245077959&text=Halo%20saya%20calon%20PHL,%20mohon%20info%20shareloc%20pabrik" target="_blank" style="color: #047857; font-weight: 700; text-decoration: underline; background: #ECFDF5; padding: 2px 6px; border-radius: 4px; border: 1px solid #A7F3D0;">📲 082245077959 (Klik Chat WhatsApp)</a>'
+                );
             }
+            notesEl.innerHTML = `⚠️ <b>PENTING:</b> ${formattedNotes}`;
         }
 
         function handleFilePreview(input, previewBoxId, badgeId) {
